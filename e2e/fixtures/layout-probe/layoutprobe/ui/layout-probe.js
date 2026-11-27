@@ -153,10 +153,10 @@ export async function startLayoutProbe({ bridge, expose, view }) {
   await bridge.commands.register("layoutprobe.title", ({ text }) => title(text));
   await bridge.commands.register("layoutprobe.footer", ({ text }) => footer(text));
   await bridge.commands.register("layoutprobe.directory", ({ path }) => directory(path));
-  // default: an omitted policy is tab, as for tab.notify (docs/spec/plugins.md#tab-reports).
-  await bridge.commands.register("layoutprobe.notify", async ({ text, policy = "tab" }) => {
-    await bridge.calls.request("tab.notify", { text, policy });
-    tab.set({ notice: { text, policy } });
+  // The notice record of the params goes to tab.notify unchanged; the status layoutprobe.view reports it (docs/spec/plugins.md#tab-reports).
+  await bridge.commands.register("layoutprobe.notify", async (notice) => {
+    await bridge.calls.request("tab.notify", notice);
+    tab.set({ notice });
     return null;
   });
   await bridge.commands.register("layoutprobe.document.color", async ({ color }) => {

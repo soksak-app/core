@@ -12,6 +12,8 @@
   --bg:#101117;--card:#191b24;--fg:#ececf5;--muted:#8f92a4;
   --edge:#2b2e3d;--rule:#22242f;--rail:#7279ff;--focus:#ffb36b;
   --no:#ff7c7c;
+  --ok:#7fd9a0;
+  --warn:#ffc27a;
 
   /* Shape. Independent of the mode. The settings set --r, --half-gap, --bw, --font and --size from the theme (settings.js). --divider, the
      width in which the boundary line of a sidebar inside a card is pressed and dragged and the width that remains of a collapsed sidebar, is a
@@ -104,7 +106,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .chrome-bar .tabs > *{pointer-events:auto}
 /* This text does not receive presses. A press reaches the drag area below. */
 /* The letters of the soksak logo are light in dark mode and dark in light mode. The color of the icon tile is fixed to the logo. */
-.brand{flex:0 0 auto;color:var(--brand-text-dark);margin-right:var(--brand-gap);pointer-events:none;display:flex;align-items:center}
+.brand{flex:0 0 auto;color:var(--brand-text-dark);margin-right:var(--brand-gap);display:flex;align-items:center}
 :root[data-mode=light] .brand{color:var(--brand-text-light)}
 .brand__logo{display:block;height:calc(var(--size) * var(--brand-logo-at-base) / var(--text-base));width:auto}
 
@@ -161,6 +163,19 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .project-column .bar-tab:hover .bar-tab__x,
 .project-column .bar-tab:focus-within .bar-tab__x{opacity:var(--opaque)}
 .project-column .bar-tab--add{width:var(--fill);height:var(--project-tab-add-h);justify-content:center}
+/* The right column stands after the work area, so its border is on its left line (settings projectTabs = right). */
+.project-column--right{border-right:0;border-left:var(--bw) solid var(--edge)}
+/* The bottom row stands under the space row and the plane, across the work area (settings projectTabs = bottom). It is hidden in the other places. */
+.tabs--bottom{align-self:stretch;flex:0 0 auto;padding:var(--project-column-pad);border-top:var(--bw) solid var(--edge)}
+.tabs--bottom[hidden]{display:none}
+/* The hint of a closed settings tab, at the bottom right of the work screen (docs/spec/settings.md#opening-and-closing). */
+.work{position:relative}
+.closed-hint{position:absolute;right:var(--space-4);bottom:var(--space-4);z-index:3;display:flex;align-items:center;gap:var(--space-2);padding:var(--space-2) var(--space-2) var(--space-2) var(--space-3);border:var(--bw) solid var(--edge);border-radius:var(--r-xs);background:var(--card);font-size:var(--text-small)}
+.closed-hint[hidden]{display:none}
+/* The status bar at the bottom of the main window (docs/spec/external-sidebars.md#status-bar). */
+.statusbar{display:flex;align-items:center;gap:var(--space-4);flex:0 0 auto;height:var(--statusbar-h);padding:0 var(--space-3);border-top:var(--bw) solid var(--edge);background:var(--card);font-size:var(--text-caption);color:var(--muted)}
+.statusbar[hidden],.statusbar__item[hidden]{display:none}
+.statusbar__spacer{flex:1 1 auto}
 
 /* Plane */
 /* The stage pads the plane by the half gap and by the insets that put the plane on the device pixel grid (alignPlane of
@@ -560,13 +575,6 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .set-setup{display:flex;flex-direction:column;gap:var(--set-caption-gap);min-width:0}
 .set-setup > .set-caption{margin:0;overflow-wrap:anywhere}
 .set-setup__state{font-size:var(--text-control)}
-.set-row{display:grid;grid-template-columns:var(--set-row-name-w) 1fr;align-items:center;gap:var(--set-row-gap);
-  min-height:var(--set-row-h)}
-.set-row--setup-change{grid-template-columns:var(--set-row-name-w) minmax(0,1fr) auto}
-.set-row__name{font-size:var(--text-control);color:var(--muted)}
-/* In a set row, the set line uses the remaining width instead of a name cell, and the buttons attach to the right of the line. */
-.set-row:has(> .set-caption){grid-template-columns:1fr auto}
-.set-row > .set-caption{margin:0;min-width:0}
 
 /* The debug view lists the files of the logs folder: the path takes the free width and the size, time and save button
    follow it on the same line. */
@@ -601,7 +609,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .select-field{position:relative;display:block}
 .select-field::after{content:"▾";position:absolute;right:var(--select-arrow-inset);top:var(--center);translate:0 calc(0% - var(--center));
   font-size:var(--text-caption);color:var(--muted);pointer-events:none}
-.select-field select,.text-field{width:var(--fill);min-width:0;padding:var(--field-pad-y) var(--space-2);
+.select-field select,.text-field{width:var(--fill);min-width:0;height:var(--field-h);padding:var(--field-pad-y) var(--space-2);
   border:var(--bw) solid var(--edge);border-radius:var(--r-xs);
   background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control)}
 .select-field select{appearance:none;padding-right:var(--select-arrow-room);cursor:pointer}
@@ -660,21 +668,83 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .th__dot{position:absolute;right:var(--theme-dot-inset);bottom:var(--theme-dot-inset);width:var(--theme-dot);height:var(--theme-dot);border-radius:var(--circle)}
 .th__name{text-align:center}
 
-/* The error color is used only on a data-error element that the error display path (shown-errors.js) attaches (AGENTS.md). */
+/* The error color is used only on a data-error element that the error display path (shown-errors.js) attaches (AGENTS.md), and by the notice
+   elements of the notification path: the bell, the toasts, the status line and the center (docs/spec/notifications.md#decisions). */
 [data-error] { color: var(--no); }
-/* Toasts float above the active content and leave it at its current size. */
-#errorToasts { position: fixed; left: var(--center); bottom: var(--error-toast-bottom); z-index: 190;
-  transform: translateX(calc(0% - var(--center))); width: max-content;
-  max-width: min(var(--error-toast-max-width), calc(var(--fill) - var(--space-4) - var(--space-4)));
-  max-height: var(--center); display: flex; flex-direction: column; align-items: center; gap: var(--error-pad-y);
-  overflow: auto; pointer-events: none; }
-[data-native-modal="dialog"] > #errorToasts { position: absolute; }
-.error-toast { display: flex; align-items: start; flex: none; box-sizing: border-box; max-width: var(--fill);
-  gap: var(--error-pad-x); padding: var(--error-pad-y) var(--error-pad-x); background: var(--card);
-  border: var(--error-border) solid var(--edge); border-radius: var(--r-sm); pointer-events: auto; }
-.error-toast:has(> .error-toast__text[data-error]) { border-color: var(--no); }
-.error-toast__text { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; user-select: text; }
-.error-toast__close { flex: none; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0 var(--error-close-pad-x); }
+/* Toasts lie under the bell at the right of the window, above the content, and keep the form of the setting toastStyle. */
+#toasts { position: fixed; top: var(--toast-top); right: var(--toast-right); z-index: 190; display: flex; flex-direction: column; align-items: flex-end;
+  gap: var(--toast-gap); width: var(--toast-width); max-width: calc(var(--fill) - var(--toast-right) - var(--toast-right)); pointer-events: none; }
+#toasts[data-style="line"] { left: var(--center); right: auto; transform: translateX(calc(0% - var(--center))); flex-direction: row; align-items: center; width: max-content; }
+#toasts[data-style="deck"] .toast:not(:first-child) { margin-top: var(--toast-deck-lift); transform: scale(var(--toast-deck-scale)); }
+#toasts[data-style="deck"]:hover .toast:not(:first-child) { transform: none; margin-top: var(--toast-gap); }
+#toasts[data-style="card"] .toast__more, #toasts[data-style="deck"] .toast__more { display: none; }
+[data-native-modal="dialog"] > #toasts { position: absolute; }
+.toast { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--toast-gap); align-items: start; box-sizing: border-box;
+  align-self: stretch; padding: var(--toast-pad-top) var(--toast-pad-right) var(--toast-pad-bottom) var(--toast-pad-x); overflow: hidden; pointer-events: auto;
+  background: var(--card); color: var(--fg); border: var(--bw) solid var(--edge); border-radius: var(--r-sm); box-shadow: var(--toast-shadow); }
+#toasts[data-style="line"] .toast { width: max-content; max-width: var(--toast-width); height: var(--toast-line-h); padding-block: 0; align-items: center; border-radius: var(--toast-line-h); }
+.toast[hidden] { display: none; }
+.toast__mark { display: inline-grid; place-items: center; width: var(--notice-glyph); height: var(--notice-glyph); color: var(--focus); }
+.toast__mark svg, .notice-center__mark svg, .notice-line__dot svg, .toast__close svg, .notice-center__head svg { display: block; width: inherit; height: inherit; fill: none; stroke: currentColor; stroke-width: var(--icon-stroke); stroke-linecap: round; stroke-linejoin: round; }
+.toast[data-kind="success"] .toast__mark { color: var(--ok); }
+.toast[data-kind="warning"] .toast__mark { color: var(--warn); }
+.toast[data-kind="error"] .toast__mark { color: var(--no); }
+.toast__title { font-weight: 600; font-size: var(--text-small); }
+.toast__text { color: var(--muted); font-size: var(--text-small); overflow-wrap: anywhere; }
+.toast__actions { display: flex; gap: var(--toast-gap); margin-top: var(--toast-gap); }
+.toast__actions[hidden], .toast__text[hidden] { display: none; }
+.toast__action { border: 0; background: none; padding: 0; color: var(--focus); font: inherit; font-size: var(--text-small); font-weight: 600; cursor: pointer; }
+.toast__close { border: 0; background: none; color: var(--muted); padding: 0; width: var(--notice-glyph); height: var(--notice-glyph); cursor: pointer; }
+.toast__more { border: 0; background: var(--card); color: var(--muted); border-radius: var(--toast-line-h); padding: 0 var(--toast-more-pad-x); font-size: var(--text-caption); cursor: pointer; }
+.toast__more[hidden] { display: none; }
+.toast__bar { position: absolute; left: 0; bottom: 0; align-self: stretch; height: var(--toast-bar); background: currentColor; opacity: var(--toast-bar-opacity); transform-origin: left;
+  animation: toast-bar linear forwards; animation-duration: inherit; }
+.toast__bar[hidden] { display: none; }
+.toast:hover .toast__bar, .toast:focus-within .toast__bar { animation-play-state: paused; }
+@keyframes toast-bar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .toast__bar { animation: none; } }
+/* The bell of the title bar: the unread count in the accent, or in the error color while an unread problem is shown. */
+.notice-bell { position: relative; }
+.notice-bell svg { display: block; width: var(--act-icon); height: var(--act-icon); fill: none; stroke: currentColor; stroke-width: var(--icon-stroke); stroke-linecap: round; stroke-linejoin: round; }
+.notice-bell__count { position: absolute; top: 0; right: 0; min-width: var(--notice-badge-min); height: var(--notice-badge-min); padding: 0 var(--toast-more-pad-x);
+  border-radius: var(--toast-line-h); background: var(--focus); color: var(--bg); font-size: var(--text-caption); line-height: var(--notice-badge-min); text-align: center; }
+.notice-bell[data-tone="problem"] .notice-bell__count { background: var(--no); }
+.notice-bell__count[hidden] { display: none; }
+/* The notice center: the popover under the bell, or the drawer at the right of the window below the title bar. */
+.notice-center { position: fixed; top: var(--chrome-h); right: var(--toast-right); z-index: 191; box-sizing: border-box; width: var(--notice-center-w);
+  max-height: var(--notice-center-max-h); overflow: auto; display: flex; flex-direction: column; gap: var(--toast-gap); padding: var(--notice-entry-pad);
+  background: var(--card); color: var(--fg); border: var(--bw) solid var(--edge); border-radius: var(--r-sm); box-shadow: var(--toast-shadow); }
+.notice-center[data-style="drawer"] { top: var(--chrome-h); right: 0; bottom: 0; max-height: none; border-radius: 0; }
+.notice-center__head, .notice-center__filters, .notice-center__label, .notice-center__foot { display: flex; align-items: center; gap: var(--toast-gap); }
+.notice-center__head { justify-content: space-between; }
+.notice-center__head button, .notice-center__filters button, .notice-center__clear, .notice-center__clear-all, .notice-center__read { border: 0; background: none; color: var(--muted); font: inherit; font-size: var(--text-caption); cursor: pointer; padding: 0; }
+.notice-center__filters button[aria-pressed="true"] { color: var(--fg); font-weight: 600; }
+.notice-center__close { width: var(--notice-glyph); height: var(--notice-glyph); }
+.notice-center__label { justify-content: space-between; color: var(--muted); font-size: var(--text-caption); }
+.notice-center__entry { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--toast-gap); padding: var(--notice-entry-pad) var(--notice-entry-pad) var(--notice-entry-pad) var(--toast-gap); border-radius: var(--r-xs); }
+.notice-center__entry[data-read="false"]::before { content: ""; position: absolute; left: 0; top: var(--notice-entry-pad); width: var(--notice-dot-size); height: var(--notice-dot-size); border-radius: var(--circle); background: var(--focus); }
+.notice-center__entry[data-read="false"][data-kind="error"]::before { background: var(--no); }
+.notice-center__entry[data-kind="error"] .notice-center__mark { color: var(--no); }
+.notice-center__entry[data-kind="warning"] .notice-center__mark { color: var(--warn); }
+.notice-center__entry[data-kind="success"] .notice-center__mark { color: var(--ok); }
+.notice-center__mark { width: var(--notice-glyph); height: var(--notice-glyph); color: var(--focus); }
+.notice-center__title { font-weight: 600; font-size: var(--text-small); }
+.notice-center__text, .notice-center__meta { color: var(--muted); font-size: var(--text-caption); }
+.notice-center__meta { display: flex; gap: var(--toast-gap); }
+.notice-center__actions { display: flex; gap: var(--toast-gap); }
+.notice-center__progress { align-self: stretch; }
+.notice-center__foot { justify-content: space-between; color: var(--muted); font-size: var(--text-caption); }
+/* The status line of a card notice in the content foot (docs/spec/notifications.md#card-status-line). */
+.notice-line { display: flex; align-items: center; gap: var(--notice-line-gap); height: var(--notice-line-h); min-width: 0; padding: 0 var(--notice-line-gap);
+  font-size: var(--text-small); white-space: nowrap; overflow: hidden; }
+.notice-line[data-kind="error"], .notice-line[data-kind="warning"] { background: color-mix(in srgb, var(--no) var(--notice-tone-mix), transparent); }
+.notice-line__dot { flex: none; width: var(--notice-dot-size); height: var(--notice-dot-size); border-radius: var(--circle); background: var(--focus); }
+.notice-line[data-kind="success"] .notice-line__dot { background: var(--ok); }
+.notice-line[data-kind="warning"] .notice-line__dot { background: var(--warn); }
+.notice-line[data-kind="error"] .notice-line__dot { background: var(--no); }
+.notice-line__text { color: var(--muted); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.notice-line__action, .notice-line__close { border: 0; background: none; color: var(--focus); font: inherit; cursor: pointer; padding: 0; }
+.notice-line__close { color: var(--muted); }
 .set-reset { font-size: var(--text-caption); }
 .set-row:has(.set-reset) { flex-wrap: wrap; }
 /* The mark of the common tab that the project value of a setting applies stands where the project tab has its reset (docs/spec/settings.md#scope-of-a-control). */
@@ -687,14 +757,23 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 /* Sidebar. The section starts at the top without a set title row or a placeholder, and ends with a 26pt status line.
    The section head is a band one step lighter than the sidebar, and a collapsed section keeps only the head. All colors come from theme tokens. */
 .card[data-place]{grid-template-rows:0 minmax(0,1fr) minmax(0,var(--foot-h))}
-.card[data-place] > .chrome{display:none}
+/* A window sidebar has its head row (docs/spec/external-sidebars.md#sidebar-head-and-edge) and no status line below its set. */
+.card[data-place] > .chrome:not(.sidebar-head){display:none}
 .card[data-place] > .set{grid-row:2}
-.card[data-place] > .status{grid-row:3}
+.card:has(> .sidebar-head){grid-template-rows:minmax(0,var(--head-h)) minmax(0,1fr)}
 .set{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column}
 /* The status line has the same height and text as the card foot, so the bottom lines of the sidebar and the neighboring card lie in one line. */
 .sidebar-status__fold{display:grid;place-items:center;margin-left:auto;width:var(--fold-button);height:var(--fold-button);padding:0;border:0;border-radius:var(--r-xs);
   background:transparent;color:var(--muted);cursor:pointer}
 .sidebar-status__fold:hover{background:var(--inset);color:var(--fg)}
+/* The × of the head shows while the pointer is over the window sidebar or the sidebar has focus (docs/spec/external-sidebars.md#sidebar-head-and-edge). */
+.sidebar-status__fold{opacity:0}
+.card:hover > .sidebar-head > .sidebar-status__fold,.card:focus-within > .sidebar-head > .sidebar-status__fold,.sidebar-status__fold:focus-visible{opacity:var(--opaque)}
+/* The head row of a window sidebar: the position of its side, the name and the layout badge of its set, and the × at the right. */
+.sidebar-head{display:flex;align-items:center;gap:var(--space-2);padding:0 var(--space-2);border-bottom:var(--bw) solid var(--edge);font-size:var(--text-caption);color:var(--muted);white-space:nowrap;overflow:hidden}
+.sidebar-head__order{font-weight:600;color:var(--fg)}
+.sidebar-head__spacer{flex:1 1 auto}
+.sidebar-head > .sidebar-status__fold{margin-left:0}
 .sidebar-status__fold svg{width:var(--card-icon);height:var(--card-icon);fill:none;stroke:currentColor;stroke-width:var(--icon-stroke);stroke-linecap:round;stroke-linejoin:round}
 .sidebar-status,.card-sidebar__status{display:flex;align-items:center;gap:var(--sidebar-status-gap);height:var(--foot-h);flex:0 0 var(--foot-h);box-sizing:border-box;
   padding:0 var(--space-2);border-top:var(--bw) solid var(--edge);font-size:var(--text-caption);color:var(--muted);
@@ -748,3 +827,13 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
    never covers it; dragging it sizes a section (docs/spec/plugins.md#sections). */
 .set__divider{position:relative;z-index:1;flex:0 0 auto;height:var(--section-divider);margin-bottom:calc(0px - var(--section-divider));cursor:row-resize;touch-action:none}
 .set__divider[hidden]{display:none}
+
+/* A section whose plugin is not loaded keeps its tab in a tab layout, dimmed and struck through (docs/spec/plugins.md#missing-plugins). */
+.set__tab--missing { opacity: var(--dim-opacity); text-decoration: line-through; }
+/* The warning line of a missing plugin in a set line or a sidebar, in the warning tone. */
+.missing-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--toast-gap); padding: var(--toast-gap); color: var(--warn); font-size: var(--text-small); }
+.missing-line__button { border: 0; background: none; padding: 0; color: var(--focus); font: inherit; font-weight: 600; cursor: pointer; }
+
+/* The line form shows its one toast in inverted colors, and its count of the other notices in the error tone (docs/spec/notifications.md#toasts). */
+#toasts[data-style="line"] .toast { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+#toasts .toast__more[data-tone="error"] { background: var(--no); color: var(--bg); }

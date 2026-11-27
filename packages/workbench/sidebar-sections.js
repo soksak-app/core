@@ -6,6 +6,7 @@
 import { bind, mark, run } from "./commands.js";
 import { clearSlotSurface, setSlotSurface } from "./compositor.js";
 import { icon } from "./icons.js";
+import { missingGroups, missingLineNode, pluginRowsNow } from "./missing-plugins.js";
 import { hasSection, section } from "./registry.js";
 import { hideSectionSurface, showSectionSurface, sectionSurfaceId } from "./section-surfaces.js";
 import { mountSurface } from "./surface-modules.js";
@@ -306,15 +307,18 @@ export function drawSet(container, sidebar, set, context) {
     return;
   }
   if (set.layout !== "list" && set.layout !== "tabs") throw new Error(`set ${set.id} layout must be list or tabs`);
-  // The sections of a plugin that is not loaded remain in the set but are not drawn (docs/spec/plugins.md).
-  const sections = set.sections.filter(hasSection).map(section);
+  // The sections of a plugin that is not loaded remain in the set but are not drawn; their plugins get one warning line each, and a tab
+  // layout keeps a dimmed tab for each of them in the set order (docs/spec/plugins.md#missing-plugins).
+  const order = set.sections.map((id) => (hasSection(id) ? section(id) : id));
+  const sections = order.filter((item) => typeof item !== "string");
+  const missing = missingGroups(set.sections, pluginRowsNow());
   const choice = choiceOf(sidebar);
   // default: a set without sections has no tab to select (null).
   if (set.layout === "tabs" && !sections.some((s) => s.id === choice.tab)) choice.tab = sections[0]?.id ?? null;
   // Neither the orientation nor the followed surface is part of the key: a change of either keeps the section surfaces, and the
   // section views read the change from core.sidebars (docs/spec/plugins.md#sections).
-  const key = JSON.stringify([space, sidebar, set.id, set.title, set.layout, sections.map((s) => s.id), context.card, context.window === true,
-    context.hidden === true]);
+  const key = JSON.stringify([space, sidebar, set.id, set.title, set.layout, order.map((s) => (typeof s === "string" ? s : s.id)),
+    missing.map((g) => [g.id, g.name, g.state, g.latest, g.sections.length]), context.card, context.window === true, context.hidden === true]);
   let record = drawn.get(container);
   if (record?.key !== key) {
     if (record) clearSet(container);
@@ -327,6 +331,10 @@ export function drawSet(container, sidebar, set, context) {
     delete container.dataset.html;
     // There is no set title line. The sections start at the top of the sidebar.
     container.replaceChildren();
+    for (const group of missing) {
+      const line = missingLineNode(document, group);
+      if (line !== null) container.append(line);
+    }
     let strip = null;
     if (set.layout === "tabs") {
       strip = document.createElement("div");
@@ -335,7 +343,21 @@ export function drawSet(container, sidebar, set, context) {
       strip.setAttribute("role", "tablist");
       container.append(strip);
     }
-    for (const section of sections) {
+    for (const item of order) {
+      if (typeof item === "string") {
+        // A missing section keeps its tab in the set order, dimmed and struck through, and has no surface and no element to operate.
+        if (strip) {
+          const tab = document.createElement("button");
+          tab.type = "button";
+          tab.className = "set__tab set__tab--missing";
+          tab.setAttribute("role", "tab");
+          tab.disabled = true;
+          tab.textContent = item;
+          strip.append(tab);
+        }
+        continue;
+      }
+      const section = item;
       const element = document.createElement("section");
       element.className = "set__section";
       element.dataset.expose = "core.sidebar.section";

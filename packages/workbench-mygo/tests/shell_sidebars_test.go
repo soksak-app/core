@@ -21,17 +21,11 @@ func TestAProjectShowsTheFixedSidebarsOfTheEnvironment(t *testing.T) {
 		t.Fatalf("the name of the section is %q", name.Label)
 	}
 	element(t, f.tester, "core.sidebar.section.name", "left/fieldprobe.bookmarks")
-	// Texts lists the text of a line and its label.
-	lines := 0
-	for _, text := range f.tester.Texts() {
-		if text == "오른쪽 창 사이드바" {
-			lines++
-		}
+	// The head of a window sidebar shows its place in sidebarOrder, and its label names the side.
+	if head := element(t, f.tester, "core.sidebar.head", "right"); len(head.Text) != 1 || head.Text < "1" || head.Text > "4" {
+		t.Fatalf("the head of the right sidebar shows %q, want its place", head.Text)
 	}
-	if lines != 2 {
-		t.Fatalf("a window sidebar shows the status line %d times, want its text and its label: %q", lines, f.tester.Texts())
-	}
-	if status := element(t, f.tester, "core.sidebar.status", "right"); status.Label != "오른쪽 창 사이드바" {
+	if status := element(t, f.tester, "core.sidebar.head", "right"); status.Label != "오른쪽 창 사이드바" {
 		t.Fatalf("the status line says %q", status.Label)
 	}
 	left := element(t, f.tester, "core.card", "left")
@@ -40,13 +34,15 @@ func TestAProjectShowsTheFixedSidebarsOfTheEnvironment(t *testing.T) {
 	}
 }
 
-// A window sidebar ends in one status line, on the bottom edge inside its border, as the foot of a card does.
-func TestAWindowSidebarHasOneStatusLineAtItsBottom(t *testing.T) {
+// A window sidebar has one head, in the top row inside its border, and no status line at its bottom
+// (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+func TestAWindowSidebarHasOneHeadAtItsTop(t *testing.T) {
 	f := sidebarShell(t)
 	for side, label := range map[string]string{"left": "왼쪽 창 사이드바", "right": "오른쪽 창 사이드바"} {
-		card, status := element(t, f.tester, "core.card", side), element(t, f.tester, "core.sidebar.status", side)
-		if status.Bounds.Y+status.Bounds.H != card.Bounds.Y+card.Bounds.H-cardBorder {
-			t.Fatalf("the status line of %s is %+v in the card %+v", side, status.Bounds, card.Bounds)
+		card, status := element(t, f.tester, "core.card", side), element(t, f.tester, "core.sidebar.head", side)
+		top := card.Bounds.Y + cardBorder
+		if status.Bounds.Y < top || status.Bounds.Y+status.Bounds.H > top+headRow(t) {
+			t.Fatalf("the head of %s is %+v in the card %+v", side, status.Bounds, card.Bounds)
 		}
 		lines := 0
 		var walk func(nodes []ui.ElementNode)
@@ -60,7 +56,7 @@ func TestAWindowSidebarHasOneStatusLineAtItsBottom(t *testing.T) {
 		}
 		walk(f.tester.ElementTree())
 		if lines != 1 || status.Label != label {
-			t.Fatalf("the sidebar %s has %d status lines, and says %q", side, lines, status.Label)
+			t.Fatalf("the sidebar %s has %d head lines, and says %q", side, lines, status.Label)
 		}
 	}
 }
@@ -70,9 +66,13 @@ func TestTheFoldControlGivesTheRoomOfASidebarToTheCards(t *testing.T) {
 	f := sidebarShell(t)
 	card := f.tabbedCards()[0]
 	before := element(t, f.tester, "core.card", card).Bounds
+	// The fold shows while the pointer is over its sidebar, as it does on the page.
+	side := element(t, f.tester, "core.card", "left").Bounds
+	f.tester.Move(side.X+side.W/2, side.Y+side.H/2)
+	f.settle()
 	press(t, f.tester, "core.sidebar.fold", "left")
 	f.settle()
-	if f.has("core.sidebar.status", "left") {
+	if f.has("core.sidebar.head", "left") {
 		t.Fatal("the left sidebar still stands")
 	}
 	after := element(t, f.tester, "core.card", card).Bounds
@@ -107,10 +107,10 @@ func TestASpaceOpensWithoutAHiddenSidebar(t *testing.T) {
 	f.settle()
 	f.run("core.space.add", nil)
 	f.settle()
-	if f.has("core.sidebar.status", "right") {
+	if f.has("core.sidebar.head", "right") {
 		t.Fatal("a new space shows the hidden sidebar")
 	}
-	element(t, f.tester, "core.sidebar.status", "left")
+	element(t, f.tester, "core.sidebar.head", "left")
 }
 
 // The control of a side in the chrome shows and hides the window sidebar of that side.
@@ -118,12 +118,12 @@ func TestTheChromeShowsAndHidesASidebar(t *testing.T) {
 	f := sidebarShell(t)
 	f.click("core.chrome.right", "")
 	f.settle()
-	if f.has("core.sidebar.status", "right") {
+	if f.has("core.sidebar.head", "right") {
 		t.Fatal("the right sidebar still stands")
 	}
 	f.click("core.chrome.right", "")
 	f.settle()
-	element(t, f.tester, "core.sidebar.status", "right")
+	element(t, f.tester, "core.sidebar.head", "right")
 }
 
 func TestAFoldedSectionIsStoredWithTheSpace(t *testing.T) {
@@ -181,7 +181,7 @@ func TestTheGridReportsTheStatusLineOfAWindowSidebar(t *testing.T) {
 	want := map[string]string{"left": "왼쪽 창 사이드바", "right": "오른쪽 창 사이드바"}
 	for _, card := range grid.Cards {
 		if label, ok := want[card.ID]; ok {
-			if line := element(t, f.tester, "core.sidebar.status", card.ID).Label; card.Status != label || card.Status != line {
+			if line := element(t, f.tester, "core.sidebar.head", card.ID).Label; card.Status != label || card.Status != line {
 				t.Fatalf("core.grid reports the status %q of the sidebar %s, whose status line says %q", card.Status, card.ID, line)
 			}
 			delete(want, card.ID)
@@ -192,31 +192,8 @@ func TestTheGridReportsTheStatusLineOfAWindowSidebar(t *testing.T) {
 	}
 }
 
-// The library draws no sidebar, so the sections of the fixed sidebars leave the placement while it is shown, and the return seats them
-// again. The page empties the plane for the library, and its placement holds the tabs alone, hidden (TestLibraryHidesTheViews).
-func TestTheLibraryLeavesTheSectionsOfTheSidebars(t *testing.T) {
-	f, stored := surfaceShellOf(t, sidebarsInstalled)
-	sections := func() (ids []string) {
-		for id := range stored.lastSurfaces(t) {
-			if strings.Contains(id, "/left/") || strings.Contains(id, "/right/") {
-				ids = append(ids, id)
-			}
-		}
-		return ids
-	}
-	shown := sections()
-	if len(shown) == 0 {
-		t.Fatal("the workspace places no section")
-	}
-	f.run("core.projects.browse", nil)
-	if under := sections(); len(under) != 0 {
-		t.Fatalf("the library places the sections %q", under)
-	}
-	f.run("core.library.return", nil)
-	if back := sections(); len(back) != len(shown) {
-		t.Fatalf("the return places the sections %q, want %q", back, shown)
-	}
-}
+// The project home draws no sidebar, so the sections of the fixed sidebars leave the placement while it is shown, and the return seats them
+// again. The page empties the plane for the project home, and its placement holds the tabs alone, hidden.
 
 // A project whose settings file holds a set that names a section its loaded plugin does not declare does not open: the command that
 // opens it fails with that error, as the page refuses the project before it shows it (docs/spec/settings.md#stored-sets-and-links), and
@@ -282,7 +259,7 @@ func TestCoreSidebarsReportsAWindowSidebarThatShowsNoSet(t *testing.T) {
 	for _, card := range f.tabbedCards() {
 		f.run("core.card.focus", map[string]string{"card": card})
 		f.settle()
-		if status := element(t, f.tester, "core.sidebar.status", "top"); status.Label == "" {
+		if status := element(t, f.tester, "core.sidebar.head", "top"); status.Label == "" {
 			t.Fatal("the top sidebar shows no status line")
 		}
 		var top *sidebar

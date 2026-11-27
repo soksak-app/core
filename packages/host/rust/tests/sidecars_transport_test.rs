@@ -2259,6 +2259,7 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
                 running: Some("0.0.6".to_string()),
                 installed: Some("0.0.7".to_string()),
                 sessions: 1,
+                surfaces: vec!["surface".to_string()],
             }],
         ),
         (
@@ -2268,6 +2269,7 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
                 running: None,
                 installed: Some("0.0.7".to_string()),
                 sessions: 1,
+                surfaces: vec!["surface".to_string()],
             }],
         ),
         (Some("0.0.7"), vec![]),
@@ -2629,6 +2631,7 @@ fn an_outdated_service_is_replaced() {
             running: Some("0.0.6".to_string()),
             installed: Some("0.0.7".to_string()),
             sessions: 1,
+            surfaces: vec!["surface-1".to_string()],
         }]
     );
     sidecars.replace(ECHO).unwrap();
@@ -2698,7 +2701,7 @@ fn a_service_of_an_undeclared_sidecar_is_ended() {
     sidecars.declare(&[]).unwrap();
     assert_eq!(
         serde_json::to_string(&sidecars.outdated()).unwrap(),
-        format!(r#"[{{"sidecar":"{ECHO}","running":"0.0.7","installed":null,"sessions":1}}]"#)
+        format!(r#"[{{"sidecar":"{ECHO}","running":"0.0.7","installed":null,"sessions":1,"surfaces":["surface-1"]}}]"#)
     );
     sidecars.replace(ECHO).unwrap();
     let notice = events.recv().unwrap();
@@ -2788,6 +2791,7 @@ fn an_outdated_service_keeps_a_surface_that_a_layout_holds() {
         .unwrap();
     assert_no_replacement(&service, &sidecars);
     assert_eq!(sidecars.outdated()[0].sessions, 1);
+    assert_eq!(sidecars.outdated()[0].surfaces, vec!["space-b/left/probe.section".to_string()]);
     // A layout surface leaves the count and the service is replaced.
     sidecars.retain_sessions(&[]).unwrap();
     service.second.recv().unwrap();
@@ -2828,7 +2832,7 @@ fn the_removal_of_the_plugin_of_a_service_keeps_the_sessions_of_its_layout_surfa
     assert_no_replacement(&service, &sidecars);
     assert_eq!(
         serde_json::to_string(&sidecars.outdated()).unwrap(),
-        format!(r#"[{{"sidecar":"{ECHO}","running":"0.0.7","installed":null,"sessions":1}}]"#)
+        format!(r#"[{{"sidecar":"{ECHO}","running":"0.0.7","installed":null,"sessions":1,"surfaces":["space-b/left/probe.section"]}}]"#)
     );
     sidecars.stop();
 }

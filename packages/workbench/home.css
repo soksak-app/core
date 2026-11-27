@@ -1,0 +1,71 @@
+/* The project home is the screen of a window with no project in front (docs/spec/projects.md#project-home). Colors come from the theme tokens. */
+.chrome-bar{order:-1}
+#home[hidden],body[data-screen=workspace] #home,body[data-screen=home] #workarea,
+body[data-screen=home] #projectBar,body[data-screen=home] #chromeActs .act[title="좌측 사이드바 위치"],
+body[data-screen=home] #chromeActs .act[title="우측 사이드바 위치"]{display:none}
+#home{display:grid;grid-template-columns:minmax(0,1fr);flex:1;min-height:0;overflow:auto;background:var(--bg);font-size:var(--text-control)}
+#home button{cursor:pointer}
+#home button:disabled{cursor:wait}
+#home [hidden]{display:none}
+.home{display:flex;justify-content:center;padding:var(--space-4) var(--space-3);min-width:0}
+/* The launcher column: centred, at most 660 points wide, with a 12 point gap between its parts. */
+.home__panel{display:flex;flex-direction:column;gap:var(--space-3);width:min(var(--home-w),var(--fill));min-width:0}
+.home__brand{display:flex;align-items:baseline;gap:var(--space-2);color:var(--fg)}
+.home__name{font-weight:700;letter-spacing:var(--letter-spacing)}
+.home__question{color:var(--muted);font-size:var(--text-small)}
+.home__search input{width:var(--fill);max-width:var(--fill)}
+.home__actions{display:flex;gap:var(--space-2)}
+.home__list{display:flex;flex-direction:column;border:var(--bw) solid var(--edge);border-radius:var(--r);background:var(--card);overflow:hidden}
+.home__form{border:var(--bw) solid var(--edge);border-radius:var(--r-sm);padding:var(--space-4);background:var(--card)}
+.home__form h2{margin:0 0 var(--space-3);font-size:var(--text-control);font-weight:600}
+.home-form__fields{display:grid;gap:var(--space-3)}
+.home-form__fields label{display:flex;gap:var(--space-2);flex-wrap:wrap;color:var(--muted)}
+.home-form__fields label input{flex:1 1 var(--fill)}
+.home-form__actions{display:flex;justify-content:flex-end;gap:var(--space-2)}
+.home-group__title{margin:0;padding:var(--space-2) var(--space-3) var(--space-1);color:var(--muted);font-size:var(--text-caption);font-weight:600}
+/* A project row: letter square, name and path, the space count and the day, and the buttons that show on hover or selection. */
+.home-row{min-height:var(--home-row-min-h);display:grid;grid-template-columns:var(--space-4) minmax(0,1fr) auto auto auto;align-items:center;gap:var(--space-3);padding:var(--space-2) var(--space-2) var(--space-2) var(--space-3);border-top:var(--bw) solid var(--edge)}
+.home-row:first-child{border-top:0}
+.home-row[data-selected=true]{background:var(--chip-on)}
+.home-row:not([data-confirm]){cursor:pointer}
+.home-row__mark{display:grid;place-items:center;width:var(--space-4);height:var(--space-4);border-radius:var(--r-xs);background:var(--focus);color:var(--bg);font-size:var(--text-caption);font-weight:600}
+.home-row__main{min-width:0}
+.home-row__name{display:inline-flex;align-items:center;gap:var(--space-2);max-width:var(--fill);padding:0;border:0;background:transparent;color:var(--fg);font-size:var(--text-control);font-weight:600}
+.home-row__badge{color:var(--rail);font-size:var(--text-caption);font-weight:400}
+.home-row__path{margin:0;overflow:hidden;color:var(--muted);font-family:ui-monospace,"SF Mono","JetBrains Mono","D2Coding",Menlo,Consolas,monospace;font-size:var(--text-small);white-space:nowrap;text-overflow:ellipsis}
+.home-row__missing{margin:0;color:var(--muted);font-size:var(--text-caption)}
+.home-row__meta{margin:0;color:var(--muted);font-size:var(--text-caption);text-align:right;white-space:nowrap}
+.home-row__pin,.home-row__remove{opacity:0}
+.home-row:hover .home-row__pin,.home-row:hover .home-row__remove,.home-row[data-selected=true] .home-row__pin,.home-row[data-selected=true] .home-row__remove{opacity:var(--opaque)}
+.home-row__pin[aria-pressed=true],.home-row[data-pinned=true] .home-row__pin{opacity:var(--opaque);color:var(--focus)}
+.home-row__confirm{grid-column:1/-1;margin:0;color:var(--fg)}
+.home-row[data-confirm]{grid-template-columns:minmax(0,1fr) auto}
+.home-row__buttons{display:flex;gap:var(--space-2)}
+.home-path{display:flex;align-items:center;flex-wrap:wrap;gap:var(--space-2);padding:var(--space-3);color:var(--muted)}
+.home-path__value{color:var(--fg);overflow-wrap:anywhere}
+.home-no-results{margin:0;padding:var(--space-3);color:var(--muted)}
+.home__hint{display:flex;gap:var(--space-4);margin:0;color:var(--muted);font-size:var(--text-caption)}
+.chrome-sep{width:var(--pixel);height:var(--space-4);margin:0 var(--space-1);background:var(--edge)}
+.sr-only{position:absolute;width:var(--pixel);height:var(--pixel);overflow:hidden;clip-path:inset(var(--clip-all));white-space:nowrap}
+body[data-screen=home] .chrome-bar__acts{margin-left:auto}
+/* The edge of a hidden side with a choice: the + <side> button shows while the pointer is over the edge (docs/spec/external-sidebars.md). */
+.sidebar-edges{position:absolute;inset:0;pointer-events:none;z-index:2}
+.sidebar-edge{position:absolute;display:flex;align-items:center;justify-content:center;pointer-events:auto}
+.sidebar-edge[hidden]{display:none}
+.sidebar-edge[data-side=left]{left:0;top:0;bottom:0;width:var(--space-4)}
+.sidebar-edge[data-side=right]{right:0;top:0;bottom:0;width:var(--space-4)}
+.sidebar-edge[data-side=top]{top:0;left:0;right:0;height:var(--space-4)}
+.sidebar-edge[data-side=bottom]{bottom:0;left:0;right:0;height:var(--space-4)}
+/* The edge button has a dashed border that is transparent at rest; the pointer over the edge shows it with the border and background of a control, and the pointer over the button with the accent (design: edge). */
+.sidebar-edge__button{opacity:0;border:var(--bw) dashed transparent;border-radius:var(--r-xs);background:none;color:var(--fg);font-size:var(--text-caption);padding:0 var(--space-2)}
+.sidebar-edge:hover .sidebar-edge__button,.sidebar-edge__button:focus-visible{opacity:var(--opaque);border-color:var(--edge);background:var(--card)}
+.sidebar-edge__button:hover{border-color:var(--rail);background:var(--chip-on)}
+/* The settings tab chip beside the project tabs and the container of the settings content (docs/spec/settings.md#opening-and-closing). */
+.settings-chip{display:flex;align-items:center;gap:var(--space-1);flex:0 0 auto;margin-left:var(--space-1)}
+.settings-chip[hidden],.settings-tab[hidden],.work[hidden]{display:none}
+.settings-chip__open{border:var(--bw) solid var(--edge);border-radius:var(--r-xs);background:var(--chip-on);color:var(--fg);font-size:var(--text-small);padding:0 var(--space-2);height:var(--chrome-row-h)}
+.settings-chip__close{border:0;background:transparent;color:var(--muted);font-size:var(--text-control);padding:0 var(--space-1)}
+/* While the settings tab is in front, the chip and its close control share one frame and the open control has no frame of its own (design: tgroup). */
+.settings-chip[data-on=true]{border:var(--bw) solid var(--edge);border-radius:var(--r-xs);background:var(--chip-sel)}
+.settings-chip[data-on=true] .settings-chip__open{border-color:transparent;background:transparent;color:var(--fg)}
+.settings-tab{flex:1 1 auto;min-width:0;min-height:0;overflow:auto;background:var(--bg)}

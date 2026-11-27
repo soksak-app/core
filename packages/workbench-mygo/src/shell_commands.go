@@ -127,7 +127,7 @@ func (s *Shell) requirePlane() error {
 
 // register adds the commands of the shell to the registry.
 func (s *Shell) register() {
-	s.registerLibrary()
+	s.registerHome()
 	s.registerRename()
 	s.registerSettings()
 	s.registerPicker()
@@ -141,10 +141,7 @@ func (s *Shell) register() {
 	s.registerDebug()
 	// The project home shows the projects (docs/spec/projects.md#project-home).
 	act(s, "core.projects.browse", func(struct{}) error {
-		if err := s.browse(); err != nil {
-			return err
-		}
-		return s.showLibraryPage("projects")
+		return s.browse()
 	})
 	later(s, "core.projects.flush", func(_ struct{}, answer func(any, error)) { s.flushProjects(answerNull(answer)) })
 	// core.plugins.apply answers {reloaded} before the new start (docs/spec/installation.md#applying-a-change).
@@ -162,7 +159,7 @@ func (s *Shell) register() {
 	s.registerPlacementLast()
 	s.registry.Method("surface.window", s.surfaceSpace)
 	// The activation answers when the project is shown, as activate of packages/workbench/projects.js resolves after showProject; an
-	// activation that is refused shows its error, as core.library.open does.
+	// activation that is refused shows its error, as core.home.open does.
 	later(s, "core.project.activate", func(value idParam, answer func(any, error)) {
 		s.activateThen(value.ID, func(err error) {
 			s.failed(err)
@@ -170,22 +167,23 @@ func (s *Shell) register() {
 		})
 	})
 	s.registerProjectClose()
-	// The role handshake of a tab (docs/spec/agent-roles.md#change-of-a-running-agent): the ordered change and the confirmation
-	// run in the workspace store of the host; the confirmation names no tab, because it runs on the surface of its caller.
-	s.registry.Command("core.error.dismiss", func(raw json.RawMessage) (any, error) {
+	s.registerNotices()
+	s.registry.Command("core.notices.close", func(raw json.RawMessage) (any, error) {
 		var params struct {
-			Text string `json:"text"`
+			ID string `json:"id"`
 		}
-		if err := json.Unmarshal(raw, &params); err != nil || params.Text == "" {
-			return nil, Refuse(InvalidParams, "core.error.dismiss requires a text")
+		if err := json.Unmarshal(raw, &params); err != nil || params.ID == "" {
+			return nil, Refuse(InvalidParams, "core.notices.close requires an id")
 		}
-		if !s.errors.DismissToast(params.Text) {
-			return nil, Refuse(InvalidParams, "core.error.dismiss names no open toast")
+		if !s.errors.CloseNotice(params.ID) {
+			return nil, Refuse(InvalidParams, "core.notices.close names no shown notice")
 		}
 		s.options.Invalidate()
 		return nil, nil
 	})
 
+	// The role handshake of a tab (docs/spec/agent-roles.md#change-of-a-running-agent): the ordered change and the confirmation
+	// run in the workspace store of the host; the confirmation names no tab, because it runs on the surface of its caller.
 	s.registry.StatusOnSurface("core.tab.role", s.roleStatus)
 	s.registry.CommandLater("core.tab.role", func(raw json.RawMessage, answer func(any, error)) {
 		var params struct {

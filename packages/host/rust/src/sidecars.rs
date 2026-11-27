@@ -8,7 +8,7 @@
 //! Starts a declared sidecar at its first use and relays one-line JSON messages between surface pages and the sidecar.
 //! The message body is not interpreted. The format is defined in docs/spec/sidecars.md.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -250,11 +250,13 @@ fn status_locked<O>(core: &Core<O>, state: &State<O>) -> SidecarStatus {
             if installed.is_some() && connection.version == installed {
                 return None;
             }
+            let surfaces = session_surfaces_of(state, process);
             Some(OutdatedSidecar {
                 sidecar: name.clone(),
                 running: connection.version.clone(),
                 installed,
-                sessions: sessions_of(state, process),
+                sessions: surfaces.len(),
+                surfaces: surfaces.into_iter().collect(),
             })
         })
         .collect();
@@ -265,13 +267,16 @@ fn status_locked<O>(core: &Core<O>, state: &State<O>) -> SidecarStatus {
 /// The sessions of the service process of the sidecar name: the open surfaces of the application that have sent to it, and each
 /// surface of the layouts of a plugin that listed it while the process ran, which may hold a session that an earlier application
 /// left.
-fn sessions_of<O>(state: &State<O>, process: &Process) -> usize {
-    process
+/// The surfaces that the sessions of the service of process count, each once, sorted (docs/spec/persistent-services.md#updates).
+fn session_surfaces_of<O>(state: &State<O>, process: &Process) -> BTreeSet<String> {
+    let mut surfaces: BTreeSet<String> = process
         .surfaces
         .iter()
         .filter(|surface| state.owners.contains_key(*surface))
-        .count()
-        + state
+        .cloned()
+        .collect();
+    surfaces.extend(
+        state
             .layout
             .iter()
             .flatten()
@@ -279,7 +284,13 @@ fn sessions_of<O>(state: &State<O>, process: &Process) -> usize {
                 process.plugins.contains(plugin)
                     && !(process.surfaces.contains(*surface) && state.owners.contains_key(*surface))
             })
-            .count()
+            .map(|(surface, _)| surface.clone()),
+    );
+    surfaces
+}
+
+fn sessions_of<O>(state: &State<O>, process: &Process) -> usize {
+    session_surfaces_of(state, process).len()
 }
 
 /// Handles line of the process `pid` when it is an answer to closed. It returns Ok(false) when it is not an answer,
@@ -1873,7 +1884,7 @@ impl SidecarSessionsRequest {
 }
 
 /// (docs/spec/persistent-services.md#updates). `running` is `None` when the service sent no version; `sessions` counts
-/// the open surfaces of the application that have sent to the service.
+/// the open surfaces of the application that have sent to the service, and `surfaces` lists those surfaces, sorted.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct OutdatedSidecar {
     pub sidecar: String,
@@ -1881,6 +1892,7 @@ pub struct OutdatedSidecar {
     /// None when the sidecar is no longer declared.
     pub installed: Option<String>,
     pub sessions: usize,
+    pub surfaces: Vec<String>,
 }
 
 /// The folder of the host executable, where the application bundle holds sok, which the environment of every sidecar puts

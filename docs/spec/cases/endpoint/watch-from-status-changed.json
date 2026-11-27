@@ -5,7 +5,7 @@
   "reason": "The notification follows a change of the status value, and the replay cannot change the status of the application on demand.",
   "variables": {
     "screen": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "workspace", "modal": null } },
-    "screen-library": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "library", "modal": null } }
+    "screen-library": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "home", "modal": null } }
   },
   "steps": [
     { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },

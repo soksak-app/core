@@ -95,11 +95,11 @@ test("an accepted system notice that a later tab notice of the tab replaces is r
     tabName: (tab) => `name of ${tab}`,
     select: async () => {},
   });
-  reportNotice("tab-replaced", "SYSTEM-NOTICE", "system");
+  reportNotice("tab-replaced", { kind: "info", title: "SYSTEM-NOTICE", text: "", system: true });
   notifications.sync();
   notifications.posted({ surface: "tab-replaced" });
   assert.deepEqual(notifications.state().posted, ["tab-replaced"]);
-  reportNotice("tab-replaced", "TAB-NOTICE", "tab");
+  reportNotice("tab-replaced", { kind: "info", title: "TAB-NOTICE", text: "" });
   notifications.sync();
   assert.deepEqual(calls, [
     ["post", { surface: "tab-replaced", title: "name of tab-replaced", body: "SYSTEM-NOTICE" }],

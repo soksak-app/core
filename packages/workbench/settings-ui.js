@@ -1,1135 +1,730 @@
-// The settings modal.
+// The settings tab of the window (docs/spec/settings.md). The tab is a tab of the main window: mountSettingsTab draws its content into the
+// container that the tab strip gives it, and the tab keeps its page, its search, its plugin and its edited set while the window lives.
 //
-// A 560px card. The header holds the title and the close button, the left holds the list of sections, and the right holds rows of the form "name 124px +
-// control". Rows are divided into groups, and each group has a name and a one-line description.
+// The modules: settings-state.js (the state of the tab), settings-rows.js (the core rows), settings-controls.js (the standard controls and
+// the scope marks), settings-pages.js, settings-sides.js, settings-sets.js and settings-plugins.js (the pages), settings-search.js (the
+// search) and settings-toast.js (the undo toast). This module draws the menu, the page head, the pane and the foot, registers the commands
+// of the commands core.settings-tab.*; core.settings.open, core.settings.close and the status core.settings-tab are in core-exposure.js.
 //
-// Each setting format has one control (Controls in docs/spec/settings.md). An on/off value is a
-// switch, one of listed values is a select box, a theme is a swatch grid, a bounded integer is a slider,
-// a string and an address are a text input, and a set reference is a select box. The default select and checkbox do not follow the colors of the theme,
-// so the controls use the appearance of app.css.
-//
-// This is a [data-native-modal] element. A DOM cannot be drawn over a native surface, so the host
-// renders this element in a separate view. That view is a copy, so a listener registered here does
-// not work. Every control gets data-key or data-set, and the responses are received by the single function answer(). Each control
-// points with data-command to the core command to run, and answer() runs that
-// command.
-import { standIn } from "./compositor.js";
-import { native, overlay } from "./host.js";
-import { icon } from "./icons.js";
-import { onGripDrag, showValue } from "./card.js";
+// The event of the tab is the publication of its state: onSettingsTabFront calls fn(front) when the tab opens, closes or comes to the front,
+// and the status core.settings-tab changes with it.
+import { registry } from "./exposure.js";
 import { commandOf, delegate, mark, run } from "./commands.js";
-import { pluginAccounts, pluginUnits } from "./environment.js";
-import { accounts } from "./accounts-exposure.js";
-import { SIDE_NAMES, WINDOW_SIDES } from "./window-sidebars.js";
-import { matchPlugins } from "./plugin-search.js";
-import { restoreScroll, scrollPositions } from "./scroll-keep.js";
+import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
+import { ALL_ROWS, PAGES, choicesOf } from "./settings-rows.js";
+import { badge, button, editable, element } from "./settings-controls.js";
+import { state, setScope, projectSelected, projectTitle, projectFolder, shownValue } from "./settings-state.js";
+import { agentsPage, behaviorPage, diagPage, headScope, lookPage, scopeSegment, setupWarnings, workspacePage } from "./settings-pages.js";
+import { setRow, setsPage } from "./settings-sets.js";
+import { browsePage, installedBadge, installedPage, pluginMenuItems, pluginPage } from "./settings-plugins.js";
+import { searchPage, searchResults } from "./settings-search.js";
+import { tabErrors } from "./settings-errors.js";
+import { dismissUndo, onUndoChange, showUndo, undoAction, undoElement, undoState } from "./settings-toast.js";
+import { defaults, missingPluginKeys, onSettingsChange, overridden, pluginsOfCategory, scopedValue, settingDefinitions } from "./settings.js";
 import { setupParts } from "./setup-exposure.js";
-import { missingKinds } from "./setup-parts.js";
-import { errorToasts, hideError, showError } from "./shown-errors.js";
-import { hasSection, section, sectionNames } from "./registry.js";
-import {
-  CHOICES, ERROR_TOAST_DISMISS_SECONDS, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
-  settingDefinitions, pluginsOfCategory,
-} from "./settings.js";
+import { accounts } from "./accounts-exposure.js";
+import { pluginOperations } from "./installed-plugins.js";
+import { pluginAccounts, pluginUnits } from "./environment.js";
+import { restoreScroll, scrollPositions } from "./scroll-keep.js";
+import { coreRowFor, sizeGroup } from "./settings-pages.js";
+import { declaredRow } from "./settings-plugins.js";
+import { sideList } from "./settings-sides.js";
+import { SIDE_NAMES } from "./window-sidebars.js";
+import { showTabError } from "./settings-errors.js";
 
-/* It exists only while open. If it were kept hidden, CSS would decide whether it is shown, and
-   [hidden] cannot override a rule that sets display. */
-let scrim = null;
-let card = null;
-let nav = null;
-let body = null;
+/** The pages that the menu shows, in order, and the two plugin pages that are not core pages. */
+const CORE_PAGES = PAGES.map((page) => page.id);
+const PLUGIN_LIST_PAGES = ["installed", "browse"];
+/** The filters of 설치됨 (docs/spec/settings.md#설치됨). */
+const FILTERS = ["all", "active", "disabled", "updates", "problems"];
+/** The rows that one press of 더 보기 adds to 찾아보기 (docs/spec/settings.md#찾아보기). */
+const BROWSE_PAGE = 30;
+/** The keys of the sides, whose switches show a toast with the side name (docs/spec/settings.md#saving-and-undo). */
+const SIDE_KEYS = ["left", "right", "top", "bottom"];
+/** The keys that the debug switch row shows (docs/spec/settings.md#진단). */
+const DEBUG_KEYS = ["diagnostics.performance", "diagnostics.log"];
 
-/** The current section. It is kept after closing, and the same section is shown when the modal opens again. */
-let here = "general";
-let scope = "common";
-/** The id of the plugin whose page is open in the plugin section. When it is null, the list is shown. */
-let chosen = null;
-/** The search term of the plugin list. */
-let query = "";
-/** The id of the set being edited in the sidebar section. null when there is none. */
-let editing = null;
-/**
- * The fields of the group 계정 of the shown plugin page (docs/spec/plugins.md#accounts): the name and the kind of the row 새 계정, the
- * id of the account whose name is edited, and the text of its field. Another page clears them.
- */
-let accountDraft = { plugin: null, name: "", kind: null, edit: null, editName: "" };
-/** The setting of the key of a control: links for a link, sets for a control of the set editor, and the key itself otherwise. */
-const settingOf = (key) => key.startsWith("link:") ? "links"
-  : ["title:", "layout:", "row:"].some((prefix) => key.startsWith(prefix)) ? "sets" : key;
-/**
- * The scope that a control of the key shows and writes: the project in the project tab, and in the common tab the scope that the applied
- * value of its setting comes from (docs/spec/settings.md#scope-of-a-control).
- */
-const scopeOf = (key) => (scope === "project" ? "project" : sourceScope(settingOf(key)));
-const value = (key) => scopedValue(key, scopeOf(key));
-const themeName = () => value("theme");
-const modeName = () => value("mode");
-const gapSetting = () => value("gap");
+/** The element of the tab, or null while the tab is not mounted. */
+let root = null;
+/** Whether the settings tab is in front. */
+let front = false;
+/** The values of the settings at the last draw, which tell the changed setting and its old value for the undo toast. */
+let snapshot = null;
+/** Whether a change that this tab makes by the undo button runs, so that it shows no toast of its own. */
+let reverting = false;
+const frontListeners = new Set();
+/** Receives the status of the tab at each publication, given by installSettingsTab. */
+let statusSink = null;
+let installed = false;
 
-/** Creates one row of the form "name + control". */
-function row(label, control) {
-  const el = document.createElement("label");
-  el.className = "set-row";
-  const name = document.createElement("span");
-  name.className = "set-row__name";
-  name.textContent = label;
-  el.append(name, control);
-  const field = control.matches("[data-set]") ? control : control.querySelector("[data-set]");
-  // default: a row without a setting control (a row with only a button) has no key.
-  const key = field?.dataset.set;
-  if (key) el.append(...rowOverrideControls(key));
-  return el;
+/** Whether the settings tab is in front (docs/spec/settings.md#opening-and-closing). */
+/** The front of the tab last published to the front listeners. */
+let publishedFront = false;
+
+export const settingsTabFront = () => front;
+
+/** Calls fn(front) when the tab opens, closes or comes to the front. It returns the function that removes fn. */
+export function onSettingsTabFront(fn) {
+  if (typeof fn !== "function") throw new TypeError("settings tab listener must be a function");
+  frontListeners.add(fn);
+  return () => frontListeners.delete(fn);
 }
 
-/**
- * The controls of a setting that the selected project overrides: the button that removes the project value in the project tab, and the
- * mark that the project value applies in the common tab (docs/spec/settings.md#scope-of-a-control).
- */
-/** The override controls of the row of a setting, whose reset button takes the size of a caption (.set-reset). */
-function rowOverrideControls(key) {
-  const controls = overrideControls(key, "전역값 사용");
-  for (const item of controls) if (item.tagName === "BUTTON") item.classList.add("set-reset");
-  return controls;
-}
-
-function overrideControls(key, label) {
-  if (!settingProject() || !overridden(key)) return [];
-  if (scope === "project") return [press(`reset:${key}`, label)];
-  const applied = document.createElement("span");
-  applied.className = "set-applied";
-  applied.dataset.key = `applied:${key}`;
-  applied.dataset.expose = "core.settings-modal.applied";
-  applied.textContent = "프로젝트 값";
-  return [applied];
-}
-
-/**
- * Creates one group of rows: a name, a one-line description, and the rows.
- *
- * If rows were only placed side by side, it would not show which of them change the layout and which change only the display.
- */
-function group(name, text, children) {
-  const el = document.createElement("section");
-  el.className = "set-group";
-  const head = document.createElement("h4");
-  head.className = "set-group__name";
-  head.textContent = name;
-  const cap = document.createElement("p");
-  cap.className = "set-caption";
-  cap.textContent = text;
-  el.append(head, cap, ...children);
-  return el;
-}
-
-/* Sets the current value as an attribute, not as a property.
-   What is sent to the host is innerHTML, and only attributes are serialized.
-   If checked/selected/value were set only as properties, the copy would render with the initial values. */
-
-/**
- * The command of a control that inputs a value. For a setting name it is core.settings.change, and for a sidebar link
- * (link:<position>:<plugin>) it is core.settings.link.
- */
-function valueCommand(el, key) {
-  const [kind, place, plugin] = key.split(":");
-  // default: a key such as link:left: whose plugin part is empty is a general choice, so plugin is null (docs/spec/settings.md).
-  if (kind === "link") mark(el, "core.settings.link", { place, plugin: plugin || null, scope: scopeOf(key) }, "set");
-  else mark(el, "core.settings.change", { key, scope: scopeOf(key) });
-}
-
-/** Creates a select box. The caller connects the command. Throws when the current value is not among the choices. */
-function selectBox(key, options, now) {
-  if (!options.some(([value]) => value === now)) throw new Error(`unknown settings choice ${String(now)} for ${key}`);
-  const wrap = document.createElement("span");
-  wrap.className = "select-field";
-  const el = document.createElement("select");
-  el.dataset.set = key;
-  el.dataset.expose = "core.settings-modal.set";
-  for (const [v, label] of options) {
-    const o = document.createElement("option");
-    o.value = v;
-    o.textContent = label;
-    if (v === now) o.setAttribute("selected", "");
-    el.appendChild(o);
+/** Publishes the state of the tab to the status listeners, and the front to the front listeners when it changed. */
+function publish() {
+  if (statusSink !== null) statusSink(statusOf());
+  if (front !== publishedFront) {
+    publishedFront = front;
+    for (const fn of frontListeners) fn(front);
   }
-  wrap.appendChild(el);
-  return wrap;
 }
 
-/** The select box of a setting. The selected value goes with key to core.settings.change or core.settings.link. */
-function choose(key, options, now) {
-  const wrap = selectBox(key, options, now);
-  valueCommand(wrap.firstChild, key);
-  return wrap;
+/** Draws the tab again when it is mounted. */
+export function redrawSettingsTab() {
+  if (root !== null) draw();
 }
 
-/** Gives names to the choices of a setting. The choices and their order are decided by CHOICES in settings.js. */
-function named(key, labels) {
-  return CHOICES[key].map((choice) => {
-    if (!Object.hasOwn(labels, choice)) throw new Error(`settings choice ${choice} of ${key} has no label`);
-    return [choice, labels[choice]];
-  });
+/** Opens the tab, or brings it to the front (docs/spec/settings.md#opening-and-closing). */
+export function openSettingsTab() {
+  front = true;
+  draw();
 }
 
-/**
- * The scope tabs. They place buttons that choose the visible scope, not a setting, in one line. They are buttons, so unlike a select they arrive as a click, not as a
- * change, and they send the value together in key.
- */
-function scopeTabs(options, now) {
-  const el = document.createElement("span");
-  el.className = "set-seg";
-  for (const [v, label] of options) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.dataset.key = `pick:scope:${v}`;
-    b.dataset.expose = "core.settings-modal.scope";
-    mark(b, "core.settings-modal.scope", { scope: v });
-    b.dataset.on = String(v === now);
-    b.textContent = label;
-    el.appendChild(b);
-  }
-  return el;
-}
-
-/** An on/off value. */
-function toggle(key, now) {
-  const el = document.createElement("input");
-  el.type = "checkbox";
-  el.className = "set-switch";
-  el.dataset.set = key;
-  el.dataset.expose = "core.settings-modal.set";
-  valueCommand(el, key);
-  el.toggleAttribute("checked", now);
-  return el;
-}
-
-/** Creates a number input of whole seconds; the range of the setting states its bounds and the step is one. */
-function seconds(key, min, max, now) {
-  const el = document.createElement("input");
-  el.type = "number";
-  el.dataset.set = key;
-  el.dataset.expose = "core.settings-modal.set";
-  valueCommand(el, key);
-  el.min = String(min);
-  el.max = String(max);
-  el.step = "1";
-  el.setAttribute("value", String(now));
-  return el;
-}
-
-/** Creates a range input and a value display. */
-function slide(key, min, max, now, unit) {
-  const wrap = document.createElement("span");
-  wrap.className = "set-slide";
-  const el = document.createElement("input");
-  el.type = "range";
-  el.dataset.set = key;
-  el.dataset.expose = "core.settings-modal.set";
-  valueCommand(el, key);
-  el.min = String(min);
-  el.max = String(max);
-  el.setAttribute("value", String(now));
-  const out = document.createElement("output");
-  out.textContent = `${now}${unit}`;
-  wrap.append(el, out);
-  return wrap;
-}
-
-/** A one-line string input that fills its row as every text field does (.text-field). The value arrives as change. */
-function text(key, maxLength, now) {
-  const el = document.createElement("input");
-  el.type = "text";
-  el.className = "text-field";
-  el.dataset.set = key;
-  el.dataset.expose = "core.settings-modal.set";
-  valueCommand(el, key);
-  el.maxLength = maxLength;
-  el.setAttribute("value", String(now));
-  return el;
-}
-
-/** Creates a button. */
-function press(key, label) {
-  const el = document.createElement("button");
-  el.className = "ui-button";
-  el.type = "button";
-  el.dataset.key = key;
-  el.dataset.expose = "core.settings-modal.reset";
-  mark(el, "core.settings.reset", { key: key.split(":")[1] });
-  el.textContent = label;
-  return el;
+/** Closes the tab. The tab strip brings the work screen to the front (docs/spec/settings.md#opening-and-closing). */
+export function closeSettingsTab() {
+  front = false;
+  syncReads();
+  publish();
 }
 
 /**
- * Creates one theme swatch.
- *
- * It draws five values in one box: background, card, border, rail and focus. If only two cells were painted, the differences between
- * themes would not show. The corners are also drawn with the value of that theme.
+ * Draws the content of the tab into container. The container is kept, so the tab draws again when the state changes.
+ * The page is built here, when the tab is shown, and not when the window is created (docs/spec/settings.md#performance).
  */
-function swatch(theme) {
-  const el = document.createElement("button");
-  el.className = "th";
-  el.type = "button";
-  el.dataset.key = `theme:${theme.name}`;
-  el.dataset.expose = "core.settings-modal.theme";
-  mark(el, "core.settings.theme", { name: theme.name, scope: scopeOf("theme") });
-  el.dataset.on = String(theme.name === themeName());
-  const c = theme[modeName()];
-  const gap = parseFloat(theme.shape.gap);
-  // The swatch is 42px, so using the actual value as it is would let the gap fill the box. The gap is quartered, but
-  // a theme with gap 0 keeps 1px and paints it with the boundary line color. That 1px is the line that the two
-  // cards share.
-  const slit = gap === 0 ? 1 : Math.max(2, Math.round(gap / 4));
-  const between = gap === 0 ? c.rule : c.bg;
-  const r = Math.min(parseFloat(theme.shape.r) / 2, 5);
-  el.innerHTML =
-    `<span class="th__box" style="background:${c.bg};border-color:${c.edge}">` +
-    `<span class="th__rail" style="background:${c.rail}"></span>` +
-    `<span class="th__pair" style="gap:${slit}px;background:${between}">` +
-      `<span class="th__card" style="background:${c.card};border-color:${c.edge};` +
-        `border-radius:${r}px">` +
-        `<span class="th__dot" style="background:${c.focus}"></span></span>` +
-      `<span class="th__card" style="background:${c.card};border-color:${c.edge};` +
-        `border-radius:${r}px"></span>` +
-    `</span></span>` +
-    `<span class="th__name">${theme.name}</span>`;
-  return el;
+export function mountSettingsTab(container) {
+  if (!(container instanceof Element)) throw new TypeError("mountSettingsTab needs an element");
+  if (root !== null && root !== container) throw new Error("the settings tab is already mounted in another element");
+  // A failed command is shown through the one error display path, and the tab shows the text of the refusal.
+  if (root === null) delegate(container, { failed: (error) => showTabError("settings-tab", error.message) });
+  root = container;
+  draw();
 }
 
-function drawGeneral() {
-  const grid = document.createElement("div");
-  grid.className = "th-grid";
-  for (const t of THEMES) grid.appendChild(swatch(t));
-
-  if (scope === "common") body.append(group("프로젝트", "프로젝트를 여는 방식은 모든 프로젝트에 적용됩니다. 이미 열린 창은 유지됩니다.", [
-    row("열기 방식", choose("projectOpening", named("projectOpening", { tabs: "현재 창", windows: "별도 창" }), value("projectOpening"))),
-  ]));
-  grid.append(...overrideControls("theme", "전역 테마 사용"));
-  body.append(group("테마", "테마가 색과 형태의 기본값을 정하고, 모드는 그 테마의 밝은 쪽과 어두운 쪽을 고른다.", [
-    grid,
-    row("모드", choose("mode", named("mode", { dark: "어두움", light: "밝음" }), modeName())),
-  ]));
-
-  body.append(group("형태", "테마가 준 값에서 시작한다. 통로를 0 으로 내리면 카드가 선 하나를 공유한다.", [
-    row("통로", slide("gap", ...SHAPE_RANGES.gap, gapSetting(), "px")),
-    row("모서리", slide("radius", ...SHAPE_RANGES.radius, value("radius"), "px")),
-    row("폰트", choose("font", FONTS.map((f) => [f.id, f.name]), value("font"))),
-    row("글자 크기", slide("size", ...SHAPE_RANGES.size, value("size"), "px")),
-  ]));
-
-  body.append(group("위치", "프로젝트 탭이 놓이는 위치. 바꾸면 카드 배치도 함께 바뀐다.", [
-    row("프로젝트 탭 위치", choose("projectTabs", named("projectTabs", { top: "위", left: "왼쪽" }), value("projectTabs"))),
-  ]));
-
-  // One fixed sidebar per side; the order sets which sidebar takes the room of the plane first (docs/spec/external-sidebars.md).
-  body.append(group("사이드바", "한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.", [
-    ...WINDOW_SIDES.map((side) => row(`${SIDE_NAMES[side]} 사이드바 보이기`, toggle(side, value(side)))),
-    ...WINDOW_SIDES.map((side) => row(`${SIDE_NAMES[side]} 사이드바 세트`, linkControl(`link:${side}:`, side, null))),
-    ...(overridden("links") && settingProject() ? [row("", ...overrideControls("links", "전역 연결 사용"))] : []),
-    ...orderRows("sidebarOrder", "사이드바 순서", SIDE_NAMES),
-  ]));
-
-  body.append(group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 저장 크기가 없는 창 사이드바가 여는 크기(위·아래 사이드바는 높이)이며 최소 폭과 최대 폭 사이여야 한다.",
-    Object.entries(LAYOUT_RANGES).map(([key, [min, max]]) => row(SIZE_LABELS[key], slide(key, min, max, value(key), "pt")))));
-
-  body.append(group("표시", "배치는 그대로 두고 보이는 모습만 바꾼다.", [
-    row("포커스 표시", choose("focusInd", named("focusInd", { border: "테두리", corner: "꺽쇠" }), value("focusInd"))),
-    row("카드 자동 정렬", choose("cardArrange", named("cardArrange", { resize: "크기맞춤", even: "균등" }), value("cardArrange"))),
-    row("경계선", choose("fullRule", named("fullRule", { under: "가림", over: "보임", none: "숨김" }), value("fullRule"))),
-    row("포커스 밖 흐리게", toggle("dim", value("dim"))),
-  ]));
-
-  body.append(group("언어", "애플리케이션 메뉴가 이 언어를 따른다. 자동은 시스템 언어이고 목록에 없으면 영어다.", [
-    row("언어", choose("language",
-      [["auto", "자동"], ...MENU_LANGUAGES.map(({ id, label }) => [id, label])], value("language"))),
-  ]));
-  if (scope === "common") body.append(group("메모리", "메모리 절약을 켜면 숨긴 지 정한 시간이 지난 탭을 내리고, 다시 보일 때 저장된 상태로 다시 연다. 보기 프로세스는 새로 여는 보기부터 적용된다.", [
-    row("보기 프로세스", choose("viewProcess", named("viewProcess", { plugin: "플러그인마다 하나", view: "보기마다 하나" }), value("viewProcess"))),
-    row("메모리 절약", toggle("memorySaver", value("memorySaver"))),
-    row("숨긴 뒤 내리기까지", slide("memorySaverDelay", ...MEMORY_SAVER_DELAY, value("memorySaverDelay"), "분")),
-  ]));
-  if (scope === "common") body.append(group("알림", "오류 토스트의 자동 닫힘을 정한다. 끄면 각 토스트의 ×로만 닫는다.", [
-    row("자동 닫힘", toggle("autoDismissErrorToasts", value("autoDismissErrorToasts"))),
-    row("초 후 자동으로 닫힘", seconds("errorToastDismissSeconds", ...ERROR_TOAST_DISMISS_SECONDS, value("errorToastDismissSeconds"))),
-  ]));
-  if (scope === "common") body.append(group("진단", "디버그를 켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.", [
-    row("디버그", debugSwitch()),
-  ]));
-  if (scope === "common") body.append(setupGroup());
+/** Takes the values of the settings for the undo toast: each key with the value the tab shows and whether the project overrides it. */
+function takeSnapshot() {
+  const values = {};
+  for (const key of Object.keys(defaults)) values[key] = { shown: scopedValue(key, state.scope), overridden: overridden(key) };
+  return values;
 }
 
-/** The names of the setup parts (docs/spec/settings.md#agents). */
-const SETUP_NAMES = { path: "명령 경로", skill: "스킬", mcp: "MCP 등록", hook: "훅" };
-const SETUP_STATES = { ok: "설치됨", absent: "설치 안 됨", differs: "다름" };
-
-/**
- * The agent group shows each setup part and its file and state. The PATH action changes the saved preference. The install
- * button appears while a skill or mcp part is not ok, and the check button reads all the parts again. Part errors use the
- * error display path.
- */
-function setupGroup() {
-  const parts = setupParts.parts();
-  const rows = parts.map((part) => {
-    const el = document.createElement("div");
-    el.className = "set-row";
-    el.dataset.key = `setup:${part.part}:${part.file}`;
-    el.dataset.expose = "core.settings-modal.setup";
-    const name = document.createElement("span");
-    name.className = "set-row__name";
-    name.textContent = SETUP_NAMES[part.part];
-    const about = document.createElement("span");
-    about.className = "set-setup";
-    const state = document.createElement("span");
-    state.className = "set-setup__state";
-    // A failed setup part keeps a state label; the error text shows in the error toast.
-    if (part.state === "error") {
-      state.textContent = "오류";
-      showError(document, `setup:${part.part}:${part.file}`, part.error);
-    } else hideError(document, `setup:${part.part}:${part.file}`);
-    if (part.state !== "error") state.textContent = part.enabled === false ? "사용 안 함" : SETUP_STATES[part.state === "ok" ? "ok" : part.reason];
-    const file = document.createElement("span");
-    file.className = "set-caption";
-    file.textContent = part.file;
-    about.append(state, file);
-    el.append(name, about);
-    if (part.part === "path" && typeof part.enabled === "boolean") {
-      el.classList.add("set-row--setup-change");
-      el.append(button("setup-change:path", "core.settings-modal.setup-change", part.enabled ? "끄기" : "켜기",
-        "core.setup.change", { part: "path", enabled: !part.enabled }));
-    }
-    return el;
-  });
-  if (!rows.length) {
-    const none = document.createElement("p");
-    none.className = "set-caption";
-    none.textContent = "이 컴퓨터에서 설정할 에이전트 항목이 없습니다.";
-    rows.push(none);
-  }
-  const kinds = missingKinds(parts);
-  const actions = document.createElement("div");
-  actions.className = "set-actions";
-  if (kinds.length) actions.append(button("setup-install", "core.settings-modal.setup-install", "설치", "core.setup.install", { parts: kinds }));
-  actions.append(button("setup-check", "core.settings-modal.setup-check", "다시 확인", "core.setup.check", {}));
-  return group("에이전트", "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.",
-    [...rows, actions]);
+/** The title of the selected plugin page: the name and the description from the manifest, or from the state when no manifest is loaded. */
+function pluginAbout(id) {
+  const unit = pluginUnits().find((item) => item.id === id);
+  if (unit) return { name: unit.name, description: unit.description };
+  const row = pluginOperations.status().plugins.find((item) => item.id === id);
+  if (!row) return null;
+  return { name: row.name, description: row.description };
 }
 
-/** The debug switch. It is on when the performance trace is on and every class of the log policy is at trace, and it runs core.settings.debug with its new value. */
-function debugSwitch() {
-  const el = document.createElement("input");
-  el.type = "checkbox";
-  el.className = "set-switch";
-  el.dataset.expose = "core.settings-modal.debug";
-  mark(el, "core.settings.debug", {}, "on");
-  el.toggleAttribute("checked", debugOn());
-  return el;
-}
+/** The keys of a plugin page that a project can override: the settings of the plugin and its sidebar links. */
+const pluginKeys = (id) => [...Object.entries(settingDefinitions()).filter(([, def]) => def.plugin === id).map(([key]) => key), "links"];
 
-/** Creates a button. It finds the response by key, exposes it by name, and points to a command. */
-function button(key, name, label, command, params, on = null) {
-  const el = document.createElement("button");
-  el.className = "ui-button";
-  el.type = "button";
-  el.dataset.key = key;
-  el.dataset.expose = name;
-  mark(el, command, params);
-  if (on !== null) el.dataset.on = String(on);
-  el.textContent = label;
-  return el;
-}
-
-/**
- * The rows of an order of listed values (docs/spec/settings.md#controls): one row per value in the current order, named by names, with ▲
- * (absent on the first row) and ▼ (absent on the last row). A button swaps its row with the row above or below and runs
- * core.settings.change with the whole new order.
- */
-function orderRows(key, label, names) {
-  const now = value(key);
-  const writes = scopeOf(key);
-  return now.map((item, index) => {
-    const acts = document.createElement("span");
-    acts.className = "set-seg";
-    const act = (direction, mark, other) => {
-      const next = [...now];
-      [next[index], next[other]] = [next[other], next[index]];
-      acts.append(button(`order:${key}:${index}:${direction}`, "core.settings-modal.order", mark, "core.settings.change", { key, value: next, scope: writes }));
-    };
-    if (index > 0) act("up", "▲", index - 1);
-    if (index < now.length - 1) act("down", "▼", index + 1);
-    const line = document.createElement("span");
-    line.className = "set-seg";
-    line.append(names[item], acts);
-    const el = row(index === 0 ? label : "", line);
-    if (index === 0) el.append(...rowOverrideControls(key));
-    return el;
-  });
-}
-
-/** The set entries of the set select box. The value is the set id. */
-// default: a set without sections is shown as having no section.
-const setItems = (sets) => sets.map((s) => [s.id, `${s.title} — ${sectionNames(s.sections).join(" · ") || "섹션 없음"}`]);
-/** The current choice to show in the select box: a set id or off. */
-function choiceOf(links, place, plugin) {
-  const found = links.find((l) => l.place === place && l.plugin === plugin);
-  if (!found) return "off";
-  return found.set;
-}
-/**
- * The select box of a general choice of a sidebar link over the links and the sets: not used and every set. It throws when the link names a
- * choice that the sets do not have, and never replaces that value with another choice.
- */
-export function linkChoice(links, sets, key, place, plugin) {
-  return choose(key, [["off", "사용 안 함"], ...setItems(sets)], choiceOf(links, place, plugin));
-}
-// A link control takes the sets of the scope of the links as its options (docs/spec/settings.md#scope-of-a-control).
-const linkControl = (key, place, plugin) => linkChoice(value("links"), scopedValue("sets", scopeOf("links")), key, place, plugin);
-
-/** The controls of the plugin setting formats (Controls in docs/spec/settings.md), one per format. */
-const DECLARED_CONTROLS = {
-  enum: (key, definition, now) => choose(key, definition.values.map((item) => [item, item]), now),
-  integer: (key, definition, now) => slide(key, definition.minimum, definition.maximum, now, ""),
-  string: (key, definition, now) => text(key, definition.maxLength, now),
-  address: (key, definition, now) => text(key, 2048, now),
-  // The plugins of the category by name. Without a value an empty choice is selected, so the select shows that no plugin is chosen.
-  plugin: (key, definition, now) => choose(key, [
-    ...(now === undefined ? [["", "선택"]] : []),
-    ...pluginsOfCategory(definition.category).map(({ id, name }) => [id, name]),
-  ], now ?? ""),
-};
-
-/** One setting row. It is the control of the declared format. */
-function declaredRow(key, definition) {
-  if (!Object.hasOwn(DECLARED_CONTROLS, definition.type)) throw new Error(`setting ${key} has no control for type ${definition.type}`);
-  const control = DECLARED_CONTROLS[definition.type](key, definition, value(key));
-  const el = row(definition.label, control);
-  el.dataset.row = key;
-  if (!definition.description) return [el];
-  // The description is one line right below the row. The rows of core.settings-modal report it together with the row.
-  const note = document.createElement("p");
-  note.className = "set-caption";
-  note.dataset.describes = key;
-  note.textContent = definition.description;
-  return [el, note];
-}
-
-/** The description of one set line: title, layout and section names. */
-// default: a set without sections is shown as having no section.
-const setLine = (s) => `${s.title} · ${s.layout === "tabs" ? "탭" : "목록"} · ${sectionNames(s.sections).join(", ") || "섹션 없음"}`;
-
-/** The plugin list: the plugin management button, the search field, and the rows of the loaded plugins that match the search term. A row shows only the name. */
-function drawPluginList() {
-  // The plugin page of the library shows installation, removal and the description (Plugin screen in docs/spec/installation.md).
-  const manage = button("plugins:manage", "core.settings-modal.manage", "플러그인 관리", "core.plugins.browse", {});
-  const search = document.createElement("input");
-  search.type = "search";
-  search.className = "set-text";
-  search.placeholder = "이름, id, 설명으로 찾기";
-  search.dataset.set = "plugin-search";
-  search.dataset.expose = "core.settings-modal.search";
-  mark(search, "core.settings-modal.search", {}, "query");
-  search.setAttribute("value", query);
-  const units = pluginUnits().toSorted((a, b) => a.id.localeCompare(b.id));
-  const rows = matchPlugins(units, query).map((unit) =>
-    button(`plugin:${unit.id}`, "core.settings-modal.plugin", unit.name, "core.settings-modal.plugin", { plugin: unit.id }));
-  for (const el of rows) el.dataset.listed = el.dataset.key.slice("plugin:".length);
-  if (!rows.length) {
-    const none = document.createElement("p");
-    none.className = "set-caption";
-    none.textContent = "찾는 플러그인이 없습니다.";
-    rows.push(none);
-  }
-  const list = document.createElement("div");
-  list.className = "set-list";
-  list.append(...rows);
-  body.append(group("플러그인", "창이 불러온 플러그인의 설정. 설치, 업데이트, 제거와 플러그인 설명은 플러그인 관리에서 본다.",
-    [row("", manage), row("찾기", search), list]));
-}
-
-/** The login of an account as the row shows it. */
-function loginText(account) {
-  if (account.running) return "로그인 중";
-  if (account.login === true) return account.until === null ? "로그인됨" : `로그인됨 · ${account.until}까지`;
-  if (account.login === false) return "로그인 필요";
-  return "-";
-}
-
-/** A text field of the group 계정 that runs command with its text as name. */
-function accountField(key, command, now) {
-  const el = document.createElement("input");
-  el.type = "text";
-  el.className = "text-field";
-  el.dataset.set = key;
-  el.dataset.expose = `core.settings-modal.${key}`;
-  mark(el, command, {}, "name");
-  el.maxLength = 40;
-  el.setAttribute("value", now);
-  return el;
-}
-
-/** One row of an account: its name, kind, login and usage lines, and its buttons. */
-function accountRow(plugin, kinds, account) {
-  const el = document.createElement("div");
-  el.className = "set-account";
-  el.dataset.expose = "core.settings-modal.account";
-  el.dataset.account = account.id;
-  const line = document.createElement("p");
-  line.className = "set-account__line";
-  // default: a stored kind is a declared kind, which the check of the records holds.
-  const kind = kinds.find((item) => item.value === account.kind).label;
-  line.textContent = `${account.name} · ${kind} · ${loginText(account)}`;
-  el.append(line);
-  for (const usage of account.usage) {
-    const used = document.createElement("p");
-    used.className = "set-caption";
-    used.textContent = usage.resets === null ? `${usage.label} ${usage.used}%` : `${usage.label} ${usage.used}% · ${usage.resets} 초기화`;
-    el.append(used);
-  }
-  const params = { plugin, id: account.id };
-  const buttons = document.createElement("div");
-  buttons.className = "set-account__buttons";
-  if (accountDraft.edit === account.id) {
-    buttons.append(
-      accountField("account-edit-name", "core.settings-modal.account-edit-name", accountDraft.editName),
-      button(`account-save:${account.id}`, "core.settings-modal.account-save", "저장", "core.accounts.rename", { ...params, name: accountDraft.editName }),
-      button(`account-edit-cancel:${account.id}`, "core.settings-modal.account-edit-cancel", "취소", "core.settings-modal.account-edit", { id: null }));
+/** The page head: the back link, the title, the description, the scope control and the folder caption (docs/spec/settings.md#page-head). */
+function headEl() {
+  const head = element("header", "set-head");
+  const text = element("div", "set-head__text");
+  let title;
+  let description;
+  let scope = null;
+  if (state.page === "plugin") {
+    const about = pluginAbout(state.plugin);
+    title = about.name;
+    description = about.description;
+    text.append(button(state.back === "browse" ? "‹ 찾아보기" : "‹ 설치된 플러그인", {
+      expose: "core.settings-tab.back", command: "core.settings-tab.back", params: {}, variant: "link",
+    }));
+    if (projectSelected()) scope = scopeSegment(pluginKeys(state.plugin));
+  } else if (state.page === "installed") {
+    title = "설치된 플러그인";
+    description = "켜고 끄기, 업데이트, 문제 고치기. 하나를 누르면 그 플러그인의 정보와 설정이 한 페이지에 있다. 새로 찾는 일은 ‘찾아보기’ 화면에서 한다.";
+  } else if (state.page === "browse") {
+    const count = pluginOperations.status().plugins.length;
+    title = "플러그인 찾아보기";
+    description = `카탈로그 ${count}개. 하나를 누르면 설치 전에 자세히 본다.`;
   } else {
-    if (account.running) buttons.append(button(`account-login-cancel:${account.id}`, "core.settings-modal.account-login-cancel", "취소", "core.accounts.login-cancel", params));
-    else if (account.login === false) buttons.append(button(`account-login:${account.id}`, "core.settings-modal.account-login", "로그인", "core.accounts.login", params));
-    else if (account.login === true) buttons.append(button(`account-logout:${account.id}`, "core.settings-modal.account-logout", "로그아웃", "core.accounts.logout", params));
-    buttons.append(
-      button(`account-edit:${account.id}`, "core.settings-modal.account-edit", "이름 변경", "core.settings-modal.account-edit", { id: account.id }),
-      button(`account-remove:${account.id}`, "core.settings-modal.account-remove", "삭제", "core.accounts.remove", params));
+    const page = PAGES.find((item) => item.id === state.page);
+    title = page.name;
+    description = page.description;
+    scope = headScope(state.page);
   }
-  el.append(buttons);
-  return el;
-}
-
-/** The group 계정 of a plugin that declares accounts: a row per account and the row 새 계정 (docs/spec/plugins.md#accounts). */
-function accountsGroup(unit, declared) {
-  let listed;
-  try {
-    listed = accounts.list(unit.id);
-  } catch (error) {
-    // A record of another form fails the page through the error display, and the group shows no account.
-    showError(document, `settings ${unit.id}`, error.message);
-    listed = [];
-  }
-  const rows = listed.map((account) => accountRow(unit.id, declared.kinds, account));
-  const kind = selectBox("account-kind", declared.kinds.map((item) => [item.value, item.label]), accountDraft.kind);
-  kind.firstChild.dataset.expose = "core.settings-modal.account-kind";
-  mark(kind.firstChild, "core.settings-modal.account-kind", {}, "kind");
-  const add = button("account-add", "core.settings-modal.account-add", "추가", "core.accounts.add",
-    { plugin: unit.id, name: accountDraft.name, kind: accountDraft.kind });
-  const fresh = document.createElement("div");
-  fresh.className = "set-account set-account--new";
-  fresh.append(accountField("account-name", "core.settings-modal.account-name", accountDraft.name), kind, add);
-  return group("계정", `${unit.name} 플러그인이 실행하는 CLI의 계정. 로그인은 시스템 브라우저에서 한다.`, [...rows, row("새 계정", fresh)]);
-}
-
-/** The settings page of one loaded plugin: the button that returns to the list, the settings, the sections and the sidebar choices. */
-function drawPluginPage(unit) {
-  const back = button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", { plugin: null });
-  body.append(group(unit.name, unit.id, [row("", back)]));
-  const declared = pluginAccounts(unit.id).accounts;
-  if (declared) {
-    if (accountDraft.plugin !== unit.id) accountDraft = { plugin: unit.id, name: "", kind: declared.kinds[0].value, edit: null, editName: "" };
-    body.append(accountsGroup(unit, declared));
-  }
-
-  const settings = Object.entries(settingDefinitions()).filter(([, d]) => d.plugin === unit.id);
-  if (settings.length) {
-    body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, settings.flatMap(([key, d]) => declaredRow(key, d))));
-  } else {
-    const none = document.createElement("p");
-    none.className = "set-caption";
-    none.textContent = "이 플러그인에는 설정이 없습니다.";
-    body.append(group("설정", `${unit.name} 플러그인이 선언한 설정.`, [none]));
-  }
-
-  const names = document.createElement("p");
-  names.className = "set-caption";
-  names.textContent = unit.sections.length ? sectionNames(unit.sections).join(", ") : "이 플러그인에는 섹션이 없습니다.";
-  body.append(group("섹션", "이 플러그인이 사이드바에 제공하는 섹션.", [names]));
-
-  body.append(group("창 사이드바", "이 플러그인의 탭이 포커스 카드의 활성 탭인 동안 그 변 고정 사이드바의 내용을 이 세트로 바꾼다.",
-    WINDOW_SIDES.map((side) => row(`창 ${SIDE_NAMES[side]} 사이드바`,
-      linkControl(`link:window-${side}:${unit.id}`, `window-${side}`, unit.id)))));
-  if (unit.surface) body.append(group("카드 사이드바", "카드 내부의 네 변에 표시한다.", [
-    ...[["left", "왼쪽"], ["right", "오른쪽"], ["top", "상단"], ["bottom", "하단"]].map(([side,label]) =>
-      row(`카드 ${label} 사이드바`, linkControl(`link:card-${side}:${unit.id}`, `card-${side}`, unit.id))),
-  ]));
-}
-
-function drawPlugins() {
-  const unit = pluginUnits().find((u) => u.id === chosen);
-  if (unit) drawPluginPage(unit);
-  else {
-    chosen = null;
-    drawPluginList();
-  }
-}
-
-const SIZE_LABELS = {
-  sidebarMinWidth: "최소 폭",
-  sidebarMaxWidth: "최대 폭",
-  sidebarWidth: "처음 폭",
-};
-
-/** The select box of one section row. It groups every registered section by plugin with optgroup. */
-function sectionSelect(s, index, now) {
-  const wrap = document.createElement("span");
-  wrap.className = "select-field";
-  const el = document.createElement("select");
-  el.dataset.set = `row:${s.id}:${index}`;
-  el.dataset.expose = "core.settings-modal.row";
-  mark(el, "core.settings.sets.row", { id: s.id, action: "choose", index, scope: scopeOf("sets") }, "section");
-  for (const u of pluginUnits().filter((item) => item.sections.length)) {
-    const optgroup = document.createElement("optgroup");
-    optgroup.label = u.name;
-    for (const id of u.sections) {
-      const o = document.createElement("option");
-      o.value = id;
-      o.textContent = section(id).name;
-      if (id === now) o.setAttribute("selected", "");
-      optgroup.append(o);
-    }
-    el.append(optgroup);
-  }
-  // The section of a plugin that is not loaded is not among the choices, so it is shown only as the current value. That value is kept separately so that the select box does not appear to
-  // have chosen another section (docs/spec/plugins.md).
-  if (!hasSection(now)) {
-    const kept = document.createElement("optgroup");
-    kept.label = "불러오지 않음";
-    const o = document.createElement("option");
-    o.value = now;
-    [o.textContent] = sectionNames([now]);
-    o.setAttribute("selected", "");
-    kept.append(o);
-    el.append(kept);
-  }
-  wrap.append(el);
-  return wrap;
-}
-
-/** Set editing: the name, the layout, the section rows (a select box and the buttons up, down and remove), and one add button. */
-function setEditor(s) {
-  const writes = scopeOf("sets");
-  const title = document.createElement("input");
-  title.type = "text";
-  title.className = "text-field";
-  title.dataset.set = `title:${s.id}`;
-  title.dataset.expose = "core.settings-modal.set";
-  mark(title, "core.settings.sets.update", { id: s.id, scope: writes }, "title");
-  title.maxLength = 40;
-  title.setAttribute("value", s.title);
-  const layout = selectBox(`layout:${s.id}`, [["list", "목록"], ["tabs", "탭"]], s.layout);
-  mark(layout.firstChild, "core.settings.sets.update", { id: s.id, scope: writes }, "layout");
-  const rows = [row("이름", title), row("배치", layout)];
-  s.sections.forEach((id, index) => {
-    const acts = document.createElement("span");
-    acts.className = "set-seg";
-    const act = (action, label) => button(`${action}:${s.id}:${index}`, "core.settings-modal.row-act", label,
-      "core.settings.sets.row", { id: s.id, action, index, scope: writes });
-    if (index > 0) acts.append(act("up", "▲"));
-    if (index < s.sections.length - 1) acts.append(act("down", "▼"));
-    acts.append(act("remove", "−"));
-    const line = document.createElement("span");
-    line.className = "set-seg";
-    line.append(sectionSelect(s, index, id), acts);
-    rows.push(row(`섹션 ${index + 1}`, line));
-  });
-  rows.push(row("", button(`add:${s.id}`, "core.settings-modal.add", "+", "core.settings.sets.row", { id: s.id, action: "add", scope: writes })));
-  rows.push(row("", button("edit:", "core.settings-modal.edit", "완료", "core.settings-modal.edit", { set: null })));
-  return group(`세트 편집: ${s.title}`, "바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다.", rows);
-}
-
-function drawSidebars() {
-  const writes = scopeOf("sets");
-  const sets = value("sets");
-  if (!sets.some((s) => s.id === editing)) editing = null;
-  const rows = sets.map((s) => {
-    const line = document.createElement("span");
-    line.className = "set-caption";
-    line.dataset.expose = "core.settings-modal.set-caption";
-    line.textContent = setLine(s);
-    const acts = document.createElement("span");
-    acts.className = "set-seg";
-    acts.append(
-      button(`edit:${s.id}`, "core.settings-modal.edit", "편집", "core.settings-modal.edit", { set: s.id }, s.id === editing),
-      button(`delete:${s.id}`, "core.settings-modal.delete", "삭제", "core.settings.sets.delete", { id: s.id, scope: writes }),
-    );
-    const el = document.createElement("div");
-    el.className = "set-row";
-    el.append(line, acts);
-    return el;
-  });
-  rows.push(row("", button("sets:create", "core.settings-modal.create", "새 세트", "core.settings.sets.create", { scope: writes })));
-  if (settingProject() && overridden("sets")) rows.push(row("", ...overrideControls("sets", "전역 세트 사용")));
-  body.append(group("세트", "사이드바에 보여 줄 섹션 묶음. 어느 사이드바에 보일지는 일반과 플러그인 페이지에서 고른다.", rows));
-  const edited = sets.find((s) => s.id === editing);
-  if (edited) body.append(setEditor(edited));
-}
-
-const SECTIONS = [
-  ["general", "일반", drawGeneral],
-  ["plugins", "플러그인", drawPlugins],
-  ["sidebars", "사이드바", drawSidebars],
-];
-
-/** The name of this modal. It is the visible title and also the name that the host gives to the window. */
-const NAME = "설정";
-
-/** Creates the card element. Call it when the modal opens. */
-function makeCard() {
-  const el = document.createElement("div");
-  el.className = "set-card";
-  el.id = "settings";
-  el.dataset.nativeModal = "dialog";
-  el.dataset.expose = "core.settings-modal.card";
-  el.setAttribute("role", "dialog");
-  el.setAttribute("aria-modal", "true");
-  el.setAttribute("aria-label", NAME);
-  el.innerHTML =
-    '<header class="set-card__head" data-grip data-expose="core.settings-modal.grip">' +
-      `<span class="set-card__title">${NAME}</span>` +
-      `<button class="act" type="button" data-key="close" data-expose="core.settings-modal.close" data-command="core.settings.close" title="닫는다">${icon("close")}</button>` +
-    '</header>' +
-    '<div class="set-card__body">' +
-      '<nav class="set-card__nav"></nav>' +
-      '<div class="set-card__pane" data-expose="core.settings-modal.pane"></div>' +
-    '</div>';
-  // Without a host, the card of this document receives the input. It runs the command that the control points to.
-  delegate(el);
-  // With a host, this element is not rendered. A grip drag happens in the view that holds the copy,
-  // and its result is passed to answer().
-  onGripDrag(el, (dx, dy) => run("core.settings-modal.move", { dx, dy }));
-  showValue(el);
-  return el;
-}
-
-/* The function to call when the modal is drawn or closed. The public entry registers it. */
-let drawn = () => {};
-
-/* The scroll position (points) of the visible content that the native modal reported. When this document draws, it is read from the pane. */
-let paneScroll = 0;
-
-/** The key of the visible content. The content is the same when the section, the scope, the plugin page and the edited set are the same (docs/spec/settings.md). */
-const scrollKey = () => JSON.stringify([here, scope, here === "plugins" ? chosen : null, here === "sidebars" ? editing : null]);
-
-/** Registers the function to call when the modal is drawn or closed. */
-export function onSettingsDrawn(fn) {
-  drawn = fn;
-}
-
-/**
- * The public controls of the open modal. Each name gets a number in document order. A native modal draws a copy of this
- * element, so the order is the same in both documents.
- */
-export function settingsModalState() {
-  if (!card) return { open: false, controls: [] };
-  const counts = new Map();
-  const controls = [...card.querySelectorAll("[data-expose]")].map((el) => {
-    const name = el.dataset.expose;
-    // default: the index of a control whose name appears for the first time is 0.
-    const index = counts.get(name) ?? 0;
-    counts.set(name, index + 1);
-    // default: a control without data-on has the checked state if it is a checkbox, and otherwise no on state (null).
-    const on = el.dataset.on ?? (el.type === "checkbox" ? String(el.checked) : null);
-    return {
-      name, index,
-      // default: a control that points to neither a key nor a setting has a null key.
-      key: el.dataset.key ?? el.dataset.set ?? null,
-      label: el.tagName === "SELECT" ? "" : el.textContent.trim(),
-      on: on === null ? null : on === "true",
-      value: "value" in el && el.tagName !== "BUTTON" ? String(el.value) : null,
-      command: commandOf(el),
-      // A select box reports its selectable values in document order.
-      options: el.tagName === "SELECT" ? [...el.querySelectorAll("option")].map((o) => o.value) : null,
-      // The select box of a section row is grouped by plugin with optgroup. It reports the name and the values of each group.
-      groups: el.tagName === "SELECT" && el.querySelector("optgroup")
-        ? [...el.querySelectorAll("optgroup")].map((g) => ({ label: g.label, values: [...g.querySelectorAll("option")].map((o) => o.value) }))
-        : null,
-    };
-  });
-  // The row name and the description of a declared setting. The plugin page draws them from the label and the description of the manifest.
-  const rows = [...card.querySelectorAll(".set-row[data-row]")].map((el) => ({
-    key: el.dataset.row,
-    name: el.querySelector(".set-row__name").textContent,
-    // default: a setting row without a description has a null description.
-    description: card.querySelector(`[data-describes="${CSS.escape(el.dataset.row)}"]`)?.textContent ?? null,
-  }));
-  const r = card.getBoundingClientRect();
-  // The pane is the box that scrolls, under the fixed head of the card: a control is reachable only inside it (docs/spec/settings.md).
-  const p = body.getBoundingClientRect();
-  const listed = [...card.querySelectorAll("[data-listed]")].map((el) => el.dataset.listed);
-  return { open: true, rows, query, listed, section: here, scope, plugin: here === "plugins" ? chosen : null, editing,
-    scroll: native ? paneScroll : body.scrollTop,
-    card: { x: r.left, y: r.top, w: r.width, h: r.height }, pane: { x: p.left, y: p.top, w: p.width, h: p.height }, controls };
-}
-
-/** Changes the section of the modal. */
-export function showSection(id) {
-  if (!card) throw new Error("settings are not open");
-  if (!SECTIONS.some(([known]) => known === id)) throw new Error(`unknown settings section ${id}`);
-  here = id;
-  drawSettings();
-}
-
-/** Opens the page of one loaded plugin in the plugin section. When it is null, returns to the list. */
-export function showPlugin(id) {
-  if (!card) throw new Error("settings are not open");
-  if (id !== null && !pluginUnits().some((unit) => unit.id === id)) throw new Error(`unknown plugin ${id}`);
-  chosen = id;
-  drawSettings();
-}
-
-/** The shown plugin page with accounts; the fields of the group 계정 exist only there. */
-function accountPage() {
-  if (!card) throw new Error("settings are not open");
-  if (here !== "plugins" || chosen === null || !pluginAccounts(chosen)?.accounts) throw new Error("no page of a plugin with accounts shows");
-}
-
-/** Sets the text of the name field of the row 새 계정. */
-export function setAccountName(name) {
-  accountPage();
-  if (typeof name !== "string") throw new Error("name must be a string");
-  accountDraft = { ...accountDraft, name };
-  drawSettings();
-}
-
-/** Sets the kind of the row 새 계정. */
-export function setAccountKind(kind) {
-  accountPage();
-  if (!pluginAccounts(chosen).accounts.kinds.some((item) => item.value === kind)) throw new Error(`account kind ${kind} is not declared by ${chosen}`);
-  accountDraft = { ...accountDraft, kind };
-  drawSettings();
-}
-
-/** Shows the name field of the account id with its name, or ends the edit with null. */
-export function editAccount(id) {
-  accountPage();
-  if (id === null) accountDraft = { ...accountDraft, edit: null, editName: "" };
-  else {
-    const account = accounts.list(chosen).find((item) => item.id === id);
-    if (!account) throw new Error(`account ${id} is not defined`);
-    accountDraft = { ...accountDraft, edit: id, editName: account.name };
-  }
-  drawSettings();
-}
-
-/** Sets the text of the name field of the edited account. */
-export function setAccountEditName(name) {
-  accountPage();
-  if (accountDraft.edit === null) throw new Error("no account name is edited");
-  if (typeof name !== "string") throw new Error("name must be a string");
-  accountDraft = { ...accountDraft, editName: name };
-  drawSettings();
-}
-
-/** Changes the search term of the plugin list. */
-export function searchPlugins(text) {
-  if (!card) throw new Error("settings are not open");
-  if (typeof text !== "string") throw new Error("query must be a string");
-  query = text;
-  drawSettings();
-}
-
-/** Opens the editing of one set in the sidebar section. When it is null, closes the editing. */
-export function editSet(id) {
-  if (!card) throw new Error("settings are not open");
-  if (id !== null && !value("sets").some((s) => s.id === id)) throw new Error(`unknown set ${id}`);
-  editing = id;
-  drawSettings();
-}
-
-/** Changes the scope of the modal. The project scope exists only while a project is selected. */
-export function showScope(next) {
-  if (!card) throw new Error("settings are not open");
-  if (next !== "common" && !(next === "project" && settingProject())) throw new Error(`scope ${next} is not available`);
-  scope = next;
-  drawSettings();
-}
-
-/** Moves the modal card. */
-export function moveSettings(dx, dy) {
-  if (!card) throw new Error("settings are not open");
-  moveBy(dx, dy);
-  queueMicrotask(() => drawn());
-}
-
-/** Draws the card again and, when it is open, also updates the content of the host view. */
-export function drawSettings() {
-  if (!card) return;
-  queueMicrotask(() => drawn());
-  if (!settingProject()) scope = "common";
-  nav.textContent = "";
-  for (const [id, name] of SECTIONS) {
-    const b = document.createElement("button");
-    b.className = "set-nav";
-    b.type = "button";
-    b.dataset.key = `nav:${id}`;
-    b.dataset.expose = "core.settings-modal.nav";
-    mark(b, "core.settings-modal.nav", { section: id });
-    b.dataset.on = String(id === here);
-    b.textContent = name;
-    nav.appendChild(b);
-  }
-  // When the same content is drawn again, its scroll position is kept. Other content has a different data-scroll-key and starts at the top.
-  const positions = scrollPositions(card);
-  body.textContent = "";
-  body.dataset.scrollKey = scrollKey();
-  // The scope tabs are above the controls of every section.
-  const tabs = scopeTabs([["common", "전역"], ...(settingProject() ? [["project", "프로젝트"]] : [])], scope);
-  tabs.className = "set-scope-tabs";
-  tabs.setAttribute("role", "group");
-  tabs.setAttribute("aria-label", "설정 범위");
-  for (const tab of tabs.children) tab.setAttribute("aria-pressed", tab.dataset.on);
-  body.append(tabs);
-  if (scope === "project") {
-    const folder = document.createElement("p");
-    folder.className = "set-caption set-folder";
-    folder.dataset.expose = "core.settings-modal.folder";
-    const root = settingProjectRoot();
-    if (root === null) throw new Error("the project settings scope has no project");
-    // The whole path stays inside the pane: text breaks at a space by itself, and the caption adds a break after each
-    // separator and hyphen (docs/spec/settings.md).
-    for (const part of root.split(/(?<=[\/\\-])/)) {
+  text.append(element("h2", "set-head__title", title), element("p", "set-caption set-head__desc", description));
+  const head2 = element("div", "set-head__scope");
+  if (scope !== null) head2.append(scope);
+  if (state.scope === "project" && projectSelected()) {
+    const folder = element("p", "set-caption set-folder");
+    folder.dataset.expose = "core.settings-tab.folder";
+    // The whole path stays inside the pane: the caption breaks after each space, hyphen and path separator (docs/spec/settings.md#page-head).
+    for (const part of projectFolder().split(/(?<=[\/\\\- ])/)) {
       folder.append(part);
-      if (/[\/\\-]$/.test(part)) folder.append(document.createElement("wbr"));
+      if (/[\/\\\- ]$/.test(part)) folder.append(document.createElement("wbr"));
     }
-    body.append(folder);
+    head2.append(folder);
   }
-  SECTIONS.find(([id]) => id === here)[2]();
-  // Showing the agent group reads the setup parts (docs/spec/settings.md#agents).
-  setupParts.show(here === "general" && scope === "common");
-  // Showing the page of a plugin with accounts reads their state (docs/spec/plugins.md#accounts).
-  accounts.show(here === "plugins" ? chosen : null);
-  overlay.update(card);
-  // When the content changes, the size of the card changes too. If the position is not notified again, the view
-  // keeps the previous size and the card inside it grows or is cut off.
-  const rect = cardRect();
-  if (native) overlay.place(card, rect);
-  else standIn(true, rect);
-  restoreScroll(card, positions);
+  head.append(text, head2);
+  return head;
 }
 
-/**
- * Handles one response of the card. key is the target and value is the value.
- *
- * A listener is not registered per control. A native view renders a copy of this element, so a
- * listener registered there does not work. The control that responded is found in the card of this document and the
- * command of that control is run. A press has an empty value, and a value input adds that value.
- */
-function answer(key, val) {
-  if (!card || key === "") return;
-  // The distance by which the header of the copy was dragged. It runs the move command that the header points to.
-  if (key === "move") {
-    const [dx, dy] = val.split(",").map(Number);
-    return run("core.settings-modal.move", { dx, dy });
+/** The content of the pane: the page in front, or the result of the search (docs/spec/settings.md#pages). */
+function paneContent() {
+  if (state.page === "look") return lookPage();
+  if (state.page === "workspace") return workspacePage();
+  if (state.page === "sets") return setsPage();
+  if (state.page === "behavior") return behaviorPage();
+  if (state.page === "agents") return agentsPage();
+  if (state.page === "diag") return diagPage();
+  if (state.page === "installed") return installedPage();
+  if (state.page === "browse") return browsePage();
+  if (state.page === "plugin") {
+    if (pluginAbout(state.plugin) !== null) return pluginPage(state.plugin);
+    // A plugin page whose plugin left the state shows the list that holds it, and the refusal is shown through the error display.
+    showTabError("settings plugin", `plugin ${state.plugin} is not in the plugin state`);
+    state.page = "installed";
+    state.plugin = null;
+    return installedPage();
   }
-  // The native modal reports the scroll position of the visible content. The position is used only as state and is not a command.
-  // It is negative while the content is pulled past its start, so it is kept as reported; only a value that is not a finite
-  // number is refused.
-  if (key === "scroll") {
-    const top = typeof val === "string" && val.trim() === "" ? NaN : Number(val);
-    if (!Number.isFinite(top)) throw new Error(`settings scroll position is not a number: ${val}`);
-    paneScroll = top;
-    drawn();
+  throw new Error(`unknown settings page ${state.page}`);
+}
+
+/** The menu item of a core or list page, with its badge. */
+function navItem(page, label, badgeEl, selected) {
+  const item = button(label, { expose: "core.settings-tab.nav", command: "core.settings-tab.nav", params: { page }, key: `nav:${page}`, on: selected, variant: "nav" });
+  if (badgeEl) item.append(badgeEl);
+  return item;
+}
+
+/** The badge of the menu item of agents: the count of setup parts that are not ok, in warn (docs/spec/settings.md#menu). */
+function agentsBadge() {
+  const count = setupWarnings();
+  return count ? badge(String(count), "warn", { title: `${count}개가 다름` }) : null;
+}
+
+/** The menu: the search field, the group 설정, the group 플러그인, and the plugins that declare settings or accounts (docs/spec/settings.md#menu). */
+function menuEl() {
+  const nav = element("nav", "set-menu");
+  nav.setAttribute("aria-label", "설정 메뉴");
+  const search = element("input", "text-field set-find");
+  search.type = "search";
+  search.placeholder = "설정 찾기";
+  search.value = state.find;
+  search.dataset.expose = "core.settings-tab.find";
+  search.dataset.live = "";
+  mark(search, "core.settings-tab.find", {}, "query");
+  nav.append(search);
+  const searching = state.find !== "";
+  const core = element("div", "set-menu__group");
+  core.append(element("p", "set-menu__label", "설정"));
+  for (const page of PAGES) {
+    const badgeEl = page.id === "agents" ? agentsBadge() : null;
+    core.append(navItem(page.id, page.name, badgeEl, !searching && state.page === page.id));
+  }
+  nav.append(core);
+  const plugins = element("div", "set-menu__group");
+  plugins.append(element("p", "set-menu__label", "플러그인"));
+  const inst = installedBadge();
+  plugins.append(navItem("installed", "설치됨", inst.tone ? badge(inst.text, inst.tone, { title: inst.title }) : element("span", "set-count", inst.text), !searching && state.page === "installed"));
+  const catalog = pluginOperations.status().plugins.length;
+  plugins.append(navItem("browse", "찾아보기", element("span", "set-count", String(catalog)), !searching && state.page === "browse"));
+  nav.append(plugins);
+  const items = pluginMenuItems();
+  if (items.length) {
+    const group = element("div", "set-menu__group");
+    group.append(element("p", "set-menu__label", "설정이 있는 플러그인"));
+    for (const unit of items) {
+      const item = button(unit.name, {
+        expose: "core.settings-tab.plugin-item", command: "core.settings-tab.plugin", params: { plugin: unit.id }, key: `plugin:${unit.id}`,
+        on: !searching && state.page === "plugin" && state.plugin === unit.id, variant: "nav",
+      });
+      const dot = element("span", "set-dot");
+      dot.title = "사용 중";
+      item.prepend(dot);
+      group.append(item);
+    }
+    nav.append(group);
+  }
+  return nav;
+}
+
+/** The foot: the line of saving and the undo toast (docs/spec/settings.md#saving-and-undo). */
+function footEl() {
+  const foot = element("footer", "set-foot");
+  foot.append(element("span", "set-foot__saved", "✓ 바꾼 값은 바로 저장된다"));
+  const toast = undoElement();
+  if (toast !== null) foot.append(toast);
+  return foot;
+}
+
+/** The key of the visible content: a change of the page, the scope, the plugin, the edited set or the search starts at the top. */
+const scrollKey = () => JSON.stringify([state.page, state.scope, state.plugin, state.editing, state.find]);
+
+/** The main column: the page head and the pane, or the search result in place of the head and the pane (docs/spec/settings.md#search). */
+function mainEl() {
+  const main = element("div", "set-main");
+  const pane = element("div", "set-pane");
+  pane.dataset.expose = "core.settings-tab.pane";
+  pane.dataset.scrollKey = scrollKey();
+  const query = state.find.trim();
+  if (query !== "") {
+    pane.append(...searchPage(query));
+  } else {
+    main.append(headEl());
+    pane.append(...paneContent());
+  }
+  main.append(pane, footEl());
+  return main;
+}
+
+/** Starts or stops the reads of the pages that show them, and only while the tab is in front (docs/spec/settings.md#에이전트). */
+function syncReads() {
+  const shown = front && state.find.trim() === "";
+  setupParts.show(shown && state.page === "agents");
+  const plugin = shown && state.page === "plugin" && pluginAccounts(state.plugin)?.accounts ? state.plugin : null;
+  accounts.show(plugin);
+}
+
+/** Draws the whole tab again, keeping the scroll position of the same content (docs/spec/settings.md#page-head). */
+function draw() {
+  if (root === null) {
+    publish();
     return;
   }
-  const pressed = card.querySelector(`[data-key="${CSS.escape(key)}"]`);
-  const field = pressed ? null : card.querySelector(`[data-set="${CSS.escape(key)}"]`);
-  const found = pressed ? commandOf(pressed) : field ? commandOf(field, val) : null;
-  if (!found) throw new Error(`settings control ${key} is not in the card`);
-  if (found.name.startsWith("core.accounts.")) return runAccount(found);
-  return run(found.name, found.params);
+  if (!projectSelected()) setScope("common");
+  const positions = scrollPositions(root);
+  root.replaceChildren(menuEl(), mainEl());
+  snapshot = takeSnapshot();
+  syncReads();
+  restoreScroll(root, positions);
+  publish();
 }
 
-/** Runs a pressed command of the group 계정; a failure shows its error with the place settings <plugin> (docs/spec/plugins.md#accounts). */
-async function runAccount({ name, params }) {
-  try {
-    await run(name, params);
-  } catch (error) {
-    showError(document, `settings ${params.plugin}`, error.message);
+/** Reads the state of the tab for the status core.settings-tab (docs/spec/settings.md#status). */
+function statusOf() {
+  // null while the window has no settings tab (docs/spec/settings.md#status).
+  if (root === null) return null;
+  const mounted = true;
+  const search = state.find.trim() !== "";
+  const controls = mounted ? [...root.querySelectorAll("[data-expose]")].map(controlOf(root)) : [];
+  const rows = mounted && state.page === "plugin" ? [...root.querySelectorAll(".set-row[data-row]")]
+    .filter((el) => Object.hasOwn(settingDefinitions(), el.dataset.row))
+    .map((el) => ({ key: el.dataset.row, name: el.querySelector(".set-row__name").textContent, description: el.querySelector(".set-caption")?.textContent ?? null })) : [];
+  const actions = mounted ? [...root.querySelectorAll('[data-expose="core.settings-tab.plugins.action"]')].map((el) => {
+    const [plugin, action] = el.dataset.key.split(":");
+    return { plugin, action, disabled: el.disabled };
+  }) : [];
+  const listed = mounted && !search && PLUGIN_LIST_PAGES.includes(state.page)
+    ? [...root.querySelectorAll(".set-plugin-row[data-plugin]")].map((el) => el.dataset.plugin) : [];
+  const shown = mounted && state.page === "browse" && !search ? root.querySelectorAll('[data-expose="core.settings-tab.browse-row"]').length : 0;
+  return {
+    page: state.page,
+    scope: state.scope,
+    find: state.find,
+    query: state.query,
+    filter: state.filter,
+    browse: { query: state.browse.query, hideInstalled: state.browse.hideInstalled, shown },
+    listed,
+    actions,
+    plugin: state.page === "plugin" ? state.plugin : null,
+    back: state.back,
+    editing: state.editing,
+    rows,
+    controls,
+    scroll: scrollPosition(mounted ? root.querySelector('[data-expose="core.settings-tab.pane"]')?.scrollTop ?? 0 : 0),
+    undo: undoState(),
+    confirm: state.confirm,
+    errors: tabErrors(),
+    results: search ? searchResults(state.find.trim()) : null,
+    missing: missingSettings(),
+  };
+}
+
+/** The keys of the plugin settings whose value names no loaded plugin (docs/spec/settings.md#status). */
+function missingSettings() { return missingPluginKeys(); }
+
+/** Describes one control of the tab for the status: its element name, key, command, value, state and select options. */
+/**
+ * Whether a control is disabled (docs/spec/settings.md#status): a setting is disabled while its parent is off, and a common-only setting
+ * in the project scope. A control of no setting reports its own disabled state.
+ */
+function disabledOf(el, key) {
+  const row = key === null ? undefined : ALL_ROWS.find((item) => item.key === key);
+  if (row === undefined) return el.disabled === true;
+  const parentOff = row.depends !== undefined && shownValue(row.depends) === false;
+  return parentOff || !editable(key);
+}
+
+function controlOf() {
+  const counts = new Map();
+  return (el) => {
+    const name = el.dataset.expose;
+    const index = counts.get(name) ?? 0;
+    counts.set(name, index + 1);
+    const command = commandOf(el);
+    const isSelect = el.tagName === "SELECT";
+    const key = el.dataset.key ?? el.dataset.set ?? null;
+    return {
+      name,
+      index,
+      key,
+      disabled: disabledOf(el, key),
+      label: isSelect ? "" : el.textContent.trim(),
+      command: command === null ? null : command.name,
+      value: "value" in el && el.tagName !== "BUTTON" && el.type !== "checkbox" ? String(el.value) : null,
+      on: el.type === "checkbox" ? el.checked : el.dataset.on === undefined ? null : el.dataset.on === "true",
+      options: isSelect ? [...el.querySelectorAll("option")].map((option) => option.value) : null,
+    };
+  };
+}
+
+/** Refuses a command parameter with the error of invalid params (docs/spec/settings.md#status). */
+function invalid(message) {
+  return new ExposureError(EXPOSURE_ERRORS.invalidParams, message);
+}
+
+/** Refuses a value that is not one of the given choices (docs/spec/settings.md#settings-tab). */
+function oneOf(name, value, choices) {
+  if (!choices.includes(value)) throw invalid(`${name} must be one of ${choices.join(", ")}`);
+  return value;
+}
+
+/** The plugin ids that the status rows list (docs/spec/settings.md#설치됨). */
+const listedPlugin = (id) => {
+  if (typeof id !== "string" || id === "") throw invalid("plugin must be a non-empty string");
+  if (!pluginOperations.status().plugins.some((row) => row.id === id)) throw invalid(`plugin ${id} is not listed`);
+  return id;
+};
+
+/** The label of a setting for the toast: the label of its row, or of its plugin declaration (docs/spec/settings.md#saving-and-undo). */
+function labelOf(key) {
+  const row = ALL_ROWS.find((item) => item.key === key);
+  if (row) return row.label;
+  const definition = settingDefinitions()[key];
+  return definition ? definition.label : key;
+}
+
+/** The text of a value in a toast: a switch shows 켬 or 끔, a choice shows its label, and a number shows its unit. */
+function textOf(key, value) {
+  if (typeof value === "boolean") return value ? "켬" : "끔";
+  const choices = CHOICE_KEYS.includes(key) ? Object.fromEntries(choicesOf(key)) : null;
+  if (choices && Object.hasOwn(choices, value)) return choices[value];
+  return String(value);
+}
+const CHOICE_KEYS = ["projectOpening", "projectTabs", "mode", "language", "viewProcess", "font", "textSize", "focusInd", "fullRule", "cardArrange"];
+
+/**
+ * The toast of a change, or null when the change shows none (docs/spec/settings.md#saving-and-undo). A change of one setting shows
+ * `<label>: <old> → <new>`; a side switch and a sidebar order have their own texts, and a theme names the theme. A change of the sets or of
+ * the links shows no toast, because it has no value to show in one line.
+ */
+function toastOf(keys, before, after) {
+  const quiet = keys.filter((key) => !["sets", "links", "diagnostics.log", "diagnostics.performance"].includes(key) && !key.endsWith(".win.order") && !key.endsWith(".card.order"));
+  if (quiet.includes("theme")) {
+    return {
+      text: `테마: ${before.theme.shown} → ${after.theme.shown}`,
+      command: "core.settings.theme",
+      params: { name: before.theme.shown, mode: before.mode.shown, scope: state.scope },
+      detail: { key: "theme", label: "테마", old: before.theme.shown, new: after.theme.shown },
+    };
   }
+  if (quiet.length !== 1) return null;
+  const [key] = quiet;
+  let text;
+  if (SIDE_KEYS.includes(key)) text = `${SIDE_NAMES[key]} 사이드바 보이기: ${textOf(key, before[key].shown)} → ${textOf(key, after[key].shown)}`;
+  else if (key === "sidebarOrder") text = `배치 순서: ${after[key].shown.map((side) => SIDE_NAMES[side]).join(" → ")}`;
+  else text = `${labelOf(key)}: ${textOf(key, before[key].shown)} → ${textOf(key, after[key].shown)}`;
+  // The undo of a project value that did not exist before removes it; every other undo writes the old value to the scope the tab shows.
+  const detail = { key, label: SIDE_KEYS.includes(key) ? `${SIDE_NAMES[key]} 사이드바 보이기` : labelOf(key), old: before[key].shown, new: after[key].shown };
+  if (state.scope === "project" && !before[key].overridden) return { text, command: "core.settings.reset", params: { key, scope: "project" }, detail };
+  return { text, command: "core.settings.change", params: { key, value: before[key].shown, scope: state.scope }, detail };
 }
 
-// A finished add clears the name of the row 새 계정 of its page, and a finished rename ends the edit (docs/spec/plugins.md#accounts).
-accounts.onFinished((command, plugin) => {
-  if (accountDraft.plugin !== plugin) return;
-  accountDraft = command === "core.accounts.add" ? { ...accountDraft, name: "" } : { ...accountDraft, edit: null, editName: "" };
-  drawSettings();
-});
+/** The sidebar sizes: their rows share one group, which also shows the error of the sizes (docs/spec/settings.md#작업-공간). */
+const SIZE_KEYS = ["sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth"];
 
-/** Measures the position and size of the card relative to the plane and returns them. The host places the view with these coordinates. */
-function cardRect() {
-  const plane = document.getElementById("plane").getBoundingClientRect();
-  const r = card.getBoundingClientRect();
-  return { x: r.left - plane.left, y: r.top - plane.top, w: r.width, h: r.height };
+/** A plugin order key: <plugin>.win.order or <plugin>.card.order. */
+const PLUGIN_ORDER_KEY = /^([^.]+)\.(win|card)\.order$/;
+
+/** The row element that shows key, as the page of the key draws it, or null when no row of a core or plugin page shows the key. */
+function rowsFor(key) {
+  if (SIDE_KEYS.includes(key)) {
+    const orderRow = ALL_ROWS.find((def) => def.form === "sidebar");
+    return [coreRowFor(orderRow)];
+  }
+  const order = PLUGIN_ORDER_KEY.exec(key);
+  if (order !== null) {
+    const [, plugin, kind] = order;
+    const title = kind === "win" ? "창 사이드바" : "카드 사이드바";
+    return [sideList({ order: key, place: (side) => `${kind === "win" ? "window" : "card"}-${side}`, plugin, title })];
+  }
+  const def = ALL_ROWS.find((item) => item.key === key);
+  if (def) return [coreRowFor(def)];
+  const plugin = settingDefinitions()[key];
+  if (plugin) return declaredRow(key, plugin);
+  return null;
 }
 
 /**
- * Moves the card by the distance the grip was dragged. 8px is left inside the window.
- *
- * The current position is read from the element. If it were kept in a separate variable, the two values would diverge.
+ * Draws again only the rows that show the changed keys, and keeps the rest of the tab (docs/spec/settings.md#performance). A row that is
+ * not shown is not drawn. The rows that show a link are drawn again for a change of the links or of the sets, since their select lists the
+ * sets. It returns false when a key needs the whole pane, and the caller draws the pane.
  */
-function moveBy(dx, dy) {
-  const r = card.getBoundingClientRect();
-  card.style.left = `${Math.max(8, Math.min(innerWidth - r.width - 8, r.left + dx))}px`;
-  card.style.top = `${Math.max(8, Math.min(innerHeight - r.height - 8, r.top + dy))}px`;
-  card.style.transform = "none";
-  const rect = cardRect();
-  if (native) overlay.place(card, rect);
-  else standIn(true, rect);
+/**
+ * The sets whose value changed, as the values after the change, or null when the list changed its members or their order, which
+ * the sets page draws with its pane (docs/spec/settings.md#performance).
+ */
+function changedSets(previous, next) {
+  if (previous === null || previous.sets === undefined || next.sets === undefined) return null;
+  const before = previous.sets.shown;
+  const after = next.sets.shown;
+  if (before.length !== after.length || before.some((set, index) => set.id !== after[index].id)) return null;
+  return after.filter((set, index) => JSON.stringify(set) !== JSON.stringify(before[index]));
 }
 
-/** Opens the modal. With a host a native view renders it, and without a host this document renders it. */
-export function openSettings() {
-  if (card) return;
-  // While the modal is open, the overlay blocks the pointer input of the plane. Without it, dragging a divider
-  // beside the card would work. Even when the host renders the card, the overlay stays in this document.
-  scrim = document.createElement("div");
-  scrim.className = "set-scrim";
-  scrim.dataset.expose = "core.settings-modal.scrim";
-  card = makeCard();
-  scrim.appendChild(card);
-  document.body.appendChild(scrim);
-  nav = card.querySelector(".set-card__nav");
-  body = card.querySelector(".set-card__pane");
-  drawSettings();
+function patchRows(keys, changed) {
+  if (keys.includes("sets") && state.page === "sets") {
+    // The row of a changed set is drawn alone; the editor of the edited set belongs to the pane, so its change draws the pane.
+    if (changed === null || changed.some((set) => set.id === state.editing)) return false;
+    for (const set of changed) {
+      const shown = root.querySelector(`.set-set[data-set="${CSS.escape(set.id)}"]`);
+      if (shown === null) return false;
+      shown.replaceWith(setRow(set));
+    }
+  }
+  const names = new Set(keys.map((key) => {
+    if (key === "mode") return "theme";
+    if (DEBUG_KEYS.includes(key)) return "debug";
+    return SIDE_KEYS.includes(key) ? "sidebarOrder" : key;
+  }));
+  if (keys.includes("mode")) names.add("mode");
+  // A row whose setting depends on a changed setting shows that setting's state (disabled while the parent is off), so it is drawn again too.
+  for (const def of ALL_ROWS) if (def.depends !== undefined && keys.includes(def.depends)) names.add(def.key);
+  if (keys.includes("links") || keys.includes("sets")) {
+    for (const row of root.querySelectorAll(".set-row[data-row]")) {
+      if (row.querySelector('[data-set^="link:"]') !== null) names.add(row.dataset.row);
+    }
+  }
+  let sizeDrawn = false;
+  for (const name of names) {
+    if (SIZE_KEYS.includes(name)) {
+      // The sizes share one group, drawn once for all of them.
+      const group = root.querySelector(`.set-row[data-row="${CSS.escape(name)}"]`)?.closest(".set-group");
+      if (group !== undefined && group !== null && !sizeDrawn) {
+        group.replaceWith(sizeGroup());
+        sizeDrawn = true;
+      }
+      continue;
+    }
+    for (const shown of [...root.querySelectorAll(`.set-row[data-row="${CSS.escape(name)}"]`)]) {
+      const next = rowsFor(name);
+      if (next === null) return false;
+      shown.replaceWith(...next);
+    }
+  }
+  // The scope control counts the overrides of the page, so its segment is drawn again (docs/spec/settings.md#page-head).
+  const scope = root.querySelector(".set-head__scope");
+  if (scope !== null && state.page !== "plugin" && state.page !== "installed" && state.page !== "browse") {
+    scope.replaceChildren(...(headScope(state.page) === null ? [] : [headScope(state.page)]));
+  }
+  return true;
+}
 
-  const rect = cardRect();
-  if (native) {
-    // The application renders it, so it is not shown here. The position and size must be read from this element,
-    // so it is hidden with visibility, not display.
-    card.style.visibility = "hidden";
-    overlay.show(card, rect, answer, () => closeSettings());
-  } else {
-    errorToasts(document).place(card);
-    standIn(true, rect);
+/** Replaces the head, the pane and the foot of the tab; the menu and the scroll position of the same content stay. */
+function drawMain() {
+  const positions = scrollPositions(root);
+  const main = root.querySelector(".set-main");
+  main.replaceWith(mainEl());
+  restoreScroll(root, positions);
+}
+
+/** Replaces the foot, when the toast changes. */
+function drawFoot() {
+  const foot = root.querySelector(".set-foot");
+  if (foot !== null) foot.replaceWith(footEl());
+}
+
+/**
+ * Runs when a setting changes. A change made while the tab is in front shows the undo toast. Only the rows of the changed keys are drawn
+ * again, so a value change moves no other row and redraws no page (docs/spec/settings.md#performance).
+ */
+function settingsChanged() {
+  const previous = snapshot;
+  const next = takeSnapshot();
+  const keys = snapshot === null ? Object.keys(next) : Object.keys(next).filter((key) => JSON.stringify(next[key]) !== JSON.stringify(snapshot[key]));
+  if (snapshot !== null && front && !reverting) {
+    const toast = toastOf(keys, snapshot, next);
+    if (toast !== null) showUndo(toast.text, toast.command, toast.params, toast.detail);
+  }
+  snapshot = next;
+  if (root === null || keys.length === 0) {
+    publish();
+    return;
+  }
+  if (!patchRows(keys, changedSets(previous, next))) drawMain();
+  publish();
+}
+
+/**
+ * The scroll position of the status, in points from the top; a negative position is kept, since the native host reports one while the
+ * content is pulled past its start. A value that is not a finite number is refused (docs/spec/settings.md#status).
+ */
+export function scrollPosition(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new TypeError(`settings scroll position is not a number: ${String(value)}`);
+  return value;
+}
+
+/** The status core.settings-tab of the tab, or null while the window has no settings tab. */
+export const settingsTabStatus = () => statusOf();
+
+/**
+ * Registers the commands core.settings-tab.* and follows the changes of the settings. core-exposure.js calls it once, when the first
+ * command of the tab loads this module. sink(status) receives the status at each publication of the tab.
+ */
+export function installSettingsTab(sink) {
+  if (installed) return;
+  installed = true;
+  statusSink = sink;
+  registry.command("core.settings-tab.nav", ({ page }) => {
+    oneOf("page", page, [...CORE_PAGES, ...PLUGIN_LIST_PAGES]);
+    state.page = page;
+    state.plugin = null;
+    state.find = "";
+    draw();
+  });
+  registry.command("core.settings-tab.scope", ({ scope }) => {
+    oneOf("scope", scope, ["common", "project"]);
+    if (scope === "project" && !projectSelected()) throw invalid("no project is selected");
+    setScope(scope);
+    draw();
+  });
+  registry.command("core.settings-tab.find", ({ query }) => {
+    if (typeof query !== "string") throw invalid("query must be a string");
+    state.find = query.trim();
+    draw();
+  });
+  registry.command("core.settings-tab.plugin", ({ plugin }) => {
+    const id = listedPlugin(plugin);
+    state.back = state.page === "browse" ? "browse" : "installed";
+    state.page = "plugin";
+    state.plugin = id;
+    state.find = "";
+    draw();
+  });
+  registry.command("core.settings-tab.back", () => {
+    state.page = state.back;
+    state.plugin = null;
+    draw();
+  });
+  registry.command("core.settings-tab.browse", ({ query, hideInstalled, more }) => {
+    if (query !== undefined) {
+      if (typeof query !== "string") throw invalid("query must be a string");
+      state.browse.query = query;
+      state.browse.shown = BROWSE_PAGE;
+    }
+    if (hideInstalled !== undefined) {
+      if (typeof hideInstalled !== "boolean") throw invalid("hideInstalled must be a boolean");
+      state.browse.hideInstalled = hideInstalled;
+      state.browse.shown = BROWSE_PAGE;
+    }
+    if (more !== undefined) {
+      if (more !== true) throw invalid("more must be true");
+      state.browse.shown += BROWSE_PAGE;
+    }
+    state.page = "browse";
+    state.plugin = null;
+    state.find = "";
+    draw();
+  });
+  registry.command("core.settings-tab.search", ({ query }) => {
+    if (typeof query !== "string") throw invalid("query must be a string");
+    state.query = query;
+    draw();
+  });
+  registry.command("core.settings-tab.filter", ({ filter }) => {
+    state.filter = oneOf("filter", filter, FILTERS);
+    draw();
+  });
+  registry.command("core.settings-tab.edit", ({ set = null }) => {
+    if (set !== null && !(typeof set === "string" && set !== "")) throw invalid("set must be a set id or null");
+    state.editing = set;
+    draw();
+  });
+  registry.command("core.settings-tab.confirm", async ({ kind, id, answer }) => {
+    oneOf("kind", kind, ["set", "plugin"]);
+    oneOf("answer", answer, ["ask", "no", "yes"]);
+    if (kind === "plugin") listedPlugin(id);
+    if (answer === "ask") state.confirm = { kind, id };
+    else {
+      state.confirm = null;
+      if (answer === "yes" && kind === "set") await run("core.settings.sets.delete", { id, scope: state.scope });
+      if (answer === "yes" && kind === "plugin") {
+        await run("core.plugins.remove", { plugin: id });
+        state.page = "installed";
+        state.plugin = null;
+      }
+    }
+    draw();
+  });
+  registry.command("core.settings-tab.undo", async () => {
+    const action = undoAction();
+    if (action === null) return;
+    dismissUndo();
+    reverting = true;
+    try {
+      await run(action.command, action.params);
+    } finally {
+      reverting = false;
+    }
+  });
+  registry.command("core.settings-tab.account-name", ({ name }) => {
+    accountPage();
+    if (typeof name !== "string") throw invalid("name must be a string");
+    state.account = { ...state.account, plugin: state.plugin, name };
+    draw();
+  });
+  registry.command("core.settings-tab.account-kind", ({ kind }) => {
+    accountPage();
+    if (!pluginAccounts(state.plugin).accounts.kinds.some((item) => item.value === kind)) throw invalid(`account kind ${kind} is not declared`);
+    state.account = { ...state.account, plugin: state.plugin, kind };
+    draw();
+  });
+  registry.command("core.settings-tab.account-edit", ({ id }) => {
+    accountPage();
+    if (id === null) state.account = { ...state.account, edit: null, editName: "" };
+    else {
+      const account = accounts.list(state.plugin).find((item) => item.id === id);
+      if (!account) throw invalid(`account ${id} is not defined`);
+      state.account = { ...state.account, edit: id, editName: account.name };
+    }
+    draw();
+  });
+  registry.command("core.settings-tab.account-edit-name", ({ name }) => {
+    accountPage();
+    if (state.account.edit === null) throw invalid("no account name is edited");
+    if (typeof name !== "string") throw invalid("name must be a string");
+    state.account = { ...state.account, editName: name };
+    draw();
+  });
+  // A finished add clears the name of the row 새 계정, and a finished rename ends the edit (docs/spec/settings.md#plugin-page).
+  accounts.onFinished((command, plugin) => {
+    if (state.account.plugin !== plugin) return;
+    state.account = command === "core.accounts.add" ? { ...state.account, name: "" } : { ...state.account, edit: null, editName: "" };
+    draw();
+  });
+  onSettingsChange(settingsChanged);
+  onUndoChange(() => { if (root !== null) drawFoot(); publish(); });
+}
+
+/** The account page: the fields of the group 계정 exist only on a plugin page with accounts (docs/spec/settings.md#plugin-page). */
+function accountPage() {
+  if (state.page !== "plugin" || pluginAccounts(state.plugin)?.accounts === undefined || pluginAccounts(state.plugin)?.accounts === null) {
+    throw invalid("no page of a plugin with accounts shows");
   }
 }
-
-/** Closes the modal and removes the overlay and the card. */
-export function closeSettings() {
-  if (!card) return;
-  queueMicrotask(() => drawn());
-  setupParts.show(false);
-  accounts.show(null);
-  if (native) overlay.hide(card);
-  else {
-    errorToasts(document).place(document.body);
-    standIn(false);
-  }
-  scrim.remove();
-  scrim = null;
-  card = null;
-  nav = null;
-  body = null;
-}
-
-// A settings card dragged to an edge must stay inside the parent window whose size changed.
-// Its native webview follows the same clamped DOM rectangle.
-addEventListener("resize", () => {
-  if (!card) return;
-  moveBy(0, 0);
-});

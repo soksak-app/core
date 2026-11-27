@@ -457,12 +457,14 @@ type SidecarDeclaration struct {
 
 // OutdatedSidecar is a persistent sidecar whose running service has another version than the installed one
 // (docs/spec/persistent-services.md#updates). Running is nil when the service sent no version; Sessions counts the open
-// surfaces of the application that have sent to the service. Installed is nil when the sidecar is no longer declared.
+// surfaces of the application that have sent to the service, and Surfaces lists those surfaces, sorted. Installed is nil when the
+// sidecar is no longer declared.
 type OutdatedSidecar struct {
-	Sidecar   string  `json:"sidecar"`
-	Running   *string `json:"running"`
-	Installed *string `json:"installed"`
-	Sessions  int     `json:"sessions"`
+	Sidecar   string   `json:"sidecar"`
+	Running   *string  `json:"running"`
+	Installed *string  `json:"installed"`
+	Sessions  int      `json:"sessions"`
+	Surfaces  []string `json:"surfaces"`
 }
 
 // NewSidecars creates the channels from the declared sidecars. The executable is the executable path inside each Folder. It fails when the form of a declaration
@@ -1216,13 +1218,13 @@ func (c *Sidecars) outdatedLocked() []OutdatedSidecar {
 		if !process.persistent || (process.version != nil && installed != nil && *process.version == *installed) {
 			continue
 		}
-		sessions := c.sessionsLocked(process)
+		surfaces := c.sessionSurfacesLocked(process)
 		var running *string
 		if process.version != nil {
 			version := *process.version
 			running = &version
 		}
-		list = append(list, OutdatedSidecar{Sidecar: name, Running: running, Installed: installed, Sessions: sessions})
+		list = append(list, OutdatedSidecar{Sidecar: name, Running: running, Installed: installed, Sessions: len(surfaces), Surfaces: surfaces})
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].Sidecar < list[j].Sidecar })
 	return list
@@ -1249,18 +1251,28 @@ func (c *Sidecars) recordOutdatedConnection(name string, running *string) {
 // to it, and each surface of the layouts of a plugin that listed it while the process ran, which may hold a session that an earlier
 // application left. Call it with c.mu held.
 func (c *Sidecars) sessionsLocked(process *sidecar) int {
-	sessions := 0
+	return len(c.sessionSurfacesLocked(process))
+}
+
+// sessionSurfacesLocked lists the surfaces that the sessions of the service process count, each once, sorted. It is called with c.mu held.
+func (c *Sidecars) sessionSurfacesLocked(process *sidecar) []string {
+	counted := map[string]bool{}
 	for surface := range process.surfaces {
 		if c.owners[surface] != nil {
-			sessions++
+			counted[surface] = true
 		}
 	}
 	for surface, plugin := range c.layout {
 		if slices.Contains(process.plugins, plugin) && !(process.surfaces[surface] && c.owners[surface] != nil) {
-			sessions++
+			counted[surface] = true
 		}
 	}
-	return sessions
+	surfaces := make([]string, 0, len(counted))
+	for surface := range counted {
+		surfaces = append(surfaces, surface)
+	}
+	sort.Strings(surfaces)
+	return surfaces
 }
 
 // outdated reports whether process is a persistent service whose version differs from the installed version of its

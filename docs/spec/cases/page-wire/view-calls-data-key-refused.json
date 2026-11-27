@@ -9,6 +9,8 @@
     {"reply":{"result":{"common":{},"pluginData": {}, "projects":[{"id":"p1","root":"/projects/p1","identity":"p1","title":"p1","color":"#fff","named":1,"activeSpaceId":"spc-p1","spaces":[{"id":"spc-p1","title":"SPACE1","layout":{"state":{"root":{"card":"main"}}}}],"settings":{}}],"open":[]}}},
     {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
     {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"notices"}}},
+    {"reply":{"result":null}},
     {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
     {"reply":{"result":[]}},
     {"call":{"name":"windowReady"}},

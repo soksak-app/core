@@ -16,10 +16,14 @@ const CASES = new URL("../../../docs/spec/cases/page-wire/", import.meta.url);
 const START_PROJECT = { id: "p1", root: "/projects/p1" };
 const SHORTCUT_ROWS = [
   { key: "shift+cmd+n", owner: "workbench", command: "core.window.new" },
-  { key: "cmd+k", owner: "workbench", command: "core.library.search.focus" },
+  { key: "cmd+k", owner: "workbench", command: "core.home.search.focus" },
+  { key: "ArrowUp", owner: "workbench", command: "core.home.select" },
+  { key: "ArrowDown", owner: "workbench", command: "core.home.select" },
+  { key: "Escape", owner: "workbench", command: "core.home.search" },
   { key: "Enter", owner: "workbench", command: "core.rename.commit" },
   { key: "Escape", owner: "workbench", command: "core.rename.cancel" },
-  { key: "Enter", owner: "workbench", command: "core.library.form.submit" },
+  { key: "Enter", owner: "workbench", command: "core.home.form.submit" },
+  { key: "Enter", owner: "workbench", command: "core.home.open" },
   { key: "Escape", owner: "workbench", command: "core.picker.close" },
   { key: "Escape", owner: "workbench", command: "core.modal.dismiss" },
   { key: "Escape", owner: "view", command: "none" },
@@ -112,9 +116,9 @@ const FIXTURES = {
     let runs = 0;
     return {
       ...base(),
-      shortcuts: [{ key: "cmd+k", owner: "workbench", command: "core.library.search.focus" }],
+      shortcuts: [{ key: "cmd+k", owner: "workbench", command: "core.home.search.focus" }],
       commands: {
-        "core.library.search.focus": () => {
+        "core.home.search.focus": () => {
           runs += 1;
           if (runs > 1) throw new Error("no focus target");
           return null;
@@ -214,12 +218,16 @@ const CHECKS = {
     ["문서", "1 of 3", "/tmp", true, "저장하지 못했습니다"],
   ),
   "view-calls-tab-keep-off": (observed) => assert.deepEqual(observed.tab.keep, [{ reason: "busy", on: true }, { reason: "busy", on: false }]),
-  "view-calls-tab-notify-keep": (observed) => assert.deepEqual(observed.tab.notify, [{ text: "끝났습니다", policy: "system" }]),
+  "view-calls-tab-notify-keep": (observed) => {
+    assert.deepEqual(observed.tab.notify, [{ kind: "progress", title: "빌드", text: "", action: { label: "중지", command: "probe.stop", params: { job: 1 } }, system: true }]);
+    assert.deepEqual(observed.tab.progress, [{ id: "notice-1", progress: 0.5 }]);
+    assert.deepEqual(observed.tab.done, [{ id: "notice-1", kind: "success", title: "끝났습니다" }]);
+  },
   "view-calls-data-get-set": (observed) => assert.deepEqual(observed.data, [{ key: "note", value: "kept" }]),
   "view-calls-links-open": (observed) => assert.deepEqual(observed.links, ["https://example.test"]),
   "view-calls-command-core-cids": (observed) => assert.deepEqual(observed.commands, [{ name: "core.tab.select", params: { tab: "current" }, cids: ["p1700000000000.5"] }]),
   "view-calls-command-core-shortcut": (observed) => assert.deepEqual(observed.events, [
-    { level: "error", event: "workbench.input.shortcut.failed", fields: { plugin: "probe", command: "core.library.search.focus" } },
+    { level: "error", event: "workbench.input.shortcut.failed", fields: { plugin: "probe", command: "core.home.search.focus" } },
   ]),
   "view-calls-contributions-fail": (observed) => assert.deepEqual(observed.contributions, [
     { plugin: "two", point: "probe.language", index: 1, reason: "extend is not a function" },

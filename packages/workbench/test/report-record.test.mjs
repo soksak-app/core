@@ -5,8 +5,8 @@ import test from "node:test";
 import { recordOf } from "../report-record.js";
 
 test("a line `<where>: <text>` is split at its first `: `", () => {
-  assert.deepEqual(recordOf("error", "library: registry failed: unreachable"), {
-    level: "error", where: "library", text: "registry failed: unreachable",
+  assert.deepEqual(recordOf("error", "home: registry failed: unreachable"), {
+    level: "error", where: "home", text: "registry failed: unreachable",
   });
 });
 

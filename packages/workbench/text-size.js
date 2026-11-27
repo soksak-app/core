@@ -54,7 +54,7 @@ export function onTextSize(fn) {
 export const textScope = () => scope;
 
 /**
- * The scope in which the text size changes. It is the place pressed if there is one, and otherwise the focused card. A window without a focused card (the library before
+ * The scope in which the text size changes. It is the place pressed if there is one, and otherwise the focused card. A window without a focused card (the project home before
  * a space opens) uses frame (docs/spec/text-size.md#scope).
  */
 export function effectiveTextScope(pressed, focused) {

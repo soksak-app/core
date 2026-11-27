@@ -28,7 +28,6 @@ export function publicHostState({layout,grid,surfaces,modal,hits,normalize=text=
     if(modal.open) {
       assert.ok(["workbench","native"].includes(hit.kind),`surface ${row.surface} native hit bypassed the modal`);
       assert.notEqual(hit.surface,row.surface,`surface ${row.surface} native hit bypassed the modal`);
-      if(hit.kind==="native") assert.equal(hit.identifier,"modal:settings","native modal hit belongs to another owner");
     } else {
       assert.equal(hit.kind,"document",`surface ${row.surface} native hit has no document owner`);
       assert.equal(hit.surface,row.surface,`surface ${row.surface} native hit belongs to another surface`);

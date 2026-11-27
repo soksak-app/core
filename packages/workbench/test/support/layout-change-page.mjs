@@ -44,7 +44,7 @@ export async function openLayoutChangePage(caseName) {
   const plane = await import("../../plane.js");
   const { installCoreExposure } = await import("../../core-exposure.js");
   const { pageMemorySaver } = await import("./memory-saver.mjs");
-  await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+  await installCoreExposure({ home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
     memorySaver: await pageMemorySaver() });
   plane.nameWindow("main");
   // The event is of the class call at the level debug, which this policy stores.

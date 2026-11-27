@@ -175,7 +175,7 @@ func (s *Shell) askedCloseCard(id string) (bool, error) {
 }
 
 // settleModified asks about each modified tab of the plane in turn with the answers words, and gives done false when a tab is kept. The
-// library shows no space, so the window has no tab to ask about.
+// project home shows no space, so the window has no tab to ask about.
 func (s *Shell) settleModified(words modifiedAnswers, done func(settled bool)) {
 	type asked struct {
 		card string

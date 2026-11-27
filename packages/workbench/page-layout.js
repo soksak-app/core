@@ -151,7 +151,7 @@ export function createPageLayout({
       return true;
     },
     /**
-     * A project switch clears the plane (onSwitch of projects.js). The draw that clears the plane draws the library screen with show. That
+     * A project switch clears the plane (onSwitch of projects.js). The draw that clears the plane draws the project home screen with show. That
      * draw runs in the animation frame that runs before the observation round, so the screen switch that hides the workspace does not change
      * the size of an element observed inside the round (F43).
      */
@@ -202,7 +202,7 @@ export function createPageLayout({
       }));
     },
     /**
-     * Draws the first row with the prepared layout. If a plane exists, it redraws the plane. A window without a plane (library) applies the
+     * Draws the first row with the prepared layout. If a plane exists, it redraws the plane. A window without a plane (project home) applies the
      * current frame scale of the setting after a preparation that carries the height of the first row without a surface. The preparation sets the window title bar in the same transaction,
      * so the row and the button change in the same frame (docs/spec/native-surfaces.md#title-bar-height).
      */

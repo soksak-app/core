@@ -18,7 +18,7 @@ const (
 
 var shortcutModifiers = map[string]ui.Modifiers{"cmd": ui.Cmd, "shift": ui.Shift, "opt": ui.Alt, "ctrl": ui.Ctrl}
 
-var shortcutKeys = map[string]ui.Key{",": ui.KeyComma, "Enter": ui.KeyEnter, "Escape": ui.KeyEscape, "=": ui.KeyEqual, "-": ui.KeyMinus}
+var shortcutKeys = map[string]ui.Key{",": ui.KeyComma, "Enter": ui.KeyEnter, "Escape": ui.KeyEscape, "=": ui.KeyEqual, "-": ui.KeyMinus, "ArrowUp": ui.KeyUp, "ArrowDown": ui.KeyDown}
 
 // ParseShortcut reads a key of the shortcut table, as "shift+cmd+n".
 func ParseShortcut(text string) (ui.Modifiers, ui.Key, error) {
@@ -49,19 +49,20 @@ type boundShortcut struct {
 	mods    ui.Modifiers
 	key     ui.Key
 	command string
+	params  map[string]any
 	holds   func() bool
 }
 
 // Shortcuts are the keys of the workbench.
 type Shortcuts struct {
 	rows   []boundShortcut
-	run    func(command string) error
+	run    func(command string, params map[string]any) error
 	failed func(command string, err error)
 }
 
-// NewShortcuts reads table. conditions holds the condition of each workbench row by the text of its when, run runs a command, and
+// NewShortcuts reads table. conditions holds the condition of each workbench row by the text of its when, run runs a command with the params of its row, and
 // failed receives each command that fails. A key that cannot be read and a workbench row without a condition are errors.
-func NewShortcuts(table []Shortcut, conditions map[string]func() bool, run func(command string) error, failed func(command string, err error)) (*Shortcuts, error) {
+func NewShortcuts(table []Shortcut, conditions map[string]func() bool, run func(command string, params map[string]any) error, failed func(command string, err error)) (*Shortcuts, error) {
 	shortcuts := &Shortcuts{run: run, failed: failed}
 	for _, row := range table {
 		if row.Owner == shortcutOwnerView {
@@ -78,7 +79,7 @@ func NewShortcuts(table []Shortcut, conditions map[string]func() bool, run func(
 		if holds == nil {
 			return nil, fmt.Errorf("shortcut %s has no condition %q", row.Key, row.When)
 		}
-		shortcuts.rows = append(shortcuts.rows, boundShortcut{mods, key, row.Command, holds})
+		shortcuts.rows = append(shortcuts.rows, boundShortcut{mods, key, row.Command, row.Params, holds})
 	}
 	return shortcuts, nil
 }
@@ -95,7 +96,7 @@ func (s *Shortcuts) Declare(c *ui.Context) {
 		if at := (chord{row.mods, row.key}); !bound[at] && row.holds() {
 			bound[at] = true
 			c.OnShortcut(row.mods, row.key, func() {
-				if err := s.run(row.command); err != nil {
+				if err := s.run(row.command, row.params); err != nil {
 					s.failed(row.command, err)
 				}
 			})

@@ -1,0 +1,184 @@
+{
+  "name": "card-notice-tab-name",
+  "description": "The page reads the workspace of two tabs in one card, the active tab and a second tab, so a notice of the second tab names that tab on its card line and core.grid reports the notice of the card.",
+  "replay": false,
+  "reason": "The case checks how the page delivers a core status whose read answers later; the producer runs the workspace role reads in the role state cases.",
+  "steps": [
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "pluginData": {},
+          "projects": [
+            {
+              "id": "prj-aaaaaa",
+              "title": "project",
+              "root": "/work/project",
+              "identity": "id",
+              "color": "#fff",
+              "named": 2,
+              "activeSpaceId": "spc-aaaaaa",
+              "spaces": [
+                {
+                  "id": "spc-aaaaaa",
+                  "title": "SPACE1",
+                  "layout": {
+                    "focusedId": "main",
+                    "named": 0,
+                    "windowSidebars": {},
+                    "sidebars": {},
+                    "leader": "main",
+                    "lastCard": 1,
+                    "state": {
+                      "root": {
+                        "card": "main",
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-aaaaa1",
+                              "plugin": "fixture",
+                              "title": "fixture",
+                              "origin": {
+                                "directory": null
+                              },
+                              "role": null
+                            },
+                            {
+                              "id": "tab-aaaaa2",
+                              "plugin": "fixture",
+                              "title": "second",
+                              "origin": {
+                                "directory": null
+                              },
+                              "role": null
+                            }
+                          ],
+                          "activeId": "tab-aaaaa1"
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "settings": {}
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabState"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "notices"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabSessions"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    },
+    {
+      "call": {
+        "name": "windowReady"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "noticesPut",
+          "notices": [
+            {
+              "id": "notice-1",
+              "kind": "info",
+              "title": "second tab done",
+              "text": "",
+              "source": {
+                "kind": "card",
+                "card": "main",
+                "tab": "tab-aaaaa2",
+                "plugin": "fixture"
+              },
+              "actions": [],
+              "at": "$notice-at-1",
+              "count": 1,
+              "read": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ],
+  "filter": [
+    "notificationState",
+    "setTheme",
+    "setMenuLanguage"
+  ],
+  "variables": {
+    "notice-at-1": {
+      "type": "string",
+      "example": "2026-11-27T13:28:15.010+09:00",
+      "source": "page"
+    }
+  }
+}

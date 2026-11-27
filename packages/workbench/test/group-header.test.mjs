@@ -59,7 +59,7 @@ const barTabs = createBarTabs({ projects, projectBar: document.getElementById("p
 // The page gives the group cards to the rename of the bars, which index.html connects in the application.
 plane.useGroupRename?.(barTabs.renames);
 const { installCoreExposure } = await import("../core-exposure.js");
-await installCoreExposure({ library: { state: () => null }, renames: barTabs.renames, chrome: () => null, drawn: async () => {},
+await installCoreExposure({ home: { state: () => null }, renames: barTabs.renames, chrome: () => null, drawn: async () => {},
   memorySaver: await pageMemorySaver() });
 // The window of the page has the name that its start document carries (docs/spec/native-host.md#page-start).
 plane.nameWindow(WINDOW);

@@ -1,8 +1,11 @@
 package workbench_test
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -20,7 +23,8 @@ func TestWorkbenchErrorsWithTheSameTextKeepTheirOrigins(t *testing.T) {
 	if !slices.Equal(lines, want) {
 		t.Errorf("records are %q, want %q", lines, want)
 	}
-	if got := errors.Toasts(); !slices.Equal(got, []string{"failed"}) {
+	// Two origins that report one title are one notice whose count is 2 (notices.js merges by kind and title).
+	if got := errors.Toasts(); !slices.Equal(got, []string{"failed ×2"}) {
 		t.Fatalf("toasts for the two origins are %q", got)
 	}
 	if errors.HideFrom("workbench", "activity tab-b") {
@@ -29,7 +33,8 @@ func TestWorkbenchErrorsWithTheSameTextKeepTheirOrigins(t *testing.T) {
 	if !errors.HideFrom("workbench", "placement") {
 		t.Error("the placement source did not withdraw its occurrence")
 	}
-	if got := errors.Toasts(); !slices.Equal(got, []string{"failed"}) {
+	// The count stays at the occurrences that merged (docs/spec/notifications.md#notices): withdrawing one origin leaves the notice with the other.
+	if got := errors.Toasts(); !slices.Equal(got, []string{"failed ×2"}) {
 		t.Fatalf("withdrawing the placement removed the activity toast: %q", got)
 	}
 	if !errors.HideFrom("workbench", "activity tab-a") {
@@ -71,7 +76,8 @@ func TestWorkbenchRecoveryKeepsOtherOrigins(t *testing.T) {
 	if !errors.HideFrom("workbench", "activity tab-a") {
 		t.Error("the generic error replaced the outstanding activity occurrence")
 	}
-	if got := errors.Toasts(); !slices.Equal(got, []string{"activity failed"}) {
+	if got := errors.Toasts(); !slices.Equal(got, []string{"activity failed ×2"}) {
+		// The generic occurrence merged into the activity notice, so its count is 2 and the notice keeps it after the activity recovers.
 		t.Errorf("activity recovery left toasts %q", got)
 	}
 }
@@ -81,7 +87,7 @@ func TestDismissedWorkbenchErrorReopensOnlyForANewOccurrence(t *testing.T) {
 	errors := workbench.NewShownErrors(func(line string) { lines = append(lines, line) })
 	errors.ShowFrom("workbench", "placement", "failed", " @ placement")
 	errors.ShowFrom("workbench", "activity tab-a", "failed", " @ activity")
-	if !errors.DismissToast("failed") {
+	if !dismissNotice(t, errors, "failed") {
 		t.Fatal("the grouped toast did not close")
 	}
 	errors.ShowFrom("workbench", "placement", "failed", " @ placement")
@@ -140,13 +146,13 @@ func TestTheErrorToastShowsAndDismissesThroughTheWorkbench(t *testing.T) {
 	if !hasStatusLabel(f.tester.ElementTree(), failure) {
 		t.Fatalf("the toast has no status label for %q", failure)
 	}
-	close := element(t, f.tester, "core.error.dismiss", failure)
+	close := element(t, f.tester, "core.notices.close", f.noticeFor(failure))
 	if close.Inert || close.Actions&ui.ActionPress == 0 {
 		t.Fatalf("the toast close control cannot be pressed: %+v", close)
 	}
-	press(t, f.tester, "core.error.dismiss", failure)
+	press(t, f.tester, "core.notices.close", f.noticeFor(failure))
 	f.settle()
-	if f.tester.HasText(failure) || f.status("core.workbench.error") != "null" {
+	if f.tester.HasText(failure) || f.workbenchError() != "null" {
 		t.Fatalf("the closed toast is still visible or reported")
 	}
 }
@@ -164,7 +170,6 @@ func TestApplicationToastMovesIntoTheActiveNativeModal(t *testing.T) {
 	for _, modal := range []struct {
 		name, open, close, scrim string
 	}{
-		{"settings", "core.settings.open", "core.settings.close", "core.settings-modal.scrim"},
 		{"debug", "core.debug.open", "core.debug.close", "core.debug.scrim"},
 	} {
 		t.Run(modal.name, func(t *testing.T) {
@@ -175,46 +180,47 @@ func TestApplicationToastMovesIntoTheActiveNativeModal(t *testing.T) {
 			if got := f.shownRecords(); !slices.Equal(got, want) {
 				t.Fatalf("the application recorded %q, want %q", got, want)
 			}
-			assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+			assertOnlyToastClose(t, f, failure)
 
 			f.do(modal.open, nil)
 			scrim := element(t, f.tester, modal.scrim, "")
-			close := assertOnlyToastClose(t, f.tester.ElementTree(), failure)
-			if child, ok := keyed(scrim.Children, "core.error.dismiss", failure); !ok || child.ID != close.ID {
+			close := assertOnlyToastClose(t, f, failure)
+			if child, ok := keyed(scrim.Children, "core.notices.close", f.noticeFor(failure)); !ok || child.ID != close.ID {
 				t.Fatalf("the toast close control is outside the %s focus scope", modal.name)
 			}
 
 			f.do(modal.close, nil)
-			assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+			assertOnlyToastClose(t, f, failure)
 
 			f.do(modal.open, nil)
-			press(t, f.tester, "core.error.dismiss", failure)
+			press(t, f.tester, "core.notices.close", f.noticeFor(failure))
 			f.settle()
-			if got := f.status("core.workbench.error"); got != "null" {
+			if got := f.workbenchError(); got != "null" {
 				t.Fatalf("clicking the modal toast close left the error %s", got)
 			}
 			element(t, f.tester, modal.scrim, "")
 			f.do(modal.close, nil)
-			if _, shown := keyed(f.tester.ElementTree(), "core.error.dismiss", failure); shown {
+			if _, shown := keyed(f.tester.ElementTree(), "core.notices.close", f.noticeFor(failure)); shown {
 				t.Fatal("the dismissed error returned outside the modal")
 			}
 		})
 	}
 }
 
-func assertOnlyToastClose(t *testing.T, tree []ui.ElementNode, text string) ui.ElementNode {
+func assertOnlyToastClose(t *testing.T, f noticeSource, text string) ui.ElementNode {
 	t.Helper()
 	var controls []ui.ElementNode
+	id := f.noticeFor(text)
 	var collect func([]ui.ElementNode)
 	collect = func(nodes []ui.ElementNode) {
 		for _, node := range nodes {
-			if key, ok := node.Key.(workbench.Exposed); ok && key.Name == "core.error.dismiss" && key.Item == text {
+			if key, ok := node.Key.(workbench.Exposed); ok && key.Name == "core.notices.close" && key.Item == id {
 				controls = append(controls, node)
 			}
 			collect(node.Children)
 		}
 	}
-	collect(tree)
+	collect(f.elementTree())
 	if len(controls) != 1 {
 		t.Fatalf("the frame has %d toast close controls for %q", len(controls), text)
 	}
@@ -228,7 +234,7 @@ func assertOnlyToastClose(t *testing.T, tree []ui.ElementNode, text string) ui.E
 func TestAnErrorToastExpiresWithoutRestartingForModalOrRepaint(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
 	f.shellFixture.run("core.settings.set", map[string]any{"scope": "common", "patch": map[string]any{
-		"autoDismissErrorToasts": true, "errorToastDismissSeconds": 4,
+		"autoDismissProblemToasts": true, "problemToastDismissSeconds": 4,
 	}})
 	const failure = "the operation could not finish"
 	f.shellFixture.run("core.focus.set", map[string]string{"name": "core.chrome.settings"})
@@ -245,11 +251,11 @@ func TestAnErrorToastExpiresWithoutRestartingForModalOrRepaint(t *testing.T) {
 	if got := f.status("core.focus"); got != workbenchFocus {
 		t.Fatalf("opening the toast moved focus from %s to %s", workbenchFocus, got)
 	}
-	assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+	assertOnlyToastClose(t, f, failure)
 
 	f.timers.tick(2000)
 	f.do("core.settings.open", nil)
-	f.shellFixture.run("core.focus.set", map[string]string{"name": "core.settings-modal.close"})
+	f.shellFixture.run("core.focus.set", map[string]string{"name": "core.settings-tab.close"})
 	modalFocus := f.status("core.focus")
 	if modalFocus == "null" || modalFocus == workbenchFocus {
 		t.Fatalf("the settings close button did not take focus: %s", modalFocus)
@@ -257,13 +263,13 @@ func TestAnErrorToastExpiresWithoutRestartingForModalOrRepaint(t *testing.T) {
 	f.timers.tick(1999)
 	f.tester.Frame()
 	f.tester.Frame()
-	assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+	assertOnlyToastClose(t, f, failure)
 	f.timers.tick(1)
 	f.settle()
-	if got := f.status("core.workbench.error"); got != "null" {
+	if got := f.workbenchError(); got != "null" {
 		t.Fatalf("the toast is still open after its original 4000ms: %s", got)
 	}
-	if _, shown := keyed(f.tester.ElementTree(), "core.error.dismiss", failure); shown {
+	if _, shown := keyed(f.tester.ElementTree(), "core.notices.close", f.noticeFor(failure)); shown {
 		t.Fatal("the expired toast still has a close control")
 	}
 	if got := f.status("core.focus"); got != modalFocus {
@@ -274,13 +280,16 @@ func TestAnErrorToastExpiresWithoutRestartingForModalOrRepaint(t *testing.T) {
 func TestAClosedToastDeadlineDoesNotExpireANewerEqualToast(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
 	f.shellFixture.run("core.settings.set", map[string]any{"scope": "common", "patch": map[string]any{
-		"autoDismissErrorToasts": true, "errorToastDismissSeconds": 4,
+		"autoDismissProblemToasts": true, "problemToastDismissSeconds": 4,
 	}})
 	const failure = "the operation could not finish"
 	f.shell.StartFailed(errors.New(failure))
 	f.shownRecords()
 	f.timers.tick(1000)
-	press(t, f.tester, "core.error.dismiss", failure)
+	press(t, f.tester, "core.notices.close", f.noticeFor(failure))
+	f.settle()
+	// The pointer leaves the closed toast: a toast under the pointer holds its deadline (docs/spec/notifications.md#places).
+	f.tester.Move(0, 0)
 	f.settle()
 
 	// A different workbench occurrence allows the failed operation to open a new toast with the same text.
@@ -289,11 +298,11 @@ func TestAClosedToastDeadlineDoesNotExpireANewerEqualToast(t *testing.T) {
 	f.shownRecords()
 	f.timers.tick(3000)
 	f.settle()
-	assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+	assertOnlyToastClose(t, f, failure)
 
 	f.timers.tick(1000)
 	f.settle()
-	if got := f.status("core.workbench.error"); got != "null" {
+	if got := f.workbenchError(); got != "null" {
 		t.Fatalf("the newer toast did not expire at its own deadline: %s", got)
 	}
 }
@@ -306,17 +315,18 @@ func TestErrorToastDismissalDefaultsToManualAndClosesOnlyTheSelectedToast(t *tes
 	f.shownRecords()
 	f.timers.tick(10000)
 	f.settle()
-	firstClose := assertOnlyToastClose(t, f.tester.ElementTree(), first)
-	secondClose := assertOnlyToastClose(t, f.tester.ElementTree(), second)
-	if firstClose.Bounds.Y >= secondClose.Bounds.Y {
-		t.Fatalf("the toasts did not stack in order: %v and %v", firstClose.Bounds, secondClose.Bounds)
+	firstClose := assertOnlyToastClose(t, f, first)
+	secondClose := assertOnlyToastClose(t, f, second)
+	// The newest notice is the first of the stack, as the toasts of notices.js list them newest first.
+	if firstClose.Bounds.Y <= secondClose.Bounds.Y {
+		t.Fatalf("the toasts did not stack newest first: %v and %v", firstClose.Bounds, secondClose.Bounds)
 	}
-	press(t, f.tester, "core.error.dismiss", first)
+	press(t, f.tester, "core.notices.close", f.noticeFor(first))
 	f.settle()
-	if _, shown := keyed(f.tester.ElementTree(), "core.error.dismiss", first); shown {
+	if _, shown := keyed(f.tester.ElementTree(), "core.notices.close", f.noticeFor(first)); shown {
 		t.Fatal("the chosen toast did not close")
 	}
-	assertOnlyToastClose(t, f.tester.ElementTree(), second)
+	assertOnlyToastClose(t, f, second)
 }
 
 func TestErrorToastSettingsApplyNewDeadlinesAndCancelOpenToasts(t *testing.T) {
@@ -330,53 +340,131 @@ func TestErrorToastSettingsApplyNewDeadlinesAndCancelOpenToasts(t *testing.T) {
 	f.shownRecords()
 
 	f.timers.tick(400)
-	change("autoDismissErrorToasts", true)
+	change("autoDismissProblemToasts", true)
 	f.timers.tick(4999)
 	f.settle()
-	assertOnlyToastClose(t, f.tester.ElementTree(), first)
+	assertOnlyToastClose(t, f, first)
 	f.timers.tick(1)
 	f.settle()
-	if got := f.status("core.workbench.error"); got != "null" {
+	if got := f.workbenchError(); got != "null" {
 		t.Fatalf("the toast did not close five seconds after enabling: %s", got)
 	}
 
 	f.shell.StartFailed(errors.New(second))
 	f.shownRecords()
 	f.timers.tick(200)
-	change("errorToastDismissSeconds", 2)
+	change("problemToastDismissSeconds", 2)
 	f.timers.tick(1999)
 	f.settle()
-	assertOnlyToastClose(t, f.tester.ElementTree(), second)
+	assertOnlyToastClose(t, f, second)
 	f.timers.tick(1)
 	f.settle()
-	if got := f.status("core.workbench.error"); got != "null" {
+	if got := f.workbenchError(); got != "null" {
 		t.Fatalf("the toast did not close two seconds after changing the delay: %s", got)
 	}
 
 	f.shell.StartFailed(errors.New(third))
 	f.shownRecords()
 	f.timers.tick(1000)
-	change("autoDismissErrorToasts", false)
+	change("autoDismissProblemToasts", false)
 	f.timers.tick(10000)
 	f.settle()
-	assertOnlyToastClose(t, f.tester.ElementTree(), third)
+	assertOnlyToastClose(t, f, third)
 }
 
 // The automatic dismissal that the common settings file holds applies from the start of the window, before any settings
 // change (docs/spec/settings.md).
 func TestStoredErrorToastDismissalAppliesFromTheStart(t *testing.T) {
 	f := newTabShell(t, &storedHost{installed: layoutPlugins, projects: []map[string]any{gridProject(oneCard(tab("tab-aaaaaa", "plain")))},
-		common: map[string]any{"autoDismissErrorToasts": true, "errorToastDismissSeconds": 3}})
+		common: map[string]any{"autoDismissProblemToasts": true, "problemToastDismissSeconds": 3}})
 	f.open(t)
 	const failure = "the operation could not finish"
 	f.shell.StartFailed(errors.New(failure))
 	f.shownRecords()
 	f.timers.tick(2999)
 	f.settle()
-	assertOnlyToastClose(t, f.tester.ElementTree(), failure)
+	assertOnlyToastClose(t, f, failure)
 	f.timers.tick(1)
 	f.settle()
-	if got := f.status("core.workbench.error"); got != "null" {
+	if got := f.workbenchError(); got != "null" {
 		t.Fatalf("the stored setting did not close the toast after three seconds: %s", got)
 	}
+}
+
+// dismissNotice closes the shown notice whose title starts with title, as the core.notices.close command does, and reports whether
+// one was closed.
+func dismissNotice(t *testing.T, errors *workbench.ShownErrors, title string) bool {
+	t.Helper()
+	for _, status := range errors.ToastStatuses() {
+		if strings.HasPrefix(status.Title, title) {
+			return errors.CloseNotice(status.ID)
+		}
+	}
+	return false
+}
+
+// toasts returns the status core.toasts, newest first.
+func (f *shellFixture) toasts() []workbench.ToastStatus {
+	f.t.Helper()
+	var toasts []workbench.ToastStatus
+	if err := json.Unmarshal([]byte(f.status("core.toasts")), &toasts); err != nil {
+		f.t.Fatalf("core.toasts is %s: %v", f.status("core.toasts"), err)
+	}
+	return toasts
+}
+
+// workbenchError returns the title of the newest shown notice as a JSON string, or null when no notice is shown.
+func (f *shellFixture) workbenchError() string {
+	toasts := f.toasts()
+	if len(toasts) == 0 {
+		return "null"
+	}
+	raw, err := json.Marshal(toasts[0].Title)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return string(raw)
+}
+
+// noticeFor returns the id of the shown notice of the error text, or "" when none is shown. The title is the first line cut to 120
+// characters, as the notice store cuts it.
+func (f *shellFixture) noticeFor(text string) string {
+	title := text
+	if runes := []rune(text); len(runes) > 120 {
+		title = string(runes[:120])
+	}
+	for _, toast := range f.toasts() {
+		if toast.Title == title || strings.HasPrefix(toast.Title, title+" ×") {
+			return toast.ID
+		}
+	}
+	return ""
+}
+
+// readWorkbenchErrorStatus returns the status core.toasts as the value that the former workbench error status held: a *string
+// of the newest title, or a nil *string when no notice is shown.
+func readWorkbenchErrorStatus(registry *workbench.Registry) (any, error) {
+	value, err := registry.Read("core.toasts")
+	if err != nil {
+		return nil, err
+	}
+	statuses, ok := value.([]workbench.ToastStatus)
+	if !ok {
+		return nil, fmt.Errorf("core.toasts is %T", value)
+	}
+	if len(statuses) == 0 {
+		return (*string)(nil), nil
+	}
+	title := statuses[0].Title
+	return &title, nil
+}
+
+// noticeSource is a fixture whose shown notices are read by title and whose element tree is drawn.
+type noticeSource interface {
+	noticeFor(title string) string
+	elementTree() []ui.ElementNode
+}
+
+func (f *shellFixture) elementTree() []ui.ElementNode {
+	return f.tester.ElementTree()
 }

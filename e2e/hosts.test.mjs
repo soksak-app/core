@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { APPS, MAIN_PAGE_APPS, drag, open, requiresAll } from "@soksak/window-check/app.mjs";
-import { fresh, recordCatalog, settingsShown } from "./fixture.mjs";
+import { fresh, recordCatalog, settingsClosed, settingsShown } from "./fixture.mjs";
 import { publicHostState, comparePublicHostStates } from "./host-public-parity.mjs";
 import { atRest, byPosition, restingFrames, settled, settledFrames, settledX, transcript } from "./host-transcript.mjs";
 import { orderNames } from "@soksak/window-check/order-names.mjs";
@@ -63,8 +63,8 @@ if (requiresAll(process.env)) test("every host answers the same page the same wa
     // the transcript lines, which the page sends as the record workbench.record.info of the class lifecycle.
     await fresh(s, { log: { call: "debug", lifecycle: "info" }, reads: ["workbench.call", "workbench.record.info"] });
     states[name] = { fresh: await layoutState(s) };
-    // The settled layout of the drag is taken by stopping the recording before the settings modal opens. The modal is an overlay of the whole window and changes the next layout,
-    // and the moment at which that layout enters the recording differs per host.
+    // The settled layout of the drag is taken by stopping the recording before the settings tab opens. The settings tab hides the surfaces
+    // of the window and changes the next layout, and the moment at which that layout enters the recording differs per host.
     const start = (await s.get("host.window")).surfaces.find((item) => item.frame.width > 0)?.frame.x;
     const expectedFrames = states[name].fresh.window.surfaces.filter((item) => item.visible).map((item) => item.frame).sort(byPosition);
     const dragLog = await s.transcript(recordCatalog(s.app));
@@ -90,10 +90,10 @@ if (requiresAll(process.env)) test("every host answers the same page the same wa
     states[name].afterDrag = await layoutState(s);
     const log = await s.transcript(recordCatalog(s.app));
     await s.run("core.settings.open");
-    const { controls } = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
-    assert.ok(controls.some((c) => c.key === "nav:sidebars"), "settings must have a sidebars section");
-    await s.run("core.settings-modal.nav", { section: "sidebars" });
-    await log.until((lines) => lines.some((line) => line.startsWith("info workbench workbench: host overlayPlace")), "settings were not placed");
+    const { controls } = await s.until("core.settings-tab", (tab) => tab !== null, "settings did not open");
+    assert.ok(controls.some((c) => c.key === "nav:sets"), "settings must have a sets page");
+    await s.run("core.settings-tab.nav", { page: "sets" });
+    await s.until("core.settings-tab", (tab) => tab?.page === "sets", "settings did not show the sets page");
     logs[name] = await log.stop();
     await s.run("core.settings.close");
   }
@@ -175,7 +175,7 @@ async function readPublicState(s, normalize) {
   const surfaces=await s.until("core.surfaces",rows=>rows.some(row=>row.visible) && rows.filter(row=>row.visible).every(row=>
     row.declared && row.applied && ["x","y","w","h"].every(key=>row.declared[key]===row.applied[key])),
   "the public surface declarations were not applied exactly");
-  const [layout,grid,modal]=await Promise.all([layoutState(s),s.get("core.grid"),s.get("core.settings-modal")]);
+  const [layout,grid,modal]=await Promise.all([layoutState(s),s.get("core.grid"),s.get("core.modal")]);
   const hits={};
   for(const row of surfaces.filter(row=>row.visible)) {
     const native=layout.window.surfaces.filter(value=>value.id===row.surface);
@@ -185,7 +185,7 @@ async function readPublicState(s, normalize) {
     // region. Modal routing is checked at this same independently owned point.
     hits[row.surface]=await s.run("host.hit",{x:frame.x+frame.width/2,y:frame.y+0.5/layout.window.scale});
   }
-  return publicHostState({layout,grid,surfaces,modal,hits,normalize});
+  return publicHostState({layout,grid,surfaces,modal:{open:modal!==null},hits,normalize});
 }
 
 if (requiresAll(process.env)) test("every host preserves public surface, hit and layout parity through drag, resize and settings", {timeout:180000}, async(t)=>{
@@ -204,12 +204,9 @@ if (requiresAll(process.env)) test("every host preserves public surface, hit and
     await s.until("core.window.workbench",value=>value.width===SIZE.width && value.height===SIZE.height,"the workbench did not take the public resize");
     states[name].resized=await readPublicState(s,normalize);
     await s.run("core.settings.open");
-    await s.until("core.settings-modal",value=>value.open,"the public settings modal did not open");
-    // host.window.presented waits only for a modal web view that is already shown, so the hits wait until the dialog is shown.
-    await settingsShown(s,"the public settings modal was not shown");
-    states[name].settingsOpen=await readPublicState(s,normalize);
+    await settingsShown(s,"the public settings tab was not shown");
     await s.run("core.settings.close");
-    await s.until("core.settings-modal",value=>!value.open,"the public settings modal did not close");
+    await settingsClosed(s,"the public settings tab did not close");
     states[name].settingsClosed=await readPublicState(s,normalize);
     assert.deepEqual(states[name].settingsClosed.geometry,states[name].resized.geometry,`${name} settings close changed its stable public state`);
   }

@@ -46,7 +46,8 @@ import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, setTabError, surfaceErrorText } from "./surface-status.js";
 import { imageDetachHold } from "./image-detach-waits.js";
 import { clearVisibleNotices, missingOriginRecords, onTabReports, recordOrigin, reportError, setVisibleTab, storedLayoutState, tabButtonData, tabError, tabFooter,
-  tabLabel, tabModified, tabNotice, tabOrigin } from "./tab-reports.js";
+  tabLabel, tabModified, tabNotice, tabOrigin, reportFocusedCard, setCardOfTab, notificationStore } from "./tab-reports.js";
+import { cardNoticeLine } from "./notice-view.js";
 import { errorToasts, hideError, showError } from "./shown-errors.js";
 import { registry } from "./exposure.js";
 import { configureSystemNotifications, systemNotifications } from "./system-notifications.js";
@@ -158,6 +159,7 @@ function focusOn(id) {
   // A group card takes no focus ring: the first content card inside it takes it (docs/spec/groups.md#focus).
   if (id !== null && tree?.isGroup(id)) id = tree.focusable(id);
   focusedId = id;
+  reportFocusedCard(id);
   keyboardOwed();
 }
 // default: without a grid, a card or a tab, or with a tab of a plugin that is not loaded, the ring has no surface.
@@ -284,7 +286,7 @@ function createCard(card) {
   el.className = "card";
   el.dataset.expose = "core.card";
   el.innerHTML = isPlace(card.id)
-    ? '<header class="chrome"></header><div class="set"></div><footer class="status sidebar-status" data-expose="core.sidebar.status"></footer>'
+    ? '<header class="chrome sidebar-head" data-expose="core.sidebar.head"></header><div class="set"></div>'
     : '<header class="chrome" data-expose="core.card.header"></header><div class="slot"></div><footer class="status" data-expose="core.card.status"></footer>';
   // It reads data-card-id of the element and does not capture the card object in a closure. Switching the space creates new
   // card objects with the same ids, so a captured reference is an object that no longer exists.
@@ -331,13 +333,6 @@ function updateCard(el, card, rect) {
   setData(el, "role", card.fixed ? "fixed" : "pane");
   setData(el, "focused", String(card.id === focusedId));
   const chrome = el.querySelector(".chrome");
-  const status = el.querySelector(".status");
-  let statusText = status.querySelector(".status__text");
-  if (!statusText) {
-    statusText = document.createElement("span");
-    statusText.className = "status__text";
-    status.appendChild(statusText);
-  }
 
   if (place) {
     const { plugin: kind, side } = windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()).find(item => item.id === place);
@@ -356,9 +351,17 @@ function updateCard(el, card, rect) {
       // The place shows no set; it draws its status line, and core.sidebars reports it with a null set.
       drawSet(holder, card.id, null, { card: null, surface: null, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side });
     }
-    setText(statusText, `${SIDE_NAMES[side]} 창 사이드바${kind ? ` · ${kind}` : ""}`);
-    // The fold button at the end of the status line turns this sidebar off. The button that turns it on again is in the window head (docs/spec/plugins.md#sections).
-    let fold = status.querySelector(".sidebar-status__fold");
+    // The head row shows the position of the side in sidebarOrder counted from 1, the name and the layout badge of its set, and the ×
+    // that turns the sidebar off (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+    chrome.classList.add("sidebar-head");
+    if (!chrome.querySelector(".sidebar-head__order")) {
+      chrome.innerHTML = '<span class="sidebar-head__order"></span><span class="sidebar-head__name"></span><span class="sidebar-head__layout"></span><span class="sidebar-head__spacer"></span>';
+    }
+    setText(chrome.querySelector(".sidebar-head__order"), String(value("sidebarOrder").indexOf(side) + 1));
+    setText(chrome.querySelector(".sidebar-head__name"), set ? set.title : SIDE_NAMES[side]);
+    setText(chrome.querySelector(".sidebar-head__layout"), set ? (set.layout === "tabs" ? "탭" : "목록") : "");
+    // The × of the head turns this sidebar off. It is shown while the pointer is over the sidebar or the sidebar has focus (CSS).
+    let fold = chrome.querySelector(":scope > .sidebar-status__fold");
     if (!fold || fold.dataset.side !== side) {
       fold?.remove();
       fold = document.createElement("button");
@@ -366,16 +369,23 @@ function updateCard(el, card, rect) {
       fold.className = "sidebar-status__fold";
       fold.dataset.side = side;
       fold.dataset.expose = "core.sidebar.fold";
-      fold.title = `${SIDE_NAMES[side]} 창 사이드바 접기`;
+      fold.title = `${SIDE_NAMES[side]} 창 사이드바 숨기기`;
       fold.setAttribute("aria-label", fold.title);
       fold.innerHTML = icon(FOLD_ICONS[side]);
       // The fold writes the scope that the applied value of the side comes from (docs/spec/settings.md#scope-of-a-control).
-      bind(fold, "core.settings.set", () => appliedPatch(side, false));
-      status.appendChild(fold);
+      bind(fold, "core.settings.change", () => ({ key: side, value: false, scope: appliedPatch(side, false).scope }));
+      chrome.appendChild(fold);
     }
     return;
   }
 
+  const status = el.querySelector(".status");
+  let statusText = status.querySelector(".status__text");
+  if (!statusText) {
+    statusText = document.createElement("span");
+    statusText.className = "status__text";
+    status.appendChild(statusText);
+  }
   const folded = drawCardSidebars(el, card, rect);
   const tabs = tabsOf(card);
   const key = tabs.map((t) => `${t.id}\u0000${tabName(t)}`).join("\u0001");
@@ -444,7 +454,6 @@ function updateCard(el, card, rect) {
     b.dataset.active = String(b.dataset.tabId === card.data.activeId);
     b.dataset.tabState = tabButtonData({ id: b.dataset.tabId }).tabState;
   }
-  drawNotices(chrome, tabs);
 
   if (!acts) {
     acts = createCardTools(card.id);
@@ -486,7 +495,7 @@ function updateCard(el, card, rect) {
     emptySlot(slot);
     slot.dataset.surfaceStatus = "empty";
     cardFolds.set(card.id, folded);
-    setText(statusText, cardStatusText(card, tabs, folded));
+    paintFoot(statusText, card, cardStatusText(card, tabs, folded));
     return;
   }
   const paramsProblem = hasPlugin(shown.plugin) ? storedParamsProblem(shown.plugin,
@@ -503,7 +512,7 @@ function updateCard(el, card, rect) {
     surfaceStates.set(shown.id, state);
     surfaceStateChanged();
     cardFolds.set(card.id, folded);
-    setText(statusText, cardStatusText(card, tabs, folded));
+    paintFoot(statusText, card, cardStatusText(card, tabs, folded));
     return;
   }
   if (!hasPlugin(shown.plugin) || paramsProblem) {
@@ -516,7 +525,7 @@ function updateCard(el, card, rect) {
     surfaceStates.set(shown.id, { phase: "ready", error: null });
     surfaceStateChanged();
     cardFolds.set(card.id, folded);
-    setText(statusText, cardStatusText(card, tabs, folded));
+    paintFoot(statusText, card, cardStatusText(card, tabs, folded));
     return;
   }
   setData(slot, "nativeSurface", "view");
@@ -542,7 +551,7 @@ function updateCard(el, card, rect) {
     report(`surface ${shown.id} mount failed: ${error.message}`);
   });
   cardFolds.set(card.id, folded);
-  setText(statusText, cardStatusText(card, tabs, folded));
+  paintFoot(statusText, card, cardStatusText(card, tabs, folded));
   // The operation error of the active tab shows in the error toast (docs/spec/plugins.md#tab-reports).
   setTabError(shown.id, tabError(shown.id));
 }
@@ -554,6 +563,32 @@ function cardStatusText(card, tabs, folded) {
   // default: the foot of a card without tabs, or of a tab that announced no bottom text, is empty text.
   const text = tabs.length ? tabFooter(activeTab(card).id) ?? "" : "";
   return [text, folded].filter((part) => part !== null && part !== "").join(" · ");
+}
+
+/* The content foot of a card shows its newest notice line while it has one, and its text otherwise (docs/spec/notifications.md#card-status-line). */
+function paintFoot(statusText, card, text) {
+  const foot = statusText.parentElement;
+  const notice = notificationStore().lineOf(card.id);
+  const line = foot.querySelector(":scope > .notice-line");
+  if (notice === null) {
+    line?.remove();
+    statusText.hidden = false;
+    setText(statusText, text);
+    return;
+  }
+  statusText.hidden = true;
+  if (line?.dataset.notice === notice.id) return;
+  line?.remove();
+  foot.append(cardNoticeLine(document, notificationStore(), notice, lineTabName(card.id, notice)));
+}
+
+/** The label of the tab of a notice that is not the active tab of its card, or null for the active tab and for a notice of no tab. */
+function lineTabName(cardId, notice) {
+  const tab = notice.source.tab ?? null;
+  const active = activeTab(grid.card(cardId))?.id ?? null;
+  // default: a notice of the active tab, or of no tab, names no tab (null).
+  if (tab === null || tab === active) return null;
+  return tabLabel(tab);
 }
 
 /* ── Tab of a plugin that is not loaded (docs/spec/plugins.md) ───────────────── */
@@ -944,7 +979,6 @@ function openTabList(anchor, cardId) {
     // The name is the text of the tab strip, which holds the mark, so the item draws the icon of the plugin and no second mark
     // (docs/spec/example-model.md#card-tabs); the tab of a plugin that is not loaded keeps an empty icon slot.
     key: t.id, name: tabName(t), mark: "", svg: hasPlugin(t.plugin) ? plugin(t.plugin).svg : "",
-    notice: tabNotice(t.id),
     active: t.id === card.data.activeId,
   })), (id) => {
     const c = grid.card(cardId);
@@ -1809,8 +1843,22 @@ export function onLayout(fn) {
  * surface in the new layout. Dimming is passed here for the same reason. Focus already moved before drawing, so reading it
  * from the DOM would publish the dimming of the previous focus.
  */
+/* Whether the native surfaces of the window are hidden: while the settings tab is in front, no card has a seat, as a hidden tab has none
+   (docs/spec/settings.md#opening-and-closing). */
+let surfacesHidden = false;
+
+/** Hides the native surfaces of the window, or shows them again, by the seats of the next layout (docs/spec/settings.md#opening-and-closing). */
+export function setSurfacesHidden(hidden) {
+  if (typeof hidden !== "boolean") throw new TypeError("hidden must be a boolean");
+  if (surfacesHidden === hidden) return;
+  surfacesHidden = hidden;
+  settle();
+}
+
 function seats(rects) {
   const out = new Map();
+  // While the window hides its surfaces, no card has a seat (setSurfacesHidden).
+  if (surfacesHidden) return out;
   // The grid of this layout: the view writes its cards on the device pixels of the ratio it read in the same turn, and verify V7c
   // judges the prediction on that grid, because the display can change scale before the check.
   const pixels = gridScale();
@@ -1848,6 +1896,7 @@ function seats(rects) {
  */
 function seatsHeld(seated) {
   if (!grid) return false;
+  if (surfacesHidden) return seated.size === 0;
   const cards = grid.cards.filter((card) => !isPlace(card.id) && activeTab(card));
   return cards.length === seated.size && cards.every((card) => {
     const seat = seated.get(card.id);
@@ -2006,27 +2055,8 @@ function build(kept) {
   settle();
 }
 
-/** Puts a dot and a tooltip on the tab with a notification and on the tab list button of a card that has such a tab. */
-function drawNotices(chrome, tabs) {
-  for (const b of chrome.querySelectorAll(".chrome__tabs .tab[data-tab-id]")) {
-    const notice = tabNotice(b.dataset.tabId);
-    if (notice) {
-      b.dataset.notice = "true";
-      b.title = systemNotifications.tooltip(notice);
-    } else if (b.dataset.notice) {
-      // Without a notice the tooltip shows the whole name of the tab again.
-      delete b.dataset.notice;
-      b.title = b.querySelector(".tab__name").textContent;
-    }
-  }
-  const ham = chrome.querySelector(".chrome__ham");
-  if (!ham) return;
-  const notices = tabs.map((t) => tabNotice(t.id)).filter(Boolean);
-  if (notices.length) ham.dataset.notice = "true";
-  else delete ham.dataset.notice;
-  ham.title = notices.length ? systemNotifications.tooltip(notices.join("\n")) : "탭 목록";
-}
-
+// The card that holds a tab id, for the notices of the tab (docs/spec/notifications.md#card-status-line).
+setCardOfTab((id) => grid?.cards.find((card) => tabsOf(card).some((tab) => tab.id === id))?.id ?? null);
 // A visible tab means the active tab of the focused card. No notification is kept for that tab.
 setVisibleTab((id) => {
   const card = grid?.card(focusedId);
@@ -2048,10 +2078,9 @@ const redrawTabReports = () => {
       name.textContent = data.name;
       name.parentElement.dataset.tabState = data.tabState;
     }
-    drawNotices(chrome, tabsOf(card));
     const statusText = el.querySelector(":scope > .status .status__text");
     // default: a card not drawn yet has no folded-side text.
-    if (statusText && !isPlace(card.id)) setText(statusText, cardStatusText(card, tabsOf(card), cardFolds.get(card.id) ?? null));
+    if (statusText && !isPlace(card.id)) paintFoot(statusText, card, cardStatusText(card, tabsOf(card), cardFolds.get(card.id) ?? null));
     if (statusText && !isPlace(card.id) && tabsOf(card).length) setTabError(activeTab(card).id, tabError(activeTab(card).id));
   }
 };
@@ -2396,7 +2425,6 @@ export function openSpaceApps(id) {
         items: tabsOf(card).map((t) => ({
           // The name holds the mark, as in the tab list.
           key: `${card.id}/${t.id}`, name: tabName(t), mark: "", svg: hasPlugin(t.plugin) ? plugin(t.plugin).svg : "",
-          notice: tabNotice(t.id),
           active: card.id === id && t.id === card.data.activeId,
         })),
       });
@@ -2560,7 +2588,7 @@ export const settleModifiedTabs = () => settleTabs(APPLY);
 export const settleModifiedTabsToClose = () => settleTabs(CLOSE);
 
 async function settleTabs(words) {
-  // The library screen shows no space, so the window has no tab to ask about.
+  // The project home screen shows no space, so the window has no tab to ask about.
   if (!grid) return true;
   for (const card of grid.cards) {
     for (const t of tabsOf(card)) {

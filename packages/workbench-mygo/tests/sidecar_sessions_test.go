@@ -59,70 +59,10 @@ func TestARefusedLayoutWriteKeepsTheSessions(t *testing.T) {
 	equal(t, retained(t, stored), [][]string(nil))
 }
 
-func TestARemovedProjectLeavesTheRetainedSessions(t *testing.T) {
-	other := storedProject(tab("tab-cccccc", "notes"))
-	other["id"], other["root"], other["identity"] = "prj-b", "/b", "identity of /b"
-	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes")), other}}
-	f := newTabShell(t, stored)
-	f.open(t)
-	stored.retains = nil
-	f.shell.Registry().RunLater("core.library.remove", json.RawMessage(`{"id":"prj-a"}`), func(any, error) {})
-	f.settle()
-	calls := retained(t, stored)
-	if len(calls) == 0 || strings.Join(calls[len(calls)-1], ",") != "/b tab-cccccc" {
-		t.Fatalf("retained %v", calls)
-	}
-}
-
 // A view of a removed project sends until the placement without it, so the sessions of the project end after that placement.
-func TestARemovedProjectRetainsAfterThePlacementWithoutItsViews(t *testing.T) {
-	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
-	f := newTabShell(t, stored)
-	f.open(t)
-	stored.calls, stored.retains = nil, nil
-	f.shell.Registry().RunLater("core.library.remove", json.RawMessage(`{"id":"prj-a"}`), func(any, error) {})
-	f.settle()
-	retain := slices.Index(stored.calls, "sidecarsRetain")
-	placement := slices.Index(stored.calls, "presentSurfaces")
-	if retain < 0 || placement < 0 || retain < placement {
-		t.Fatalf("calls %v", stored.calls)
-	}
-	equal(t, retained(t, stored), [][]string{{}})
-}
 
 // A removal ends after the retain that ends the sessions of the removed project answered, as projects.close of the page awaits the
 // read that retains, so a request after the answer of the removal or of diagnostics.fixture finds those sessions ended.
-func TestARemovalAnswersAfterTheRetainOfTheSessionsOfTheRemovedProject(t *testing.T) {
-	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
-	f := newTabShell(t, stored)
-	f.open(t)
-	hold := newGate()
-	stored.mu.Lock()
-	stored.retains, stored.holdRetains = nil, hold
-	stored.mu.Unlock()
-	answered := false
-	f.shell.Registry().RunLater("core.library.remove", json.RawMessage(`{"id":"prj-a"}`), func(_ any, err error) {
-		if err != nil {
-			t.Errorf("core.library.remove failed: %v", err)
-		}
-		answered = true
-	})
-	f.settle()
-	stored.mu.Lock()
-	asked := len(stored.retains)
-	stored.mu.Unlock()
-	if asked == 0 {
-		t.Fatal("the removal asked for no retain")
-	}
-	if answered {
-		t.Fatal("core.library.remove answered before the host answered the retain of the sessions of the removed project")
-	}
-	hold.open()
-	f.settle()
-	if !answered {
-		t.Fatal("core.library.remove did not answer after the retain answered")
-	}
-}
 
 func TestTheSectionsOfTheShownProjectAreRetained(t *testing.T) {
 	stored := &storedHost{installed: sidebarsInstalled, projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"))}}
@@ -165,7 +105,7 @@ func cardWithSidebar(project map[string]any) string {
 }
 
 // A restart leaves the services alive and their sessions recoverable while a layout holds the surface
-// (docs/spec/persistent-services.md), and a window starts in the library, where no sidebar is drawn yet.
+// (docs/spec/persistent-services.md), and a window starts in the project home, where no sidebar is drawn yet.
 func TestTheStartKeepsTheSessionsOfTheSectionsOfTheStoredLayouts(t *testing.T) {
 	project := storedProject(tab("tab-aaaaaa", "notes"))
 	card := cardWithSidebar(project)
@@ -256,12 +196,12 @@ func TestAFailedRetainIsShown(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.pending.drain(t)
-	shown, err := f.shell.Registry().Read("core.workbench.error")
+	shown, err := readWorkbenchErrorStatus(f.shell.Registry())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if text, ok := shown.(*string); !ok || text == nil || !strings.Contains(*text, "retain was not answered") {
-		t.Fatalf("the status core.workbench.error is %v", shown)
+		t.Fatalf("the status core.toasts is %v", shown)
 	}
 }
 
@@ -283,11 +223,73 @@ func TestAStoredLayoutThatCannotBeReadKeepsTheStoredEntries(t *testing.T) {
 	stored := &storedHost{projects: []map[string]any{broken}, sessionTabs: []string{"tab-gone"}, startFails: true}
 	f := newTabShell(t, stored)
 	equal(t, f.sessionPuts, []string(nil))
-	shown, err := f.shell.Registry().Read("core.workbench.error")
+	shown, err := readWorkbenchErrorStatus(f.shell.Registry())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if text, ok := shown.(*string); !ok || text == nil || !strings.Contains(*text, "space spc-aaaaaa") {
-		t.Fatalf("the status core.workbench.error is %v", shown)
+		t.Fatalf("the status core.toasts is %v", shown)
+	}
+}
+
+func TestARemovedProjectLeavesTheRetainedSessions(t *testing.T) {
+	other := storedProject(tab("tab-cccccc", "notes"))
+	other["id"], other["root"], other["identity"] = "prj-b", "/b", "identity of /b"
+	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes")), other}}
+	f := newTabShell(t, stored)
+	f.open(t)
+	stored.retains = nil
+	f.shell.Registry().RunLater("core.home.remove", json.RawMessage(`{"project":"prj-a"}`), func(any, error) {})
+	f.settle()
+	calls := retained(t, stored)
+	if len(calls) == 0 || strings.Join(calls[len(calls)-1], ",") != "/b tab-cccccc" {
+		t.Fatalf("retained %v", calls)
+	}
+}
+
+func TestARemovedProjectRetainsAfterThePlacementWithoutItsViews(t *testing.T) {
+	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
+	f := newTabShell(t, stored)
+	f.open(t)
+	stored.calls, stored.retains = nil, nil
+	f.shell.Registry().RunLater("core.home.remove", json.RawMessage(`{"project":"prj-a"}`), func(any, error) {})
+	f.settle()
+	retain := slices.Index(stored.calls, "sidecarsRetain")
+	placement := slices.Index(stored.calls, "presentSurfaces")
+	if retain < 0 || placement < 0 || retain < placement {
+		t.Fatalf("calls %v", stored.calls)
+	}
+	equal(t, retained(t, stored), [][]string{{}})
+}
+
+func TestARemovalAnswersAfterTheRetainOfTheSessionsOfTheRemovedProject(t *testing.T) {
+	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
+	f := newTabShell(t, stored)
+	f.open(t)
+	hold := newGate()
+	stored.mu.Lock()
+	stored.retains, stored.holdRetains = nil, hold
+	stored.mu.Unlock()
+	answered := false
+	f.shell.Registry().RunLater("core.home.remove", json.RawMessage(`{"project":"prj-a"}`), func(_ any, err error) {
+		if err != nil {
+			t.Errorf("core.home.remove failed: %v", err)
+		}
+		answered = true
+	})
+	f.settle()
+	stored.mu.Lock()
+	asked := len(stored.retains)
+	stored.mu.Unlock()
+	if asked == 0 {
+		t.Fatal("the removal asked for no retain")
+	}
+	if answered {
+		t.Fatal("core.home.remove answered before the host answered the retain of the sessions of the removed project")
+	}
+	hold.open()
+	f.settle()
+	if !answered {
+		t.Fatal("core.home.remove did not answer after the retain answered")
 	}
 }

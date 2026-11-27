@@ -565,11 +565,10 @@ func (s *Shell) dialogScrim() ui.Color {
 	return ui.RGBA(0, 0, 0, float32(s.options.Declared.ChromeNumber("scrim-alpha", "px")))
 }
 
-// dialogOpen tells whether a dialog of the window is open. A menu has no background.
-// dialogOpen tells whether a dialog stands over the workbench, which blurs its drawing: the settings, the debug view or a dialog
-// surface.
+// dialogOpen tells whether a dialog stands over the workbench, which blurs its drawing: the debug view or a dialog surface. A
+// menu has no background, and the settings tab is a tab of the window, not a dialog (docs/spec/settings.md).
 func (s *Shell) dialogOpen() bool {
-	return s.settingsWindow.open || s.debugView.open || s.dialog != nil
+	return s.debugView.open || s.dialog != nil
 }
 
 // surfaceBehindDialog tells whether an open dialog stands over the document of a surface.
@@ -580,8 +579,8 @@ func (s *Shell) surfaceBehindDialog(string) bool {
 // tellBackground tells the host when a dialog opened or closed, so the host blurs the documents of the window.
 func (s *Shell) tellBackground() {
 	// The host derives the blur of a dialog surface from its placement and leaves the dialog unblurred, so only the dialogs that the
-	// workbench draws itself are told (docs/spec/native-surfaces.md).
-	open := s.settingsWindow.open || s.debugView.open
+	// workbench draws itself are told (docs/spec/native-surfaces.md). The settings tab is a tab of the window, not a dialog.
+	open := s.debugView.open
 	if open == s.backgroundTold {
 		return
 	}
@@ -597,8 +596,6 @@ func (s *Shell) tellBackground() {
 func (s *Shell) modalName() *string {
 	name := ""
 	switch {
-	case s.settingsWindow.open:
-		name = "settings"
 	case s.debugView.open:
 		name = "debug"
 	case s.picker.open:
@@ -698,7 +695,7 @@ func (s *Shell) registerPicker() {
 	s.registry.Status("core.screen", func() any {
 		screen := "workspace"
 		if s.browsing || s.opened() == nil {
-			screen = "library"
+			screen = "home"
 		}
 		return screenStatus{Screen: screen, Modal: s.modalName()}
 	})

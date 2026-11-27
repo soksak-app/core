@@ -75,11 +75,11 @@ func TestDiagnosticsTranscriptSendsTheHostCallsOfTheWorkbenchToTheHostLog(t *tes
 func TestAFocusTransitionOfTheWorkbenchIsAnInformationRecord(t *testing.T) {
 	stored := &storedHost{classes: traceClasses(), common: map[string]any{"diagnostics.log": traceClasses()}}
 	f := newShell(t, stored)
-	f.run("core.focus.set", map[string]any{"name": "core.library.search"})
+	f.run("core.focus.set", map[string]any{"name": "core.home.search"})
 	focusIn := func() bool {
 		for _, event := range stored.written("workbench.record.info") {
 			fields := event["fields"].(map[string]any)
-			if fields["where"] == "workbench" && fields["text"] == "focus in core.library.search" {
+			if fields["where"] == "workbench" && fields["text"] == "focus in core.home.search" {
 				return true
 			}
 		}

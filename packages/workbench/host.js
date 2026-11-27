@@ -129,15 +129,15 @@ function windowOverlays() {
  */
 // Whether the element is in an error toast of the main document.
 function inErrorToast(element) {
-  const holder = document.getElementById("errorToasts");
+  const holder = document.getElementById("toasts");
   return holder !== null && holder.parentElement === document.body && holder.contains(element);
 }
 
 function toastCuts() {
   if (shown) return [];
-  const holder = document.getElementById("errorToasts");
+  const holder = document.getElementById("toasts");
   if (!holder || holder.parentElement !== document.body) return [];
-  return [...holder.querySelectorAll(":scope > .error-toast")]
+  return [...holder.querySelectorAll(":scope > .toast")]
     .map((toast) => toast.getBoundingClientRect())
     .filter((rect) => rect.width > 0 && rect.height > 0)
     .map((rect) => ({ x: rect.left, y: rect.top, w: rect.width, h: rect.height, cut: true }));

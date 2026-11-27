@@ -46,12 +46,12 @@ type Painted interface {
 func projectOfAddress(address string) string {
 	parsed, err := url.Parse(address)
 	if err != nil {
-		return "" // silent: the host writes the address, and a window without a readable one starts at the library.
+		return "" // silent: the host writes the address, and a window without a readable one starts at the project home.
 	}
 	return parsed.Query().Get("project")
 }
 
-// libraryOfAddress returns the project that a library address names as the one to return to, and "" without one.
+// libraryOfAddress returns the project that a `library` address parameter names as the one to return to, and "" without one.
 func libraryOfAddress(address string) string {
 	parsed, err := url.Parse(address)
 	if err != nil {
@@ -60,8 +60,8 @@ func libraryOfAddress(address string) string {
 	return parsed.Query().Get("library")
 }
 
-// addressOfProject returns the address of a window that shows project, and when it is "" of the library that returns to held, or
-// of the library without a way back when held is "" too.
+// addressOfProject returns the address of a window that shows project, and when it is "" of the project home that returns to held, or
+// of the project home without a way back when held is "" too.
 func addressOfProject(project, held string) string {
 	if project != "" {
 		return "/?project=" + url.QueryEscape(project)
@@ -259,7 +259,7 @@ func (s *Shell) pluginsChanged() {
 	}
 	s.pluginOperations.Refresh(func() {
 		s.showStartFailures()
-		s.pluginOperations.RefreshOutdated(func() { s.applyPlugins(func(bool, error) {}) })
+		s.refreshOutdated(func() { s.applyPlugins(func(bool, error) {}) })
 	})
 }
 
@@ -364,7 +364,7 @@ func (s *Shell) event(name string, data []any) {
 	case "image-detach-ended":
 		s.imageDetachEnded(data)
 	case "sidecars-changed":
-		s.pluginOperations.RefreshOutdated(func() {})
+		s.refreshOutdated(func() {})
 	case "window-active":
 		s.pluginOperations.Refresh(func() {})
 		s.appUpdates.Refresh(func() {})

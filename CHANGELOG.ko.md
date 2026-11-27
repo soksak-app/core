@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217: 두 page가 design을 그려요: bell, notice center, card status line, toast 형태를 가진 notice store 하나, row component와 plugin page를 가진 settings tab, library 대신 project home, status bar, closed hint, sidebar head row, 네 위치의 project tab이에요(F1217-1, F1217-3, F1217-5, F1217-6, F1217-7, F1217-11~F1217-15). outdated service notice가 두 page에 보이고 outdated 항목이 surface를 나열해요(F1161).
 - F715-3: 테스트 링크 검사가 F715-2의 라이브러리·설정 링크를 현재 홈, 설정, e2e 테스트로 연결하고, 프로젝트 홈에 패널 규칙이 없어 라이브러리 패널 항목을 제거한다.
 - F1107: test는 main page가 status를 등록한 두 surface 중 지정한 surface로 읽기를 보내고, view가 지정한 surface의 읽기에 답함을 고정한다. CLI와 host는 지정한 surface를 넘긴다.
 - F1220-1: page log와 performance case는 거절된 batch의 손실을 다음 batch에 기록하고, test는 자기 지점에서 flush한다. logging specification은 그 손실의 이유를 적는다(Red: F1220 뒤 page log test 9개와 performance test 1개 실패).

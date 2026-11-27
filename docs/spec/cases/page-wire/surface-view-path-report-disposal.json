@@ -1,37 +1,561 @@
 {
   "name": "surface-view-path-report-disposal",
-  "description": "Two views each report a title, a footer, a notice and an error through view calls, and the page answers each call with null.",
+  "description": "Two views each report a title, a footer, a notice and an error through view calls, and the page answers each call with null. The flush at the end of the test sends the clock statement of the page and the gated counts of the view calls.",
   "replay": false,
   "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
-  "variables": {"page-identity": {"type": "string", "example": "0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e", "source": "page"}},
+  "variables": {
+    "page-identity": {
+      "type": "string",
+      "example": "0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e",
+      "source": "page"
+    },
+    "notice-id-1": {
+      "type": "string",
+      "example": "notice-1",
+      "source": "page"
+    },
+    "notice-id-2": {
+      "type": "string",
+      "example": "notice-2",
+      "source": "page"
+    },
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 0,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000461,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000801,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000462,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 5000000802,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000463,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5000000803,
+      "source": "page"
+    },
+    "flush-ts-us-f1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "flush-mono-ns-f1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "flush-trip-us": {
+      "type": "integer",
+      "example": 0,
+      "source": "page"
+    },
+    "flush-resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "flush-ts-us-f2": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "flush-mono-ns-f2": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "flush-ts-us-f3": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "flush-mono-ns-f3": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    }
+  },
   "steps": [
-    {"call": {"name": "compositionDeclare", "payload": {"plugin": "fixture-plain", "composition": {"kind": "view", "page": "ui/page.html", "regions": [], "overlays": []}, "surface": "view-unload-reports"}}},
-    {"reply": {"result": null}},
-    {"notice": {"event": "view-call", "payload": {"surface": "view-unload-reports", "plugin": "fixture-plain", "generation": 1, "id": 1, "command": "tab.title", "params": "Doc"}}},
-    {"call": {"name": "viewReply", "payload": {"id": 1, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-unload-reports"}}},
-    {"reply": {"result": null}},
-    {"notice": {"event": "view-call", "payload": {"surface": "view-unload-reports", "plugin": "fixture-plain", "generation": 1, "id": 2, "command": "tab.footer", "params": "foot"}}},
-    {"call": {"name": "viewReply", "payload": {"id": 2, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-unload-reports"}}},
-    {"reply": {"result": null}},
-    {"notice": {"event": "view-call", "payload": {"surface": "view-unload-reports", "plugin": "fixture-plain", "generation": 1, "id": 3, "command": "tab.notify", "params": {"text": "done"}}}},
-    {"call": {"name": "viewReply", "payload": {"id": 3, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-unload-reports"}}},
-    {"reply": {"result": null}},
-    {"notice": {"event": "view-call", "payload": {"surface": "view-unload-reports", "plugin": "fixture-plain", "generation": 1, "id": 4, "command": "tab.error", "params": "failed"}}},
-    {"call": {"name": "viewReply", "payload": {"id": 4, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-unload-reports"}}},
-    {"reply": {"result": null}},
-    {"call": {"name": "compositionDeclare", "payload": {"plugin": "fixture-plain", "composition": {"kind": "view", "page": "ui/page.html", "regions": [], "overlays": []}, "surface": "view-close-reports"}}},
-    {"reply": {"result": null}},
-    {"notice": {"event": "view-call", "payload": {"surface": "view-close-reports", "plugin": "fixture-plain", "generation": 1, "id": 5, "command": "tab.title", "params": "Doc"}}},
-    {"call": {"name": "viewReply", "payload": {"id": 5, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-close-reports"}}},
-    {"reply": {"result": null}},
-    {"notice": {"event": "view-call", "payload": {"surface": "view-close-reports", "plugin": "fixture-plain", "generation": 1, "id": 6, "command": "tab.footer", "params": "foot"}}},
-    {"call": {"name": "viewReply", "payload": {"id": 6, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-close-reports"}}},
-    {"reply": {"result": null}},
-    {"notice": {"event": "view-call", "payload": {"surface": "view-close-reports", "plugin": "fixture-plain", "generation": 1, "id": 7, "command": "tab.notify", "params": {"text": "done"}}}},
-    {"call": {"name": "viewReply", "payload": {"id": 7, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-close-reports"}}},
-    {"reply": {"result": null}},
-    {"notice": {"event": "view-call", "payload": {"surface": "view-close-reports", "plugin": "fixture-plain", "generation": 1, "id": 8, "command": "tab.error", "params": "failed"}}},
-    {"call": {"name": "viewReply", "payload": {"id": 8, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-close-reports"}}},
-    {"reply": {"result": null}}
+    {
+      "call": {
+        "name": "compositionDeclare",
+        "payload": {
+          "plugin": "fixture-plain",
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [],
+            "overlays": []
+          },
+          "surface": "view-unload-reports"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "notice": {
+        "event": "view-call",
+        "payload": {
+          "surface": "view-unload-reports",
+          "plugin": "fixture-plain",
+          "generation": 1,
+          "id": 1,
+          "command": "tab.title",
+          "params": "Doc"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "viewReply",
+        "payload": {
+          "id": 1,
+          "result": null,
+          "page": "$page-identity",
+          "generation": 1,
+          "surface": "view-unload-reports"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "notice": {
+        "event": "view-call",
+        "payload": {
+          "surface": "view-unload-reports",
+          "plugin": "fixture-plain",
+          "generation": 1,
+          "id": 2,
+          "command": "tab.footer",
+          "params": "foot"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "viewReply",
+        "payload": {
+          "id": 2,
+          "result": null,
+          "page": "$page-identity",
+          "generation": 1,
+          "surface": "view-unload-reports"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "notice": {
+        "event": "view-call",
+        "payload": {
+          "surface": "view-unload-reports",
+          "plugin": "fixture-plain",
+          "generation": 1,
+          "id": 3,
+          "command": "tab.notify",
+          "params": {
+            "kind": "info",
+            "title": "done"
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "viewReply",
+        "payload": {
+          "id": 3,
+          "result": "$notice-id-1",
+          "page": "$page-identity",
+          "generation": 1,
+          "surface": "view-unload-reports"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "notice": {
+        "event": "view-call",
+        "payload": {
+          "surface": "view-unload-reports",
+          "plugin": "fixture-plain",
+          "generation": 1,
+          "id": 4,
+          "command": "tab.error",
+          "params": "failed"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "viewReply",
+        "payload": {
+          "id": 4,
+          "result": null,
+          "page": "$page-identity",
+          "generation": 1,
+          "surface": "view-unload-reports"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "compositionDeclare",
+        "payload": {
+          "plugin": "fixture-plain",
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [],
+            "overlays": []
+          },
+          "surface": "view-close-reports"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "notice": {
+        "event": "view-call",
+        "payload": {
+          "surface": "view-close-reports",
+          "plugin": "fixture-plain",
+          "generation": 1,
+          "id": 5,
+          "command": "tab.title",
+          "params": "Doc"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "viewReply",
+        "payload": {
+          "id": 5,
+          "result": null,
+          "page": "$page-identity",
+          "generation": 1,
+          "surface": "view-close-reports"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "notice": {
+        "event": "view-call",
+        "payload": {
+          "surface": "view-close-reports",
+          "plugin": "fixture-plain",
+          "generation": 1,
+          "id": 6,
+          "command": "tab.footer",
+          "params": "foot"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "viewReply",
+        "payload": {
+          "id": 6,
+          "result": null,
+          "page": "$page-identity",
+          "generation": 1,
+          "surface": "view-close-reports"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "notice": {
+        "event": "view-call",
+        "payload": {
+          "surface": "view-close-reports",
+          "plugin": "fixture-plain",
+          "generation": 1,
+          "id": 7,
+          "command": "tab.notify",
+          "params": {
+            "kind": "info",
+            "title": "closed"
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "viewReply",
+        "payload": {
+          "id": 7,
+          "result": "$notice-id-2",
+          "page": "$page-identity",
+          "generation": 1,
+          "surface": "view-close-reports"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "notice": {
+        "event": "view-call",
+        "payload": {
+          "surface": "view-close-reports",
+          "plugin": "fixture-plain",
+          "generation": 1,
+          "id": 8,
+          "command": "tab.error",
+          "params": "failed"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "viewReply",
+        "payload": {
+          "id": 8,
+          "result": null,
+          "page": "$page-identity",
+          "generation": 1,
+          "surface": "view-close-reports"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$flush-ts-us-f1",
+              "mono_ns": "$flush-mono-ns-f1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$flush-trip-us",
+                "resolution_us": "$flush-resolution-us"
+              }
+            },
+            {
+              "ts_us": "$flush-ts-us-f2",
+              "mono_ns": "$flush-mono-ns-f2",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "debug",
+                "count": 16
+              }
+            },
+            {
+              "ts_us": "$flush-ts-us-f3",
+              "mono_ns": "$flush-mono-ns-f3",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "lifecycle",
+                "level": "info",
+                "count": 2
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
   ]
 }

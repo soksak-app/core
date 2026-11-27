@@ -52,7 +52,7 @@ projects.onSwitch({
   empty: async (show) => { plane.layout = null; show?.(); },
 });
 
-// The start of the page: the first screen is the library, the settings and the project list connect to the store of the host, and the
+// The start of the page: the first screen is the project home, the settings and the project list connect to the store of the host, and the
 // start of the document is the first event that leaves the log.
 projects.begin(structuredClone(SNAPSHOT));
 await orderedCallsAnswered();

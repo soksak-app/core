@@ -1,0 +1,376 @@
+/* The settings tab (settings-ui.js). Lengths are chrome metrics or theme tokens; a rule holds no literal length or color of its own
+   (docs/spec/settings.md#performance). The page links this file after app.css. */
+
+.set-tab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  height: var(--fill);
+  min-height: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: var(--text-control);
+}
+
+.set-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-4);
+  border-right: var(--bw) solid var(--rule);
+}
+
+.set-menu__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.set-menu__label {
+  color: var(--muted);
+  font-size: var(--text-caption);
+}
+
+.set-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.set-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: var(--bw) solid var(--rule);
+}
+
+.set-head__title {
+  margin: 0;
+  font-size: var(--text-control);
+  font-weight: 600;
+}
+
+.set-head__desc,
+.set-caption {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-caption);
+}
+
+.set-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4);
+}
+
+.set-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-bottom: var(--bw) solid var(--rule);
+}
+
+.set-group__name {
+  margin: 0;
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.set-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* A row has the label on the left and the control in the control column (docs/spec/settings.md#rows). */
+.set-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--set-control-w);
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--set-row-h);
+}
+
+.set-row--wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.set-row--indent {
+  padding-left: var(--space-3);
+}
+
+.set-row__label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.set-row__name {
+  font-size: var(--text-control);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.set-row__control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: var(--set-control-w);
+}
+
+.set-chips,
+.set-chip-group,
+.set-actions,
+.set-set__actions,
+.set-plugin-row__actions,
+.set-account__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.set-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--r-sm);
+  background: var(--chip);
+  color: var(--fg);
+  font-size: var(--text-caption);
+}
+
+.set-chip--neutral {
+  color: var(--muted);
+}
+
+.set-seg {
+  display: inline-flex;
+  border: var(--bw) solid var(--edge);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+
+.set-seg > .ui-button {
+  border-radius: 0;
+}
+
+.set-button--sm {
+  height: var(--button-sm-h);
+  padding: 0 var(--space-2);
+  font-size: var(--text-caption);
+}
+
+.set-button--primary {
+  background: var(--chip-on);
+}
+
+.set-button[aria-pressed="true"],
+.set-button[aria-checked="true"] {
+  background: var(--chip-on);
+}
+
+.set-switch[aria-checked="true"] {
+  background: var(--chip-on);
+}
+
+.text-field {
+  min-width: 0;
+  width: var(--fill);
+  padding: var(--space-1) var(--space-2);
+  border: var(--bw) solid var(--edge);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+}
+
+.text-field:focus-visible,
+.ui-button:focus-visible {
+  outline: var(--bw) solid var(--focus);
+}
+
+.set-find {
+  width: var(--fill);
+}
+
+.set-sides {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.set-side {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.set-side__no {
+  color: var(--muted);
+}
+
+.set-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.set-plugin-list,
+.set-set,
+.set-editor,
+.set-account,
+.set-setup,
+.set-browse-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.set-plugin-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  border-bottom: var(--bw) solid var(--rule);
+}
+
+.set-plugin-row__head,
+.set-plugin-row__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.set-plugin-row__name {
+  font-weight: 600;
+}
+
+.set-plugin-info {
+  padding: var(--space-3) 0;
+}
+
+.set-removal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.set-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--set-control-w), 1fr));
+  gap: var(--space-2);
+}
+
+.set-preview__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: var(--bw) solid var(--edge);
+  border-radius: var(--r-sm);
+  background: var(--card);
+}
+
+.set-preview__head {
+  font-size: var(--text-caption);
+  color: var(--muted);
+}
+
+.set-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-top: var(--bw) solid var(--rule);
+  color: var(--muted);
+  font-size: var(--text-caption);
+}
+
+.set-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--bw) solid var(--edge);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--fg);
+}
+
+.set-toast__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.set-dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--circle);
+  background: var(--rail);
+}
+
+.set-count {
+  color: var(--muted);
+  font-size: var(--text-caption);
+}
+
+.set-confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.set-setup {
+  padding: var(--space-2) 0;
+}
+
+/* Badge tones (docs/spec/settings.md#controls): ok and acc use rail, warn uses focus, err uses no, neutral uses muted. */
+.set-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border: var(--bw) solid currentColor;
+  border-radius: var(--r-sm);
+  font-size: var(--text-caption);
+}
+
+.set-badge--ok,
+.set-badge--acc {
+  color: var(--rail);
+}
+
+.set-badge--warn {
+  color: var(--focus);
+}
+
+
+.set-badge--neutral {
+  color: var(--muted);
+}
+
+/* The folder caption of the project scope breaks after a space, a hyphen and a path separator, and a name wider than the pane breaks at the
+   end of the line; it is never shortened or cut off (docs/spec/settings.md#page-head). */
+.set-folder {
+  overflow-wrap: anywhere;
+}
+
+/* A chip of a section whose plugin is not loaded: dashed, muted and struck through (docs/spec/plugins.md#missing-plugins). */
+.set-chip--missing { border: var(--bw) dashed var(--muted); color: var(--muted); background: none; text-decoration: line-through; }

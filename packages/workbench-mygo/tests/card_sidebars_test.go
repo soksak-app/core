@@ -531,7 +531,7 @@ func TestACardSectionFollowsItsCardAndEndsWithItsSide(t *testing.T) {
 func TestTheSettingsHoldTheSetsAndLinksOfTheSidebars(t *testing.T) {
 	f := sidebarShell(t)
 	f.run("core.settings.link", map[string]any{"place": "left", "plugin": nil, "set": "set-boxprobe"})
-	if status := element(t, f.tester, "core.sidebar.status", "left"); status.Label != "왼쪽 창 사이드바" {
+	if status := element(t, f.tester, "core.sidebar.head", "left"); status.Label != "왼쪽 창 사이드바" {
 		t.Fatalf("the status line says %q", status.Label)
 	}
 	element(t, f.tester, "core.sidebar.tabs", "left")

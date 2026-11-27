@@ -2,7 +2,7 @@
 // has a window-right override and the second layout probe has none, so a tab of each shows the override and the general choice.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
+import { APPS, keepCommonSettings, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { turnOffCardSidebars } from "./card-sidebar-choices.mjs";
 /** The plugin without a window sidebar override. */
@@ -212,16 +212,16 @@ for (const app of Object.values(APPS))
     },
   );
 
-// The sidebar settings of the section `general` of the settings window (the sections of packages/workbench/settings-ui.js) keep
+// The sidebar settings of the page `workspace` of the settings tab (the pages of packages/workbench/settings-ui.js) keep
 // the workbench answering (F714-13). Input: the order of the window sidebars or the general sets of the sides change through the
-// commands of the settings window. Expected: after each change the workbench answers the next request, core.sidebars shows the
+// commands of the settings tab. Expected: after each change the workbench answers the next request, core.sidebars shows the
 // window sidebars that the switches and the links give, and the window sidebars stand where the order places them.
 for (const app of Object.values(APPS))
   test(`${app.name}: the workbench answers after the sidebar settings of the settings window change`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const { values, overridden } = await s.get("core.settings");
-    // The settings window shows the common scope of a project without overrides; a project value would hide a common change.
+    // The settings tab shows the common scope of a project without overrides; a project value would hide a common change.
     assert.deepEqual(overridden, [], "the fixture project overrides settings");
     const sets = values.sets.map((set) => set.id);
     assert.ok(sets.length >= 2, `two sidebar sets are required, the fixture has ${JSON.stringify(sets)}`);
@@ -251,42 +251,38 @@ for (const app of Object.values(APPS))
       t.diagnostic(`${label}: sidebars ${bars.filter((bar) => bar.placement === "window").map((bar) => `${bar.sidebar}:${bar.set}`).join(", ")}; cards ${placed.map((card) => card.id).join(", ")}`);
     }
     await answers("fixture");
-    // The settings window stays open on its section `general` while the controls change the settings, as a person uses it.
+    // The settings tab stays open on its page look while the controls change the settings, as a person uses it.
     await s.run("core.settings.open");
     s.cleanup(() => s.run("core.settings.close"));
-    const general = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
-    const nav = general.controls.find((item) => item.name === "core.settings-modal.nav" && item.key === "nav:general");
+    const look = await s.until("core.settings-tab", (tab) => tab !== null, "settings did not open");
+    const nav = look.controls.find((item) => item.name === "core.settings-tab.nav" && item.key === "nav:look");
     await s.run(nav.command.name, nav.command.params);
-    await s.until("core.settings-modal", (modal) => modal.section === "general", "settings did not show 일반");
-    // Scrolls the settings window with the native wheel until the control stands inside the pane that scrolls, and returns the
-    // centre of the control in window coordinates. element.rect of a control of a native modal reports the rectangle of the copy
-    // that the person sees, so the scroll of the copy is already in it (docs/spec/exposure.md). The pane lies under the fixed head
-    // of the card, and the head covers the content that the scroll clips, so a control under the head takes no press.
+    await s.until("core.settings-tab", (tab) => tab.page === "look", "settings did not show 모양");
+    // Scrolls the settings pane with the native wheel until the control stands inside the pane that scrolls, and returns the centre of
+    // the control in window coordinates (element core.settings-tab.pane, docs/spec/settings.md#pages).
     async function reveal(label, name, index) {
       for (;;) {
         await s.presented();
-        // element.rect of a control of a native modal answers the report of the modal document, which core.modal holds, so the
-        // check waits until that report names the control. A host that draws its modal itself has no modal document and answers
-        // element.rect at once.
-        if (MAIN_PAGE_APPS.some((candidate) => candidate.name === app.name))
-          await s.until("core.modal", (modal) => (modal?.document?.elements ?? []).filter((item) => item.name === name).length > index,
-            `${label}: the modal document did not report ${name} ${index}`);
         const rect = await s.rect(name, index);
-        const { pane, scroll } = await s.get("core.settings-modal");
+        const box = await s.rect("core.settings-tab.pane");
+        const pane = { x: (box.document?.x ?? 0) + box.x, y: (box.document?.y ?? 0) + box.y, w: box.width, h: box.height };
+        const { scroll } = await s.get("core.settings-tab");
         const point = { x: (rect.document?.x ?? 0) + rect.x + rect.width / 2, y: (rect.document?.y ?? 0) + rect.y + rect.height / 2 };
         if (point.y - rect.height / 2 >= pane.y && point.y + rect.height / 2 <= pane.y + pane.h) return point;
         await s.pointer(pane.x + pane.w / 2, pane.y + pane.h / 2, "scroll", { deltaY: point.y - (pane.y + pane.h / 2) });
-        await s.until("core.settings-modal", (modal) => modal.scroll !== scroll,
-          `${label}: the settings window did not scroll from ${scroll} to ${name} ${index} at ${JSON.stringify(rect)} in the pane ${JSON.stringify(pane)}`);
+        await s.until("core.settings-tab", (tab) => tab.scroll !== scroll,
+          `${label}: the settings pane did not scroll from ${scroll} to ${name} ${index} at ${JSON.stringify(rect)} in the pane ${JSON.stringify(pane)}`);
       }
     }
-    // Changes a setting through a control of the settings window: a native click on a button or a switch, as a person presses it,
+    // Changes a setting through a control of the settings tab: a native click on a button or a switch, as a person presses it,
     // or the command that a select points to with value as its input, because the menu of a select is a native menu outside the
     // document. Then it waits until core.settings holds the change and checks that the workbench answers.
-    async function change(label, name, key, value, param, applied) {
-      const modal = await s.until("core.settings-modal", (state) => state.controls.some((item) => item.name === name && item.key === key),
+    async function change(label, name, key, value, param, applied, target) {
+      const tab = await s.until("core.settings-tab", (state) => state.controls.some((item) => item.name === name && item.key === key),
         `${label}: the settings control ${name} ${key} did not appear`);
-      const found = modal.controls.find((item) => item.name === name && item.key === key);
+      // A control of an order row is told apart by the order its command sets (target), since its rows share one key.
+      const found = tab.controls.find((item) => item.name === name && item.key === key
+        && (target === undefined || JSON.stringify(item.command?.params?.value) === JSON.stringify(target)));
       assert.ok(found.command, `${label}: ${name} ${key} has no command`);
       let input = `the command ${found.command.name}`;
       if (param === undefined) {
@@ -299,23 +295,63 @@ for (const app of Object.values(APPS))
       await s.until("core.settings", (settings) => applied(settings.values), `${label}: core.settings does not hold the change after ${input}`);
       await answers(label);
     }
-    const order = "core.settings-modal.order";
-    const select = "core.settings-modal.set";
+    const order = "core.settings-tab.order";
+    const select = "core.settings-tab.side";
+    const link = "core.settings-tab.link";
     const linked = (place, set) => (values) => values.links.some((link) => link.place === place && link.plugin === null && link.set === set);
     const ordered = (list) => (values) => JSON.stringify(values.sidebarOrder) === JSON.stringify(list);
     // The order with top second: ▲ of the row of top in the order left, right, top, bottom.
-    await change("order left, top, right, bottom", order, "order:sidebarOrder:2:up", undefined, undefined, ordered(["left", "top", "right", "bottom"]));
-    await change("order left, right, top, bottom", order, "order:sidebarOrder:1:down", undefined, undefined, ordered(["left", "right", "top", "bottom"]));
+    await change("order left, top, right, bottom", order, "sidebarOrder", undefined, undefined, ordered(["left", "top", "right", "bottom"]),
+      ["left", "top", "right", "bottom"]);
+    await change("order left, right, top, bottom", order, "sidebarOrder", undefined, undefined, ordered(["left", "right", "top", "bottom"]),
+      ["left", "right", "top", "bottom"]);
     // The general sets of the sides with the switches of top and bottom off.
-    await change("left general set", select, "link:left:", first, "set", linked("left", first));
-    await change("right general set", select, "link:right:", first, "set", linked("right", first));
-    await change("top general set", select, "link:top:", second, "set", linked("top", second));
-    await change("bottom general set", select, "link:bottom:", second, "set", linked("bottom", second));
+    await change("left general set", link, "link:left:", first, "set", linked("left", first));
+    await change("right general set", link, "link:right:", first, "set", linked("right", first));
+    await change("top general set", link, "link:top:", second, "set", linked("top", second));
+    await change("bottom general set", link, "link:bottom:", second, "set", linked("bottom", second));
     // The switches of top and bottom on and off again with every side linked, and top first.
     await change("top switch on", select, "top", undefined, undefined, (values) => values.top === true);
     await change("bottom switch on", select, "bottom", undefined, undefined, (values) => values.bottom === true);
-    await change("order left, top, right, bottom with top shown", order, "order:sidebarOrder:2:up", undefined, undefined, ordered(["left", "top", "right", "bottom"]));
-    await change("order top, left, right, bottom", order, "order:sidebarOrder:1:up", undefined, undefined, ordered(["top", "left", "right", "bottom"]));
+    await change("order left, top, right, bottom with top shown", order, "sidebarOrder", undefined, undefined, ordered(["left", "top", "right", "bottom"]),
+      ["left", "top", "right", "bottom"]);
+    await change("order top, left, right, bottom", order, "sidebarOrder", undefined, undefined, ordered(["top", "left", "right", "bottom"]),
+      ["top", "left", "right", "bottom"]);
     await change("top switch off", select, "top", undefined, undefined, (values) => values.top === false);
     await change("bottom switch off", select, "bottom", undefined, undefined, (values) => values.bottom === false);
   });
+
+// The title bar of the window shows the window tools of its screen (docs/spec/external-sidebars.md#window-tools): the work screen
+// shows the four side switches and the settings button, the project home shows only the settings button, and the settings tab in
+// front shows no tool and draws no native surface.
+for (const app of Object.values(APPS)) {
+  test(`${app.name}: the title bar shows the window tools of the work screen, the project home and the settings tab`, { timeout: 60000 }, async (t) => {
+    const s = await open(t, app);
+    await fresh(s);
+    const first = await s.get("core.project");
+    const SIDES = ["core.chrome.left", "core.chrome.right", "core.chrome.top", "core.chrome.bottom"];
+    for (const name of [...SIDES, "core.chrome.settings"]) {
+      const box = await s.rect(name);
+      assert.ok(box.width > 0 && box.height > 0, `the work screen tool ${name} has no size: ${JSON.stringify(box)}`);
+    }
+
+    await s.run("core.projects.browse");
+    await s.until("core.screen", (screen) => screen.screen === "home", "the project home did not show");
+    for (const name of SIDES) await assert.rejects(s.rect(name), new RegExp(name.replaceAll(".", "\\.")), `the project home shows the side switch ${name}`);
+    const home = await s.rect("core.chrome.settings");
+    assert.ok(home.width > 0 && home.height > 0, "the project home has no settings button");
+
+    await s.run("core.settings.open");
+    await s.until("core.settings-tab", (value) => value !== null, "the settings tab did not load");
+    const host = await s.get("host.window");
+    assert.equal(host.surfaces.some((surface) => surface.visible), false, "the settings tab in front shows a native surface");
+    await s.run("core.settings.close");
+
+    await s.run("core.home.open", { project: first.id });
+    await s.until("core.screen", (screen) => screen.screen === "workspace", "the project home did not return to the workspace");
+    for (const name of SIDES) {
+      const box = await s.rect(name);
+      assert.ok(box.width > 0 && box.height > 0, `the work screen tool ${name} has no size after the return: ${JSON.stringify(box)}`);
+    }
+  });
+}

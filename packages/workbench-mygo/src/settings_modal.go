@@ -1,7 +1,6 @@
 package workbench
 
 import (
-	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,8 +10,6 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
-
-	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // The settings window of the mygo host (docs/spec/settings.md): native UI instead of the modal web view of the other hosts. A
@@ -44,17 +41,18 @@ type LoadedPlugin struct {
 	Categories []string
 }
 
-// settingsSections are the sections of the window in order, with their labels.
-var settingsSections = [][2]string{{"general", "일반"}, {"plugins", "플러그인"}, {"sidebars", "사이드바"}}
+// settingsPages are the pages of the settings tab in menu order, with their labels (docs/spec/settings.md#menu). The plugin page is
+// opened from the menu's plugin items and from 설치됨, and the menu does not list it.
+var settingsPages = [][2]string{{"look", "모양"}, {"workspace", "작업 공간"}, {"sets", "사이드바 세트"}, {"behavior", "동작"},
+	{"agents", "에이전트 연동"}, {"diag", "진단"}, {"installed", "설치됨"}, {"browse", "찾아보기"}, {"plugin", "플러그인"}}
 
-// settingsName is the title of the window and the name of its card.
+// settingsName is the title of the settings tab.
 const settingsName = "설정"
 
 // The placement of the card, as the chrome metrics of workbench.json hold them: its width, its top, the share of the window
 // height that it fills at most, and the margin that a moved card keeps from the window edges.
 const (
 	settingsCardMaxShare = 0.74
-	settingsCardMargin   = 8
 )
 
 // The kinds of a control of the card.
@@ -65,7 +63,11 @@ const (
 	controlSwatch
 	controlSwitch
 	controlSelect
+	// controlSegment is a choice of two or three listed values, with one button per value (docs/spec/settings.md#controls).
+	controlSegment
 	controlSlider
+	// controlStepper is a small bounded integer with its unit, changed one step at a time by its − and + buttons.
+	controlStepper
 	controlText
 	controlCaption
 	// controlMark is the mark of the common tab that the project value of its setting applies.
@@ -74,6 +76,9 @@ const (
 	controlSetup
 	// controlAccount is a row of the group 계정, with the line and the usage lines of an account and its buttons.
 	controlAccount
+	// controlChip is a section chip of a set, and controlBadge a badge of a row (docs/spec/settings.md#사이드바-세트).
+	controlChip
+	controlBadge
 )
 
 // ControlCommand is the command of a control, without the value that the control adds.
@@ -90,6 +95,8 @@ type OptionGroup struct {
 
 // SettingsControl is a control of the card as the status reports it.
 type SettingsControl struct {
+	// small is the size sm of a button, 24 points high (docs/spec/settings.md#controls).
+	small   bool
 	Name    string          `json:"name"`
 	Index   int             `json:"index"`
 	Key     *string         `json:"key"`
@@ -99,8 +106,14 @@ type SettingsControl struct {
 	Command *ControlCommand `json:"command"`
 	Options []string        `json:"options"`
 	Groups  []OptionGroup   `json:"groups"`
+	// Disabled is true while the control takes no press: a dependent setting whose parent is off, a side whose switch is off for its
+	// set select, and the first row's ↑ or the last row's ↓ (docs/spec/settings.md#status).
+	Disabled bool `json:"disabled"`
 
-	kind       controlKind
+	kind controlKind
+	// missingTip is the tooltip of a section chip whose plugin is not loaded (docs/spec/plugins.md#missing-plugins).
+	missingTip string
+	title      string            // the title of a button, which shows as its tip while the pointer rests on it (docs/spec/settings.md#작업-공간)
 	param      string            // the parameter that takes the value of the control
 	labels     map[string]string // the text of each option
 	lo, hi     float64           // the bounds of a slider
@@ -108,6 +121,7 @@ type SettingsControl struct {
 	theme      *CatalogTheme // the theme of a swatch
 	maxLength  int
 	searchable bool        // a field that runs its command for each change, as the plugin search does
+	tone       string      // the tone of a badge: ok, acc, warn, err or neutral (docs/spec/settings.md#controls)
 	setup      *setupRow   // the content of a row of the agent group
 	account    *accountRow // the content of a row of the group 계정
 }
@@ -127,8 +141,13 @@ type settingsRow struct {
 	controls    []*SettingsControl
 	// list says that the controls stand in the flow of a line, one after the other (.set-list).
 	list bool
-	// value is the name of the value of an order row, which stands before its buttons.
-	value string
+	// side says that the row is a row of the sidebar list: number is its number in the order, and name its side name
+	// (docs/spec/settings.md#작업-공간).
+	side   bool
+	number string
+	// indent says that the row depends on a parent setting, so it is indented under it, and disabled that its controls take no
+	// press while the parent is off (docs/spec/settings.md#dependency-and-validation-rules).
+	indent, disabled bool
 }
 
 // settingsGroup is a group of rows with its name and its one-line text.
@@ -140,24 +159,37 @@ type settingsGroup struct {
 // settingsModel is the card: its section buttons, its scope buttons, the folder of the project scope and its groups.
 type settingsModel struct {
 	close        *SettingsControl
+	find         *SettingsControl
 	nav, scopes  []*SettingsControl
 	folder       string
 	groups       []settingsGroup
 	declaredRows []settingsRow
 	listed       []string
 	controls     []*SettingsControl
+	// actions are the action buttons of the plugin rows and pages, labels the row name of each control key, shown the number of
+	// catalog rows that 찾아보기 shows, and results the result of a search.
+	actions []settingsActionStatus
+	labels  map[string]string
+	shown   int
+	results *settingsResultsStatus
 }
 
 // settingsWindow is the state of the window of a shell. Its section, scope, search, plugin and edited set outlast a close.
 type settingsWindow struct {
-	// drawnHeight is the height of the card in the last frame, and 0 before its first frame.
-	drawnHeight     float64
-	open            bool
-	section, scope  string
+	open bool
+	// openedOnce says that this window has opened its settings tab, so the work screen shows the closed hint after a close.
+	openedOnce  bool
+	page, scope string
+	// find is the text of the menu search, filter the filter of 설치됨 and back the page of the back link of the plugin page.
+	find, filter, back string
+	// browse is the state of 찾아보기, confirm the open confirmation and undo the toast of the last change.
+	browse  settingsBrowse
+	confirm settingsConfirm
+	undo    *settingsUndo
+	// locale is the language of the frame that the model was built for.
+	locale          string
 	query           string
 	chosen, editing string
-	moved           bool
-	x, y            float64
 	width, height   float64
 	scroll          ui.ScrollState
 	scrollKey       string
@@ -165,16 +197,64 @@ type settingsWindow struct {
 	// The fields of the group 계정 of the shown plugin page (docs/spec/plugins.md#accounts): the plugin of the page, the name and the
 	// kind of the row 새 계정, the account whose name is edited and the text of its field. Another page clears them.
 	accountPlugin, accountName, accountKind, accountEdit, accountEditName string
+	// builds counts the models that settingsBuild built, which the tests read (SettingsModelBuilds).
+	builds int
+	// inputs advances with each change of a setting, the plugins or the accounts; the model is kept while its key holds.
+	inputs uint64
+	model  *settingsModel
+	key    settingsKey
 }
 
+// settingsKey is what the settings model reads besides the settings, the plugins and the accounts: a change of any field rebuilds the
+// model (docs/spec/settings.md#performance).
+type settingsKey struct {
+	inputs, setup                    uint64
+	plugins                          int
+	operation                        PluginOperation
+	locale, project                  string
+	page, scope, query, find, filter string
+	browse                           settingsBrowse
+	confirm                          settingsConfirm
+	chosen, editing                  string
+	accountPlugin                    string
+	accountName, accountKind         string
+	accountEdit, accountEditName     string
+}
+
+// settingsInputsChanged records a change that the settings model reads and asks the window for a frame.
+func (s *Shell) settingsInputsChanged() {
+	s.settingsWindow.inputs++
+	s.options.Invalidate()
+}
+
+// SettingsModelBuilds returns how many settings models the shell has built.
+func (s *Shell) SettingsModelBuilds() int { return s.settingsWindow.builds }
+
 func newSettingsWindow() settingsWindow {
-	return settingsWindow{section: "general", scope: "common", drafts: map[string]string{}}
+	return settingsWindow{page: "look", scope: "common", filter: "all", back: "installed", browse: settingsBrowse{limit: settingsBrowseFirst}, drafts: map[string]string{}}
 }
 
 // builder adds the controls of a card in document order.
 type settingsBuilder struct {
 	model  *settingsModel
 	counts map[string]int
+	// descriptions holds the description of each declared row, by its setting key (docs/spec/settings.md#rows).
+	descriptions map[string]string
+}
+
+// declaredDescriptions returns the description of each declared row that has one, by its setting key.
+func declaredDescriptions(rows declaredRows) map[string]string {
+	descriptions := map[string]string{}
+	for _, groups := range rows.Groups {
+		for _, group := range groups {
+			for _, row := range group.Rows {
+				if row.Description != "" {
+					descriptions[row.Key] = row.Description
+				}
+			}
+		}
+	}
+	return descriptions
 }
 
 func (b *settingsBuilder) add(control SettingsControl) *SettingsControl {
@@ -197,6 +277,13 @@ func settingCommand(name string, params map[string]any) *ControlCommand {
 // button is a button with its key, its element name and its command.
 func (b *settingsBuilder) button(key, name, label, command string, params map[string]any) *SettingsControl {
 	return b.add(SettingsControl{Name: name, Key: text(key), Label: label, Command: settingCommand(command, params), kind: controlButton})
+}
+
+// small is a button of the small size sm, which is 24 points high (docs/spec/settings.md#controls).
+func (b *settingsBuilder) small(key, name, label, command string, params map[string]any) *SettingsControl {
+	control := b.button(key, name, label, command, params)
+	control.small = true
+	return control
 }
 
 // pressedButton is a button that shows that it is on.
@@ -224,20 +311,24 @@ func (s *Shell) settingsBuild() (*settingsModel, error) {
 	if store.Project() == "" {
 		w.scope = "common"
 	}
-	model := &settingsModel{}
-	b := &settingsBuilder{model: model, counts: map[string]int{}}
-	b.add(SettingsControl{Name: "core.settings-modal.grip", Label: settingsName, kind: controlCaption})
-	model.close = b.add(SettingsControl{Name: "core.settings-modal.close", Key: text("close"), Label: "닫는다", Command: settingCommand("core.settings.close", nil), kind: controlButton})
-	for _, section := range settingsSections {
-		model.nav = append(model.nav, b.pressedButton("nav:"+section[0], "core.settings-modal.nav", section[1], "core.settings-modal.nav",
-			map[string]any{"section": section[0]}, section[0] == w.section))
+	w.builds++
+	model := &settingsModel{labels: map[string]string{}}
+	b := &settingsBuilder{model: model, counts: map[string]int{}, descriptions: declaredDescriptions(s.settings.Catalog.Rows)}
+	model.close = b.add(SettingsControl{Name: "core.settings-tab.close", Key: text("close"), Label: "닫는다", Command: settingCommand("core.settings.close", nil), kind: controlButton})
+	// The menu lists the pages of 설정 and 플러그인; the plugin page is opened by a plugin item.
+	for _, page := range settingsPages[:len(settingsPages)-1] {
+		model.nav = append(model.nav, b.pressedButton("nav:"+page[0], "core.settings-tab.nav", page[1], "core.settings-tab.nav",
+			map[string]any{"page": page[0]}, page[0] == w.page))
 	}
+	// The search field stands at the top of the menu and runs core.settings-tab.find for each change (docs/spec/settings.md#menu).
+	model.find = b.add(SettingsControl{Name: "core.settings-tab.find", Key: text("find"), Value: text(w.find), Command: settingCommand("core.settings-tab.find", nil),
+		kind: controlText, param: "query", searchable: true, Label: "설정 찾기"})
 	scopes := [][2]string{{"common", "전역"}}
 	if store.Project() != "" {
 		scopes = append(scopes, [2]string{"project", "프로젝트"})
 	}
 	for _, scope := range scopes {
-		model.scopes = append(model.scopes, b.pressedButton("pick:scope:"+scope[0], "core.settings-modal.scope", scope[1], "core.settings-modal.scope",
+		model.scopes = append(model.scopes, b.pressedButton("pick:scope:"+scope[0], "core.settings-tab.scope", scope[1], "core.settings-tab.scope",
 			map[string]any{"scope": scope[0]}, scope[0] == w.scope))
 	}
 	if w.scope == "project" {
@@ -247,14 +338,35 @@ func (s *Shell) settingsBuild() (*settingsModel, error) {
 		}
 		model.folder = project.Root
 	}
-	build := map[string]func(*settingsBuilder) error{"general": s.buildGeneral, "plugins": s.buildPlugins, "sidebars": s.buildSidebars}
-	if err := build[w.section](b); err != nil {
+	// A query of the menu search replaces the page with its results (docs/spec/settings.md#search).
+	if w.find != "" {
+		match := s.matchSettings(store, w.find)
+		model.results = &settingsResultsStatus{Settings: match.keys(), Plugins: match.installed, Catalog: len(match.catalog)}
+		if err := s.buildSearch(b, w.find, match); err != nil {
+			return nil, err
+		}
+		return model, nil
+	}
+	if err := s.pageBuilders()[w.page](b); err != nil {
 		return nil, err
 	}
 	return model, nil
 }
 
+// pageBuilders returns the builder of each page of the settings tab, by page id.
+func (s *Shell) pageBuilders() map[string]func(*settingsBuilder) error {
+	return map[string]func(*settingsBuilder) error{"look": s.buildLook, "workspace": s.buildWorkspace, "sets": s.buildSets,
+		"behavior": s.buildBehavior, "agents": s.buildAgents, "diag": s.buildDiag, "installed": s.buildInstalled, "browse": s.buildBrowse,
+		"plugin": s.buildPluginTab}
+}
+
 func (b *settingsBuilder) group(name, text string, rows ...settingsRow) {
+	// A row without its own description takes the declared description of its setting, as the web rows do.
+	for i := range rows {
+		if rows[i].description == "" && len(rows[i].controls) > 0 && rows[i].controls[0].Key != nil {
+			rows[i].description = b.descriptions[*rows[i].controls[0].Key]
+		}
+	}
 	b.model.groups = append(b.model.groups, settingsGroup{name: name, text: text, rows: rows})
 }
 
@@ -263,6 +375,7 @@ func (b *settingsBuilder) group(name, text string, rows ...settingsRow) {
 func (s *Shell) row(b *settingsBuilder, name string, control *SettingsControl) settingsRow {
 	row := settingsRow{name: name, controls: []*SettingsControl{control}}
 	if control.Key != nil {
+		b.model.labels[*control.Key] = name
 		row.controls = append(row.controls, s.overrideControls(b, *control.Key, "전역값 사용")...)
 	}
 	return row
@@ -277,7 +390,7 @@ func (s *Shell) overrideControls(b *settingsBuilder, key, reset string) []*Setti
 	if s.settingsWindow.scope == "project" {
 		return []*SettingsControl{b.resetButton(key, reset)}
 	}
-	return []*SettingsControl{b.add(SettingsControl{Name: "core.settings-modal.applied", Key: text("applied:" + key), Label: "프로젝트 값", kind: controlMark})}
+	return []*SettingsControl{b.add(SettingsControl{Name: "core.settings-tab.applied", Key: text("applied:" + key), Label: "프로젝트 값", kind: controlMark})}
 }
 
 // settingOf is the setting of the key of a control: links for a link, sets for a control of the set editor, and the key itself
@@ -304,7 +417,7 @@ func (s *Shell) controlScope(key string) string {
 }
 
 func (b *settingsBuilder) resetButton(key, label string) *SettingsControl {
-	return b.button("reset:"+key, "core.settings-modal.reset", label, "core.settings.reset", map[string]any{"key": key})
+	return b.button("reset:"+key, "core.settings-tab.reset", label, "core.settings.reset", map[string]any{"key": key})
 }
 
 // setting is the command of a control of the setting key: core.settings.change, or core.settings.link for a link key of the
@@ -335,7 +448,15 @@ func (s *Shell) choose(b *settingsBuilder, key string, options [][2]string, now 
 		return nil, fmt.Errorf("unknown settings choice %s for %s", now, key)
 	}
 	command, param := s.setting(key)
-	return b.add(SettingsControl{Name: "core.settings-modal.set", Key: text(key), Value: text(now), Command: command, Options: values, kind: controlSelect, param: param, labels: labels}), nil
+	return b.add(SettingsControl{Name: "core.settings-tab.choice", Key: text(key), Value: text(now), Command: command, Options: values, kind: choiceKind(len(values)), param: param, labels: labels}), nil
+}
+
+// choiceKind is the control of a listed choice: a segment for two or three values, a select box for more (docs/spec/settings.md#controls).
+func choiceKind(count int) controlKind {
+	if count <= 3 {
+		return controlSegment
+	}
+	return controlSelect
 }
 
 // choosePlugin is the select box of a plugin setting: its options are the loaded plugins of the category by id, labeled with their names,
@@ -351,14 +472,34 @@ func (s *Shell) choosePlugin(b *settingsBuilder, key string, options [][2]string
 		value = text(id)
 	}
 	command, param := s.setting(key)
-	return b.add(SettingsControl{Name: "core.settings-modal.set", Key: text(key), Value: value, Command: command, Options: values, kind: controlSelect, param: param, labels: labels})
+	return b.add(SettingsControl{Name: "core.settings-tab.choice", Key: text(key), Value: value, Command: command, Options: values, kind: controlSelect, param: param, labels: labels})
 }
 
 // syncPluginChoices shows the error that asks for a choice of each plugin setting that has no value, and withdraws it when the setting
 // has one (docs/spec/plugins.md#settings-declarations).
+// syncMissingPlugins shows the load error of each plugin setting whose stored value names no loaded plugin, and withdraws the error of a
+// setting that is no longer missing. Each error is shown under the key (docs/spec/plugins.md#settings-declarations).
+func (s *Shell) syncMissingPlugins() {
+	for _, definition := range s.settings.Definitions {
+		if definition.Type != "plugin" {
+			continue
+		}
+		source := "settings " + definition.Key
+		if _, missing := s.settings.Missing(definition.Key); missing {
+			s.errors.ShowFrom(workbenchErrorPlace, source, s.settings.MissingError(definition.Key), "")
+		} else {
+			s.errors.HideFrom(workbenchErrorPlace, source)
+		}
+	}
+}
+
 func (s *Shell) syncPluginChoices() {
 	for _, definition := range s.settings.Definitions {
 		if definition.Type != "plugin" {
+			continue
+		}
+		// A stored value that names no loaded plugin is shown by its own error, not by the choice (docs/spec/plugins.md#settings-declarations).
+		if _, missing := s.settings.Missing(definition.Key); missing {
 			continue
 		}
 		source := "plugin choice " + definition.Key
@@ -373,25 +514,32 @@ func (s *Shell) syncPluginChoices() {
 func (s *Shell) toggle(b *settingsBuilder, key string) *SettingsControl {
 	on, _ := s.value(key).(bool) // silent: the settings store checks the type of the value.
 	command, param := s.setting(key)
-	return b.add(SettingsControl{Name: "core.settings-modal.set", Key: text(key), On: &on, Value: text(strconv.FormatBool(on)), Command: command, kind: controlSwitch, param: param})
+	return b.add(SettingsControl{Name: "core.settings-tab.set", Key: text(key), On: &on, Value: text(strconv.FormatBool(on)), Command: command, kind: controlSwitch, param: param})
 }
 
 func (s *Shell) slide(b *settingsBuilder, key string, bounds [2]float64, unit string) *SettingsControl {
 	now := valueText(s.value(key))
 	command, param := s.setting(key)
-	return b.add(SettingsControl{Name: "core.settings-modal.set", Key: text(key), Value: text(now), Command: command, kind: controlSlider, param: param, lo: bounds[0], hi: bounds[1], unit: unit})
+	return b.add(SettingsControl{Name: "core.settings-tab.step", Key: text(key), Value: text(now), Command: command, kind: controlSlider, param: param, lo: bounds[0], hi: bounds[1], unit: unit})
+}
+
+// stepper is a stepper of a small bounded integer: its element is core.settings-tab.step, and its buttons change the value by one.
+func (s *Shell) stepper(b *settingsBuilder, key string, bounds [2]float64, unit string) *SettingsControl {
+	now := valueText(s.value(key))
+	command, param := s.setting(key)
+	return b.add(SettingsControl{Name: "core.settings-tab.step", Key: text(key), Value: text(now), Command: command, kind: controlStepper, param: param, lo: bounds[0], hi: bounds[1], unit: unit})
 }
 
 func (s *Shell) textField(b *settingsBuilder, key string, maxLength int) *SettingsControl {
 	command, param := s.setting(key)
-	return b.add(SettingsControl{Name: "core.settings-modal.set", Key: text(key), Value: text(valueText(s.value(key))), Command: command, kind: controlText, param: param, maxLength: maxLength})
+	return b.add(SettingsControl{Name: "core.settings-tab.text", Key: text(key), Value: text(valueText(s.value(key))), Command: command, kind: controlText, param: param, maxLength: maxLength})
 }
 
 // sectionNames are the names of the section ids.
 func (s *Shell) sectionNames(ids []string) []string {
 	names := make([]string, len(ids))
 	for i, id := range ids {
-		names[i] = id + " (불러오지 않음)"
+		names[i] = id
 		for _, plugin := range s.plugins {
 			for _, section := range plugin.Sections {
 				if section.ID == id {
@@ -411,11 +559,16 @@ func joinedOr(names []string, separator, none string) string {
 	return strings.Join(names, separator)
 }
 
-// setOptions are the choices of a sidebar: not used and every set.
+// setOptions are the choices of a sidebar: not used and every set, each with its layout and its number of sections as the hint
+// (docs/spec/settings.md#작업-공간).
 func (s *Shell) setOptions(sets []StoredSet) [][2]string {
 	options := [][2]string{{"off", "사용 안 함"}}
 	for _, set := range sets {
-		options = append(options, [2]string{set.ID, set.Title + " — " + joinedOr(s.sectionNames(set.Sections), " · ", "섹션 없음")})
+		layout := "목록"
+		if set.Layout == "tabs" {
+			layout = "탭"
+		}
+		options = append(options, [2]string{set.ID, fmt.Sprintf("%s (%s · %d)", set.Title, layout, len(set.Sections))})
 	}
 	return options
 }
@@ -436,6 +589,8 @@ func (s *Shell) linkChoice(b *settingsBuilder, name, place, plugin string, sets 
 	if err != nil {
 		return settingsRow{}, err
 	}
+	// A set reference is a select box whatever the number of its options (docs/spec/settings.md#controls).
+	control.kind = controlSelect
 	return s.row(b, name, control), nil
 }
 
@@ -451,158 +606,12 @@ func labelled(values []string, labels map[string]string) ([][2]string, error) {
 	return options, nil
 }
 
-func (s *Shell) buildGeneral(b *settingsBuilder) error {
-	catalog := s.settings.Catalog
-	scope := s.settingsWindow.scope
-	themeScope := s.controlScope("theme")
-	var failed error
-	choice := func(name, key string, labels map[string]string) settingsRow {
-		options, err := labelled(catalog.choices(key), labels)
-		if err != nil {
-			failed = err
-			return settingsRow{}
-		}
-		control, err := s.choose(b, key, options, valueText(s.value(key)))
-		if err != nil {
-			failed = err
-			return settingsRow{}
-		}
-		return s.row(b, name, control)
-	}
-	if scope == "common" {
-		b.group("프로젝트", "프로젝트를 여는 방식은 모든 프로젝트에 적용됩니다. 이미 열린 창은 유지됩니다.",
-			choice("열기 방식", "projectOpening", map[string]string{"tabs": "현재 창", "windows": "별도 창"}))
-	}
-	theme := settingsRow{}
-	for i := range catalog.Themes {
-		item := &catalog.Themes[i]
-		theme.controls = append(theme.controls, b.pressedButton("theme:"+item.Name, "core.settings-modal.theme", "", "core.settings.theme",
-			map[string]any{"name": item.Name, "scope": themeScope}, item.Name == s.value("theme")))
-		last := theme.controls[len(theme.controls)-1]
-		last.kind, last.theme, last.Label = controlSwatch, item, item.Name
-	}
-	theme.controls = append(theme.controls, s.overrideControls(b, "theme", "전역 테마 사용")...)
-	b.group("테마", "테마가 색과 형태의 기본값을 정하고, 모드는 그 테마의 밝은 쪽과 어두운 쪽을 고른다.", theme,
-		choice("모드", "mode", map[string]string{"dark": "어두움", "light": "밝음"}))
-
-	fonts := make(map[string]string, len(catalog.Fonts))
-	for _, font := range catalog.Fonts {
-		fonts[font.ID] = font.Name
-	}
-	shape := catalog.Settings.ShapeRanges
-	b.group("형태", "테마가 준 값에서 시작한다. 통로를 0 으로 내리면 카드가 선 하나를 공유한다.",
-		s.row(b, "통로", s.slide(b, "gap", shape["gap"], "px")),
-		s.row(b, "모서리", s.slide(b, "radius", shape["radius"], "px")),
-		choice("폰트", "font", fonts),
-		s.row(b, "글자 크기", s.slide(b, "size", shape["size"], "px")))
-	b.group("위치", "프로젝트 탭이 놓이는 위치. 바꾸면 카드 배치도 함께 바뀐다.",
-		choice("프로젝트 탭 위치", "projectTabs", map[string]string{"top": "위", "left": "왼쪽"}))
-
-	// A link control takes the sets of the scope of the links as its options.
-	sets, err := s.settings.Sets(s.controlScope("links"))
-	if err != nil {
-		return err
-	}
-	links, err := s.settings.Links(s.controlScope("links"))
-	if err != nil {
-		return err
-	}
-	// One fixed sidebar per side; the order sets which sidebar takes the room of the plane first (docs/spec/external-sidebars.md).
-	rows := []settingsRow{}
-	for _, side := range layout.WindowSides {
-		rows = append(rows, s.row(b, sideNames[side]+" 사이드바 보이기", s.toggle(b, side)))
-	}
-	for _, side := range layout.WindowSides {
-		row, err := s.linkChoice(b, sideNames[side]+" 사이드바 세트", side, "", sets, links)
-		if err != nil {
-			return err
-		}
-		rows = append(rows, row)
-	}
-	if controls := s.overrideControls(b, "links", "전역 연결 사용"); controls != nil {
-		rows = append(rows, settingsRow{controls: controls})
-	}
-	rows = append(rows, s.orderRows(b, "sidebarOrder", "사이드바 순서", sideNames)...)
-	b.group("사이드바", "한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.", rows...)
-
-	widths := catalog.Settings.LayoutRanges
-	b.group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 저장 크기가 없는 창 사이드바가 여는 크기(위·아래 사이드바는 높이)이며 최소 폭과 최대 폭 사이여야 한다.",
-		s.row(b, "최소 폭", s.slide(b, "sidebarMinWidth", widths["sidebarMinWidth"], "pt")),
-		s.row(b, "최대 폭", s.slide(b, "sidebarMaxWidth", widths["sidebarMaxWidth"], "pt")),
-		s.row(b, "처음 폭", s.slide(b, "sidebarWidth", widths["sidebarWidth"], "pt")))
-	b.group("표시", "배치는 그대로 두고 보이는 모습만 바꾼다.",
-		choice("포커스 표시", "focusInd", map[string]string{"border": "테두리", "corner": "꺽쇠"}),
-		choice("카드 자동 정렬", "cardArrange", map[string]string{"resize": "크기맞춤", "even": "균등"}),
-		choice("경계선", "fullRule", map[string]string{"under": "가림", "over": "보임", "none": "숨김"}),
-		s.row(b, "포커스 밖 흐리게", s.toggle(b, "dim")))
-
-	languages := map[string]string{"auto": "자동"}
-	for _, language := range catalog.MenuLanguages {
-		languages[language.ID] = language.Label
-	}
-	b.group("언어", "애플리케이션 메뉴가 이 언어를 따른다. 자동은 시스템 언어이고 목록에 없으면 영어다.", choice("언어", "language", languages))
-	if scope == "common" {
-		b.group("메모리", "메모리 절약을 켜면 숨긴 지 정한 시간이 지난 탭을 내리고, 다시 보일 때 저장된 상태로 다시 연다. 보기 프로세스는 새로 여는 보기부터 적용된다.",
-			choice("보기 프로세스", "viewProcess", map[string]string{"plugin": "플러그인마다 하나", "view": "보기마다 하나"}),
-			s.row(b, "메모리 절약", s.toggle(b, "memorySaver")),
-			s.row(b, "숨긴 뒤 내리기까지", s.slide(b, "memorySaverDelay", catalog.Settings.MemorySaverDelay, "분")))
-		b.group("알림", "오류 토스트의 자동 닫힘을 정한다. 끄면 각 토스트의 ×로만 닫는다.",
-			s.row(b, "자동 닫힘", s.toggle(b, "autoDismissErrorToasts")),
-			s.row(b, "초 후 자동으로 닫힘", s.textField(b, "errorToastDismissSeconds", 3)))
-		on := s.settings.DebugOn()
-		debug := b.add(SettingsControl{Name: "core.settings-modal.debug", Label: "디버그", On: &on, Command: settingCommand("core.settings.debug", nil), kind: controlSwitch, param: "on"})
-		b.group("진단", "디버그를 켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.", settingsRow{name: "디버그", controls: []*SettingsControl{debug}})
-		s.buildSetup(b)
-	}
-	return failed
-}
-
-// matchedPlugins are the loaded plugins whose id, name or description holds the query, by id.
-func (s *Shell) matchedPlugins(query string) []LoadedPlugin {
-	needle := strings.ToLower(query)
-	var matched []LoadedPlugin
-	for _, plugin := range s.plugins {
-		for _, field := range []string{plugin.ID, plugin.Name, plugin.Description} {
-			if strings.Contains(strings.ToLower(field), needle) {
-				matched = append(matched, plugin)
-				break
-			}
-		}
-	}
-	slices.SortFunc(matched, func(a, b LoadedPlugin) int { return cmp.Compare(a.ID, b.ID) })
-	return matched
-}
-
 func (s *Shell) loadedPlugin(id string) *LoadedPlugin {
 	for i := range s.plugins {
 		if s.plugins[i].ID == id {
 			return &s.plugins[i]
 		}
 	}
-	return nil
-}
-
-func (s *Shell) buildPlugins(b *settingsBuilder) error {
-	w := &s.settingsWindow
-	if plugin := s.loadedPlugin(w.chosen); plugin != nil {
-		return s.buildPluginPage(b, plugin)
-	}
-	w.chosen = ""
-	manage := b.button("plugins:manage", "core.settings-modal.manage", "플러그인 관리", "core.plugins.browse", nil)
-	search := b.add(SettingsControl{Name: "core.settings-modal.search", Key: text("plugin-search"), Value: text(w.query), Command: settingCommand("core.settings-modal.search", nil),
-		kind: controlText, param: "query", searchable: true, Label: "이름, id, 설명으로 찾기"})
-	rows := []settingsRow{{controls: []*SettingsControl{manage}}, {name: "찾기", controls: []*SettingsControl{search}}}
-	matched := s.matchedPlugins(w.query)
-	list := settingsRow{list: true}
-	for _, plugin := range matched {
-		list.controls = append(list.controls, b.button("plugin:"+plugin.ID, "core.settings-modal.plugin", plugin.Name, "core.settings-modal.plugin", map[string]any{"plugin": plugin.ID}))
-		b.model.listed = append(b.model.listed, plugin.ID)
-	}
-	rows = append(rows, list)
-	if len(matched) == 0 {
-		rows = append(rows, settingsRow{description: "찾는 플러그인이 없습니다."})
-	}
-	b.group("플러그인", "창이 불러온 플러그인의 설정. 설치, 업데이트, 제거와 플러그인 설명은 플러그인 관리에서 본다.", rows...)
 	return nil
 }
 
@@ -650,7 +659,7 @@ func accountLogin(account AccountView) string {
 
 // accountField is a text field of the group 계정 that runs command with its text as name.
 func accountField(b *settingsBuilder, key, command, now string) *SettingsControl {
-	return b.add(SettingsControl{Name: "core.settings-modal." + key, Key: text(key), Value: text(now), Command: settingCommand(command, nil), kind: controlText, param: "name", maxLength: 40})
+	return b.add(SettingsControl{Name: "core.settings-tab." + key, Key: text(key), Value: text(now), Command: settingCommand(command, nil), kind: controlText, param: "name", maxLength: 40})
 }
 
 // buildAccounts adds the group 계정 of a plugin that declares accounts: a row per account and the row 새 계정.
@@ -679,25 +688,25 @@ func (s *Shell) buildAccounts(b *settingsBuilder, plugin *LoadedPlugin, declared
 			content.usage = append(content.usage, line)
 		}
 		// The row stands before its controls in document order, as the element of the page holds them.
-		row := b.add(SettingsControl{Name: "core.settings-modal.account", kind: controlAccount, account: content})
+		row := b.add(SettingsControl{Name: "core.settings-tab.account", kind: controlAccount, account: content})
 		params := map[string]any{"plugin": plugin.ID, "id": account.ID}
 		if w.accountEdit == account.ID {
 			content.controls = append(content.controls,
-				accountField(b, "account-edit-name", "core.settings-modal.account-edit-name", w.accountEditName),
-				b.button("account-save:"+account.ID, "core.settings-modal.account-save", "저장", "core.accounts.rename", map[string]any{"plugin": plugin.ID, "id": account.ID, "name": w.accountEditName}),
-				b.button("account-edit-cancel:"+account.ID, "core.settings-modal.account-edit-cancel", "취소", "core.settings-modal.account-edit", map[string]any{"id": nil}))
+				accountField(b, "account-edit-name", "core.settings-tab.account-edit-name", w.accountEditName),
+				b.button("account-save:"+account.ID, "core.settings-tab.account-save", "저장", "core.accounts.rename", map[string]any{"plugin": plugin.ID, "id": account.ID, "name": w.accountEditName}),
+				b.button("account-edit-cancel:"+account.ID, "core.settings-tab.account-edit-cancel", "취소", "core.settings-tab.account-edit", map[string]any{"id": nil}))
 		} else {
 			switch {
 			case account.Running:
-				content.controls = append(content.controls, b.button("account-login-cancel:"+account.ID, "core.settings-modal.account-login-cancel", "취소", "core.accounts.login-cancel", params))
+				content.controls = append(content.controls, b.button("account-login-cancel:"+account.ID, "core.settings-tab.account-login-cancel", "취소", "core.accounts.login-cancel", params))
 			case account.Login != nil && !*account.Login:
-				content.controls = append(content.controls, b.button("account-login:"+account.ID, "core.settings-modal.account-login", "로그인", "core.accounts.login", params))
+				content.controls = append(content.controls, b.button("account-login:"+account.ID, "core.settings-tab.account-login", "로그인", "core.accounts.login", params))
 			case account.Login != nil && *account.Login:
-				content.controls = append(content.controls, b.button("account-logout:"+account.ID, "core.settings-modal.account-logout", "로그아웃", "core.accounts.logout", params))
+				content.controls = append(content.controls, b.button("account-logout:"+account.ID, "core.settings-tab.account-logout", "로그아웃", "core.accounts.logout", params))
 			}
 			content.controls = append(content.controls,
-				b.button("account-edit:"+account.ID, "core.settings-modal.account-edit", "이름 변경", "core.settings-modal.account-edit", map[string]any{"id": account.ID}),
-				b.button("account-remove:"+account.ID, "core.settings-modal.account-remove", "삭제", "core.accounts.remove", params))
+				b.button("account-edit:"+account.ID, "core.settings-tab.account-edit", "이름 변경", "core.settings-tab.account-edit", map[string]any{"id": account.ID}),
+				b.button("account-remove:"+account.ID, "core.settings-tab.account-remove", "삭제", "core.accounts.remove", params))
 		}
 		// The label is the text of the row in document order, as the page reports the textContent of its row.
 		row.Label = content.line + strings.Join(content.usage, "")
@@ -714,84 +723,12 @@ func (s *Shell) buildAccounts(b *settingsBuilder, plugin *LoadedPlugin, declared
 	for i, item := range declared.Kinds {
 		options[i], values[i], labels[item.Value] = [2]string{item.Value, item.Label}, item.Value, item.Label
 	}
-	name := accountField(b, "account-name", "core.settings-modal.account-name", w.accountName)
-	kind := b.add(SettingsControl{Name: "core.settings-modal.account-kind", Key: text("account-kind"), Value: text(w.accountKind), Command: settingCommand("core.settings-modal.account-kind", nil),
+	name := accountField(b, "account-name", "core.settings-tab.account-name", w.accountName)
+	kind := b.add(SettingsControl{Name: "core.settings-tab.account-kind", Key: text("account-kind"), Value: text(w.accountKind), Command: settingCommand("core.settings-tab.account-kind", nil),
 		Options: values, kind: controlSelect, param: "kind", labels: labels})
-	add := b.button("account-add", "core.settings-modal.account-add", "추가", "core.accounts.add", map[string]any{"plugin": plugin.ID, "name": w.accountName, "kind": w.accountKind})
+	add := b.button("account-add", "core.settings-tab.account-add", "추가", "core.accounts.add", map[string]any{"plugin": plugin.ID, "name": w.accountName, "kind": w.accountKind})
 	rows = append(rows, settingsRow{name: "새 계정", controls: []*SettingsControl{name, kind, add}})
 	b.group("계정", plugin.Name+" 플러그인이 실행하는 CLI의 계정. 로그인은 시스템 브라우저에서 한다.", rows...)
-}
-
-func (s *Shell) buildPluginPage(b *settingsBuilder, plugin *LoadedPlugin) error {
-	scope := s.controlScope("links")
-	back := b.button("plugins:list", "core.settings-modal.back", "목록", "core.settings-modal.plugin", map[string]any{"plugin": nil})
-	b.group(plugin.Name, plugin.ID, settingsRow{controls: []*SettingsControl{back}})
-	if unit := s.units[plugin.ID]; unit != nil && unit.Accounts != nil {
-		w := &s.settingsWindow
-		if w.accountPlugin != plugin.ID {
-			w.accountPlugin, w.accountName, w.accountKind, w.accountEdit, w.accountEditName = plugin.ID, "", unit.Accounts.Kinds[0].Value, "", ""
-		}
-		s.buildAccounts(b, plugin, unit.Accounts)
-	}
-	var rows []settingsRow
-	for _, definition := range s.settings.Definitions {
-		if definition.Plugin != plugin.ID {
-			continue
-		}
-		control, err := s.declaredControl(b, definition)
-		if err != nil {
-			return err
-		}
-		row := s.row(b, definition.Label, control)
-		row.key, row.description = definition.Key, definition.Description
-		rows = append(rows, row)
-		b.model.declaredRows = append(b.model.declaredRows, row)
-	}
-	if len(rows) == 0 {
-		rows = []settingsRow{{description: "이 플러그인에는 설정이 없습니다."}}
-	}
-	b.group("설정", plugin.Name+" 플러그인이 선언한 설정.", rows...)
-	ids := make([]string, len(plugin.Sections))
-	for i, section := range plugin.Sections {
-		ids[i] = section.ID
-	}
-	b.group("섹션", "이 플러그인이 사이드바에 제공하는 섹션.", settingsRow{description: joinedOr(s.sectionNames(ids), ", ", "이 플러그인에는 섹션이 없습니다.")})
-	sets, err := s.settings.Sets(scope)
-	if err != nil {
-		return err
-	}
-	links, err := s.settings.Links(scope)
-	if err != nil {
-		return err
-	}
-	choices := func(places [][2]string) ([]settingsRow, error) {
-		rows := make([]settingsRow, len(places))
-		for i, place := range places {
-			row, err := s.linkChoice(b, place[1], place[0], plugin.ID, sets, links)
-			if err != nil {
-				return nil, err
-			}
-			rows[i] = row
-		}
-		return rows, nil
-	}
-	sides := [][2]string{}
-	for _, side := range layout.WindowSides {
-		sides = append(sides, [2]string{"window-" + side, "창 " + sideNames[side] + " 사이드바"})
-	}
-	window, err := choices(sides)
-	if err != nil {
-		return err
-	}
-	b.group("창 사이드바", "이 플러그인의 탭이 포커스 카드의 활성 탭인 동안 그 변 고정 사이드바의 내용을 이 세트로 바꾼다.", window...)
-	if plugin.Surface {
-		card, err := choices([][2]string{{"card-left", "카드 왼쪽 사이드바"}, {"card-right", "카드 오른쪽 사이드바"}, {"card-top", "카드 상단 사이드바"}, {"card-bottom", "카드 하단 사이드바"}})
-		if err != nil {
-			return err
-		}
-		b.group("카드 사이드바", "카드 내부의 네 변에 표시한다.", card...)
-	}
-	return nil
 }
 
 // registeredSections are the section ids in the order of the plugins and their declarations.
@@ -807,146 +744,27 @@ func (s *Shell) registeredSections() []string {
 
 // sectionSelect is the select box of one section row, grouped by plugin. A section of a plugin that is not loaded stands in a
 // group of its own as the current value.
-func (s *Shell) sectionSelect(b *settingsBuilder, set StoredSet, index int, now string) *SettingsControl {
-	scope := s.controlScope("sets")
-	labels := map[string]string{}
-	var groups []OptionGroup
-	var options []string
-	for _, plugin := range s.plugins {
-		if len(plugin.Sections) == 0 {
-			continue
-		}
-		group := OptionGroup{Label: plugin.Name}
-		for _, section := range plugin.Sections {
-			group.Values = append(group.Values, section.ID)
-			labels[section.ID] = section.Name
-		}
-		groups = append(groups, group)
-		options = append(options, group.Values...)
-	}
-	if !slices.Contains(options, now) {
-		labels[now] = s.sectionNames([]string{now})[0]
-		groups = append(groups, OptionGroup{Label: "불러오지 않음", Values: []string{now}})
-		options = append(options, now)
-	}
-	return b.add(SettingsControl{Name: "core.settings-modal.row", Key: text(fmt.Sprintf("row:%s:%d", set.ID, index)), Value: text(now), Options: options, Groups: groups,
-		Command: settingCommand("core.settings.sets.row", map[string]any{"id": set.ID, "action": "choose", "index": index, "scope": scope}), kind: controlSelect, param: "section", labels: labels})
-}
-
-// setEditor is the group of the edited set.
-func (s *Shell) setEditor(b *settingsBuilder, set StoredSet) {
-	scope := s.controlScope("sets")
-	update := map[string]any{"id": set.ID, "scope": scope}
-	title := b.add(SettingsControl{Name: "core.settings-modal.set", Key: text("title:" + set.ID), Value: text(set.Title), Command: settingCommand("core.settings.sets.update", update), kind: controlText, param: "title", maxLength: setTitleMax})
-	layout := b.add(SettingsControl{Name: "core.settings-modal.set", Key: text("layout:" + set.ID), Value: text(set.Layout), Options: []string{"list", "tabs"}, Command: settingCommand("core.settings.sets.update", update),
-		kind: controlSelect, param: "layout", labels: map[string]string{"list": "목록", "tabs": "탭"}})
-	rows := []settingsRow{{name: "이름", controls: []*SettingsControl{title}}, {name: "배치", controls: []*SettingsControl{layout}}}
-	for index, id := range set.Sections {
-		row := settingsRow{name: fmt.Sprintf("섹션 %d", index+1), controls: []*SettingsControl{s.sectionSelect(b, set, index, id)}}
-		act := func(action, label string) {
-			row.controls = append(row.controls, b.button(fmt.Sprintf("%s:%s:%d", action, set.ID, index), "core.settings-modal.row-act", label, "core.settings.sets.row",
-				map[string]any{"id": set.ID, "action": action, "index": index, "scope": scope}))
-		}
-		if index > 0 {
-			act("up", "▲")
-		}
-		if index < len(set.Sections)-1 {
-			act("down", "▼")
-		}
-		act("remove", "−")
-		rows = append(rows, row)
-	}
-	rows = append(rows, settingsRow{controls: []*SettingsControl{b.button("add:"+set.ID, "core.settings-modal.add", "+", "core.settings.sets.row", map[string]any{"id": set.ID, "action": "add", "scope": scope})}},
-		settingsRow{controls: []*SettingsControl{b.button("edit:", "core.settings-modal.edit", "완료", "core.settings-modal.edit", map[string]any{"set": nil})}})
-	b.group("세트 편집: "+set.Title, "바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다.", rows...)
-}
-
-func (s *Shell) buildSidebars(b *settingsBuilder) error {
-	w := &s.settingsWindow
-	scope := s.controlScope("sets")
-	sets, err := s.settings.Sets(scope)
-	if err != nil {
-		return err
-	}
-	if !slices.ContainsFunc(sets, func(set StoredSet) bool { return set.ID == w.editing }) {
-		w.editing = ""
-	}
-	rows := make([]settingsRow, 0, len(sets)+2)
-	for _, set := range sets {
-		layout := "목록"
-		if set.Layout == "tabs" {
-			layout = "탭"
-		}
-		line := b.add(SettingsControl{Name: "core.settings-modal.set-caption", Label: set.Title + " · " + layout + " · " + joinedOr(s.sectionNames(set.Sections), ", ", "섹션 없음"), kind: controlCaption})
-		rows = append(rows, settingsRow{controls: []*SettingsControl{line,
-			b.pressedButton("edit:"+set.ID, "core.settings-modal.edit", "편집", "core.settings-modal.edit", map[string]any{"set": set.ID}, set.ID == w.editing),
-			b.button("delete:"+set.ID, "core.settings-modal.delete", "삭제", "core.settings.sets.delete", map[string]any{"id": set.ID, "scope": scope})}})
-	}
-	rows = append(rows, settingsRow{controls: []*SettingsControl{b.button("sets:create", "core.settings-modal.create", "새 세트", "core.settings.sets.create", map[string]any{"scope": scope})}})
-	if controls := s.overrideControls(b, "sets", "전역 세트 사용"); controls != nil {
-		rows = append(rows, settingsRow{controls: controls})
-	}
-	b.group("세트", "사이드바에 보여 줄 섹션 묶음. 어느 사이드바에 보일지는 일반과 플러그인 페이지에서 고른다.", rows...)
-	for _, set := range sets {
-		if set.ID == w.editing {
-			s.setEditor(b, set)
-		}
-	}
-	return nil
-}
-
-// settingsCard is the rectangle of the card in the window.
-func (s *Shell) settingsCard() (x, y, width, height float64) {
-	x, y = s.settingsCardOrigin()
-	height = s.settingsWindow.drawnHeight
-	if height == 0 {
-		height = s.settingsCardMost()
-	}
-	return x, y, s.options.Declared.ChromeNumber("set-card-w", "px"), height
-}
-
-// settingsCardMost is the largest height of the card in the window.
-func (s *Shell) settingsCardMost() float64 { return s.settingsWindow.height * settingsCardMaxShare }
-
-// settingsCardOrigin is the corner of the card in the window.
-func (s *Shell) settingsCardOrigin() (x, y float64) {
-	w := &s.settingsWindow
-	if w.moved {
-		return w.x, w.y
-	}
-	return (w.width - s.options.Declared.ChromeNumber("set-card-w", "px")) / 2, s.options.Declared.ChromeNumber("set-card-top", "px")
-}
-
-// clampCard keeps a moved card inside the window.
-func (s *Shell) clampCard() {
-	w := &s.settingsWindow
-	x, y, cardW, cardH := s.settingsCard()
-	w.x = max(settingsCardMargin, min(w.width-cardW-settingsCardMargin, x))
-	w.y = max(settingsCardMargin, min(w.height-cardH-settingsCardMargin, y))
-}
-
-// moveCard moves the card by dx and dy within the window.
-func (s *Shell) moveCard(dx, dy float64) {
-	w := &s.settingsWindow
-	x, y := s.settingsCardOrigin()
-	w.moved, w.x, w.y = true, x+dx, y+dy
-	s.clampCard()
-}
-
-// settingsModalStatus is the value of core.settings-modal.
-type settingsModalStatus struct {
-	Open     bool               `json:"open"`
-	Controls []*SettingsControl `json:"controls"`
-	Rows     []settingsRowValue `json:"rows"`
-	Query    string             `json:"query"`
-	Listed   []string           `json:"listed"`
-	Section  string             `json:"section"`
-	Scope    string             `json:"scope"`
-	Plugin   *string            `json:"plugin"`
-	Editing  *string            `json:"editing"`
-	Scroll   float64            `json:"scroll"`
-	Card     map[string]float64 `json:"card"`
-	Pane     map[string]float64 `json:"pane"`
+// settingsTabStatus is the value of core.settings-tab while the tab is in front; every field is present (docs/spec/settings.md#status).
+type settingsTabStatus struct {
+	Page     string                 `json:"page"`
+	Scope    string                 `json:"scope"`
+	Find     string                 `json:"find"`
+	Query    string                 `json:"query"`
+	Filter   string                 `json:"filter"`
+	Browse   settingsBrowseStatus   `json:"browse"`
+	Listed   []string               `json:"listed"`
+	Actions  []settingsActionStatus `json:"actions"`
+	Plugin   *string                `json:"plugin"`
+	Back     string                 `json:"back"`
+	Editing  *string                `json:"editing"`
+	Rows     []settingsRowValue     `json:"rows"`
+	Controls []*SettingsControl     `json:"controls"`
+	Scroll   float64                `json:"scroll"`
+	Undo     *settingsUndoStatus    `json:"undo"`
+	Confirm  *settingsConfirmStatus `json:"confirm"`
+	Errors   []settingsErrorStatus  `json:"errors"`
+	Results  *settingsResultsStatus `json:"results"`
+	Missing  []string               `json:"missing"`
 }
 
 type settingsRowValue struct {
@@ -962,12 +780,14 @@ func optional(value string) *string {
 	return &value
 }
 
+// settingsStatus is the value of core.settings-tab: nil while the tab is not in front. The model is read through the key of the frame,
+// so a command that changed the state reports the state at once, without a frame.
 func (s *Shell) settingsStatus() (any, error) {
 	w := &s.settingsWindow
 	if !w.open {
-		return settingsModalStatus{Controls: []*SettingsControl{}}, nil
+		return nil, nil
 	}
-	model, err := s.settingsBuild()
+	model, err := s.settingsModelNow()
 	if err != nil {
 		return nil, err
 	}
@@ -975,31 +795,51 @@ func (s *Shell) settingsStatus() (any, error) {
 	for i, row := range model.declaredRows {
 		rows[i] = settingsRowValue{Key: row.key, Name: row.name, Description: optional(row.description)}
 	}
-	listed := model.listed
-	if listed == nil {
-		listed = []string{}
+	status := settingsTabStatus{Page: w.page, Scope: w.scope, Find: w.find, Query: w.query, Filter: w.filter, Back: w.back,
+		Browse:   settingsBrowseStatus{Query: w.browse.query, HideInstalled: w.browse.hideInstalled, Shown: model.shown},
+		Listed:   settingsList(model.listed),
+		Actions:  settingsList(model.actions),
+		Rows:     settingsList(rows),
+		Controls: settingsList(model.controls),
+		Scroll:   float64(w.scroll.Y),
+		Errors:   settingsErrors(s.errors),
+		Results:  model.results,
+		Missing:  settingsList(s.settings.MissingKeys()),
 	}
-	status := settingsModalStatus{Open: true, Controls: model.controls, Rows: rows, Query: w.query, Listed: listed, Section: w.section, Scope: w.scope, Scroll: float64(w.scroll.Y)}
-	if w.section == "plugins" {
+	if w.page == "plugin" {
 		status.Plugin = optional(w.chosen)
 	}
 	status.Editing = optional(w.editing)
-	x, y, width, height := s.settingsCard()
-	status.Card = map[string]float64{"x": x, "y": y, "w": width, "h": height}
-	// The pane is the box that scrolls, under the fixed head of the card and beside its section nav: a control is reachable only
-	// inside it (docs/spec/settings.md). The card draws its children inside its border, so the pane starts one border width in.
-	pane := s.readSettingsPane()
-	border := float64(2 * s.palette.BorderWidth)
-	status.Pane = map[string]float64{
-		"x": x + float64(s.palette.BorderWidth) + float64(pane.navW),
-		"y": y + float64(s.palette.BorderWidth) + float64(pane.headH),
-		"w": width - border - float64(pane.navW),
-		"h": height - border - float64(pane.headH),
+	if w.undo != nil {
+		status.Undo = &settingsUndoStatus{Key: w.undo.key, Label: w.undo.label, Old: w.undo.old, New: w.undo.new}
+	}
+	if w.confirm.kind != "" {
+		status.Confirm = &settingsConfirmStatus{Kind: w.confirm.kind, ID: w.confirm.id}
 	}
 	return status, nil
 }
 
-// requireSettings is the error of a command of a closed window.
+// settingsErrors returns the error lines of the settings tab: the lines of the plugin pages and of the core update, which the tab
+// shows through the error display (docs/spec/settings.md#status).
+func settingsErrors(shown *ShownErrors) []settingsErrorStatus {
+	lines := shown.Lines(func(where string) bool {
+		return strings.HasPrefix(where, "plugin ") || strings.HasPrefix(where, "settings ")
+	})
+	list := make([]settingsErrorStatus, 0, len(lines))
+	for _, line := range lines {
+		list = append(list, settingsErrorStatus{Key: line.Where, Text: line.Text})
+	}
+	return list
+}
+
+// settingsList returns the list, or an empty list for a nil one, so the status reports a list and not null.
+func settingsList[T any](list []T) []T {
+	if list == nil {
+		return []T{}
+	}
+	return list
+}
+
 func (s *Shell) requireSettings() error {
 	if !s.settingsWindow.open {
 		return errors.New("settings are not open")
@@ -1008,7 +848,7 @@ func (s *Shell) requireSettings() error {
 }
 
 // settingsSave writes a change of the settings in the order of the writes.
-func (s *Shell) settingsSave(project string, patch map[string]any, remove []string) {
+func (s *Shell) settingsSave(project string, patch map[string]any, remove []string, restore func()) {
 	var id any
 	if project != "" {
 		id = project
@@ -1024,6 +864,11 @@ func (s *Shell) settingsSave(project string, patch map[string]any, remove []stri
 	s.settingsIssued++
 	s.calls.Caused(cids).CallInOrder("workspace", "workspace", map[string]any{"kind": "settings", "id": id, "patch": patch, "remove": remove}, func(_ any, err error) {
 		s.settings.EndSave()
+		if err != nil {
+			// The host refused the write: the stored value comes back in the store and in the model, and the error is shown once.
+			restore()
+			s.settingsInputsChanged()
+		}
 		s.settingsAnswered(write, err)
 		if err != nil {
 			s.fail(err)
@@ -1097,6 +942,7 @@ func (s *Shell) settingsChanged() error {
 
 // applySettings takes what the settings hold for the screens: the colors and the shape, and the sets and the links of the sidebars.
 func (s *Shell) applySettings() error {
+	s.settingsWindow.inputs++
 	if err := s.applyPalette(); err != nil {
 		return err
 	}
@@ -1110,16 +956,17 @@ func (s *Shell) applySettings() error {
 	}
 	s.sidebars.Adopt(sets, links)
 	// The toast deadline follows the automatic-dismissal settings on every load and change of the settings.
-	auto, ok := s.settings.Value("autoDismissErrorToasts").(bool)
+	auto, ok := s.settings.Value("autoDismissProblemToasts").(bool)
 	if !ok {
-		return fmt.Errorf("settings: autoDismissErrorToasts is %s, not a switch", jsonText(s.settings.Value("autoDismissErrorToasts")))
+		return fmt.Errorf("settings: autoDismissProblemToasts is %s, not a switch", jsonText(s.settings.Value("autoDismissProblemToasts")))
 	}
-	seconds, ok := s.settings.Value("errorToastDismissSeconds").(float64)
+	seconds, ok := s.settings.Value("problemToastDismissSeconds").(float64)
 	if !ok {
-		return fmt.Errorf("settings: errorToastDismissSeconds is %s, not a number", jsonText(s.settings.Value("errorToastDismissSeconds")))
+		return fmt.Errorf("settings: problemToastDismissSeconds is %s, not a number", jsonText(s.settings.Value("problemToastDismissSeconds")))
 	}
 	s.errors.ConfigureToastDeadline(auto, int64(seconds)*1000)
 	s.syncPluginChoices()
+	s.syncMissingPlugins()
 	return nil
 }
 
@@ -1306,17 +1153,18 @@ func (s *Shell) settingsChange(actor string, change func() error) error {
 // registerSettings adds the commands and the statuses of the settings.
 func (s *Shell) registerSettings() {
 	s.registry.Status("core.settings", func() any { return s.settings.Status() })
-	s.registry.Status("core.settings-modal", func() any {
+	s.registry.Status("core.settings-tab", func() any {
 		status, err := s.settingsStatus()
 		if err != nil {
 			s.fail(err)
-			return settingsModalStatus{Controls: []*SettingsControl{}}
+			return nil
 		}
 		return status
 	})
 	s.registerSettingsValues()
 	s.registerSettingsSets()
 	s.registerSettingsWindow()
+	s.registerSettingsTabCommands()
 }
 
 func (s *Shell) registerSettingsValues() {
@@ -1334,7 +1182,13 @@ func (s *Shell) registerSettingsValues() {
 		if err := json.Unmarshal(value.Value, &input); err != nil {
 			return invalidSetting(fmt.Errorf("core.settings.change: %w", err))
 		}
-		return invalidSetting(s.changing("core.settings.change", func() error { return s.settings.Change(value.Key, input, value.Scope) }))
+		scope := inScope(value.Scope)
+		old := s.settings.Scoped(value.Key, scope)
+		err := s.changing("core.settings.change", func() error { return s.settings.Change(value.Key, input, value.Scope) })
+		if err == nil {
+			s.recordChange(value.Key, scope, old, input)
+		}
+		return invalidSetting(err)
 	})
 	act(s, "core.settings.theme", func(value settingsParam) error {
 		return s.changing("core.settings.theme", func() error { return s.settings.Theme(value.Name, value.Mode, value.Scope) })
@@ -1430,16 +1284,19 @@ func (s *Shell) registerSettingsSets() {
 // windowParam is the parameter of a command of the window.
 type windowParam struct {
 	// The members that a command does not declare are omitted, so a run of the workbench gives a command only its own members.
-	Section string  `json:"section,omitempty"`
-	Scope   string  `json:"scope,omitempty"`
-	Plugin  *string `json:"plugin,omitempty"`
-	Query   *string `json:"query,omitempty"`
-	Set     *string `json:"set,omitempty"`
-	Name    *string `json:"name,omitempty"`
-	Kind    *string `json:"kind,omitempty"`
-	ID      *string `json:"id,omitempty"`
-	DX      float64 `json:"dx"`
-	DY      float64 `json:"dy"`
+	Page   string `json:"page,omitempty"`
+	Answer string `json:"answer,omitempty"`
+	// HideInstalled is the switch of 찾아보기, and More asks for the next rows of 찾아보기.
+	HideInstalled *bool   `json:"hideInstalled,omitempty"`
+	More          bool    `json:"more,omitempty"`
+	Filter        string  `json:"filter,omitempty"`
+	Scope         string  `json:"scope,omitempty"`
+	Plugin        *string `json:"plugin,omitempty"`
+	Query         *string `json:"query,omitempty"`
+	Set           *string `json:"set,omitempty"`
+	Name          *string `json:"name,omitempty"`
+	Kind          *string `json:"kind,omitempty"`
+	ID            *string `json:"id,omitempty"`
 }
 
 // windowAct is a command of the open window.
@@ -1464,44 +1321,74 @@ func (s *Shell) registerSettingsWindow() {
 		}
 		s.closeDebug()
 		s.closePicker()
-		w.open = true
+		w.open, w.openedOnce = true, true
 		s.options.Invalidate()
 		return nil
 	})
 	act(s, "core.settings.close", func(struct{}) error { s.closeSettings(); return nil })
-	windowAct(s, "core.settings-modal.nav", func(value windowParam) error {
-		if !slices.ContainsFunc(settingsSections, func(section [2]string) bool { return section[0] == value.Section }) {
-			return fmt.Errorf("unknown settings section %s", value.Section)
+	windowAct(s, "core.settings-tab.nav", func(value windowParam) error {
+		if !slices.ContainsFunc(settingsPages[:len(settingsPages)-1], func(page [2]string) bool { return page[0] == value.Page }) {
+			return fmt.Errorf("unknown settings page %s", value.Page)
 		}
-		w.section = value.Section
+		w.page = value.Page
+		w.chosen = ""
+		w.scroll = ui.ScrollState{}
+		if value.Page == "installed" {
+			// The installed page reads the plugin state and the application update of the host when it is shown, as the plugin page did
+			// before the library was removed (docs/spec/settings.md#설치됨).
+			s.pluginOperations.Refresh(func() {})
+			s.appUpdates.Refresh(func() {})
+		}
 		return nil
 	})
-	windowAct(s, "core.settings-modal.scope", func(value windowParam) error {
+	windowAct(s, "core.settings-tab.scope", func(value windowParam) error {
 		if value.Scope != "common" && !(value.Scope == "project" && s.settings.Project() != "") {
 			return fmt.Errorf("scope %s is not available", value.Scope)
 		}
 		w.scope = value.Scope
 		return nil
 	})
-	windowAct(s, "core.settings-modal.plugin", func(value windowParam) error {
+	windowAct(s, "core.settings-tab.plugin", func(value windowParam) error {
 		if value.Plugin == nil {
+			// A plugin page without a plugin is not drawn, so the null plugin leaves the plugin page for its back page.
+			if w.page == "plugin" {
+				w.page = w.back
+			}
 			w.chosen = ""
 			return nil
 		}
-		if s.loadedPlugin(*value.Plugin) == nil {
+		// A plugin page opens for each plugin of the plugin state, loaded or not (docs/spec/settings.md#plugin-page).
+		if !slices.ContainsFunc(s.pluginRowsOf(s.pluginOperations.Status()), func(row PluginRow) bool { return row.ID == *value.Plugin }) {
 			return fmt.Errorf("unknown plugin %s", *value.Plugin)
 		}
 		w.chosen = *value.Plugin
+		// The back link returns to the page that opened the plugin page: 찾아보기 when it was shown, else 설치됨.
+		w.back = "installed"
+		if w.page == "browse" {
+			w.back = "browse"
+		}
+		w.page = "plugin"
 		return nil
 	})
-	windowAct(s, "core.settings-modal.search", func(value windowParam) error {
+	windowAct(s, "core.settings-tab.back", func(value windowParam) error {
+		w.page, w.chosen = w.back, ""
+		return nil
+	})
+	windowAct(s, "core.settings-tab.find", func(value windowParam) error {
 		if value.Query == nil {
 			return errors.New("query must be a string")
 		}
-		w.query = *value.Query
+		w.find = strings.TrimSpace(*value.Query)
 		return nil
 	})
-	windowAct(s, "core.settings-modal.edit", func(value windowParam) error {
+	windowAct(s, "core.settings-tab.filter", func(value windowParam) error {
+		if !slices.Contains([]string{"all", "active", "disabled", "updates", "problems"}, value.Filter) {
+			return fmt.Errorf("unknown filter %s", value.Filter)
+		}
+		w.filter = value.Filter
+		return nil
+	})
+	windowAct(s, "core.settings-tab.edit", func(value windowParam) error {
 		if value.Set == nil {
 			w.editing = ""
 			return nil
@@ -1516,7 +1403,7 @@ func (s *Shell) registerSettingsWindow() {
 		w.editing = *value.Set
 		return nil
 	})
-	windowAct(s, "core.settings-modal.account-name", func(value windowParam) error {
+	windowAct(s, "core.settings-tab.account-name", func(value windowParam) error {
 		if err := s.accountPage(); err != nil {
 			return err
 		}
@@ -1526,7 +1413,7 @@ func (s *Shell) registerSettingsWindow() {
 		w.accountName = *value.Name
 		return nil
 	})
-	windowAct(s, "core.settings-modal.account-kind", func(value windowParam) error {
+	windowAct(s, "core.settings-tab.account-kind", func(value windowParam) error {
 		if err := s.accountPage(); err != nil {
 			return err
 		}
@@ -1540,7 +1427,7 @@ func (s *Shell) registerSettingsWindow() {
 		w.accountKind = *value.Kind
 		return nil
 	})
-	windowAct(s, "core.settings-modal.account-edit", func(value windowParam) error {
+	windowAct(s, "core.settings-tab.account-edit", func(value windowParam) error {
 		if err := s.accountPage(); err != nil {
 			return err
 		}
@@ -1559,7 +1446,7 @@ func (s *Shell) registerSettingsWindow() {
 		w.accountEdit, w.accountEditName = *value.ID, accounts[index].Name
 		return nil
 	})
-	windowAct(s, "core.settings-modal.account-edit-name", func(value windowParam) error {
+	windowAct(s, "core.settings-tab.account-edit-name", func(value windowParam) error {
 		if err := s.accountPage(); err != nil {
 			return err
 		}
@@ -1572,16 +1459,12 @@ func (s *Shell) registerSettingsWindow() {
 		w.accountEditName = *value.Name
 		return nil
 	})
-	windowAct(s, "core.settings-modal.move", func(value windowParam) error {
-		s.moveCard(value.DX, value.DY)
-		return nil
-	})
 }
 
 // accountPage refuses a field command of the group 계정 while no page of a plugin with accounts shows.
 func (s *Shell) accountPage() error {
 	w := &s.settingsWindow
-	if w.section != "plugins" || w.chosen == "" || !s.accounts.Declares(w.chosen) {
+	if w.page != "plugin" || w.chosen == "" || !s.accounts.Declares(w.chosen) {
 		return errors.New("no page of a plugin with accounts shows")
 	}
 	return nil
@@ -1726,38 +1609,4 @@ func (s *Shell) sendTraceSwitch() {
 		return
 	}
 	send()
-}
-
-// orderRows are the rows of an order of listed values (docs/spec/settings.md#controls): one row per value in the current order, named by
-// names, with ▲ (absent on the first row) and ▼ (absent on the last row). A button swaps its row with the row above or below and runs
-// core.settings.change with the whole new order.
-func (s *Shell) orderRows(b *settingsBuilder, key, label string, names map[string]string) []settingsRow {
-	scope := s.controlScope(key)
-	now, _ := s.value(key).([]any) // silent: the settings store checks that the value is an order of its values.
-	rows := []settingsRow{}
-	for index, item := range now {
-		name, _ := item.(string) // silent: the settings store checks that the value is an order of its values.
-		// The row shows the name of its value before its buttons, and the first row the name of the setting, as orderRows of the page.
-		row := settingsRow{value: names[name]}
-		if index == 0 {
-			row.name = label
-		}
-		act := func(direction, mark string, other int) {
-			next := slices.Clone(now)
-			next[index], next[other] = next[other], next[index]
-			row.controls = append(row.controls, b.button(fmt.Sprintf("order:%s:%d:%s", key, index, direction), "core.settings-modal.order", mark,
-				"core.settings.change", map[string]any{"key": key, "value": next, "scope": scope}))
-		}
-		if index > 0 {
-			act("up", "▲", index-1)
-		}
-		if index < len(now)-1 {
-			act("down", "▼", index+1)
-		}
-		if index == 0 {
-			row.controls = append(row.controls, s.overrideControls(b, key, "전역값 사용")...)
-		}
-		rows = append(rows, row)
-	}
-	return rows
 }

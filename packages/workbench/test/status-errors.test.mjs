@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-// The error toast runs the declared command core.error.dismiss, so the page exposure is installed before a toast shows.
+import { notificationStore } from "../tab-reports.js";
+// The error toast runs the declared command core.notices.close, so the page exposure is installed before a toast shows.
 const { installExposure } = await import("../exposure.js");
 const { default: exposureFile } = await import("../exposure.json", { with: { type: "json" } });
 installExposure(exposureFile);
@@ -15,7 +16,10 @@ test("an error of the status row shows its text in the toast and the row keeps a
   globalThis.document = dom.window.document;
   const { setSurfaceStatus, setTabError } = await import("../surface-status.js?toast");
   const status = document.querySelector(".status");
-  const toasts = () => [...document.querySelectorAll(".error-toast__text")].map((shown) => [shown.dataset.error, shown.textContent]);
+  // A toast shows its title and its text in two elements; the title and the text together hold the whole error line.
+  const toasts = () => [...document.querySelectorAll(".toast")].map((shown) => [
+    notificationStore().records().find((notice) => notice.toast !== null)?.origin,
+    shown.querySelector(".toast__title").textContent + shown.querySelector(".toast__text").textContent]);
   try {
     setSurfaceStatus(status, "tab-a", { phase: "error", error: LONG });
     const indicator = status.querySelector("[data-surface-status]");

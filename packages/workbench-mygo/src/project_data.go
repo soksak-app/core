@@ -580,7 +580,7 @@ func (s *Shell) takeStored(project *projectRecord, read projectRecord) (projectR
 	// The window keeps the spaces of a project that it holds, which it writes itself; every other project takes its stored record,
 	// which another window or another environment may have changed, as readProjects of the page does.
 	// The plugin data and the settings file of the folder are the store's, which the window does not write into the record, so a project
-	// that it holds takes them too: a return from the library shows the stored overrides (beginSettings).
+	// that it holds takes them too: a return from the project home shows the stored overrides (beginSettings).
 	if !s.windowProjects[read.ID] {
 		*project = read
 	} else {

@@ -33,6 +33,10 @@ func TestFoldingAWindowSidebarTakesItsColumnOut(t *testing.T) {
 	if cardWidth(f, "left") == 0 || before == 0 {
 		t.Fatalf("the cards are left %v and main %v", cardWidth(f, "left"), before)
 	}
+	// The fold shows while the pointer is over its sidebar, as it does on the page.
+	node, _ := exposedNode(f.tester.ElementTree(), "core.card", "left")
+	f.tester.Move(node.Bounds.X+node.Bounds.W/2, node.Bounds.Y+node.Bounds.H/2)
+	f.settle()
 	f.click("core.sidebar.fold", "left")
 	f.settle()
 	if width := cardWidth(f, "left"); width != 0 {

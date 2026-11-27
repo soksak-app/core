@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
+	"strconv"
 
 	"github.com/egoist/mygo/ui"
 
@@ -19,8 +21,9 @@ const (
 	sectionHeightMax = 4096
 )
 
-// actionIcons are the icons of section actions, plus, settings and ellipsis of Lucide, as the page draws them.
+// actionIcons are the icons of section actions, plus, settings, ellipsis and bell of Lucide, as the page draws them.
 var actionIcons = map[string]*ui.SVG{
+	"bell":     strokeIcon(`<path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>`),
 	"plus":     strokeIcon(`<path d="M5 12h14"/><path d="M12 5v14"/>`),
 	"settings": strokeIcon(`<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>`),
 	"more":     strokeIcon(`<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>`),
@@ -121,11 +124,19 @@ type SidebarFrame struct {
 	Orientation string
 	// Tab is the selected section of a `tabs` set.
 	Tab string
+	// Missing lists the sections of the set whose plugin is not loaded, in set order (docs/spec/plugins.md#missing-plugins).
+	Missing []MissingSection
+	// Order lists the section ids of the set in set order, the loaded and the missing ones, which the tabs keep.
+	Order []string
 	// Side is `left` or `right` for a window sidebar and empty for a card sidebar.
 	Side string
 	// Scope is the scope that the applied value of the side comes from, which the fold control writes
 	// (docs/spec/settings.md#scope-of-a-control).
-	Scope    string
+	Scope string
+	// Number is the place of the side in sidebarOrder, counted from 1; the head of a window sidebar shows it.
+	Number int
+	// SetTitle is the name of the set that the sidebar shows; the head of a window sidebar shows it.
+	SetTitle string
 	Status   string
 	Sections []SidebarSection
 	// Set is the id of the set that the sidebar shows, and empty for a sidebar without a set.
@@ -300,10 +311,23 @@ func sectionItem(frame SidebarFrame, section SidebarSection) string {
 	return frame.Sidebar + "/" + section.ID
 }
 
+// sidebarBands returns the height of the band above the set and of the band below it: a window sidebar has its head above the set, and a
+// card sidebar has its status line below it (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+func sidebarBands(frame SidebarFrame, metrics SidebarMetrics) (top, bottom float32) {
+	if frame.Side != "" {
+		return metrics.FootH, 0
+	}
+	return 0, metrics.FootH
+}
+
 // DrawSidebar draws the sidebar of the frame in a box of width and height. seat runs in the body of an open section, where the
 // native view of the section surface stands, and at the end for each section that is not visible.
 func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame SidebarFrame, metrics SidebarMetrics, width, height float32, seat seatDrawer) {
-	room := height - metrics.FootH
+	// A window sidebar has its head as the top row and no status line; a card sidebar has its status line as the bottom row
+	// (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+	window := frame.Side != ""
+	bandTop, bandBottom := sidebarBands(frame, metrics)
+	room := height - bandTop - bandBottom
 	inset := frame.SetInsets
 	setWidth := max(float32(0), width-inset.Left-inset.Right)
 	setRoom := max(float32(0), room-inset.Top-inset.Bottom)
@@ -313,14 +337,19 @@ func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame Sidebar
 	// A seat names the place of its body, which the insets of the set move.
 	body := func(c *ui.Context, place SidebarSeat) {
 		place.Box.X += float64(inset.Left)
-		place.Box.Y += float64(inset.Top)
+		place.Box.Y += float64(inset.Top + bandTop)
 		seat(c, place)
 	}
 	whole := ui.Column(c).Size(width, height).Clip()
 	if !named {
 		whole.Role(ui.RoleGroup).Label(frame.Sidebar)
 	}
+	// The × of the head shows while the pointer is over the sidebar or the sidebar has focus (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+	shown := whole.Hovered() || whole.FocusWithin()
 	whole.Children(func() {
+		if window {
+			drawSidebarHead(c, binder, frame, metrics, shown)
+		}
 		// The set takes all the room, so a set of short sections leaves the status line at the bottom.
 		var set ui.Element
 		if named {
@@ -339,7 +368,9 @@ func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame Sidebar
 				drawVerticalList(c, binder, drag, frame, metrics, setWidth, setRoom, body)
 			}
 		})
-		drawSidebarStatus(c, binder, frame, metrics)
+		if !window {
+			drawSidebarStatus(c, binder, frame, metrics)
+		}
 	})
 	for _, place := range SidebarSeats(frame) {
 		if !place.Visible {
@@ -530,13 +561,27 @@ func drawHorizontalList(c *ui.Context, binder *Binder, frame SidebarFrame, metri
 
 // drawSectionTabs draws the row of tabs and only the section of the selected tab.
 func drawSectionTabs(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics, width, room float32, seat seatDrawer) {
+	// Order lists every section of the set (fill), so a loaded section outside it would draw no tab; the frame is refused instead.
+	for _, section := range frame.Sections {
+		if !slices.Contains(frame.Order, section.ID) {
+			panic(fmt.Sprintf("sidebar %s: section %s is not in Order", frame.Sidebar, section.ID))
+		}
+	}
 	theme := c.Theme()
 	// The set keeps the height of the room, so a section with an integer height leaves the status line at the end of the sidebar.
 	ui.Column(c).Size(width, room).Children(func() {
 		ui.ScrollHorizontal(binder.Name(c, "core.sidebar.tabs", frame.Sidebar)).Size(width, metrics.HeadH).Role(ui.RoleTabList).Background(faded(theme.Text, metrics.SectionHeadMix)).Children(func() {
 			ui.Row(c).FillHeight().Children(func() {
-				for _, section := range frame.Sections {
-					drawSectionTab(c, binder, frame, section, metrics, theme)
+				// The tabs keep the order of the set. A tab of a missing section is dimmed and its name struck through; it selects nothing
+				// (docs/spec/plugins.md#missing-plugins).
+				for _, id := range frame.Order {
+					if section, ok := sectionOf(frame, id); ok {
+						drawSectionTab(c, binder, frame, section, metrics, theme)
+						continue
+					}
+					ui.Box(c).FillHeight().Padding(metrics.SectionHeadPad, 0).Children(func() {
+						ui.Text(c, id).NoWrap().Strikethrough().FontSize(metrics.SectionHeadText).Font(metrics.SectionHeadFont).TextColor(faded(theme.TextMuted, 0.5))
+					})
 				}
 			})
 		})
@@ -581,21 +626,49 @@ func drawSectionTab(c *ui.Context, binder *Binder, frame SidebarFrame, section S
 // statusName is the element name of the status line of the frame: that of a window sidebar or that of a card sidebar.
 func statusName(frame SidebarFrame) string {
 	if frame.Side != "" {
-		return "core.sidebar.status"
+		return "core.sidebar.head"
 	}
 	return "core.card.sidebar.status"
 }
 
+// drawSidebarStatus draws the status line at the bottom of a card sidebar, which describes the slot.
 func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics) {
 	theme := c.Theme()
 	ui.Row(binder.Name(c, statusName(frame), frame.Sidebar)).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(metrics.StatusGap).PaddingX(metrics.StatusPad).
 		BorderWidth(metrics.BorderWidth, 0, 0, 0).BorderColor(theme.Border).Role(ui.RoleStatus).Label(frame.Status).Children(func() {
 		ui.Text(c, frame.Status).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Grow(1).FontSize(metrics.StatusText).TextColor(theme.TextMuted)
-		if frame.Side == "" {
+	})
+}
+
+// drawSidebarHead draws the head row at the top of a window sidebar: the place of the side in sidebarOrder as the text of the head, the
+// name of its set (the side name without a set), the layout badge 탭 or 목록 of the set, and the × that turns the side off. shown tells
+// whether the pointer is over the sidebar or the sidebar has focus: the × is absent otherwise, as the page keeps it hidden.
+func drawSidebarHead(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics, shown bool) {
+	theme := c.Theme()
+	name, badge := sideNames[frame.Side], ""
+	if frame.Set != "" {
+		name, badge = frame.SetTitle, "목록"
+		if frame.Layout == "tabs" {
+			badge = "탭"
+		}
+	}
+	// The element core.sidebar.head holds only the place as its text, so the name and the badge stand beside it in the band.
+	ui.Row(c).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(metrics.StatusGap).PaddingX(metrics.StatusPad).
+		BorderWidth(0, 0, metrics.BorderWidth, 0).BorderColor(theme.Border).Children(func() {
+		ui.Row(binder.Name(c, "core.sidebar.head", frame.Sidebar)).AlignItems(ui.Center).Role(ui.RoleStatus).Label(frame.Status).Children(func() {
+			ui.Text(c, strconv.Itoa(frame.Number)).SingleLine().FontSize(metrics.StatusText).TextColor(theme.TextMuted)
+		})
+		ui.Text(c, name).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Grow(1).FontSize(metrics.StatusText).TextColor(theme.Text)
+		if badge != "" {
+			ui.Text(c, badge).SingleLine().FontSize(metrics.StatusText).TextColor(theme.TextMuted)
+		}
+		icon, title := foldIcon(foldPaths[frame.Side], metrics.IconStroke), sideNames[frame.Side]+" 창 사이드바 숨기기"
+		params := settingChange{Key: frame.Side, Value: false, Scope: frame.Scope}
+		if !shown {
+			binder.Absent(c, "core.sidebar.fold", "core.settings.change", frame.Side, params).Label(title)
 			return
 		}
-		icon, title := foldIcon(foldPaths[frame.Side], metrics.IconStroke), sideNames[frame.Side]+" 창 사이드바 접기"
-		fold := binder.Press(c, "core.sidebar.fold", "core.settings.set", frame.Side, settingsPatchParam{map[string]any{frame.Side: false}, frame.Scope}).Label(title).Size(metrics.FoldButton, metrics.FoldButton).
+		fold := binder.Press(c, "core.sidebar.fold", "core.settings.change", frame.Side, params).Label(title).Size(metrics.FoldButton, metrics.FoldButton).
 			Radius(float32(math.Round(float64(theme.Radius * metrics.FoldRadiusRatio))))
 		color := theme.TextMuted
 		if fold.Hovered() {

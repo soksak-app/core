@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 
-import { backgroundBlurRule, CHROME, focusMarkBox, libraryNarrowCondition, markLibraryNarrow } from "../chrome-metrics.js";
+import { backgroundBlurRule, CHROME, focusMarkBox } from "../chrome-metrics.js";
 
 const read = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
 const declared = () => JSON.parse(read("workbench.json")).chrome;
@@ -17,26 +17,6 @@ function withMetric(name, value, body) {
   try { body(); } finally { CHROME[name] = kept; }
 }
 
-test("the library is marked narrow while the window is at most the chrome metric library-narrow-w wide", () => {
-  assert.equal(CHROME["library-narrow-w"], declared()["library-narrow-w"]);
-  assert.equal(libraryNarrowCondition(), `(max-width: ${declared()["library-narrow-w"]})`);
-  const root = new JSDOM("").window.document.documentElement;
-  assert.equal(root.hasAttribute("data-library-narrow"), false);
-  markLibraryNarrow(root, true);
-  assert.equal(root.getAttribute("data-library-narrow"), "");
-  markLibraryNarrow(root, false);
-  assert.equal(root.hasAttribute("data-library-narrow"), false);
-
-  // The width is read from the metric when the page follows it.
-  withMetric("library-narrow-w", "512px", () => {
-    assert.equal(libraryNarrowCondition(), "(max-width: 512px)");
-  });
-
-  // library.css narrows by the mark and holds no width condition of its own.
-  const css = read("library.css").replace(/\/\*[\s\S]*?\*\//g, "");
-  assert.match(css, /:root\[data-library-narrow\] \.library-grid\{/);
-  assert.doesNotMatch(css, /@media[^{]*width/);
-});
 
 test("the focus mark surrounds the slot, outside it on every side by the chrome metric focus-mark-t", () => {
   const thickness = declared()["focus-mark-t"];

@@ -47,9 +47,9 @@ test("the core names hold statuses and commands", () => {
   assert.ok(core.status.includes("core.grid") && core.commands.length > 0);
 });
 
-test("the core names hold the workbench statuses and no page status", () => {
+test("the core names hold the workbench statuses and the toasts, and no page status", () => {
   const core = coreExposure();
-  for (const name of ["core.window.workbench", "core.workbench.error", "core.workbench.audit"]) {
+  for (const name of ["core.window.workbench", "core.toasts", "core.notices", "core.workbench.audit"]) {
     assert.ok(core.status.includes(name), `core exposure lacks ${name}`);
   }
   assert.deepEqual(core.status.filter((name) => /^core\.(page\.|window\.document$)/.test(name)), []);

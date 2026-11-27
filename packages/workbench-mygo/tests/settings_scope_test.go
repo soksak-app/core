@@ -42,6 +42,10 @@ func TestAControlChangesTheValueThatItShowsInTheScopeThatTheValueComesFrom(t *te
 		t.Fatalf("the left switch wrote %+v common %v applied %v", status.Overridden, status.Common["left"], status.Values["left"])
 	}
 	// The fold control of the right sidebar changes the common value as well.
+	// The fold shows while the pointer is over its sidebar, as it does on the page.
+	right := f.box("core.card", "right")
+	f.tester.Move(right.X+right.W/2, right.Y+right.H/2)
+	f.settle()
 	f.click("core.sidebar.fold", "right")
 	status = f.settingsStatus()
 	if slices.Contains(status.Overridden, "right") || status.Common["right"] != false {
@@ -50,7 +54,7 @@ func TestAControlChangesTheValueThatItShowsInTheScopeThatTheValueComesFrom(t *te
 	// The project overrides the top side and the mode, so their chrome switches change the project values.
 	f.run("core.settings.set", map[string]any{"patch": map[string]any{"top": true, "mode": "light"}, "scope": "project"})
 	f.click("core.chrome.top", "")
-	f.click("core.chrome.mode", "")
+	f.run("core.settings.change", map[string]any{"key": "mode", "value": "dark", "scope": "project"})
 	status = f.settingsStatus()
 	if status.Values["top"] != false || status.Common["top"] != false || !slices.Contains(status.Overridden, "top") {
 		t.Fatalf("the top switch: applied %v common %v overridden %v", status.Values["top"], status.Common["top"], status.Overridden)
@@ -64,39 +68,44 @@ func TestAControlChangesTheValueThatItShowsInTheScopeThatTheValueComesFrom(t *te
 	f.tester.SetSize(1200, 3200)
 	f.settle()
 	f.click("core.chrome.settings", "")
+	// The sides are on the page 작업 공간 and the mode on the page 모양 (docs/spec/settings.md#작업-공간).
+	f.run("core.settings-tab.nav", map[string]any{"page": "workspace"})
 	// The common tab shows the project value of the top side with its mark, and a press writes the project scope.
-	on, scope, found := f.modalControl("core.settings-modal.set", "top")
+	on, scope, found := f.modalControl("core.settings-tab.side", "top")
 	if !found || on == nil || !*on || scope != "project" {
 		t.Fatalf("the top switch of the common tab: found %v on %v scope %v", found, on, scope)
 	}
-	if !f.has("core.settings-modal.applied", "applied:top") || !f.tester.HasText("프로젝트 값") {
+	if !f.has("core.settings-tab.applied", "applied:top") || !f.tester.HasText("프로젝트 값") {
 		t.Fatalf("the common tab marks no project value of top; the texts are %q", f.tester.Texts())
 	}
 	// A setting without a project value shows the common value and writes the common scope, without a mark.
-	on, scope, found = f.modalControl("core.settings-modal.set", "left")
+	on, scope, found = f.modalControl("core.settings-tab.side", "left")
 	if !found || on == nil || *on || scope != "common" {
 		t.Fatalf("the left switch of the common tab: found %v on %v scope %v", found, on, scope)
 	}
-	if _, _, marked := f.modalControl("core.settings-modal.applied", "applied:left"); marked {
+	if _, _, marked := f.modalControl("core.settings-tab.applied", "applied:left"); marked {
 		t.Fatal("the common tab marks a common value")
 	}
-	if _, scope, _ := f.modalControl("core.settings-modal.set", "mode"); scope != "project" {
+	f.run("core.settings-tab.nav", map[string]any{"page": "look"})
+	if _, scope, _ := f.modalControl("core.settings-tab.choice", "mode"); scope != "project" {
 		t.Fatalf("the mode of the common tab writes %v", scope)
 	}
-	f.click("core.settings-modal.set", "top")
+	f.run("core.settings-tab.nav", map[string]any{"page": "workspace"})
+	f.click("core.settings-tab.side", "top")
 	status = f.settingsStatus()
 	if status.Values["top"] != false || status.Common["top"] != false || !slices.Contains(status.Overridden, "top") {
 		t.Fatalf("the top switch of the common tab: applied %v common %v overridden %v", status.Values["top"], status.Common["top"], status.Overridden)
 	}
-	if on, _, _ := f.modalControl("core.settings-modal.set", "top"); on == nil || *on {
+	if on, _, _ := f.modalControl("core.settings-tab.side", "top"); on == nil || *on {
 		t.Fatalf("the top switch of the common tab shows %v after its press", on)
 	}
 	// The project tab marks nothing and keeps the button that removes the project value.
-	f.run("core.settings-modal.scope", map[string]any{"scope": "project"})
-	if _, _, marked := f.modalControl("core.settings-modal.applied", "applied:top"); marked {
+	f.run("core.settings-tab.scope", map[string]any{"scope": "project"})
+	f.run("core.settings-tab.nav", map[string]any{"page": "workspace"})
+	if _, _, marked := f.modalControl("core.settings-tab.applied", "applied:top"); marked {
 		t.Fatal("the project tab marks its own value")
 	}
-	if !slices.Contains(f.modal().keys("core.settings-modal.reset"), "reset:top") {
+	if !slices.Contains(f.modal().keys("core.settings-tab.reset"), "reset:top") {
 		t.Fatal("the project tab has no reset of top")
 	}
 }

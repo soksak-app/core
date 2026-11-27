@@ -5,9 +5,9 @@ import { JSDOM } from "jsdom";
 import { selectPageWire } from "@soksak/runtime";
 import { recordsOf } from "./support/records.mjs";
 
-test("the native settings and debug copies share the foreground toast and forward its close once", async (t) => {
+test("the debug copy shares the foreground toast of the window and forwards its close once", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  const wire = selectPageWire("error-toast-modal");
+  const wire = selectPageWire("error-toast-debug");
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const dom = new JSDOM(markup, { url: "http://localhost/" });
   const copy = new JSDOM('<body><div role="dialog" id="copy"></div></body>');
@@ -33,7 +33,6 @@ test("the native settings and debug copies share the foreground toast and forwar
   const { flushEvents } = await import("../page-log.js");
   const { onAnswer } = await import("../card.js");
   const { updateContent } = await import("../overlay-content.js");
-  const settings = await import("../settings-ui.js");
   const debug = await import("../debug-ui.js");
 
   const message = "The workspace could not be saved";
@@ -47,21 +46,17 @@ test("the native settings and debug copies share the foreground toast and forwar
     const call = wire.calls.findLast(({ name: method, payload }) => method === name && payload.id === id);
     assert.ok(call, `the native ${id} document was not sent`);
     updateContent(root, call.payload.html);
-    const toast = root.querySelector(".error-toast");
-    assert.equal(root.querySelectorAll('[data-expose="core.error.dismiss"]').length, 1, `the native ${id} copy must have one close control`);
-    assert.equal(toast.querySelector(".error-toast__text").textContent, message);
-    assert.equal(document.querySelectorAll(".error-toast__close").length, 1);
-    assert.equal(document.querySelector(`#${id} .error-toast`)?.closest('[role="dialog"]')?.id, id);
+    const toast = root.querySelector(".toast");
+    assert.equal(root.querySelectorAll('[data-expose="core.notices.close"]').length, 1, `the native ${id} copy must have one close control`);
+    // The title is the message, with the count of its merged occurrences after it (docs/spec/notifications.md#toasts).
+    assert.match(toast.querySelector(".toast__title").textContent, new RegExp(`^${message}( ×\\d+)?$`));
+    assert.equal(document.querySelectorAll(".toast__close").length, 1);
+    assert.equal(document.querySelector(`#${id} .toast`)?.closest('[role="dialog"]')?.id, id);
     return toast.querySelector("button");
   }
 
-  settings.openSettings();
-  await orderedCallsAnswered();
-  copied("overlayShow", "settings");
-  settings.closeSettings();
-  await keyboardIdle();
-  await orderedCallsAnswered();
-  assert.ok(document.querySelector("body > #errorToasts .error-toast"));
+  // The settings tab shows the error in the toast of the window, and opens no copy.
+  assert.ok(document.querySelector("body > #toasts .toast"));
 
   errors.withdraw("layout");
   assert.equal(errors.newest(), message);
@@ -73,9 +68,9 @@ test("the native settings and debug copies share the foreground toast and forwar
   const previous = copied("overlayUpdate", "debug");
   const previousKey = previous.dataset.key;
   // The common settings turn on the automatic dismissal, as a settings snapshot of the host does.
-  (await import("../settings.js")).beginSettings({ common: { autoDismissErrorToasts: true, errorToastDismissSeconds: 4 }, projects: [] }, null);
+  (await import("../settings.js")).beginSettings({ common: { autoDismissProblemToasts: true, problemToastDismissSeconds: 4 }, projects: [] }, null);
   let dismissals = 0;
-  registry.watch((name) => { if (name === "core.error.dismiss") dismissals++; });
+  registry.watch((name) => { if (name === "core.notices.close") dismissals++; });
   const answers = [];
   onAnswer(copy.window.document, (key, value) => answers.push({ key, value }));
   t.mock.timers.tick(4000);
@@ -104,14 +99,14 @@ test("the native settings and debug copies share the foreground toast and forwar
   assert.equal(dismissals, 1);
   const update = wire.calls.findLast(({ name, payload }) => name === "overlayUpdate" && payload.id === "debug");
   updateContent(root, update.payload.html);
-  assert.equal(root.querySelector(".error-toast"), null, "the copied toast is removed when dismissed");
+  assert.equal(root.querySelector(".toast"), null, "the copied toast is removed when dismissed");
   assert.equal(errors.text("activity"), message);
   source("activity");
 
   debug.closeDebug();
   await keyboardIdle();
   await orderedCallsAnswered();
-  assert.equal(document.querySelector(".error-toast"), null);
+  assert.equal(document.querySelector(".toast"), null);
   await flushEvents();
   assert.deepEqual(wire.calls.flatMap(({ name, payload }) => recordsOf(name, payload)), [
     { level: "error", where: "layout origin", text: message },

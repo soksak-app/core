@@ -19,6 +19,8 @@
     {"reply":{"result":{"common":{},"pluginData": {}, "projects":[{"id":"prj-startup","root":"/work/startup","identity":"1:1","title":"startup","color":"#fff","named":1,"activeSpaceId":"spc-startup","spaces":[{"id":"spc-startup","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"startup"}}}],"settings":{}}],"open":[]}}},
     {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
     {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"notices"}}},
+    {"reply":{"result":null}},
     {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
     {"reply":{"result":[]}},
     {"call":{"name":"projectFolder","payload":"/work/startup"}},

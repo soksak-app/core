@@ -21,7 +21,7 @@ test("a failure of the update at start that pluginsState reports is shown throug
   assert.deepEqual(pluginOperations.startFailures(), [
     { where: "plugin update probe", text: "section browser.dom status is removed" },
   ], "the page did not keep the failure of the update at start");
-  const toast = document.querySelector(".error-toast__text")?.textContent ?? null;
+  const toast = document.querySelector(".toast__title")?.textContent ?? null;
   assert.equal(toast, "section browser.dom status is removed", "the failure of the update at start was not shown through the error display");
   wire.finish();
 });

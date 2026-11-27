@@ -49,7 +49,7 @@ registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", imp
 const { begin } = await import("../projects.js");
 const plane = await import("../plane.js");
 const { installCoreExposure } = await import("../core-exposure.js");
-await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+await installCoreExposure({ home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   memorySaver: await pageMemorySaver() });
 plane.nameWindow(WINDOW);
 

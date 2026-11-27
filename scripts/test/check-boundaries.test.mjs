@@ -45,8 +45,8 @@ test("a check names a plugin by its id, its settings keys and the namespace of t
   assert.deepEqual(namedPlugins(`await s.run("core.card.add-tab", { plugin: "probe" });`), ["core", "probe"]);
   assert.deepEqual(namedPlugins(`const tab = tabs.find((item) => item.plugin === 'probe');`), ["probe"]);
   assert.deepEqual(namedPlugins("if (typeof fields?.plugin !== \"string\") throw new Error();"), []);
-  assert.deepEqual(namedPlugins(`await press(s, "core.settings-modal.plugin", "plugin:probe");`), ["probe"]);
-  assert.deepEqual(namedPlugins("await press(s, \"core.settings-modal.set\", `link:card-left:probe`);"), ["probe"]);
+  assert.deepEqual(namedPlugins(`await press(s, "core.settings-tab.plugin", "plugin:probe");`), ["probe"]);
+  assert.deepEqual(namedPlugins("await press(s, \"core.settings-tab.set\", `link:card-left:probe`);"), ["probe"]);
   assert.deepEqual(namedPlugins(`run(sok, ["plugin", "install", "probe", "--config-dir", dir]);`), ["probe"]);
   assert.deepEqual(namedPlugins("sok plugin remove probe --config-dir dir"), ["probe"]);
   assert.deepEqual(namedPlugins("run(sok, [\"plugin\", \"install\", id]); run(`sok plugin install ${id}`);"), []);

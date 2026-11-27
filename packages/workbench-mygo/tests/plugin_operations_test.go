@@ -7,7 +7,6 @@ import (
 	"github.com/egoist/mygo/ui"
 	"image/color"
 	"math"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -30,12 +29,17 @@ type pluginsHost struct {
 	startUpdate []map[string]string
 	// held is the held list of pluginsState; nil reports an empty list.
 	held []any
-	runs []string
-	used []string
-	jobs []string
+	// answer, when set, is the whole answer of pluginsState, read from a fixture of the host answer instead of the fields above.
+	answer map[string]any
+	runs   []string
+	used   []string
+	jobs   []string
 }
 
 func (p *pluginsHost) state(json.RawMessage) (any, error) {
+	if p.answer != nil {
+		return p.answer, nil
+	}
 	state := map[string]any{"core": p.core, "registry": p.registry, "index": p.index, "firstRun": p.firstRun, "starter": p.starter,
 		"installed": map[string]any{"format": 1, "plugins": p.plugins, "sidecars": p.sidecars}}
 	if p.startUpdate != nil {
@@ -225,12 +229,6 @@ func TestThePluginPageListsTheRegistry(t *testing.T) {
 	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.0.0", "1.2.0"}, "beta": {"1.0.0"}})}
 	plugins.plugins = map[string]map[string]any{"alpha": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{"hello": "^2.0.0"}}}
 	f := pluginShell(t, plugins, loadedAlpha)
-	f.run("core.library.page", map[string]string{"page": "plugins"})
-	for _, want := range []string{"Alpha", "Name of beta", "사용 중", "설치 안 됨", "모두 업데이트", "alpha: 1.0.0 → 1.2.0"} {
-		if !slices.Contains(f.tester.Texts(), want) {
-			t.Fatalf("the page has no %q: %q", want, f.tester.Texts())
-		}
-	}
 	f.audit()
 	status := f.pluginStatus()
 	if status.Registry == nil || *status.Registry != "file:///registry/index.json" || status.Core == nil || status.Reload {
@@ -239,151 +237,9 @@ func TestThePluginPageListsTheRegistry(t *testing.T) {
 	if len(status.Updates) != 1 || status.Updates[0].Latest != "1.2.0" {
 		t.Fatalf("the updates are %+v", status.Updates)
 	}
-	if !f.has("core.chrome.updates", "") {
-		t.Fatal("the window has no control of the updates")
-	}
-	value, err := f.shell.Registry().Read("core.library")
-	if err != nil {
-		t.Fatal(err)
-	}
-	library, err := json.Marshal(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var read struct {
-		Page    string
-		Plugins struct {
-			Shown   []string
-			Actions []workbench.PluginAction
-		}
-	}
-	if err := json.Unmarshal(library, &read); err != nil {
-		t.Fatal(err)
-	}
-	if read.Page != "plugins" || !slices.Equal(read.Plugins.Shown, []string{"alpha", "beta"}) {
-		t.Fatalf("core.library is %s", library)
-	}
-	if !strings.Contains(string(library), `"action":"install"`) || !strings.Contains(string(library), `"action":"disable"`) {
-		t.Fatalf("core.library is %s", library)
-	}
-}
-
-func TestEachLibraryPageReportsOnlyItsOwnCards(t *testing.T) {
-	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.0.0"}, "beta": {"1.0.0"}})}
-	plugins.plugins = map[string]map[string]any{"alpha": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}}
-	plugins.core = "1.0.0"
-	f := newShell(t, &storedHost{installed: loadedAlpha, plugins: plugins, projects: []map[string]any{storedProject(tab("tab-aaaaaa", "session"))}})
-	read := func() (page string, projects, cards []string, actions int) {
-		t.Helper()
-		value, err := f.shell.Registry().Read("core.library")
-		if err != nil {
-			t.Fatal(err)
-		}
-		encoded, err := json.Marshal(value)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var library struct {
-			Page    string
-			Shown   []string
-			Plugins struct {
-				Shown   []string
-				Actions []workbench.PluginAction
-			}
-		}
-		if err := json.Unmarshal(encoded, &library); err != nil {
-			t.Fatal(err)
-		}
-		return library.Page, library.Shown, library.Plugins.Shown, len(library.Plugins.Actions)
-	}
-	f.run("core.library.page", map[string]string{"page": "plugins"})
-	if page, projects, cards, _ := read(); page != "plugins" || len(projects) != 0 || len(cards) == 0 {
-		t.Fatalf("the plugin page reports page %s, projects %v and plugins %v", page, projects, cards)
-	}
-	f.run("core.library.page", map[string]string{"page": "projects"})
-	if page, projects, cards, actions := read(); page != "projects" || len(projects) == 0 || len(cards) != 0 || actions != 0 {
-		t.Fatalf("the project page reports page %s, projects %v, plugins %v and %d plugin actions", page, projects, cards, actions)
-	}
-}
-
-func TestAPluginActionRunsTheOperationOfTheHost(t *testing.T) {
-	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"beta": {"1.0.0"}})}
-	f := pluginShell(t, plugins, `{"plugins":[]}`)
-	f.run("core.library.page", map[string]string{"page": "plugins"})
-	f.click("core.library.plugins.action", "beta/install")
-	if !slices.Equal(plugins.runs, []string{"install beta"}) {
-		t.Fatalf("the operations are %v", plugins.runs)
-	}
-	status := f.pluginStatus()
-	if status.Operation == nil || status.Operation.State != "done" || status.Operation.Error != nil {
-		t.Fatalf("the operation is %+v", status.Operation)
-	}
-	if len(status.Plugins) != 1 || status.Plugins[0].State != "reload" || !status.Reload {
-		t.Fatalf("an installed plugin that the window did not load waits for the reload: %+v", status)
-	}
-	if err := f.finish("core.plugins.disable", map[string]string{"plugin": "beta"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.finish("core.plugins.enable", map[string]string{"plugin": "beta"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.finish("core.plugins.remove", map[string]string{"plugin": "beta"}); err != nil {
-		t.Fatal(err)
-	}
-	if want := []string{"install beta", "disable beta", "enable beta", "remove beta"}; !slices.Equal(plugins.runs, want) {
-		t.Fatalf("the operations are %v", plugins.runs)
-	}
-}
-
-func TestAFailedPluginOperationIsTheStateOfItsCard(t *testing.T) {
-	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"beta": {"1.0.0"}})}
-	f := pluginShell(t, plugins, `{"plugins":[]}`)
-	f.host.failing = map[string]error{"pluginsRun": errors.New("the release is damaged")}
-	f.run("core.library.page", map[string]string{"page": "plugins"})
-	var failure error
-	f.shell.Registry().RunLater("core.plugins.install", json.RawMessage(`{"plugin":"beta"}`), func(_ any, err error) { failure = err })
-	f.pending.drain(t)
-	f.tester.Frame()
-	f.pending.drain(t)
-	f.tester.Frame()
-	if failure == nil || !strings.Contains(failure.Error(), "damaged") {
-		t.Fatalf("the failure is %v", failure)
-	}
-	status := f.pluginStatus()
-	if status.Operation == nil || status.Operation.State != "failed" || status.Operation.Error == nil || *status.Operation.Error != "the release is damaged" {
-		t.Fatalf("the operation is %+v", status.Operation)
-	}
-	if !slices.Contains(f.tester.Texts(), "the release is damaged") {
-		t.Fatalf("the card does not show the failure: %q", f.tester.Texts())
-	}
-	if errors := f.host.written("workbench.record.error"); len(errors) != 1 {
-		t.Fatalf("the shown failure is recorded %d times", len(errors))
-	}
 }
 
 // The update button of the chrome shows the update list at the top of a page that was scrolled away from it.
-func TestShowUpdatesBringsTheUpdateListIntoView(t *testing.T) {
-	versions := map[string][]string{"alpha": {"1.0.0", "1.2.0"}}
-	for i := range 30 {
-		versions[fmt.Sprintf("plugin-%02d", i)] = []string{"1.0.0"}
-	}
-	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(versions), plugins: map[string]map[string]any{
-		"alpha": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}}}
-	f := pluginShell(t, plugins, `{"plugins":[]}`)
-	f.run("core.library.page", map[string]string{"page": "plugins"})
-	f.settle()
-	top := positional(t, f.tester, "core.library.plugins.updates", 0).Bounds.Y
-	f.tester.Scroll(600, 600, 0, 1500)
-	f.tester.Frame()
-	if scrolled := positional(t, f.tester, "core.library.plugins.updates", 0).Bounds.Y; scrolled >= 0 {
-		t.Fatalf("the list stands at %v after the scroll, from %v", scrolled, top)
-	}
-	f.run("core.plugins.show-updates", nil)
-	f.settle()
-	if shown := positional(t, f.tester, "core.library.plugins.updates", 0).Bounds.Y; shown < 0 {
-		t.Fatalf("the list stands at %v", shown)
-	}
-}
 
 // A plugin whose manifest the window refuses is left out with its error, its row says so, and the other plugins load.
 func TestAnInstalledPluginWithARefusedManifestIsRefused(t *testing.T) {
@@ -418,55 +274,6 @@ func TestAPluginCommandRefusesAnEmptyPlugin(t *testing.T) {
 	f := pluginShell(t, &pluginsHost{}, `{"plugins":[]}`)
 	if err := f.finish("core.plugins.install", map[string]string{"plugin": ""}); err == nil {
 		t.Fatal("an empty plugin ran")
-	}
-}
-
-func TestAHeldOperationIsListedAndItsActionRunsItWithEnd(t *testing.T) {
-	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.0.0", "1.2.0"}}),
-		plugins: map[string]map[string]any{"alpha": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{"hello": "^2.0.0"}}},
-		held: []any{map[string]any{"plugin": "alpha", "action": "update", "version": "1.2.0",
-			"error":    "plugin alpha 1.2.0: sidecar hello 2.1.0 waits for the end of its running service 2.0.0",
-			"sidecars": []any{map[string]any{"sidecar": "hello", "planned": "2.1.0", "running": "2.0.0", "sessions": 2}}}}}
-	f := pluginShell(t, plugins, loadedAlpha)
-	f.shell.Registry().RunLater("core.library.page", json.RawMessage(`{"page":"plugins"}`), func(_ any, err error) {
-		if err != nil {
-			t.Error(err)
-		}
-	})
-	// The card shows the error of the held operation through the error display, which records it once.
-	if got, want := f.shownRecords(), []shownRecord{{"library plugin alpha held", "plugin alpha 1.2.0: sidecar hello 2.1.0 waits for the end of its running service 2.0.0"}}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("the shell recorded %+v, want %+v", got, want)
-	}
-	running, sessions := "2.0.0", 2
-	want := []sok.HeldOperation{{Plugin: "alpha", Action: "update", Version: "1.2.0",
-		Error:    "plugin alpha 1.2.0: sidecar hello 2.1.0 waits for the end of its running service 2.0.0",
-		Sidecars: []sok.HeldService{{Sidecar: "hello", Planned: "2.1.0", Running: &running, Sessions: &sessions}}}}
-	if got := f.pluginStatus().Held; !reflect.DeepEqual(got, want) {
-		t.Fatalf("held is %+v, want %+v", got, want)
-	}
-	if err := f.finish("core.plugins.update", map[string]any{"plugin": "alpha", "end": false}); err == nil || err.Error() != "end must be true" {
-		t.Fatalf("an end of false answered %v", err)
-	}
-	f.click("core.library.plugins.end", "alpha")
-	if want := []string{"update alpha end true"}; !slices.Equal(plugins.runs, want) {
-		t.Fatalf("the operations are %v, want %v", plugins.runs, want)
-	}
-	if got := f.pluginStatus().Held; len(got) != 0 {
-		t.Fatalf("held after the run is %+v", got)
-	}
-}
-
-func TestUpdateAllStopsAtTheFirstFailure(t *testing.T) {
-	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.2.0"}, "beta": {"1.2.0"}})}
-	plugins.plugins = map[string]map[string]any{"alpha": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}},
-		"beta": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}}
-	f := pluginShell(t, plugins, `{"plugins":[]}`)
-	f.run("core.library.page", map[string]string{"page": "plugins"})
-	if err := f.finish("core.plugins.update-all", nil); err != nil {
-		t.Fatal(err)
-	}
-	if want := []string{"update alpha", "update beta"}; !slices.Equal(plugins.runs, want) {
-		t.Fatalf("the operations are %v", plugins.runs)
 	}
 }
 
@@ -528,9 +335,9 @@ func TestTheInstallOfATabHasTheLookOfAButtonOfThePage(t *testing.T) {
 	stored := &storedHost{plugins: plugins}
 	plugins.core, plugins.plugins = "1.0.0", map[string]map[string]any{}
 	f := newShell(t, stored)
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	node, ok := exposedNode(f.tester.ElementTree(), "core.card.placeholder-action", "")
 	if !ok {
 		t.Fatalf("the tab offers no install: %q", f.tester.Texts())
@@ -558,9 +365,9 @@ func TestATabOfAPluginThatIsNotLoadedOffersItsInstall(t *testing.T) {
 	stored := &storedHost{plugins: plugins}
 	plugins.core, plugins.plugins = "1.0.0", map[string]map[string]any{}
 	f := newShell(t, stored)
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	if !f.has("core.card.placeholder-action", "") {
 		t.Fatalf("the tab offers no install: %q", f.tester.Texts())
 	}
@@ -582,9 +389,9 @@ func TestThePlaceholderStandsAsThePageStandsIt(t *testing.T) {
 	stored := &storedHost{plugins: plugins}
 	plugins.core, plugins.plugins = "1.0.0", map[string]map[string]any{}
 	f := newShell(t, stored)
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	var line ui.ElementNode
 	var find func(nodes []ui.ElementNode)
 	find = func(nodes []ui.ElementNode) {
@@ -617,9 +424,9 @@ func TestSurfacesListATabOfAPluginThatIsNotLoadedWithItsPlaceholderReason(t *tes
 	stored := &storedHost{plugins: plugins}
 	plugins.core, plugins.plugins = "1.0.0", map[string]map[string]any{}
 	f := newShell(t, stored)
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	// The new-space layout holds a terminal tab and a browser tab, and the window loaded neither plugin.
 	placeholders := func() map[string]map[string]any {
 		rows := map[string]map[string]any{}

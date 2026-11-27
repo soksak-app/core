@@ -291,14 +291,17 @@ fn move_without_delta_is_refused() {
 }
 
 /// The common-only keys, each with a value.
-fn common_only_cases() -> [(&'static str, Value); 7] {
+fn common_only_cases() -> [(&'static str, Value); 10] {
     [
-        ("autoDismissErrorToasts", json!(true)),
-        ("errorToastDismissSeconds", json!(5)),
+        ("autoDismissProblemToasts", json!(true)),
         ("memorySaver", json!(false)),
         ("memorySaverDelay", json!(30)),
+        ("noticeCenterStyle", json!("popover")),
+        ("problemToastDismissSeconds", json!(5)),
         ("projectOpening", json!("tabs")),
+        ("quietToasts", json!(false)),
         ("textSize", json!(1.5)),
+        ("toastStyle", json!("card")),
         ("viewProcess", json!("view")),
     ]
 }

@@ -1,4 +1,7 @@
-import { isLocalAbsolutePath, originFault } from "@soksak/plugin-api";
+import { checkNotice, checkNoticeDone, checkNoticeProgress, isLocalAbsolutePath, originFault } from "@soksak/plugin-api";
+import { log, report } from "./host.js";
+import { createNotices } from "./notices.js";
+import { onSettingsChange, value as settingValue } from "./settings.js";
 import { tabName } from "./card-data.js";
 import { mapStateCards, stateCards } from "./layout-tree.js";
 import { hasPlugin, plugin } from "./registry.js";
@@ -22,8 +25,9 @@ const forgottenBy = new Map();
 const leftWhileMounted = new Map();
 // Whether the surface of a tab id is mounted and not disposed. The page sets it (setMountedTab) because the surface modules import this module.
 let mountedTab = () => false;
-const notices = new Map();
-const noticePolicies = new Map();
+// The notices of the tabs (docs/spec/notifications.md). The store keeps them; a system notice of a tab also keeps its text here until the tab is
+// visible, because only that text is posted as an operating system notification (system-notifications.js).
+const systemNotices = new Map();
 const modified = new Set();
 const errors = new Map();
 // The tabs whose surface reports work in progress through context.tab.keep("busy", true) (docs/spec/plugins.md#memory-saver).
@@ -33,14 +37,37 @@ const memoryStates = new Map();
 const MEMORY_STATES = new Set(["loaded", "unloaded", "restoring"]);
 // The plane tells whether a tab is visible (whether it is the active tab of the focused card).
 let visibleTab = () => false;
+// The plane tells the card that holds a tab id, or null when no card holds it.
+let cardOfTab = () => null;
+// The entry watchers are notified on every change of a notice; the toast watchers only when the shown toasts change.
 const listeners = new Set();
+const toastListeners = new Set();
+// The shown toasts as the toast watchers last saw them: the toasts of the store start empty.
+let shownToasts = "[]";
 
 const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
-const NOTICE_POLICIES = new Set(["tab", "system"]);
+
+// The state of the shown toasts that the toast watchers draw: the id, kind, title, count, text and actions of each. The remaining time is
+// left out, because the store changes it without a change of the toasts.
+const toastState = () => JSON.stringify(noticeStore.toasts().map((toast) => {
+  const notice = noticeStore.notice(toast.id);
+  return [toast.id, toast.kind, toast.title, toast.count, notice.text, notice.actions];
+}));
 
 function notify() {
   for (const listener of listeners) listener();
+  const now = toastState();
+  if (now === shownToasts) return;
+  shownToasts = now;
+  for (const listener of toastListeners) listener();
 }
+
+const noticeStore = createNotices({
+  settings: (key) => settingValue(key),
+  view: globalThis,
+  log: (level, line) => (level === "error" ? report(line) : log(line)),
+  onChange: () => notify(),
+});
 
 /** Sets (text) or clears (null) the title that the surface of the tab id shows. */
 export function reportTitle(tabId, text) {
@@ -104,30 +131,80 @@ export function setVisibleTab(probe) {
   visibleTab = probe;
 }
 
-/** Puts a notice on a tab that is not visible. For a visible tab, the surface is already visible, so nothing is changed. */
-export function reportNotice(tabId, text, policy = "tab") {
-  if (typeof text !== "string" || text.length === 0 || text.length > 1024 || CONTROL.test(text)) {
-    throw new TypeError("a tab notice must be 1 to 1024 characters without control characters");
-  }
-  if (!NOTICE_POLICIES.has(policy)) throw new TypeError(`unknown tab notice policy: ${String(policy)}`);
-  if (visibleTab(tabId)) return;
-  if (notices.get(tabId) === text && noticePolicies.get(tabId) === policy) return;
-  notices.set(tabId, text);
-  noticePolicies.set(tabId, policy);
+/**
+ * Shows a notice of a tab of a plugin, checked with the notice rule of the plugin api, and returns its id (docs/spec/plugins.md#tab-reports).
+ * A notice with system true is also kept for an operating system notification while its tab is not visible.
+ */
+export function reportNotice(tabId, fields, plugin) {
+  const id = noticeStore.showTab(fields, { card: cardOfTab(tabId), tab: tabId, plugin });
+  // A later notice of the tab, system or not, replaces the kept system notice of the tab (docs/spec/plugins.md#tab-reports).
+  if (fields.system === true) keepSystemNotice(tabId, fields);
+  else if (systemNotices.delete(tabId)) notify();
+  return id;
+}
+
+// A system notice is kept under its tab, or under its plugin for a page notice, while it is not visible (docs/spec/notifications.md#plugin-notices).
+function keepSystemNotice(tabId, fields) {
+  if (visibleTab(tabId)) systemNotices.delete(tabId);
+  else systemNotices.set(tabId, fields.text === "" ? fields.title : `${fields.title}\n${fields.text}`);
   notify();
 }
 
-// default: a tab without a notice is null.
-export const tabNotice = (tabId) => noticePolicies.get(tabId) === "system" ? null : (notices.get(tabId) ?? null);
+/**
+ * Shows a notice of a page of a plugin that belongs to no card, checked with the notice rule of the plugin api, and returns its id.
+ * Its source is the plugin, and a system notice is kept under the plugin id (docs/spec/notifications.md#plugin-notices).
+ */
+export function reportPageNotice(fields, plugin) {
+  const checked = checkNotice(fields);
+  const id = noticeStore.show({ kind: checked.kind, title: checked.title, text: checked.text, source: { kind: "plugin", plugin },
+    actions: checked.action ? [checked.action] : [], progress: checked.kind === "progress" ? null : undefined });
+  if (checked.system === true) keepSystemNotice(plugin, checked);
+  return id;
+}
 
-/** The list of [tab id, text] of all tab notices. */
-export const tabNotices = () => [...notices].filter(([tabId]) => noticePolicies.get(tabId) === "system");
+/** Sets the progress of a progress notice of a tab (docs/spec/notifications.md#plugin-notices). */
+export function reportProgress(id, progress) {
+  const checked = checkNoticeProgress({ id, progress });
+  noticeStore.progress(checked.id, checked.progress);
+}
 
-/** Removes the notice of a tab that became visible. The plane calls it on every drawing. */
+/** Ends a progress notice of a tab as success or error (docs/spec/notifications.md#plugin-notices). */
+export function reportDone(id, kind, title) {
+  const checked = checkNoticeDone({ id, kind, title });
+  noticeStore.done(checked.id, checked.kind, checked.title);
+}
+
+/** Sets the probe with which the plane tells the card that holds a tab id. */
+export function setCardOfTab(probe) {
+  cardOfTab = probe;
+}
+
+/** Withdraws the notices of a card that has the focus, which the plane reports when the focus moves (docs/spec/notifications.md#places). */
+export function reportFocusedCard(card) {
+  noticeStore.focusCard(card);
+}
+
+/** The bell and the notice center of the window (docs/spec/notifications.md). */
+// A change of the problem toast settings restarts or cancels the deadlines of the shown toasts (docs/spec/notifications.md#settings). The
+// subscription starts at the first use of the store, because the settings module may still be loading when this module evaluates.
+let settingsWatched = false;
+export const notificationStore = () => {
+  if (!settingsWatched) {
+    settingsWatched = true;
+    onSettingsChange(() => noticeStore.settingsChanged());
+  }
+  return noticeStore;
+};
+
+// default: a tab without a shown notice is null; otherwise the newest shown notice of the tab as its title and text.
+/** The list of [tab id, text] of the system notices whose tab is not visible. */
+export const tabNotices = () => [...systemNotices];
+
+/** Removes the system notice of a tab that became visible. The plane calls it on every drawing. */
 export function clearVisibleNotices() {
   let removed = false;
-  for (const tabId of [...notices.keys()]) {
-    if (visibleTab(tabId)) removed = notices.delete(tabId) || removed;
+  for (const tabId of [...systemNotices.keys()]) {
+    if (visibleTab(tabId)) removed = systemNotices.delete(tabId) || removed;
   }
   if (removed) notify();
 }
@@ -371,8 +448,8 @@ export function forgetTab(tabId) {
   busy.delete(tabId);
   memoryStates.delete(tabId);
   directories.delete(tabId);
-  const noticed = notices.delete(tabId);
-  noticePolicies.delete(tabId);
+  const noticed = systemNotices.delete(tabId);
+  noticeStore.withdrawTab(tabId);
   const footed = footers.delete(tabId);
   const unsaved = modified.delete(tabId);
   const failed = errors.delete(tabId);
@@ -382,4 +459,10 @@ export function forgetTab(tabId) {
 export function onTabReports(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+/** Subscribes to the changes of the shown toasts; the entries that the center holds notify onTabReports only (docs/spec/notifications.md#toasts). */
+export function onToastChange(listener) {
+  toastListeners.add(listener);
+  return () => toastListeners.delete(listener);
 }

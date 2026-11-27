@@ -19,7 +19,7 @@
     {"send":{"jsonrpc":"2.0","id":7,"method":"status.get","params":{"window":"w1","name":"host.windows"}}},
     {"reply":{"jsonrpc":"2.0","id":7,"result":[{"window":"w1","ready":true}]}},
     {"send":{"jsonrpc":"2.0","id":8,"method":"status.get","params":{"window":"w1","name":"core.screen"}}},
-    {"reply":{"jsonrpc":"2.0","id":8,"result":{"screen":"library","modal":null}}},
+    {"reply":{"jsonrpc":"2.0","id":8,"result":{"screen":"home","modal":null}}},
     {"send":{"jsonrpc":"2.0","id":9,"method":"status.get","params":{"window":"w1","name":"core.surfaces"}}},
     {"reply":{"jsonrpc":"2.0","id":9,"result":[{"kind":"tab","surface":"t-term","plugin":"probeinput","exposes":["status probeinput.cursor"],"status":{"phase":"ready","error":null}},{"kind":"tab","surface":"t-web","plugin":"probeplain","exposes":["command probeplain.navigate","status probeplain.location"],"status":{"phase":"ready","error":null}}]}}
   ]

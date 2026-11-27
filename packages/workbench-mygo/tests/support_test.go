@@ -123,8 +123,11 @@ func pressPositional(t *testing.T, tt *ui.Tester, name string, index int) {
 	tt.ClickAt(node.Bounds.X+node.Bounds.W/2, node.Bounds.Y+node.Bounds.H/2)
 }
 
-// screenCommands are the commands that the plugin page and the debug view run.
-var screenCommands = []string{"core.library.plugins.search", "core.plugins.install", "core.plugins.update", "core.plugins.remove", "core.plugins.enable",
+// noErrors returns the error display of a test that keeps no line.
+func noErrors() *workbench.ShownErrors { return workbench.NewShownErrors(func(string) {}) }
+
+// screenCommands are the commands that the debug view runs.
+var screenCommands = []string{"core.plugins.install", "core.plugins.update", "core.plugins.remove", "core.plugins.enable",
 	"core.plugins.disable", "core.plugins.apply", "core.plugins.update-all", "core.plugins.replace", "core.app.release", "core.app.update",
 	"core.debug.close", "core.debug.save-all", "core.debug.timeline", "core.debug.state", "core.debug.view", "core.debug.save", "core.debug.list",
 	"core.debug.state.compare", "core.debug.timeline.follow", "core.debug.timeline.older", "core.debug.timeline.save", "core.debug.timeline.select",

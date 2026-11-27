@@ -9,7 +9,7 @@ import test from "node:test";
 import { currentEventOffsets, readEvents, untilEventLine, untilEventLines } from "@soksak/window-check/event-log.mjs";
 import { APPS, MAIN_PAGE_APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { pasteboardText, writePasteboard } from "@soksak/window-check/pasteboard.mjs";
-import { fresh, reading, settingsShown } from "./fixture.mjs";
+import { fresh, reading } from "./fixture.mjs";
 import { documentPoint, fieldPoint, inputProbeTab } from "./input-probe.mjs";
 
 const REGISTRY_COMMAND = "workbench.command";
@@ -25,16 +25,10 @@ async function openProbe(t, app, options) {
   await keepCommonSettings(s);
   s.cleanupSteps(
     async () => {
-      if ((await s.get("core.modal"))?.id === "settings") await s.run("core.settings.close");
+      if ((await s.get("core.settings-tab")) !== null) await s.run("core.settings.close");
     },
     async () => {
       if ((await s.get("core.picker")).open) await s.run("core.picker.close");
-    },
-    async () => {
-      if ((await s.get("core.screen")).screen === "library") {
-        await s.run("core.library.page", { page: "projects" });
-        await s.run("core.library.return");
-      }
     },
   );
   return s;
@@ -243,37 +237,6 @@ for (const app of Object.values(APPS)) {
     }
   });
 
-  test(`${app.name}: settings dialog Escape stays with the native modal responder`, { timeout: 60000 }, async (t) => {
-    const s = await openProbe(t, app);
-    await focusedDocument(s);
-    await s.run("core.settings.open");
-    const webView = (await s.get("host.window")).pageProcess !== null;
-    await settingsShown(s, "the settings dialog was not shown");
-    const owner = webView ? "modal" : "workbench";
-    const modalWindow = await s.get("host.window");
-    assert.equal(modalWindow.responder?.owner, owner,
-      `the settings dialog does not own keyboard focus: ${JSON.stringify(modalWindow.responder)}`);
-    const offsets = currentEventOffsets(s.app.configDir);
-    await s.press("Escape");
-    // The input-injection record is emitted after AppKit's synchronous sendEvent dispatch returns.
-    await untilEventLines(s.app.configDir, offsets,
-      (lines) => lines.filter((line) => line.includes("native input inject:")
-        && line.includes("Escape") && line.includes("delivered")).length >= 2, { ...reading(s.app, [INPUT_INJECTION]), ended: s.client.ended });
-    const events = await traceEvents(s, offsets);
-    const deliveredEscape = injectedKeyEvents(events, "Escape");
-    assert.equal(deliveredEscape.length, 2, "the completed Escape press must contain down and up delivery records");
-    assert.deepEqual(deliveredEscape.map((event) => {
-      const input = JSON.parse(event.fields.text);
-      return { down: input.down, result: input.result };
-    }), [{ down: true, result: "delivered" }, { down: false, result: "delivered" }],
-    "AppKit did not complete delivery of both Escape phases");
-    assert.equal((await s.get("core.modal"))?.id, "settings", "Escape closed the native settings dialog");
-    assert.equal((await s.get("host.window")).responder?.owner, owner, "Escape moved focus away from the settings dialog");
-    assertDeliveredKey(events, "Escape", "settings dialog Escape");
-    assert.equal(traceCommands(events, "core.picker.close").length, 0,
-      "settings dialog Escape must not run a page picker command");
-  });
-
   test(`${app.name}: native cmd+c copies selected view field text without view keydown`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app, { clipboard: true });
     const probe = await focusedField(s);
@@ -317,40 +280,33 @@ for (const app of Object.values(APPS)) {
       "native cmd+= must run core.text.larger exactly once");
   });
 
-  for (const [page, name] of [["projects", "core.library.search"], ["plugins", "core.library.plugins.search"]]) {
-    test(`${app.name}: cmd+k focuses ${page} search in the shown library`, { timeout: 60000 }, async (t) => {
-      const s = await openProbe(t, app);
-      if (page === "projects") await s.run("core.projects.browse");
-      else await s.run("core.plugins.browse");
-      await s.until("core.screen", (state) => state.screen === "library",
-        `the ${page} library screen did not open`);
-      await s.until("core.library", (state) => state.page === page,
-        `the library did not select its ${page} page`);
-      // A pointer move that presses nothing makes the window the virtual key window.
-      const content = (await s.get("host.window")).content;
-      await s.pointer(content.width / 2, content.height / 2, "move");
-      await s.until("host.window", (window) => window.virtualKey, "the window did not become the virtual key window");
-      await s.run("core.focus.set", { name: "core.library.window" });
-      await s.until("core.focus", (focus) => focus?.name === "core.library.window" && focus.surface === null,
-        `the ${page} library's new-window control did not hold main-document focus`);
-      const mainWindow = await s.get("host.window");
-      assert.equal(mainWindow.responder?.owner, "workbench",
-        `the main document is not the responder before cmd+k: ${JSON.stringify(mainWindow.responder)}`);
-      await s.press("k", { modifiers: ["command"] });
-      await s.until("core.focus", (focus) => focus?.name === name && focus.surface === null,
-        `cmd+k did not focus ${name}`);
-      assert.equal((await s.get("host.window")).responder?.owner, "workbench",
-        "cmd+k moved keyboard focus away from the main document");
-      assert.equal((await s.get("core.screen")).screen, "library",
-        "cmd+k changed the shown library screen");
-    });
-  }
+  test(`${app.name}: cmd+k focuses the project home search`, { timeout: 60000 }, async (t) => {
+    const s = await openProbe(t, app);
+    await s.run("core.projects.browse");
+    await s.until("core.home", (home) => home !== null, "the project home did not show");
+    // A pointer move that presses nothing makes the window the virtual key window.
+    const content = (await s.get("host.window")).content;
+    await s.pointer(content.width / 2, content.height / 2, "move");
+    await s.until("host.window", (window) => window.virtualKey, "the window did not become the virtual key window");
+    await s.run("core.focus.set", { name: "core.home.add" });
+    await s.until("core.focus", (focus) => focus?.name === "core.home.add" && focus.surface === null,
+      "the project home primary button did not hold main-document focus");
+    const mainWindow = await s.get("host.window");
+    assert.equal(mainWindow.responder?.owner, "workbench",
+      `the main document is not the responder before cmd+k: ${JSON.stringify(mainWindow.responder)}`);
+    await s.press("k", { modifiers: ["command"] });
+    await s.until("core.focus", (focus) => focus?.name === "core.home.search" && focus.surface === null,
+      "cmd+k did not focus core.home.search");
+    assert.equal((await s.get("host.window")).responder?.owner, "workbench",
+      "cmd+k moved keyboard focus away from the main document");
+    assert.notEqual((await s.get("core.screen")).screen, "workspace", "cmd+k changed the shown project home");
+  });
 
-  test(`${app.name}: a focused view keeps cmd+k when the library is hidden`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: a focused view keeps cmd+k when the project home is hidden`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
     const { surface } = await focusedField(s);
     assert.equal((await s.get("core.screen")).screen, "workspace",
-      "the focused view key case requires the library to be hidden");
+      "the focused view key case requires the project home to be hidden");
     const focusedWindow = await s.get("host.window");
     assert.equal(focusedWindow.virtualKey, true, "the focused view window is not the virtual key window");
     assert.equal(focusedWindow.responder?.surface, surface,
@@ -359,18 +315,18 @@ for (const app of Object.values(APPS)) {
     await s.press("k", { modifiers: ["command"] });
     const events = await traceEvents(s, offsets);
     assertDeliveredKey(events, "k", "focused view cmd+k", { downResponder: "SPDocumentView" });
-    // The shortcut table applies cmd+k only while the library is shown. With the library hidden,
+    // The shortcut table applies cmd+k only while the project home is shown. With the project home hidden,
     // the focused view owns its normal key handling and does not forward the workbench command.
-    assert.equal(traceCommands(events, "core.library.search.focus").length, 0,
-      "hidden-library cmd+k must not invoke the library-only workbench command");
+    assert.equal(traceCommands(events, "core.home.search.focus").length, 0,
+      "hidden-home cmd+k must not invoke the home-only workbench command");
     assert.equal(events.filter((event) => event.event === "workbench.input.shortcut.failed"
-      && event.fields?.plugin === "probeinput" && event.fields?.command === "core.library.search.focus").length, 0,
-    "hidden-library cmd+k must not report a failed forwarded command");
+      && event.fields?.plugin === "probeinput" && event.fields?.command === "core.home.search.focus").length, 0,
+    "hidden-home cmd+k must not report a failed forwarded command");
     assert.equal((await s.get("core.screen")).screen, "workspace",
-      "hidden-library cmd+k changed the workspace screen");
+      "hidden-home cmd+k changed the workspace screen");
   });
 
-  test(`${app.name}: native shift+cmd+n opens and cleans up a library window`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: native shift+cmd+n opens and cleans up a project home window`, { timeout: 60000 }, async (t) => {
     const s = await openProbe(t, app);
     await focusedDocument(s);
     const initialWindows = await s.get("host.windows");
@@ -387,12 +343,11 @@ for (const app of Object.values(APPS)) {
       keyDown = true;
       await s.key("n", "down", { modifiers: ["shift", "command"] });
       const windows = await s.windows(initialWindows.length + 1,
-        "native shift+cmd+n did not create its new library window");
+        "native shift+cmd+n did not create its new window");
       const childWindow = windows.find((window) => !initialIDs.has(window.window));
-      assert.ok(childWindow, "the new library window has no distinct native window identity");
+      assert.ok(childWindow, "the new window has no distinct native window identity");
       const child = s.on(childWindow.window);
-      await child.until("core.screen", (value) => value.screen === "library",
-        "native shift+cmd+n did not open the library screen");
+      await child.until("core.home", (home) => home !== null, "native shift+cmd+n did not open the project home");
       await child.key("n", "up", { modifiers: ["shift", "command"] });
       keyDown = false;
     } finally {

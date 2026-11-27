@@ -227,7 +227,7 @@ func (s *Shell) answerKeyboard(err error) {
 }
 
 // keyboardTarget is the surface that holds the keyboard, and nil when the workbench holds it: while a modal is open, while the
-// window shows the library, while a rename field is open, and for a card without a surface. It reads the seats of the frame that
+// window shows the project home, while a rename field is open, and for a card without a surface. It reads the seats of the frame that
 // was drawn.
 func (s *Shell) keyboardTarget() *string {
 	// An open dialog surface holds the keyboard as a modal of the kind dialog, from the placement that holds it

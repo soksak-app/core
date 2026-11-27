@@ -34,7 +34,7 @@ test("core.settings.theme without a scope writes the common scope while a projec
   try {
     await installCoreExposure({
       memorySaver: await pageMemorySaver(),
-      library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+      home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
     });
     beginSettings(structuredClone(memory), "prj-a");
     await registry.run("core.settings.theme", { name: "midnight", mode: "dark" });

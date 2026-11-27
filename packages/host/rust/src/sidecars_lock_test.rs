@@ -544,6 +544,7 @@ fn declaration_notifies_each_outdated_version_change() {
             running: Some("0.0.6".into()),
             installed: None,
             sessions: 1,
+            surfaces: vec!["tab-fixture".into()],
         }]
     );
 }

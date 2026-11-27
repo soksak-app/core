@@ -161,32 +161,20 @@ test("the sidebar sets of the configuration take the sections of the layout prob
   await assert.rejects(probeSidebarSets((await play(t, "sidebar-sets-none")).s), /the configuration holds no sidebar set/);
 });
 
-test("the settings dialog is shown when the modal web view of a main page shows it, and on the mygo host when core.modal names it", async (t) => {
-  const page = await play(t, "settings-shown-page");
-  await settingsShown(page.s, "not shown");
-  await page.server.played;
-  assert.deepEqual(watched(page.server), ["host.window"]);
+test("the settings tab is shown while the status core.settings-tab is not null", async (t) => {
+  const shown = await play(t, "settings-shown-page");
+  await settingsShown(shown.s, "not shown");
+  await shown.server.played;
+  assert.deepEqual(watched(shown.server), ["core.settings-tab"]);
   await assert.rejects(settingsShown((await play(t, "settings-shown-page-hidden")).s, "not shown"), /not shown/);
-
-  const mygo = await play(t, "settings-shown-mygo");
-  await settingsShown(mygo.s, "not shown");
-  await mygo.server.played;
-  assert.deepEqual(watched(mygo.server), ["core.modal"]);
-  await assert.rejects(settingsShown((await play(t, "settings-shown-mygo-none")).s, "not shown"), /not shown/);
 });
 
-test("the settings dialog is closed when the main page has no modal web view, and on the mygo host when core.modal is empty", async (t) => {
-  const page = await play(t, "settings-closed-page");
-  await settingsClosed(page.s, "not closed");
-  await page.server.played;
-  assert.deepEqual(watched(page.server), ["host.window"]);
+test("the settings tab is closed when the status core.settings-tab is null", async (t) => {
+  const closed = await play(t, "settings-closed-page");
+  await settingsClosed(closed.s, "not closed");
+  await closed.server.played;
+  assert.deepEqual(watched(closed.server), ["core.settings-tab"]);
   await assert.rejects(settingsClosed((await play(t, "settings-closed-page-shown")).s, "not closed"), /not closed/);
-
-  const mygo = await play(t, "settings-closed-mygo");
-  await settingsClosed(mygo.s, "not closed");
-  await mygo.server.played;
-  assert.deepEqual(watched(mygo.server), ["core.modal"]);
-  await assert.rejects(settingsClosed((await play(t, "settings-closed-mygo-open")).s, "not closed"), /not closed/);
 });
 
 test("the document region of a layout probe tab is painted after its document reports and is ready once it reports the colour", async (t) => {

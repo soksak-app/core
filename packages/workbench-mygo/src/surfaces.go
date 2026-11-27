@@ -251,12 +251,12 @@ type surfaceState struct {
 	// drawn holds the tabs that the current frame seats, with their boxes in window coordinates.
 	drawn map[string]layout.Rect
 	// seated holds the seats of the section surfaces of the sidebars of the current frame, drawnPlane is the plane that the frame drew,
-	// and drawnLibrary tells that the frame drew the library instead.
+	// and drawnHome tells that the frame drew the project home instead.
 	seated map[string]SidebarSeat
 	// behindDialog are the native views of the frame that wait to draw over the blurred workbench.
 	behindDialog []viewBehindDialog
 	drawnPlane   *layout.Grid
-	drawnLibrary bool
+	drawnHome    bool
 	// dataWrites counts the writes of project data of each project that the store has not answered.
 	dataWrites map[string]int
 	// pluginData holds the plugin keys of the last snapshot by plugin and key, pluginDataError the error of a refused
@@ -546,10 +546,10 @@ func (s *Shell) cardHoldsTab(card, tab string) bool {
 }
 
 // forgetUnseated forgets the section surfaces that no sidebar of the frame holds: a section lives while a drawn set holds it. A frame
-// of the library holds none, as the page empties its plane for the library; a frame that drew neither the plane nor the library tells
+// of the project home holds none, as the page empties its plane for the project home; a frame that drew neither the plane nor the project home tells
 // nothing.
 func (s *Shell) forgetUnseated() {
-	if s.surfaces.drawnPlane == nil && !s.surfaces.drawnLibrary {
+	if s.surfaces.drawnPlane == nil && !s.surfaces.drawnHome {
 		return
 	}
 	var gone []string

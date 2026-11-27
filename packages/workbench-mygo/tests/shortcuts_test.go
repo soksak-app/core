@@ -34,7 +34,7 @@ func TestEveryDeclaredShortcutHasAKey(t *testing.T) {
 	if len(declared.Shortcuts) == 0 {
 		t.Fatal("the shortcut table is empty")
 	}
-	if _, err := workbench.NewShortcuts(declared.Shortcuts, everyCondition(t), func(string) error { return nil }, func(string, error) {}); err != nil {
+	if _, err := workbench.NewShortcuts(declared.Shortcuts, everyCondition(t), func(string, map[string]any) error { return nil }, func(string, error) {}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -73,20 +73,20 @@ func TestParseShortcut(t *testing.T) {
 // row of another owner is no binding of the workbench.
 func TestShortcutsRunTheCommandOfTheRowThatHolds(t *testing.T) {
 	table := []workbench.Shortcut{
-		{Key: "cmd+k", Owner: "workbench", Command: "core.library.search.focus", When: "The library is shown"},
+		{Key: "cmd+k", Owner: "workbench", Command: "core.home.search.focus", When: "The project home is shown"},
 		{Key: "Escape", Owner: "workbench", Command: "core.rename.cancel", When: "The tab rename field has focus"},
 		{Key: "Escape", Owner: "workbench", Command: "core.picker.close", When: "A picker layer is open"},
 		{Key: "cmd+=", Owner: "native menu", Command: "core.text.larger", When: "Any focus"},
 		{Key: "text input keys", Owner: "view", Command: "none", When: "A plugin view has a text input focused"},
 	}
-	library, rename, picker := false, false, false
+	home, rename, picker := false, false, false
 	conditions := map[string]func() bool{
-		"The library is shown":           func() bool { return library },
+		"The project home is shown":      func() bool { return home },
 		"The tab rename field has focus": func() bool { return rename },
 		"A picker layer is open":         func() bool { return picker },
 	}
 	var ran []string
-	shortcuts, err := workbench.NewShortcuts(table, conditions, func(command string) error {
+	shortcuts, err := workbench.NewShortcuts(table, conditions, func(command string, _ map[string]any) error {
 		ran = append(ran, command)
 		return nil
 	}, func(string, error) {})
@@ -105,33 +105,33 @@ func TestShortcutsRunTheCommandOfTheRowThatHolds(t *testing.T) {
 	if len(ran) != 0 {
 		t.Fatalf("keys without a condition ran %v", ran)
 	}
-	library, picker = true, true
+	home, picker = true, true
 	tester.Frame()
 	tester.Key(ui.Cmd, ui.KeyK)
 	tester.Key(0, ui.KeyEscape)
 	picker, rename = false, true
 	tester.Frame()
 	tester.Key(0, ui.KeyEscape)
-	if want := []string{"core.library.search.focus", "core.picker.close", "core.rename.cancel"}; !slices.Equal(ran, want) {
+	if want := []string{"core.home.search.focus", "core.picker.close", "core.rename.cancel"}; !slices.Equal(ran, want) {
 		t.Fatalf("the keys ran %v, want %v", ran, want)
 	}
 }
 
 // A workbench row without a condition, whose key would never run, is an error of the table.
 func TestShortcutsRefuseARowWithoutACondition(t *testing.T) {
-	table := []workbench.Shortcut{{Key: "cmd+k", Owner: "workbench", Command: "core.library.search.focus", When: "The library is shown"}}
-	_, err := workbench.NewShortcuts(table, nil, func(string) error { return nil }, func(string, error) {})
-	if err == nil || err.Error() != `shortcut cmd+k has no condition "The library is shown"` {
+	table := []workbench.Shortcut{{Key: "cmd+k", Owner: "workbench", Command: "core.home.search.focus", When: "The project home is shown"}}
+	_, err := workbench.NewShortcuts(table, nil, func(string, map[string]any) error { return nil }, func(string, error) {})
+	if err == nil || err.Error() != `shortcut cmd+k has no condition "The project home is shown"` {
 		t.Fatalf("the table failed with %v", err)
 	}
 }
 
 // A command that fails reaches failed with its name.
 func TestShortcutFailureReachesItsHandler(t *testing.T) {
-	table := []workbench.Shortcut{{Key: "cmd+k", Owner: "workbench", Command: "core.library.search.focus", When: "Always"}}
+	table := []workbench.Shortcut{{Key: "cmd+k", Owner: "workbench", Command: "core.home.search.focus", When: "Always"}}
 	var failure string
 	shortcuts, err := workbench.NewShortcuts(table, map[string]func() bool{"Always": func() bool { return true }},
-		func(string) error { return errors.New("the library is hidden") },
+		func(string, map[string]any) error { return errors.New("the project home is hidden") },
 		func(command string, err error) { failure = command + ": " + err.Error() })
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +139,7 @@ func TestShortcutFailureReachesItsHandler(t *testing.T) {
 	tester := ui.NewTester(shortcuts.Declare, 100, 100)
 	tester.Frame()
 	tester.Key(ui.Cmd, ui.KeyK)
-	if want := "core.library.search.focus: the library is hidden"; failure != want {
+	if want := "core.home.search.focus: the project home is hidden"; failure != want {
 		t.Fatalf("the failure is %q, want %q", failure, want)
 	}
 }
@@ -164,9 +164,9 @@ func projectWithoutOwnKeyRows(t *testing.T) *shellFixture {
 	}
 	f := startedShellOf(t, recordingCommands(acme()), &table)
 	f.settle()
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	return f
 }
 
@@ -214,5 +214,22 @@ func TestThePickerLayerTakesEscapeItself(t *testing.T) {
 	}
 	if got := f.commandRecords("core.picker.close"); got != 1 {
 		t.Fatalf("Escape left %d records of core.picker.close, not 1", got)
+	}
+}
+
+// A row with params runs its command with them, so the arrow keys of the project home give the step of core.home.select.
+func TestAShortcutRowRunsItsCommandWithItsParams(t *testing.T) {
+	table := []workbench.Shortcut{{Key: "ArrowDown", Owner: "workbench", Command: "core.home.select", When: "Always", Params: map[string]any{"step": 1}}}
+	var got map[string]any
+	shortcuts, err := workbench.NewShortcuts(table, map[string]func() bool{"Always": func() bool { return true }},
+		func(_ string, params map[string]any) error { got = params; return nil }, func(string, error) {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tester := ui.NewTester(shortcuts.Declare, 100, 100)
+	tester.Frame()
+	tester.Key(0, ui.KeyDown)
+	if got["step"] != 1 {
+		t.Fatalf("the key ran with %v, want step 1", got)
 	}
 }

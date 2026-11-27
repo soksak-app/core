@@ -22,7 +22,7 @@ test("a plugin command passes end true to the operation and refuses another end"
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const { installCoreExposure } = await import("../core-exposure.js");
-  const parts = { library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {}, memorySaver: await pageMemorySaver() };
+  const parts = { home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {}, memorySaver: await pageMemorySaver() };
   await installCoreExposure(parts);
   const run = (name, params) => registry.handle({ method: "command.run", params: { name, params } });
   for (const name of ["core.plugins.install", "core.plugins.update", "core.plugins.enable"]) {

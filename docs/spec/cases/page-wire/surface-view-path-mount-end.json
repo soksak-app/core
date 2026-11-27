@@ -288,45 +288,6 @@
       "reply": {
         "result": null
       }
-    },
-    {
-      "call": {
-        "name": "log",
-        "payload": {
-          "action": "batch",
-          "events": [
-            {
-              "ts_us": "$ts-us-3",
-              "mono_ns": "$mono-ns-3",
-              "start": "$page-identity",
-              "level": "info",
-              "event": "workbench.log.gated",
-              "fields": {
-                "class": "call",
-                "level": "debug",
-                "count": 66
-              }
-            },
-            {
-              "ts_us": "$ts-us-4",
-              "mono_ns": "$mono-ns-4",
-              "start": "$page-identity",
-              "level": "info",
-              "event": "workbench.log.gated",
-              "fields": {
-                "class": "lifecycle",
-                "level": "debug",
-                "count": 3
-              }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
     }
   ]
 }

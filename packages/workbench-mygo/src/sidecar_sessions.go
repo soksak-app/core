@@ -17,7 +17,7 @@ type retainedSurface struct {
 
 // layoutSurfaces returns what the layouts of every space of every project hold, with the root of their project: the tabs and the section
 // surfaces of their sidebars. A session stays recoverable while a layout holds its surface (docs/spec/persistent-services.md), so the list
-// follows from the layouts and the declared sets, and not from what the window draws: a window starts in the library, where no sidebar
+// follows from the layouts and the declared sets, and not from what the window draws: a window starts in the project home, where no sidebar
 // is drawn, and the sessions of a service outlive an application that ended. The spaces of a project hold the plane of its shown space,
 // because each change of the plane writes it there before it reaches this list.
 func (s *Shell) layoutSurfaces() ([]retainedSurface, error) {

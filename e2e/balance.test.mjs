@@ -1,4 +1,4 @@
-// The card auto-arrange button after the project list button, and its command (packages/soksak/docs/layout.md#balancing).
+// The command core.layout.balance gives the cards of a space a fair share of the plane, and keeps the arrangement.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -35,17 +35,10 @@ for (const app of Object.values(APPS)) {
     assert.ok(spread(upper.map((id) => card(before, id).w)) > 10, `the upper row started even: ${JSON.stringify(before.cards)}`);
     assert.ok(spread(below.map((id) => card(before, id).w)) > 10, `the lower row started even: ${JSON.stringify(before.cards)}`);
 
-    // The button is in the right button row of the first row, directly after the project list button.
-    const projects = await s.rect("core.chrome.projects");
-    const button = await s.rect("core.chrome.balance");
-    const after = projects.x + projects.width;
-    assert.ok(button.x >= after && button.x - after <= 8 && Math.abs(button.y - projects.y) <= 0.5,
-      `the auto-arrange button is not directly after the project library button: ${JSON.stringify({ projects, button })}`);
-
-    await s.click((button.document?.x ?? 0) + button.x + button.width / 2, (button.document?.y ?? 0) + button.y + button.height / 2);
+    await s.run("core.layout.balance");
     const arranged = await s.until("core.grid", (grid) =>
       spread(upper.map((id) => card(grid, id).w)) <= 1 && spread(below.map((id) => card(grid, id).w)) <= 1,
-      "the native click on the auto-arrange button did not even the rows");
+      "core.layout.balance did not even the rows");
     assert.ok(Math.abs(card(arranged, upper[0]).h - card(arranged, below[0]).h) <= 1,
       `the rows do not halve the height: ${JSON.stringify(arranged.cards)}`);
     for (const id of [...upper, ...below]) {

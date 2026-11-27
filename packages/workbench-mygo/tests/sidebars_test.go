@@ -283,7 +283,10 @@ func TestDrawingASidebarGivesEverySeatItsPlaceInTheWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	head, _ := declared.Metric("head-h")
-	if tree.Box.Y != 20+head {
+	foot, _ := declared.Metric("foot-h")
+	// The head row of the window sidebar stands above the set, and the set holds gone.section, whose plugin is not loaded, so the line of
+	// that plugin stands above the sections for one header height.
+	if tree.Box.Y != 20+foot+head+head {
 		t.Fatalf("the seat of the tree starts at %v", tree.Box.Y)
 	}
 }
@@ -351,5 +354,146 @@ func TestTheTopAndBottomWindowSidebarsLieHorizontally(t *testing.T) {
 		if frame.Orientation != orientation || frame.Status != status || frame.Side != place {
 			t.Fatalf("the frame of %s is %s %q %s", place, frame.Orientation, frame.Status, frame.Side)
 		}
+	}
+}
+
+// goneInstalled installs the plugin gone, whose section gone.section the set of the environment names.
+const goneInstalled = `{"plugins":[
+	{"id":"gone","package":"g","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"gone","name":"고","description":"gone","sections":[
+		{"id":"gone.section","name":"고 섹션","composition":{"kind":"view","page":"ui/s.html"},"height":160}]}}]}`
+
+// A section whose plugin is not loaded is kept in the frame as a missing section, and the sidebar draws only the sections that it can draw
+// (docs/spec/plugins.md#missing-plugins).
+func TestAWindowSidebarNamesTheSectionsThatItCannotDraw(t *testing.T) {
+	f := newSidebars(t, sidebarsEnvironment, sidebarsInstalled)
+	frame := f.frame(t, "left", workbench.FocusedSurface{})
+	if want := []workbench.MissingSection{{ID: "gone.section", Plugin: "gone"}}; !reflect.DeepEqual(frame.Missing, want) {
+		t.Fatalf("the missing sections are %+v, want %+v", frame.Missing, want)
+	}
+	if got := sectionIDs(frame); !reflect.DeepEqual(got, []string{"fieldprobe.tree", "fieldprobe.bookmarks"}) {
+		t.Fatalf("the drawn sections are %q", got)
+	}
+}
+
+// The line of a plugin that is not loaded names it and gives the remedy of its state: the install button only when the catalog lists it,
+// the enable button when it is disabled, and the installed-plugins button when the window refused it (docs/spec/plugins.md#missing-plugins).
+func TestTheMissingLineNamesThePluginAndItsRemedy(t *testing.T) {
+	f := newSidebars(t, sidebarsEnvironment, sidebarsInstalled)
+	frame := f.frame(t, "left", workbench.FocusedSurface{})
+	cases := []struct {
+		name, state, text, label, command string
+	}{
+		{"고", "available", "고(gone) 플러그인이 없어 섹션 1개를 못 보여 준다.", "고 설치", "core.plugins.install"},
+		{"gone", "", "gone(gone) 플러그인이 없어 섹션 1개를 못 보여 준다.", "", ""},
+		{"고", "disabled", "고(gone) 플러그인이 꺼져 있어 섹션 1개를 못 보여 준다.", "켜기", "core.plugins.enable"},
+		{"고", "refused", "고(gone) 플러그인을 불러오지 못해 섹션 1개를 못 보여 준다.", "설치됨 보기", "core.plugins.browse"},
+		{"고", "requires", "고(gone) 플러그인을 불러오지 못해 섹션 1개를 못 보여 준다.", "설치됨 보기", "core.plugins.browse"},
+	}
+	for _, c := range cases {
+		lines := workbench.MissingLines(frame, func(id string) workbench.PluginLine {
+			return workbench.PluginLine{Name: c.name, State: c.state}
+		})
+		if len(lines) != 1 || lines[0].Plugin != "gone" || lines[0].Count != 1 || lines[0].Text != c.text {
+			t.Fatalf("the state %q gives the line %+v, want the text %q", c.state, lines, c.text)
+		}
+		if c.label == "" {
+			if lines[0].Action != nil {
+				t.Fatalf("the state %q has the button %+v, want none", c.state, lines[0].Action)
+			}
+			continue
+		}
+		if lines[0].Action == nil || lines[0].Action.Label != c.label || lines[0].Action.Command != c.command {
+			t.Fatalf("the state %q has the button %+v, want %s %s", c.state, lines[0].Action, c.label, c.command)
+		}
+		if c.command != "core.plugins.browse" && lines[0].Action.Params["plugin"] != "gone" {
+			t.Fatalf("the button %s runs with %+v, want the plugin gone", c.command, lines[0].Action.Params)
+		}
+	}
+}
+
+// When the plugin loads, its section is drawn and the line of the plugin ends (docs/spec/plugins.md#missing-plugins).
+func TestTheMissingLineEndsWhenThePluginLoads(t *testing.T) {
+	var document struct {
+		Plugins []json.RawMessage `json:"plugins"`
+	}
+	for _, text := range []string{sidebarsInstalled, goneInstalled} {
+		var part struct {
+			Plugins []json.RawMessage `json:"plugins"`
+		}
+		if err := json.Unmarshal([]byte(text), &part); err != nil {
+			t.Fatal(err)
+		}
+		document.Plugins = append(document.Plugins, part.Plugins...)
+	}
+	installed, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newSidebars(t, sidebarsEnvironment, string(installed))
+	frame := f.frame(t, "left", workbench.FocusedSurface{})
+	if len(frame.Missing) != 0 {
+		t.Fatalf("the loaded plugins leave the missing sections %+v", frame.Missing)
+	}
+	if got := sectionIDs(frame); !reflect.DeepEqual(got, []string{"fieldprobe.tree", "gone.section", "fieldprobe.bookmarks"}) {
+		t.Fatalf("the drawn sections are %q", got)
+	}
+	if lines := workbench.MissingLines(frame, nil); len(lines) != 0 {
+		t.Fatalf("the loaded plugins leave the lines %+v", lines)
+	}
+}
+
+// Drawing a sidebar whose set holds a section of a plugin that is not loaded draws the line of that plugin with the element
+// core.sidebar.missing of the plugin, above the sections (docs/spec/plugins.md#missing-plugins).
+func TestDrawingASidebarShowsTheLineOfAMissingPlugin(t *testing.T) {
+	f := newSidebars(t, sidebarsEnvironment, sidebarsInstalled)
+	var failed error
+	tt := ui.NewTester(func(c *ui.Context) {
+		f.sidebars.Begin()
+		frame, err := f.sidebars.Frame("left", "spc-1", workbench.FocusedSurface{})
+		if err != nil {
+			failed = err
+			return
+		}
+		f.sidebars.Draw(c, frame, layout.Rect{X: 10, Y: 20, W: 190, H: 480})
+	}, 320, 520)
+	if failed != nil {
+		t.Fatal(failed)
+	}
+	element(t, tt, "core.sidebar.missing", "gone")
+	if !tt.HasText("gone(gone) 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+		t.Fatalf("the sidebar shows %q", tt.Texts())
+	}
+}
+
+// A missing section of a tab layout has a dimmed tab with its id struck through; the tab selects nothing, and the loaded tab is selected
+// (docs/spec/plugins.md#missing-plugins).
+func TestAMissingSectionOfATabLayoutHasADimmedTab(t *testing.T) {
+	environment := `{"sidebars":{"sets":[{"id":"set-tabs","title":"탭","sections":["gone.section","fieldprobe.tree"],"layout":"tabs"}],
+		"links":[{"place":"left","plugin":null,"set":"set-tabs"}]}}`
+	f := newSidebars(t, environment, sidebarsInstalled)
+	var failed error
+	var frame workbench.SidebarFrame
+	tt := ui.NewTester(func(c *ui.Context) {
+		f.sidebars.Begin()
+		var err error
+		frame, err = f.sidebars.Frame("left", "spc-1", workbench.FocusedSurface{})
+		if err != nil {
+			failed = err
+			return
+		}
+		f.sidebars.Draw(c, frame, layout.Rect{X: 10, Y: 20, W: 190, H: 480})
+	}, 320, 520)
+	if failed != nil {
+		t.Fatal(failed)
+	}
+	if frame.Tab != "fieldprobe.tree" {
+		t.Fatalf("the selected tab is %q, want the loaded section", frame.Tab)
+	}
+	// The tabs keep the order of the set: the missing section keeps its place before the loaded one.
+	if want := []string{"gone.section", "fieldprobe.tree"}; !reflect.DeepEqual(frame.Order, want) {
+		t.Fatalf("the tabs are in the order %q, want %q", frame.Order, want)
+	}
+	if !tt.HasText("gone.section") {
+		t.Fatalf("the tabs show %q", tt.Texts())
 	}
 }

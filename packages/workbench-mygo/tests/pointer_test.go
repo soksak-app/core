@@ -220,7 +220,7 @@ func TestAKeyReportsTheClickOfAButton(t *testing.T) {
 // A press in an overlay of the workbench is a press of the workbench: the dialogs and the picker stand outside its root.
 func TestAPressInAnOverlayReportsThePointerSequence(t *testing.T) {
 	for _, each := range []struct{ title, command, name string }{
-		{"settings", "core.settings.open", "core.settings-modal.close"},
+		{"settings", "core.settings.open", "core.settings-tab.close"},
 		{"debug", "core.debug.open", "core.debug.close"},
 	} {
 		t.Run(each.title, func(t *testing.T) {

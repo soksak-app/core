@@ -131,13 +131,13 @@ for (const app of Object.values(APPS)) {
       [{ sidecar: SIDECAR, version: running.version, next: newer }]);
 
     await s.run("core.plugins.browse");
-    await s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.length > 0, "the plugin page did not show");
-    const row = await s.rect("core.library.plugins.outdated", 0);
+    await s.until("core.settings-tab", (tab) => tab?.page === "installed" && tab.listed.length > 0, "the settings tab did not show 설치됨");
+    const row = await s.rect("core.settings-tab.plugins.outdated", 0);
     assert.ok(row.width > 0 && row.height > 0, `the outdated row has no size: ${JSON.stringify(row)}`);
 
     // The action ends the sessions of the service and replaces it; the host writes the replacement to its log.
     const offsets = currentEventOffsets(app.configDir);
-    await s.act("core.library.plugins.replace", "click");
+    await s.act("core.settings-tab.plugins.replace", "click");
     await untilEventLine(app.configDir, offsets, (line) => line.includes(`service ${running.version} replaced by ${newer}`),
       { ...reading(app, ["host.record.info"]), ended: s.client.ended });
   });

@@ -56,7 +56,7 @@
             "title": { "type": ["string", "null"] },
             "footer": { "type": ["string", "null"] },
             "reported": { "type": ["string", "null"] },
-            "notice": { "type": ["object", "null"], "properties": { "text": { "type": "string" }, "policy": { "type": "string", "enum": ["tab", "system"] } } }
+            "notice": { "type": ["object", "null"], "properties": { "kind": { "type": "string", "enum": ["success", "info", "warning", "error", "progress"] }, "title": { "type": "string" }, "text": { "type": "string" }, "system": { "type": "boolean" } } }
           }
         }
       },
@@ -117,8 +117,8 @@
         "params": { "type": "object", "properties": { "text": { "type": ["string", "null"] } } }, "result": { "type": "null" } },
       { "name": "layoutprobe.footer", "description": "Sets the footer text of the tab with tab.footer, or removes it with null.",
         "params": { "type": "object", "properties": { "text": { "type": ["string", "null"] } } }, "result": { "type": "null" } },
-      { "name": "layoutprobe.notify", "description": "Gives the tab a notice with tab.notify and the policy tab or system.",
-        "params": { "type": "object", "properties": { "text": { "type": "string" }, "policy": { "type": "string", "enum": ["tab", "system"] } } }, "result": { "type": "null" } },
+      { "name": "layoutprobe.notify", "description": "Gives the tab the notice that its params state, with tab.notify, and reports the notice it gave in the status layoutprobe.view.",
+        "params": { "type": "object", "required": ["kind", "title"], "properties": { "kind": { "type": "string", "enum": ["success", "info", "warning", "error", "progress"] }, "title": { "type": "string" }, "text": { "type": "string" }, "system": { "type": "boolean" } } }, "result": { "type": "null" } },
       { "name": "layoutprobe.directory", "description": "Records the working directory of the tab with tab.directory, or removes it with null.",
         "params": { "type": "object", "properties": { "path": { "type": ["string", "null"] } } }, "result": { "type": "null" } },
       { "name": "layoutprobe.document.color", "description": "Paints the content of the region document in a CSS color.",

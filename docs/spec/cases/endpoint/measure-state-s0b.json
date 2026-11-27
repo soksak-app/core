@@ -27,6 +27,6 @@
     {"send":{"jsonrpc":"2.0","id":11,"method":"diagnostics.process.exit","params":{"window":"w1","pid":903}}},
     {"reply":{"jsonrpc":"2.0","id":11,"result":null}},
     {"send":{"jsonrpc":"2.0","id":12,"method":"status.get","params":{"window":"w1","name":"core.screen"}}},
-    {"reply":{"jsonrpc":"2.0","id":12,"result":{"screen":"library","modal":null}}}
+    {"reply":{"jsonrpc":"2.0","id":12,"result":{"screen":"home","modal":null}}}
   ]
 }

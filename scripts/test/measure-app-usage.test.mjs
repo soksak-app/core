@@ -632,7 +632,7 @@ test("the page plugin must expose its navigate command and its location status",
   await bare.server.played;
 });
 
-test("S0 keeps the library screen of one window without a plugin view", { timeout: 30000 }, async (t) => {
+test("S0 keeps the project home of one window without a plugin view", { timeout: 30000 }, async (t) => {
   const { s, server } = await play(t, "measure-state-s0");
   assert.deepEqual(await prepareState(s, "S0", prepareDeps()), { state: "S0", windows: ["w1"], footprints: "settled" });
   await server.played;
@@ -644,18 +644,18 @@ test("S0 fails with plugin views or the workspace in the window", { timeout: 300
   await assert.rejects(prepareState(shown.s, "S0", prepareDeps()), /S0 requires a window without plugin views; window w1 shows t-term, t-web/);
   await shown.server.played;
   const project = await play(t, "measure-state-s0-project");
-  await assert.rejects(prepareState(project.s, "S0", prepareDeps()), /S0 requires the library screen; window w1 shows workspace/);
+  await assert.rejects(prepareState(project.s, "S0", prepareDeps()), /S0 requires the project home; window w1 shows workspace/);
   await project.server.played;
 });
 
-test("S14 keeps the library screen and types one character into the library search 10 seconds before the reading", { timeout: 30000 }, async (t) => {
+test("S14 keeps the project home and types one character into the project home search 10 seconds before the reading", { timeout: 30000 }, async (t) => {
   const { s, server } = await play(t, "measure-state-s14");
   const { keyAt, ...context } = await prepareState(s, "S14", prepareDeps());
   assert.deepEqual(context, { state: "S14", windows: ["w1"], footprints: "at-once" });
   assert.equal(keyReadingWaitMs({ keyAt, now: keyAt }), 10000, "the reading is 10 seconds after the key");
   await server.played;
   assert.deepEqual(received(server), S1_STEPS.slice(0, 1).concat(S1_STEPS.slice(2, 4), [
-    ["run", "w1", "core.library.search.focus", {}, undefined],
+    ["run", "w1", "core.home.search.focus", {}, undefined],
     ["input.key", "w1"],
     ["input.key", "w1"],
   ]));
@@ -678,7 +678,7 @@ test("S0b closes the project and waits for the exit of each WebContent process o
   await kept.server.played;
 });
 
-test("S9 places a second library window over the window of S1 and requires occluded true", { timeout: 30000 }, async (t) => {
+test("S9 places a second window over the window of S1 and requires occluded true", { timeout: 30000 }, async (t) => {
   const { s, server } = await play(t, "measure-state-s9");
   const context = await prepareState(s, "S9", prepareDeps(), S1_PLUGINS);
   await server.played;
@@ -731,7 +731,7 @@ test("S12 makes one layout draw fail and waits for its error line in the applica
   assert.equal(context.faultLog["host-1-10.jsonl"].offset, 0, "the position is the end of the log before the request");
 });
 
-test("S15 opens the settings window of S1", { timeout: 30000 }, async (t) => {
+test("S15 opens the settings tab of S1", { timeout: 30000 }, async (t) => {
   const { s, server } = await play(t, "measure-state-s15");
   await prepareState(s, "S15", prepareDeps(), S1_PLUGINS);
   await server.played;

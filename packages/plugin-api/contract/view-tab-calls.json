@@ -1,6 +1,6 @@
 {
   "surface": "packages/plugin-api/view.js#createViewBridge calls",
-  "description": "Ordered steps of the tab calls of a view page. Each case sends a tab call through the call layer of the bridge with the parameters that the call takes (docs/spec/native-surfaces.md, view calls: tab.title, tab.footer, tab.directory, tab.modified and tab.error take the value; tab.notify takes {text, policy}; tab.keep takes {reason, on}). The first step sends a valid value, and the host answers null. The second step sends an invalid value, and the host answers with the refusal of the workbench for that value (its text is the one the tab reports refuse with). The cases verify the request that the bridge posts and that the reply and the refusal of the host reach the view unchanged: the bridge validates no tab value itself. Each step lists the posted call, the result and the error text.",
+  "description": "Ordered steps of the tab calls of a view page. Each case sends a tab call through the call layer of the bridge with the parameters that the call takes (docs/spec/native-surfaces.md, view calls: tab.title, tab.footer, tab.directory, tab.modified and tab.error take the value; tab.notify takes the notice fields {kind, title, text, action, system} and replies the notice id, tab.progress takes {id, progress}, tab.done takes {id, kind, title}; tab.keep takes {reason, on}). The page calls page.notify, page.progress and page.done take the same fields and reply the same as tab.notify, tab.progress and tab.done (docs/spec/native-surfaces.md, view calls). The first step sends a valid value, and the host answers its reply (null, or the notice id for tab.notify). The second step sends an invalid value, and the host answers with the refusal of the workbench for that value (its text is the one the tab reports refuse with). The cases verify the request that the bridge posts and that the reply and the refusal of the host reach the view unchanged: the bridge validates no tab value itself. Each step lists the posted call, the result and the error text.",
   "cases": [
     {
       "id": "view.tab.title-request-reply-and-refusal",
@@ -159,8 +159,90 @@
           "call": {
             "command": "tab.notify",
             "params": {
-              "text": "Saved",
-              "policy": "tab"
+              "kind": "progress",
+              "title": "Build",
+              "text": "",
+              "action": {
+                "label": "Stop",
+                "command": "probe.stop",
+                "params": {
+                  "job": 1
+                }
+              },
+              "system": true
+            }
+          },
+          "answer": {
+            "result": "notice-1"
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "tab.notify",
+                "params": {
+                  "kind": "progress",
+                  "title": "Build",
+                  "text": "",
+                  "action": {
+                    "label": "Stop",
+                    "command": "probe.stop",
+                    "params": {
+                      "job": 1
+                    }
+                  },
+                  "system": true
+                }
+              }
+            ],
+            "result": "notice-1",
+            "throws": null
+          }
+        },
+        {
+          "call": {
+            "command": "tab.notify",
+            "params": {
+              "kind": "loud",
+              "title": "Build",
+              "text": ""
+            }
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "a notice kind must be success, info, warning, error or progress"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "tab.notify",
+                "params": {
+                  "kind": "loud",
+                  "title": "Build",
+                  "text": ""
+                }
+              }
+            ],
+            "result": null,
+            "throws": "a notice kind must be success, info, warning, error or progress"
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.tab.progress-request-reply-and-refusal",
+      "steps": [
+        {
+          "call": {
+            "command": "tab.progress",
+            "params": {
+              "id": "notice-1",
+              "progress": 0.5
             }
           },
           "answer": {
@@ -171,10 +253,10 @@
               {
                 "sok": 1,
                 "id": 1,
-                "command": "tab.notify",
+                "command": "tab.progress",
                 "params": {
-                  "text": "Saved",
-                  "policy": "tab"
+                  "id": "notice-1",
+                  "progress": 0.5
                 }
               }
             ],
@@ -184,16 +266,16 @@
         },
         {
           "call": {
-            "command": "tab.notify",
+            "command": "tab.progress",
             "params": {
-              "text": "",
-              "policy": "tab"
+              "id": "notice-1",
+              "progress": 1.5
             }
           },
           "answer": {
             "error": {
               "code": -32000,
-              "message": "a tab notice must be 1 to 1024 characters without control characters"
+              "message": "a notice progress must be a number from 0 to 1, or null while the amount is unknown"
             }
           },
           "output": {
@@ -201,15 +283,81 @@
               {
                 "sok": 1,
                 "id": 2,
-                "command": "tab.notify",
+                "command": "tab.progress",
                 "params": {
-                  "text": "",
-                  "policy": "tab"
+                  "id": "notice-1",
+                  "progress": 1.5
                 }
               }
             ],
             "result": null,
-            "throws": "a tab notice must be 1 to 1024 characters without control characters"
+            "throws": "a notice progress must be a number from 0 to 1, or null while the amount is unknown"
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.tab.done-request-reply-and-refusal",
+      "steps": [
+        {
+          "call": {
+            "command": "tab.done",
+            "params": {
+              "id": "notice-1",
+              "kind": "success",
+              "title": "Built"
+            }
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "tab.done",
+                "params": {
+                  "id": "notice-1",
+                  "kind": "success",
+                  "title": "Built"
+                }
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "call": {
+            "command": "tab.done",
+            "params": {
+              "id": "notice-1",
+              "kind": "info",
+              "title": "Built"
+            }
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "a finished notice must be success or error"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "tab.done",
+                "params": {
+                  "id": "notice-1",
+                  "kind": "info",
+                  "title": "Built"
+                }
+              }
+            ],
+            "result": null,
+            "throws": "a finished notice must be success or error"
           }
         }
       ]
@@ -372,6 +520,216 @@
             ],
             "result": null,
             "throws": "unknown keep reason: idle"
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.page.notify-request-reply-and-refusal",
+      "steps": [
+        {
+          "call": {
+            "command": "page.notify",
+            "params": {
+              "kind": "progress",
+              "title": "Build",
+              "text": "",
+              "action": {
+                "label": "Stop",
+                "command": "probe.stop",
+                "params": {
+                  "job": 1
+                }
+              },
+              "system": true
+            }
+          },
+          "answer": {
+            "result": "notice-1"
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "page.notify",
+                "params": {
+                  "kind": "progress",
+                  "title": "Build",
+                  "text": "",
+                  "action": {
+                    "label": "Stop",
+                    "command": "probe.stop",
+                    "params": {
+                      "job": 1
+                    }
+                  },
+                  "system": true
+                }
+              }
+            ],
+            "result": "notice-1",
+            "throws": null
+          }
+        },
+        {
+          "call": {
+            "command": "page.notify",
+            "params": {
+              "kind": "loud",
+              "title": "Build",
+              "text": ""
+            }
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "a notice kind must be success, info, warning, error or progress"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "page.notify",
+                "params": {
+                  "kind": "loud",
+                  "title": "Build",
+                  "text": ""
+                }
+              }
+            ],
+            "result": null,
+            "throws": "a notice kind must be success, info, warning, error or progress"
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.page.progress-request-reply-and-refusal",
+      "steps": [
+        {
+          "call": {
+            "command": "page.progress",
+            "params": {
+              "id": "notice-1",
+              "progress": 0.5
+            }
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "page.progress",
+                "params": {
+                  "id": "notice-1",
+                  "progress": 0.5
+                }
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "call": {
+            "command": "page.progress",
+            "params": {
+              "id": "notice-1",
+              "progress": 1.5
+            }
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "a notice progress must be a number from 0 to 1, or null while the amount is unknown"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "page.progress",
+                "params": {
+                  "id": "notice-1",
+                  "progress": 1.5
+                }
+              }
+            ],
+            "result": null,
+            "throws": "a notice progress must be a number from 0 to 1, or null while the amount is unknown"
+          }
+        }
+      ]
+    },
+    {
+      "id": "view.page.done-request-reply-and-refusal",
+      "steps": [
+        {
+          "call": {
+            "command": "page.done",
+            "params": {
+              "id": "notice-1",
+              "kind": "success",
+              "title": "Built"
+            }
+          },
+          "answer": {
+            "result": null
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 1,
+                "command": "page.done",
+                "params": {
+                  "id": "notice-1",
+                  "kind": "success",
+                  "title": "Built"
+                }
+              }
+            ],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "call": {
+            "command": "page.done",
+            "params": {
+              "id": "notice-1",
+              "kind": "info",
+              "title": "Built"
+            }
+          },
+          "answer": {
+            "error": {
+              "code": -32000,
+              "message": "a finished notice must be success or error"
+            }
+          },
+          "output": {
+            "posted": [
+              {
+                "sok": 1,
+                "id": 2,
+                "command": "page.done",
+                "params": {
+                  "id": "notice-1",
+                  "kind": "info",
+                  "title": "Built"
+                }
+              }
+            ],
+            "result": null,
+            "throws": "a finished notice must be success or error"
           }
         }
       ]

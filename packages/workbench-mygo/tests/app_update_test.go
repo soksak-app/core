@@ -53,7 +53,6 @@ func updateShell(t *testing.T, candidate string) (*shellFixture, *storedHost) {
 			"release": map[string]string{"url": candidate, "sha256": strings.Repeat("0", 64)}}}
 	}
 	f := newShell(t, stored)
-	f.do("core.library.page", map[string]string{"page": "plugins"})
 	f.settle()
 	return f, stored
 }
@@ -77,6 +76,7 @@ func (f *shellFixture) appUpdateStatus() updateStatus {
 
 func TestCoreAppReportsTheCandidateAndThePluginsThatDoNotFitIt(t *testing.T) {
 	f, _ := updateShell(t, appRelease)
+	openInstalled(t, f)
 	status := f.appUpdateStatus()
 	if status.Version == nil || *status.Version != "1.0.0" || status.Available == nil || status.Available.Version != "2.0.0" {
 		t.Fatalf("the status is %+v", status)
@@ -98,18 +98,16 @@ func TestCoreAppReportsTheCandidateAndThePluginsThatDoNotFitIt(t *testing.T) {
 	if want := []string{"alpha 1.0.0 ^1.0.0 1.2.0", "beta 1.0.0 ^1.0.0 "}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("the incompatible plugins are %q, want %q", got, want)
 	}
-	if !f.tester.HasText("core: 1.0.0 → 2.0.0") {
-		t.Fatalf("the plugin page shows %q", f.tester.Texts())
+	if _, ok := findControl(f.controlsOf(), "core.settings-tab.plugins.app", "core"); !ok {
+		t.Fatalf("the installed page shows no core row: %+v", f.controlsOf())
 	}
 }
 
-func TestTheUpdateControlCountsTheApplicationUpdate(t *testing.T) {
+// The title bar holds only the window tools of its screen, so no update control is drawn in it (docs/spec/external-sidebars.md#window-tools).
+func TestTheTitleBarHasNoUpdateControl(t *testing.T) {
 	f, _ := updateShell(t, appRelease)
-	if !f.has("core.chrome.updates", "") {
-		t.Fatalf("the window has no control of the updates; the texts are %q", f.tester.Texts())
-	}
-	if want := fmt.Sprintf("업데이트 %d", len(f.pluginStatus().Updates)+1); !f.tester.HasText(want) {
-		t.Fatalf("the window does not show %q: %q", want, f.tester.Texts())
+	if f.tester.HasText(fmt.Sprintf("업데이트 %d", len(f.pluginStatus().Updates)+1)) {
+		t.Fatalf("the title bar shows the update count: %q", f.tester.Texts())
 	}
 }
 
@@ -128,6 +126,7 @@ func TestARegistryURLThatIsNoReleaseHasNoReleasePage(t *testing.T) {
 
 func TestCoreAppReleaseOpensTheReleasePage(t *testing.T) {
 	f, stored := updateShell(t, appRelease)
+	openInstalled(t, f)
 	if err := f.finish("core.app.release", struct{}{}); err != nil {
 		t.Fatal(err)
 	}
@@ -152,6 +151,7 @@ func TestAFailedReadIsTheErrorOfCoreApp(t *testing.T) {
 
 func TestCoreAppUpdateStagesAndAppliesTheCandidate(t *testing.T) {
 	f, stored := updateShell(t, appRelease)
+	openInstalled(t, f)
 	stored.calls = nil
 	if err := f.finish("core.app.update", struct{}{}); err != nil {
 		t.Fatal(err)
@@ -166,6 +166,7 @@ func TestCoreAppUpdateStagesAndAppliesTheCandidate(t *testing.T) {
 
 func TestAFailedStageIsTheOperationOfCoreApp(t *testing.T) {
 	f, stored := updateShell(t, appRelease)
+	openInstalled(t, f)
 	stored.failing = map[string]error{"appUpdateStage": errors.New("no space")}
 	var failure error
 	f.shell.Registry().RunLater("core.app.update", json.RawMessage(`{}`), func(_ any, err error) { failure = err })
@@ -180,8 +181,12 @@ func TestAFailedStageIsTheOperationOfCoreApp(t *testing.T) {
 	if status.Operation == nil || status.Operation.State != "failed" || status.Operation.Error == nil || !strings.Contains(*status.Operation.Error, "no space") {
 		t.Fatalf("the status is %+v", status)
 	}
-	if !strings.Contains(strings.Join(f.tester.Texts(), " "), "2.0.0 업데이트하지 못했습니다: ") {
-		t.Fatalf("the plugin page shows %q", f.tester.Texts())
+	// The failure is an error of the status, so it shows through the one display path of errors, the toast (docs/spec/notifications.md#toasts).
+	f.runExpectingErrors("core.settings.open", nil)
+	f.runExpectingErrors("core.settings-tab.nav", map[string]string{"page": "installed"})
+	f.tester.Frame()
+	if f.noticeFor("2.0.0 업데이트하지 못했습니다: no space") == "" {
+		t.Fatalf("the toasts are %+v", f.toasts())
 	}
 }
 
@@ -201,9 +206,6 @@ func TestCoreAppUpdateWithoutACandidateFails(t *testing.T) {
 // application update after the frame of the plugin state, so the command cannot answer with that frame.
 func TestTheRegistryCommandAnswersAfterTheFrameThatShowsTheApplicationUpdate(t *testing.T) {
 	f, stored := updateShell(t, "")
-	if f.has("core.chrome.updates", "") {
-		t.Fatalf("the window shows the update control before the index lists a release; the texts are %q", f.tester.Texts())
-	}
 	stored.appUpdate = map[string]any{"version": "1.0.0", "available": map[string]any{"version": "2.0.0",
 		"release": map[string]string{"url": appRelease, "sha256": strings.Repeat("0", 64)}}}
 	hold := newGate()
@@ -215,7 +217,7 @@ func TestTheRegistryCommandAnswersAfterTheFrameThatShowsTheApplicationUpdate(t *
 			t.Errorf("core.plugins.registry failed: %v", err)
 		}
 		answered = true
-		_, found = f.shell.Registry().Answer("element.rect", json.RawMessage(`{"name":"core.chrome.updates"}`), nil)
+		_, found = f.shell.Registry().Answer("element.rect", json.RawMessage(`{"name":"core.chrome.settings"}`), nil)
 	})
 	f.settle()
 	if answered {
@@ -240,4 +242,11 @@ func filterCalls(calls []string, prefix string) []string {
 		}
 	}
 	return found
+}
+
+// openInstalled shows the installed page, which reads the application update when it is shown (docs/spec/settings.md#설치됨).
+func openInstalled(t *testing.T, f *shellFixture) {
+	t.Helper()
+	f.run("core.settings.open", nil)
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
 }

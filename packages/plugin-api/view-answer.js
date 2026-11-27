@@ -4,6 +4,7 @@ import { causeCids } from "./calls.js";
 import { runCommandCall } from "./command-route.js";
 import { shellQuotePath } from "./clipboard.js";
 import { surfaceDocumentEntry } from "./surface-document.js";
+import { checkNotice, checkNoticeDone, checkNoticeProgress } from "./tab-notice.js";
 
 /** A binary id of the binary store of a view: 32 lowercase hexadecimal characters (docs/spec/plugin-processes.md#binary-path). */
 const BINARY_ID = /^[0-9a-f]{32}$/;
@@ -24,8 +25,9 @@ const BINARY_ID = /^[0-9a-f]{32}$/;
  *               startProject(): the project {id, root} of the start values of the view, or null when they carry none
  *               emitEvent(level, event, fields): the event writer of the page, which stores the shortcut records of the view
  *               contributions(point): the connected items of the point, as contributions of the surface context returns them
+ *               page: the page notice handlers notify(fields) which returns the notice id, progress(id, progress) and done(id, kind, title)
  *               tab: the tab handlers of the surface context, as context.tab has: the reports title(text), footer(text),
- *                 directory(path), notify(text, policy), modified(value), error(text), keep(reason, on), focus(value), and state with
+ *                 directory(path), notify(fields) which returns the notice id, progress(id, progress), done(id, kind, title), modified(value), error(text), keep(reason, on), focus(value), and state with
  *                 {read, write} only when the plugin declares surface.unload. focus(value) receives the value of the view call
  *                 tab.focus, {name, index} or null, and records it for the surface; the caller validates it and its errors reject the call.
  *               runtime: the handlers of the runtime entries of the DOM surface context
@@ -185,7 +187,7 @@ function regionOf(command, params) {
   return fields;
 }
 
-async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent, contributions, runCore, runOwned, startProject, runtime, composition, signal }) {
+async function run(command, params, { plugin, surface, tab, page, shortcuts, emitEvent, contributions, runCore, runOwned, startProject, runtime, composition, signal }) {
 
   switch (command) {
     case "tab.state.read":
@@ -388,9 +390,30 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
     case "tab.error":
       tab.error(params);
       return null;
-    case "tab.notify": {
-      const fields = objectOf(command, params);
-      tab.notify(fields.text, fields.policy);
+    // A notice is checked before the tab receives it; the reply is the id that the workbench assigned to the notice.
+    case "tab.notify":
+      return tab.notify(checkNotice(objectOf(command, params)));
+    case "tab.progress": {
+      const fields = checkNoticeProgress(objectOf(command, params));
+      tab.progress(fields.id, fields.progress);
+      return null;
+    }
+    case "tab.done": {
+      const fields = checkNoticeDone(objectOf(command, params));
+      tab.done(fields.id, fields.kind, fields.title);
+      return null;
+    }
+    // The page notices of a view belong to no card (docs/spec/notifications.md#plugin-notices); they take the checks of the tab notices.
+    case "page.notify":
+      return page.notify(checkNotice(objectOf(command, params)));
+    case "page.progress": {
+      const fields = checkNoticeProgress(objectOf(command, params));
+      page.progress(fields.id, fields.progress);
+      return null;
+    }
+    case "page.done": {
+      const fields = checkNoticeDone(objectOf(command, params));
+      page.done(fields.id, fields.kind, fields.title);
       return null;
     }
     case "tab.keep": {

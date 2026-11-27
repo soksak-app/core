@@ -533,7 +533,7 @@ func (s *Shell) shownActivities() (tabs, groups, projects, spaces map[string]str
 	for id, project := range state.Projects {
 		projects[id] = project.Activity
 	}
-	if shown, ok := state.Projects[s.active]; ok && !s.inLibrary() {
+	if shown, ok := state.Projects[s.active]; ok && !s.inHome() {
 		for id, space := range shown.Spaces {
 			spaces[id] = space.Activity
 		}

@@ -125,9 +125,9 @@ export function operationSteps({ window, windows, plugins, sok, configDir, clien
     },
     "settings.window": async () => {
       await run(["core.settings.open", "--window", window]);
-      await until("core.settings-modal", (modal) => modal.open);
+      await until("core.settings-tab", (tab) => tab !== null);
       await run(["core.settings.close", "--window", window]);
-      await until("core.settings-modal", (modal) => !modal.open);
+      await until("core.settings-tab", (tab) => tab === null);
     },
     "plugins.apply": async () => {
       const before = (await status("core.window.workbench")).start;

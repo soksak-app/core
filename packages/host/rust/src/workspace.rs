@@ -64,8 +64,8 @@ pub struct Workspace {
     role: Mutex<crate::role_state::RoleState>,
 }
 
-/// A store request. kind is one of snapshot, add, patch, remove, move, settings, tabState, tabStatePut, tabSession,
-/// tabSessionPut and tabSessions.
+/// A store request. kind is one of snapshot, add, patch, remove, move, settings, tabState, tabStatePut, notices, noticesPut,
+/// tabSession, tabSessionPut and tabSessions.
 #[derive(Deserialize)]
 pub struct Request {
     kind: String,
@@ -77,6 +77,8 @@ pub struct Request {
     delta: Option<i64>,
     tab: Option<String>,
     entry: Option<Map<String, Value>>,
+    /// notices is the list of noticesPut; an absent member and a JSON null are both None and both refused.
+    notices: Option<Value>,
     regions: Option<Map<String, Value>>,
     roles: Option<Map<String, Value>>,
     role: Option<Value>,
@@ -299,8 +301,8 @@ fn same_value(one: &Value, other: &Value) -> bool {
 /// role definitions change no project or setting (docs/spec/plugins.md#plugin-data).
 pub fn notifies_windows(kind: &str, result: &Value) -> bool {
     match kind {
-        "snapshot" | "tabState" | "tabStatePut" | "tabSession" | "tabSessionPut"
-        | "tabSessions" | "roles" | "rolesPut" | "rolesStatus" | "role" => false,
+        "snapshot" | "tabState" | "tabStatePut" | "notices" | "noticesPut" | "tabSession"
+        | "tabSessionPut" | "tabSessions" | "roles" | "rolesPut" | "rolesStatus" | "role" => false,
         "pluginData" => result == &Value::Bool(true),
         _ => true,
     }
@@ -402,6 +404,29 @@ const TAB_STATE_FORMAT: u64 = 1;
 /// is refused with the path of the file.
 fn read_tab_state(path: &Path) -> Result<Value, String> {
     Ok(read_stored(path, "tab-state.json", TAB_STATE_FORMAT)?.map_or(Value::Null, Value::Object))
+}
+
+/// The format of notices.json, the notice center store (docs/spec/notifications.md#notice-center).
+const NOTICES_FORMAT: u64 = 1;
+
+/// Returns the document of notices.json as stored, or null when the file does not exist; a document of another format is
+/// refused with the path of the file.
+fn read_notices(path: &Path) -> Result<Value, String> {
+    Ok(read_stored(path, "notices.json", NOTICES_FORMAT)?.map_or(Value::Null, Value::Object))
+}
+
+/// Replaces the list of notices in notices.json and returns the size of the written file. A value that is not a list is refused
+/// before the file is read, so a refused put leaves the file unchanged.
+fn put_notices(path: &Path, notices: Option<Value>) -> Result<Value, String> {
+    let Some(Value::Array(list)) = notices else {
+        return Err("notices put requires a list of notices".into());
+    };
+    read_stored(path, "notices.json", NOTICES_FORMAT)?;
+    write(path, &json!({"format": NOTICES_FORMAT, "notices": list}))?;
+    let size = fs::metadata(path)
+        .map_err(|e| format!("{}: {e}", path.display()))?
+        .len();
+    Ok(size.into())
 }
 
 /// Sets the entry of tab, or removes it when entry is None, in tab-state.json and returns the size of the written
@@ -692,6 +717,10 @@ impl Workspace {
                     req.tab.as_deref().unwrap_or_default(),
                     req.entry,
                 );
+            }
+            "notices" => return read_notices(&self.directory.join("notices.json")),
+            "noticesPut" => {
+                return put_notices(&self.directory.join("notices.json"), req.notices);
             }
             "tabSession" => {
                 // default: a request without a tab is refused by tab_session_path with its own error.

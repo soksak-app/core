@@ -155,7 +155,7 @@ var hostStatus = map[string]hostEntry{
 		}}},
 	},
 	"host.sidecars": {
-		Description: "The surfaces whose closed the host has sent and the sidecar has not answered, sorted by sidecar and surface, and the persistent sidecars whose service runs another version than the installed one, sorted by sidecar, with the running version (null when the service sent none), the installed version (null when the sidecar is no longer declared) and the number of open surfaces of the service: {closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}.",
+		Description: "The surfaces whose closed the host has sent and the sidecar has not answered, sorted by sidecar and surface, and the persistent sidecars whose service runs another version than the installed one, sorted by sidecar, with the running version (null when the service sent none), the installed version (null when the sidecar is no longer declared) and the number of open surfaces of the service: {closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions, surfaces}]}, where surfaces lists the surfaces that sessions counts, sorted.",
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"closing": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": map[string]any{
 				"sidecar": map[string]any{"type": "string"}, "surface": map[string]any{"type": "string"},

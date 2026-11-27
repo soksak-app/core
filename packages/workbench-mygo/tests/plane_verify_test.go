@@ -482,7 +482,7 @@ func TestASettledPlaneAsksForNoFrame(t *testing.T) {
 }
 
 // Without a drawn plane nothing is verified, and a row of the plane that was drawn before does not stay.
-func TestTheLibraryHasNoVerificationRows(t *testing.T) {
+func TestTheHomeHasNoVerificationRows(t *testing.T) {
 	f := newShell(t, &storedHost{})
 	verify := status[*workbench.VerifyStatus](t, f, "core.verify")
 	if verify != nil && len(verify.Rows) != 0 {
@@ -636,7 +636,7 @@ func TestTheGridStatesTheSidesOfACard(t *testing.T) {
 }
 
 // The step after a frame outlives a close of the project: the window goes on and its watcher still waits for the result of that
-// frame. A window without a plane verifies nothing, as the next frame of the library will state.
+// frame. A window without a plane verifies nothing, as the next frame of the project home will state.
 func TestTheStepAfterAFrameReadsAClosedProjectAsNoPlane(t *testing.T) {
 	f, _ := placingShell(t)
 	resized(f, 1000)
@@ -684,7 +684,7 @@ func TestTheStepAfterAFrameReadsAClosedProjectAsNoPlane(t *testing.T) {
 	}
 	f.settle()
 	if !done || answered != nil {
-		t.Fatalf("after the frame of the library the close answered %v, done %t", answered, done)
+		t.Fatalf("after the frame of the project home the close answered %v, done %t", answered, done)
 	}
 }
 
@@ -726,7 +726,7 @@ func TestAReadBeforeTheFrameOfAnotherPlaneStatesNoRows(t *testing.T) {
 // shownError reads the error that the workbench shows, or "" when it shows none.
 func shownError(t *testing.T, f *shellFixture) string {
 	t.Helper()
-	shown, err := f.shell.Registry().Read("core.workbench.error")
+	shown, err := readWorkbenchErrorStatus(f.shell.Registry())
 	if err != nil {
 		t.Fatal(err)
 	}

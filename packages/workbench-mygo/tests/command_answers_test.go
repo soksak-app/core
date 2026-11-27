@@ -34,48 +34,42 @@ func TestAddingASpaceAnswersItsIdAndTitle(t *testing.T) {
 	}
 }
 
-func TestTheSearchOfTheLibraryTakesTheFocusAndItsKeys(t *testing.T) {
+func TestTheSearchOfTheHomeTakesTheFocusAndItsKeys(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	if !f.has("core.library.search", "") {
-		t.Fatalf("the library has no search; the texts are %q", f.tester.Texts())
+	if !f.has("core.home.search", "") {
+		t.Fatalf("the project home has no search; the texts are %q", f.tester.Texts())
 	}
-	f.run("core.library.search.focus", nil)
-	if !f.tester.Focused("프로젝트 검색") {
-		t.Fatal("core.library.search.focus left the search without the focus")
+	f.run("core.home.search.focus", nil)
+	if !f.tester.Focused("프로젝트 찾기") {
+		t.Fatal("core.home.search.focus left the search without the focus")
 	}
 	f.tester.Type("a")
 	f.settle()
-	if got := status[map[string]any](t, f, "core.library")["query"]; got != "a" {
-		t.Fatalf("the query of the library is %v", got)
+	if got := status[homeRead](t, f, "core.home").Query; got != "a" {
+		t.Fatalf("the query of the home is %v", got)
 	}
 }
 
-func TestTheSearchOfThePluginPageTakesTheFocus(t *testing.T) {
-	f := newShell(t, &storedHost{})
-	f.run("core.library.page", map[string]string{"page": "plugins"})
-	f.run("core.library.search.focus", nil)
-	if !f.tester.Focused("플러그인 검색") {
-		t.Fatal("core.library.search.focus left the search of the plugin page without the focus")
-	}
-}
-
-func TestTheSearchFocusNeedsTheLibrary(t *testing.T) {
+func TestTheSearchFocusNeedsTheHome(t *testing.T) {
 	f := openedShell(t)
 	failure := make(chan error, 1)
-	f.shell.Registry().RunLater("core.library.search.focus", nil, func(_ any, err error) { failure <- err })
+	f.shell.Registry().RunLater("core.home.search.focus", nil, func(_ any, err error) { failure <- err })
 	f.settle()
-	if err := <-failure; err == nil || err.Error() != "the library is not shown" {
-		t.Fatalf("core.library.search.focus failed with %v", err)
+	if err := <-failure; err == nil || err.Error() != "the project home is not shown" {
+		t.Fatalf("core.home.search.focus failed with %v", err)
 	}
 }
 
 // A command answers after the frame that shows its change (docs/spec/exposure.md#registration): core.projects.browse, the
-// command of Command+K, answers when the frame that draws the library ran, so a request that the caller sends after the answer
-// finds the elements of the library.
+// command of Command+K, answers when the frame that draws the project home ran, so a request that the caller sends after the answer
+// finds the elements of the project home.
+
+// A command whose run changes nothing answers at once, without asking for a frame: core.home.search with the query that the home holds.
+
 func TestACommandAnswersAfterTheFrameThatShowsItsChange(t *testing.T) {
 	f := openedShell(t)
-	if f.has("core.library.window", "") {
-		t.Fatal("the workspace already shows the library")
+	if f.has("core.home.search", "") {
+		t.Fatal("the workspace already shows the project home")
 	}
 	answered := false
 	var focused error
@@ -85,37 +79,35 @@ func TestACommandAnswersAfterTheFrameThatShowsItsChange(t *testing.T) {
 		}
 		answered = true
 		_, focused = f.shell.Registry().Answer("command.run",
-			json.RawMessage(`{"name":"core.focus.set","params":{"name":"core.library.window","index":0}}`), nil)
+			json.RawMessage(`{"name":"core.focus.set","params":{"name":"core.home.search","index":0}}`), nil)
 	})
 	if answered {
-		t.Fatal("core.projects.browse answered before a frame drew the library")
+		t.Fatal("core.projects.browse answered before a frame drew the project home")
 	}
 	f.settle()
 	if !answered {
-		t.Fatal("core.projects.browse did not answer after the frame that drew the library")
+		t.Fatal("core.projects.browse did not answer after the frame that drew the project home")
 	}
 	if focused != nil {
 		t.Fatalf("a request after the answer of core.projects.browse failed: %v", focused)
 	}
 }
 
-// A command whose run asks for no frame answers at once: core.library.window asks the host for a new window and changes
-// nothing that this window draws.
 func TestACommandThatChangesNothingAnswersAtOnce(t *testing.T) {
 	f := openedShell(t)
 	frames := f.frames
 	answered := false
-	f.shell.Registry().RunLater("core.library.window", nil, func(_ any, err error) {
+	f.shell.Registry().RunLater("core.home.search", json.RawMessage(`{"query":""}`), func(_ any, err error) {
 		if err != nil {
-			t.Errorf("core.library.window failed: %v", err)
+			t.Errorf("core.home.search failed: %v", err)
 		}
 		answered = true
 	})
 	if f.frames != frames {
-		t.Fatalf("core.library.window asked for %d frames", f.frames-frames)
+		t.Fatalf("core.home.search asked for %d frames", f.frames-frames)
 	}
 	if !answered {
-		t.Fatal("core.library.window, which asked for no frame, did not answer at once")
+		t.Fatal("core.home.search, which changed nothing, did not answer at once")
 	}
 	f.settle()
 }

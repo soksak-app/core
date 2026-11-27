@@ -1736,8 +1736,8 @@ func TestPersistentServiceOfAnotherVersionIsReportedOutdated(t *testing.T) {
 		version *string
 		want    []host.OutdatedSidecar
 	}{
-		{"another version", &old, []host.OutdatedSidecar{{Sidecar: "fixture-service", Running: &old, Installed: text("0.0.7"), Sessions: 1}}},
-		{"no version", nil, []host.OutdatedSidecar{{Sidecar: "fixture-service", Running: nil, Installed: text("0.0.7"), Sessions: 1}}},
+		{"another version", &old, []host.OutdatedSidecar{{Sidecar: "fixture-service", Running: &old, Installed: text("0.0.7"), Sessions: 1, Surfaces: []string{"surface"}}}},
+		{"no version", nil, []host.OutdatedSidecar{{Sidecar: "fixture-service", Running: nil, Installed: text("0.0.7"), Sessions: 1, Surfaces: []string{"surface"}}}},
 		{"the installed version", text("0.0.7"), []host.OutdatedSidecar{}},
 	}
 	for _, item := range cases {
@@ -2122,7 +2122,7 @@ func TestAServiceOfAnUndeclaredSidecarIsEnded(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ := json.Marshal(sidecars.Outdated())
-	if want := `[{"sidecar":"fixture-service","running":"0.0.7","installed":null,"sessions":1}]`; string(got) != want {
+	if want := `[{"sidecar":"fixture-service","running":"0.0.7","installed":null,"sessions":1,"surfaces":["surface-1"]}]`; string(got) != want {
 		t.Fatalf("outdated of the undeclared sidecar = %s, want %s", got, want)
 	}
 	if err := sidecars.Replace(context.Background(), "fixture-service"); err != nil {
@@ -2250,7 +2250,7 @@ func TestTheRemovalOfThePluginOfAServiceKeepsTheSessionsOfItsLayoutSurfaces(t *t
 	}
 	requireNoReplacement(t, service, sidecars)
 	got, _ := json.Marshal(sidecars.Outdated())
-	if want := `[{"sidecar":"fixture-service","running":"0.0.7","installed":null,"sessions":1}]`; string(got) != want {
+	if want := `[{"sidecar":"fixture-service","running":"0.0.7","installed":null,"sessions":1,"surfaces":["space-b/left/probe.section"]}]`; string(got) != want {
 		t.Fatalf("outdated after the removal = %s, want %s", got, want)
 	}
 }

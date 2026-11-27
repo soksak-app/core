@@ -30,7 +30,7 @@ globalThis.location = dom.window.location;
 globalThis.history = dom.window.history;
 globalThis.dispatchEvent = dom.window.dispatchEvent.bind(dom.window);
 globalThis.ErrorEvent = dom.window.ErrorEvent;
-/** Gives the window the address of a test: the page of a project names it in its search, the library has none. */
+/** Gives the window the address of a test: the page of a project names it in its search, the project home has none. */
 const locate = (search) => history.replaceState(null, "", `/index.html${search}`);
 
 const projects = await import("../projects.js");
@@ -39,7 +39,7 @@ const { HostWorkspaceStore } = await import("../host-store.js");
 const { connectSettings, settingProject } = await import("../settings.js");
 const { flushEvents, recordWorkbenchStart } = await import("../page-log.js");
 
-let contextPendingAtLibraryEmpty = false;
+let contextPendingAtHomeEmpty = false;
 const plane = { layout: null };
 let loadsBeforeInitialContextCommit = 0;
 projects.onSwitch({
@@ -53,13 +53,13 @@ projects.onSwitch({
   retain: async () => {},
   presented: async () => {},
   empty: async (show) => {
-    contextPendingAtLibraryEmpty = !projects.initialProjectContextReady();
+    contextPendingAtHomeEmpty = !projects.initialProjectContextReady();
     plane.layout = null;
     show?.();
   },
 });
 
-// The start of the page: the first screen is the library, the settings connect to the store of the host, and the start of the document
+// The start of the page: the first screen is the project home, the settings connect to the store of the host, and the start of the document
 // is the first event that leaves the log.
 projects.begin(snapshotOf());
 await orderedCallsAnswered();
@@ -70,7 +70,7 @@ await flushEvents();
 
 /** The calls of the page that a host call name selects, from the call at index `from` on. */
 const callsOf = (name, from = 0) => wire.calls.slice(from).filter((call) => call.name === name);
-/** The ids of the projects that the calls from index `from` on published as shown, null for the library. */
+/** The ids of the projects that the calls from index `from` on published as shown, null for the project home. */
 const shownIn = (from) => callsOf("projectShown", from).map(({ payload }) => payload.project?.id ?? null);
 
 test("a page start without a project does not wait for project context", async () => {
@@ -89,7 +89,7 @@ test("a failed first activation releases startup waiters after the preview is cl
   await projects.initialise(store);
   await initialContext;
 
-  assert.equal(contextPendingAtLibraryEmpty, true,
+  assert.equal(contextPendingAtHomeEmpty, true,
     "the initial context gate opened before leaveBegun cleared the preview layout");
   assert.equal(projects.initialProjectContextReady(), true);
   assert.equal(projects.active(), null, "a rejected first activation left the preview project active");

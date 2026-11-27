@@ -9,24 +9,25 @@ const SPACES = [{ id: "s1", title: "one" }, { id: "s2", title: "two" }];
 
 /** The strips over a fixture of two projects, of which the first is shown with two spaces. */
 function strips() {
-  const { document } = new JSDOM(`<div id="projectBar"></div><main id="workarea"></main><div id="spaceBar"></div>`).window;
+  const { document } = new JSDOM(`<div id="projectBar"></div><div id="projectRow"></div><main id="workarea"></main><div id="spaceBar"></div>`).window;
   globalThis.document = document;
   const state = {
     activities: { projects: {}, tabs: {} },
-    library: false,
+    home: false,
     all: [{ id: "p1", title: "first", color: "#111", activeSpaceId: "s1", spaces: SPACES }, { id: "p2", title: "second", color: "#222", spaces: [] }],
   };
   const projects = {
-    active: () => (state.library ? null : state.all[0]),
+    active: () => (state.home ? null : state.all[0]),
     all: () => state.all,
-    inLibrary: () => state.library,
+    inHome: () => state.home,
   };
   let redraws = 0;
   const projectBar = document.getElementById("projectBar");
+  const projectRow = document.getElementById("projectRow");
   const spaceBar = document.getElementById("spaceBar");
   const workarea = document.getElementById("workarea");
   const runs = [];
-  const tabs = createBarTabs({ projects, projectBar, spaceBar, workarea, bind: () => {}, run: async (name, params) => { runs.push([name, params]); }, keyboardOwed: () => {},
+  const tabs = createBarTabs({ projects, projectBar, projectRow, spaceBar, workarea, bind: () => {}, run: async (name, params) => { runs.push([name, params]); }, keyboardOwed: () => {},
     redraw: () => { redraws += 1; }, changed: () => {}, activities: () => state.activities });
   const texts = (strip) => [...strip.children].map((child) => child.textContent);
   return { state, tabs, projectBar, spaceBar, workarea, texts, runs, redraws: () => redraws };
@@ -34,9 +35,9 @@ function strips() {
 
 test("a draw between a press and its release keeps the pressed project and space tabs", () => {
   const { tabs, projectBar, spaceBar } = strips();
-  tabs.draw(false);
+  tabs.draw("top");
   const [project, space] = [projectBar.children[1], spaceBar.children[1]];
-  tabs.draw(false);
+  tabs.draw("top");
   assert.equal(projectBar.children[1], project, "the draw replaced the pressed project tab");
   assert.equal(spaceBar.children[1], space, "the draw replaced the pressed space tab");
   assert.equal(project.isConnected && space.isConnected, true);
@@ -44,7 +45,7 @@ test("a draw between a press and its release keeps the pressed project and space
 
 test("the shown project tab has the background of its project, and another project tab has none", () => {
   const { tabs, projectBar } = strips();
-  tabs.draw(false);
+  tabs.draw("top");
   const [shown, other] = projectBar.children;
   assert.equal(shown.dataset.tinted, "true");
   assert.equal(shown.style.getPropertyValue("--project-color"), "#111");
@@ -54,7 +55,7 @@ test("the shown project tab has the background of its project, and another proje
 
 test("the top strip holds the project tabs and the plus button, and the space strip the spaces of the shown project", () => {
   const { tabs, projectBar, spaceBar, workarea, texts } = strips();
-  tabs.draw(false);
+  tabs.draw("top");
   assert.deepEqual(texts(projectBar), ["first✕", "second✕", "+"]);
   assert.deepEqual(texts(spaceBar), ["one✕", "two✕", "+"]);
   assert.equal(workarea.querySelector(".project-column"), null);
@@ -62,12 +63,12 @@ test("the top strip holds the project tabs and the plus button, and the space st
 
 test("the left column takes the project tabs from the top strip and gives them back", () => {
   const { tabs, projectBar, workarea, texts } = strips();
-  tabs.draw(false);
-  tabs.draw(true);
+  tabs.draw("top");
+  tabs.draw("left");
   const column = workarea.querySelector(".project-column");
   assert.deepEqual(texts(column), ["first✕", "second✕", "+"]);
   assert.deepEqual(texts(projectBar), []);
-  tabs.draw(false);
+  tabs.draw("top");
   assert.equal(workarea.querySelector(".project-column"), null);
   assert.deepEqual(texts(projectBar), ["first✕", "second✕", "+"]);
 });
@@ -90,10 +91,10 @@ function dragOnto(from, to) {
 }
 
 test("a project tab dragged onto another moves its project, on the bar and in the column", () => {
-  for (const left of [false, true]) {
+  for (const place of ["top", "left"]) {
     const { tabs, projectBar, workarea, runs } = strips();
-    tabs.draw(left);
-    const strip = left ? workarea.querySelector(".project-column") : projectBar;
+    tabs.draw(place);
+    const strip = place === "left" ? workarea.querySelector(".project-column") : projectBar;
     const [first, second] = strip.children;
     assert.equal(first.draggable, true, "a project tab is not a drag source");
     const { over, drop } = dragOnto(first, second);
@@ -106,11 +107,11 @@ test("a project tab dragged onto another moves its project, on the bar and in th
   }
 });
 
-test("the library draws no tab, also with the left setting", () => {
+test("the project home draws no tab, also with the left setting", () => {
   const { state, tabs, projectBar, spaceBar, workarea, texts } = strips();
-  tabs.draw(false);
-  state.library = true;
-  tabs.draw(true);
+  tabs.draw("top");
+  state.home = true;
+  tabs.draw("left");
   assert.deepEqual(texts(projectBar), []);
   assert.deepEqual(texts(spaceBar), []);
   assert.equal(workarea.querySelector(".project-column"), null);
@@ -118,11 +119,11 @@ test("the library draws no tab, also with the left setting", () => {
 
 test("a tab whose project or space changed is replaced and the other tabs stay", () => {
   const { state, tabs, projectBar, spaceBar } = strips();
-  tabs.draw(false);
+  tabs.draw("top");
   const [first, second] = [spaceBar.children[0], spaceBar.children[1]];
   const project = projectBar.children[0];
   state.all[0] = { ...state.all[0], activeSpaceId: "s2" };
-  tabs.draw(false);
+  tabs.draw("top");
   assert.equal(projectBar.children[0], project);
   assert.notEqual(spaceBar.children[0], first, "the tab that stopped being active kept its state");
   assert.equal(spaceBar.children[0].dataset.on, "false");
@@ -133,24 +134,24 @@ test("a tab whose project or space changed is replaced and the other tabs stay",
 test("the last space has no close control and a second space gives both one", () => {
   const { state, tabs, spaceBar } = strips();
   state.all[0] = { ...state.all[0], spaces: [SPACES[0]] };
-  tabs.draw(false);
+  tabs.draw("top");
   assert.equal(spaceBar.querySelector(".bar-tab__x"), null);
   state.all[0] = { ...state.all[0], spaces: SPACES };
-  tabs.draw(false);
+  tabs.draw("top");
   assert.equal(spaceBar.querySelectorAll(".bar-tab__x").length, 2);
 });
 
 test("a rename puts the field in the place of its tab and a cancel gives the tab back", () => {
   const { tabs, spaceBar, redraws } = strips();
-  tabs.draw(false);
+  tabs.draw("top");
   tabs.renames.begin({ kind: "space", id: "s2" });
   assert.equal(redraws(), 1);
-  tabs.draw(false);
+  tabs.draw("top");
   assert.equal(spaceBar.children[1].tagName, "INPUT");
   assert.equal(spaceBar.children[1].value, "two");
   assert.equal(spaceBar.children[0].tagName, "BUTTON");
   tabs.renames.cancel();
-  tabs.draw(false);
+  tabs.draw("top");
   assert.equal(spaceBar.children[1].tagName, "BUTTON");
   assert.equal(tabs.renames.state(), null);
 });
@@ -158,7 +159,7 @@ test("a rename puts the field in the place of its tab and a cancel gives the tab
 test("a project tab and a space tab show the icon of their activity before the name, and none without one", () => {
   const { state, tabs, projectBar, spaceBar } = strips();
   state.activities = { projects: { p1: { activity: "attention", spaces: { s2: { activity: "attention", cards: {}, groups: {} } } } }, tabs: {} };
-  tabs.draw(false);
+  tabs.draw("top");
   const icons = (strip, expose) => [...strip.querySelectorAll(`[data-expose="${expose}"]`)]
     .map((icon) => [icon.parentElement.querySelector(".bar-tab__name").textContent, icon.dataset.activity, icon.getAttribute("aria-label")]);
   assert.deepEqual(icons(projectBar, "core.activity.project"), [["first", "attention", "응답 대기"]]);
@@ -166,9 +167,46 @@ test("a project tab and a space tab show the icon of their activity before the n
   assert.equal(spaceBar.querySelector(".activity").nextElementSibling.className, "bar-tab__name", "the icon does not stand before the name");
   // A change of activity draws the tab again with the next icon, and an ended activity removes it.
   state.activities = { projects: { p1: { activity: "running", spaces: { s2: { activity: "running", cards: {}, groups: {} } } } }, tabs: {} };
-  tabs.draw(false);
+  tabs.draw("top");
   assert.deepEqual(icons(projectBar, "core.activity.project"), [["first", "running", "실행 중"]]);
   state.activities = { projects: {}, tabs: {} };
-  tabs.draw(false);
+  tabs.draw("top");
   assert.equal(projectBar.querySelector(".activity") ?? spaceBar.querySelector(".activity"), null);
+});
+
+/** The strips of the four positions: the bottom row is a third strip beside the top row, the space row and the work area. */
+function positions() {
+  const { document } = new JSDOM(`<div id="projectBar"></div><div id="projectRow"></div><main id="workarea"><section id="work"></section></main><div id="spaceBar"></div>`).window;
+  globalThis.document = document;
+  const state = { activities: { projects: {}, tabs: {} }, home: false, all: [{ id: "p1", title: "first", color: "#111", activeSpaceId: "s1", spaces: SPACES }, { id: "p2", title: "second", color: "#222", spaces: [] }] };
+  const projects = { active: () => state.all[0], all: () => state.all, inHome: () => state.home };
+  const projectBar = document.getElementById("projectBar");
+  const projectRow = document.getElementById("projectRow");
+  const workarea = document.getElementById("workarea");
+  const spaceBar = document.getElementById("spaceBar");
+  const tabs = createBarTabs({ projects, projectBar, projectRow, spaceBar, workarea, bind: () => {}, run: async () => {}, keyboardOwed: () => {},
+    redraw: () => {}, changed: () => {}, activities: () => state.activities });
+  return { tabs, projectBar, projectRow, workarea, spaceBar, texts: (strip) => [...strip.children].map((child) => child.textContent) };
+}
+
+test("the right position puts the project column after the work area and the other positions do not keep it", () => {
+  const { tabs, projectBar, projectRow, workarea, texts } = positions();
+  tabs.draw("right");
+  const column = workarea.querySelector(".project-column");
+  assert.equal(column, workarea.lastElementChild, "the right column does not stand after the work area");
+  assert.ok(column.classList.contains("project-column--right"), "the right column has no right modifier");
+  assert.deepEqual(texts(column), ["first✕", "second✕", "+"]);
+  assert.deepEqual(texts(projectBar), [], "the right position left the top strip filled");
+  assert.deepEqual(texts(projectRow), [], "the right position drew the bottom row");
+  tabs.draw("top");
+  assert.equal(workarea.querySelector(".project-column"), null);
+  assert.deepEqual(texts(projectBar), ["first✕", "second✕", "+"]);
+});
+
+test("the bottom position draws the project tabs in the bottom row and no column", () => {
+  const { tabs, projectBar, projectRow, workarea, texts } = positions();
+  tabs.draw("bottom");
+  assert.deepEqual(texts(projectRow), ["first✕", "second✕", "+"]);
+  assert.deepEqual(texts(projectBar), [], "the bottom position left the top strip filled");
+  assert.equal(workarea.querySelector(".project-column"), null);
 });

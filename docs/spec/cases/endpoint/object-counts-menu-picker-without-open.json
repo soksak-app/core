@@ -1,0 +1,171 @@
+{
+  "name": "object-counts-menu-picker-without-open",
+  "description": "The card menu opens the picker, and the picker reply has no open member, so the wait for open fails with the predicate error and the client unwatches and closes.",
+  "replay": false,
+  "reason": "The case plays the commands and the waits of the operations of an object-count measurement, which run sok processes and a client of the endpoint on a workbench that the replay cannot arrange.",
+  "steps": [
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "status.get",
+        "params": {
+          "name": "core.grid",
+          "window": "w1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "cards": [
+            {
+              "id": "main",
+              "fixed": false,
+              "c0": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "close": "client"
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "exposure.list",
+        "params": {
+          "window": "w1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "status": [],
+          "commands": [
+            {
+              "name": "core.card.menu",
+              "description": "Opens or closes the add, split or group split menu of a card, or the split or group split menu of a group card.",
+              "params": {
+                "type": "object",
+                "properties": {
+                  "card": {
+                    "type": "string"
+                  },
+                  "menu": {
+                    "enum": [
+                      "add",
+                      "split-x",
+                      "split-y"
+                    ]
+                  }
+                }
+              },
+              "result": {
+                "type": "null"
+              },
+              "registered": true
+            }
+          ],
+          "element": []
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "command.run",
+        "params": {
+          "name": "core.card.menu",
+          "params": {
+            "card": "main",
+            "menu": "add"
+          },
+          "window": "w1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": null
+      }
+    },
+    {
+      "close": "client"
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "status.watch",
+        "params": {
+          "window": "w1",
+          "name": "core.picker"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": null
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "status.get",
+        "params": {
+          "window": "w1",
+          "name": "core.picker"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "title": "새 탭에 무엇을 띄울까",
+          "items": [],
+          "groups": [],
+          "columns": {
+            "groups": []
+          }
+        }
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "status.unwatch",
+        "params": {
+          "window": "w1",
+          "name": "core.picker"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": null
+      }
+    },
+    {
+      "close": "client"
+    }
+  ]
+}

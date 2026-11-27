@@ -22,7 +22,7 @@ test("installCoreExposure refuses a page without its memory saver and installs t
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const { installCoreExposure } = await import("../core-exposure.js");
-  const parts = { library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {} };
+  const parts = { home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {} };
   await assert.rejects(installCoreExposure(parts),
     new TypeError("installCoreExposure requires memorySaver, the memory saver of the page (memory-saver.js)"));
   const memoryStatus = () => registry.handle({ method: "status.get", params: { name: "core.tab.memory" } });

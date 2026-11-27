@@ -10,7 +10,9 @@ const REASON = "the view failed 4 times within 300 seconds and is created again 
 test("the stop of a view shows its reason on the card and the reopened card clears it", async () => {
   // The case selects the host of the page before the modules that read it are imported, because the page reads the host when it is imported.
   const wire = selectPageWire("view-stopped-display-error");
-  // The error toast runs the declared command core.error.dismiss, so the page exposure is installed before a toast shows.
+  // Imported after the case selects the host, because the notice store reads the host when it is imported.
+  const { notificationStore } = await import("../tab-reports.js");
+  // The error toast runs the declared command core.notices.close, so the page exposure is installed before a toast shows.
   const { installExposure } = await import("../exposure.js");
   const { default: exposureFile } = await import("../exposure.json", { with: { type: "json" } });
   installExposure(exposureFile);
@@ -27,9 +29,10 @@ test("the stop of a view shows its reason on the card and the reopened card clea
     assert.equal(status.dataset.surfaceStatus, "error");
     assert.equal(indicator.hidden, false, "the error is visible on the card");
     assert.equal(indicator.textContent, "표면 오류", "the indicator keeps a state label");
-    const toast = document.querySelector(".error-toast__text");
+    const toast = document.querySelector(".toast__title");
     assert.match(toast.textContent, /the view failed 4 times within 300 seconds/);
-    assert.equal(toast.dataset.error, "surface status card-1 probe-surface", "the error uses the display path of its card");
+    assert.equal(notificationStore().records().find((notice) => notice.toast !== null)?.origin, "surface status card-1 probe-surface",
+      "the error uses the display path of its card");
     // The record leaves in the batch of the page log, which the flush waits for.
     await flushEvents();
     const reports = wire.calls

@@ -48,7 +48,7 @@ type storedHost struct {
 	plugins    *pluginsHost
 	// reloads counts the starts of the workbench that the shell asked for.
 	reloads int
-	// located is the project that the shell last named as the one that its window shows, and held the project that the library
+	// located is the project that the shell last named as the one that its window shows, and held the project that the project home
 	// named as the one to return to (F1149-1).
 	located, held string
 	// environment is the environment.json of the shell, and the test environment when it is nil.
@@ -93,6 +93,7 @@ type storedHost struct {
 	shown []any
 	// tabState is the document of the tab state store, and sessionTabs the tabs with a stored session.
 	tabState    any
+	notices     any
 	sessionTabs []string
 	// startFails tells that the start of the shell shows an error, so the fixture does not audit it.
 	startFails bool
@@ -513,6 +514,7 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		Key         string
 		Base        json.RawMessage
 		Default     json.RawMessage
+		Notices     []any
 	}
 	if err := json.Unmarshal(argument, &request); err != nil {
 		return nil, err
@@ -549,7 +551,7 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 		}
 		return snapshot, nil
 	case "settings":
-		h.settings = append(h.settings, map[string]any{"id": request.ID, "patch": request.Patch, "remove": request.Remove})
+		h.settings = append(h.settings, map[string]any{"project": request.ID, "patch": request.Patch, "remove": request.Remove})
 		// The host stores the write, so the next snapshot holds it: the common settings, or the settings file of the folder of the
 		// project.
 		if request.ID == "" {
@@ -595,6 +597,11 @@ func (h *storedHost) workspace(argument json.RawMessage) (any, error) {
 			list = append(list, map[string]any{"id": id, "text": h.roles[id]["text"], "ko": h.roles[id]["ko"], "files": h.roles[id]["files"]})
 		}
 		return map[string]any{"seq": h.rolesSeq, "roles": list}, nil
+	case "notices":
+		return h.notices, nil
+	case "noticesPut":
+		h.notices = map[string]any{"format": 1, "notices": request.Notices}
+		return 1, nil
 	case "tabStatePut", "tabSessionPut":
 		return 1, nil
 	case "add":
@@ -923,13 +930,13 @@ func (f *shellFixture) audit() {
 	}
 }
 
-// openedShell opens a project through the form of the library.
+// openedShell opens a project through the form of the project home.
 func openedShell(t *testing.T) *shellFixture {
 	t.Helper()
 	f := newShell(t, &storedHost{})
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	return f
 }
 
@@ -967,20 +974,24 @@ func (f *shellFixture) tabbedCards() []string {
 	var ids []string
 	for _, card := range f.cardsOf() {
 		data, _ := card["data"].(map[string]any) // silent: a window sidebar has no data.
+		if fixed, _ := card["fixed"].(bool); fixed {
+			continue
+		}
 		if data != nil && data["tabs"] != nil {
-			ids = append(ids, card["id"].(string))
+			ids = append(ids, card["card"].(string))
 		}
 	}
 	return ids
 }
 
-func TestLibraryShowsTheStartOfAnEmptyWorkspace(t *testing.T) {
+// The project home of a window without a project starts with the logo line, the two buttons and the key hint line (docs/spec/projects.md#project-home).
+func TestHomeShowsTheStartOfAnEmptyWorkspace(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	if !f.tester.HasText("프로젝트를 시작하세요") || !f.tester.HasText("새 프로젝트를 만들거나 기존 폴더를 여세요.") {
-		t.Fatalf("the library shows %q", f.tester.Texts())
+	if !f.tester.HasText("어디서 시작할까?") || !f.tester.HasText("새 프로젝트") || !f.tester.HasText("폴더 열기") || !f.tester.HasText("↑↓ 이동, Enter 열기, ⌘, 설정") {
+		t.Fatalf("the home shows %q", f.tester.Texts())
 	}
-	if !f.has("core.chrome.settings", "") || f.has("core.chrome.projects", "") {
-		t.Fatal("the chrome of the library has the settings button and not the project buttons")
+	if !f.has("core.chrome.settings", "") || !f.has("core.chrome.projects", "") {
+		t.Fatal("the chrome of the home has no logo or no settings button")
 	}
 	f.audit()
 }
@@ -991,10 +1002,10 @@ func TestTheWindowNamesTheProjectThatItShows(t *testing.T) {
 	if f.host.located != id {
 		t.Fatalf("the window names %q, not %s", f.host.located, id)
 	}
-	// The library shows no project, so its address names none, and a new start of the workbench starts at the library (F1149).
+	// The project home shows no project, so its address names none, and a new start of the workbench starts at the project home (F1149).
 	f.run("core.projects.browse", nil)
 	if f.host.located != "" {
-		t.Fatalf("the library names the project %q", f.host.located)
+		t.Fatalf("the project home names the project %q", f.host.located)
 	}
 	f.run("core.project.activate", map[string]string{"id": id})
 	if f.host.located != id {
@@ -1008,10 +1019,18 @@ func TestTheWindowNamesTheProjectThatItShows(t *testing.T) {
 	}
 }
 
+// The start calls are the calls with a rule of the specification at start: performance once with the stored switch
+// (docs/spec/performance-trace.md#the-switch), setTheme before the views (docs/spec/native-surfaces.md#view-surfaces) and setMenuLanguage
+// for the titles of the menu (docs/spec/host-contract.md#application-menu). appUpdateState is not in the list: no rule of the
+// specification requires it at start, so its call at start is a defect until a rule names it.
 func TestWindowIsReadyAfterTheSnapshot(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	if strings.Join(startCalls(f.host.calls), " ") != "windowControls workspace windowReady notificationState pluginsState sidecarsOutdated sidecarsRetain" {
-		t.Fatalf("the start called %v", f.host.calls)
+	// The specification sets no order among these calls, so they are compared as a set.
+	got := slices.Clone(f.host.calls)
+	slices.Sort(got)
+	want := []string{"notificationState", "performance", "pluginsState", "setMenuLanguage", "setTheme", "sidecarsOutdated", "sidecarsRetain", "windowControls", "windowReady", "workspace", "workspace"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("the start called %v, want %v", got, want)
 	}
 }
 
@@ -1033,7 +1052,7 @@ func startCalls(calls []string) []string {
 	return kept
 }
 
-func TestLibraryFormOpensAProject(t *testing.T) {
+func TestHomeFormOpensAProject(t *testing.T) {
 	f := openedShell(t)
 	if len(f.host.projects) != 1 || f.host.projects[0]["root"] != "/work/alpha" || f.host.projects[0]["title"] != "alpha" {
 		t.Fatalf("the store holds %v", f.host.projects)
@@ -1047,33 +1066,15 @@ func TestLibraryFormOpensAProject(t *testing.T) {
 	f.audit()
 }
 
-func TestLibraryFormCreatesAFolder(t *testing.T) {
+func TestHomeFormCreatesAFolder(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	f.run("core.library.form.open", map[string]string{"mode": "create"})
-	f.run("core.library.form.set", map[string]string{"field": "name", "value": "beta"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work"})
+	f.run("core.home.form.open", map[string]string{"mode": "create"})
+	f.run("core.home.form.set", map[string]string{"field": "name", "value": "beta"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work"})
 	f.audit()
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.submit", nil)
 	if len(f.host.projects) != 1 || f.host.projects[0]["root"] != "/work/beta" {
 		t.Fatalf("the store holds %v", f.host.projects)
-	}
-}
-
-func TestLibraryListsAndRemovesProjects(t *testing.T) {
-	f := openedShell(t)
-	id := f.host.projects[0]["id"].(string)
-	f.run("core.projects.browse", nil)
-	if !f.has("core.library.return", "") || !f.tester.HasText("alpha") {
-		t.Fatalf("the library shows %q", f.tester.Texts())
-	}
-	f.audit()
-	f.click("core.library.open", id)
-	if !f.has("core.card", "") {
-		t.Fatal("the opened project shows no card")
-	}
-	f.run("core.library.remove", map[string]string{"id": id})
-	if len(f.host.projects) != 0 || !f.tester.HasText("프로젝트를 시작하세요") {
-		t.Fatalf("the store holds %v and the screen shows %q", f.host.projects, f.tester.Texts())
 	}
 }
 
@@ -1150,7 +1151,7 @@ func TestStoredProjectOpensItsLayout(t *testing.T) {
 	first.click("core.picker.item", "acme")
 	cards := first.tabbedCards()
 	second := newShell(t, first.host)
-	second.click("core.library.open", first.host.projects[0]["id"].(string))
+	second.click("core.home.open", first.host.projects[0]["id"].(string))
 	for _, id := range cards {
 		if !second.has("core.card", id) {
 			t.Fatalf("card %s is not drawn; the texts are %q", id, second.tester.Texts())
@@ -1158,23 +1159,17 @@ func TestStoredProjectOpensItsLayout(t *testing.T) {
 	}
 }
 
-func TestHostFailureShowsInTheLibrary(t *testing.T) {
+func TestHostFailureShowsInTheHome(t *testing.T) {
 	f := newShell(t, &storedHost{failing: map[string]error{"projectFolder": fmt.Errorf("project directory is gone")}})
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	if _, err := f.shell.Registry().Run("core.library.form.submit", nil); err != nil {
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	if _, err := f.shell.Registry().Run("core.home.form.submit", nil); err != nil {
 		t.Fatal(err)
 	}
 	f.pending.drain(t)
 	f.tester.Frame()
 	if !f.tester.HasText("project directory is gone") {
-		t.Fatalf("the library shows %q", f.tester.Texts())
-	}
-	library := status[struct {
-		Error *string `json:"error"`
-	}](t, f, "core.library")
-	if library.Error == nil || *library.Error != "project directory is gone" {
-		t.Fatalf("the status core.library reports the error %v", library.Error)
+		t.Fatalf("the project home shows %q", f.tester.Texts())
 	}
 }
 

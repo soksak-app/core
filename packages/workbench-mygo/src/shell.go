@@ -20,7 +20,7 @@ import (
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
-// The shell of the native workbench: the chrome bar, the library, the spaces and the cards of a project. It holds the state of one
+// The shell of the native workbench: the chrome bar, the project home, the spaces and the cards of a project. It holds the state of one
 // window. Every change runs in a step of the main thread: the binder presses in the step of the frame, a command of the endpoint in
 // a step of Post, and an answer of the host in the later step of Calls (docs/spec/hosts.md#workbench).
 
@@ -37,7 +37,7 @@ type ShellOptions struct {
 	Environment []byte
 	// Invalidate asks for a frame.
 	Invalidate func()
-	// FirstScreen tells the window that the start shows its first screen: the library or the project of the window, or the failure
+	// FirstScreen tells the window that the start shows its first screen: the project home or the project of the window, or the failure
 	// of the start. The window keeps the last frame of the previous workbench until then (docs/spec/native-host.md#page-start).
 	FirstScreen func()
 	// Backdrop sets the color of the window behind its content, which a surface without a background of its own shows.
@@ -52,9 +52,9 @@ type ShellOptions struct {
 	Detaching func() []string
 	// Project is the project that the address of the window names, and "" without one.
 	Project string
-	// Library is the project that the library address of the window names as the one to return to, and "" without one (F1149-1).
+	// Library is the project that the `library` address parameter of the window names as the one to return to, and "" without one (F1149-1).
 	Library string
-	// Located names the project that the window shows from now on, "" when it shows none, and held the project that the library
+	// Located names the project that the window shows from now on, "" when it shows none, and held the project that the project home
 	// returns to, "" when it shows a project or holds none.
 	Located func(shown, held string)
 	// Elements are the elements of the window, which the element requests answer from.
@@ -102,17 +102,21 @@ func lineBox(size, multiple float32) float32 {
 
 // metrics are the chrome metrics that the shell draws with.
 type metrics struct {
-	// The library (packages/workbench/library.css) and the project column (.project-column of packages/workbench).
-	space1, space2, space3, space4, libraryFooterH, librarySortW, librarySearchW, libraryCardMinW, libraryCardMinWNarrow, libraryNarrowW,
-	libraryPreviewH, libraryMark, libraryMarkStroke, previewLineH, previewLineStep, previewLineOpacity, previewSidebarOpacity, libraryAddH,
-	libraryFormW, fieldPadY, selectArrowRoom, selectArrowInset, previewBorderMix, previewFillMix, previewInkMix, previewLineW,
+	// The project column (.project-column of packages/workbench).
+	space1, space2, space3, space4,
+	fieldPadY, selectArrowRoom, selectArrowInset,
 	lineHeight, lineHeightTight, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH,
 	barTabRootPad, barTabRootW, barTabRootH, dropMix, dropBorder, dropBand, dropBandMargin, groupFocusFade, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
 	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, activityIconEm, activityGapEm, activityStroke, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW, tabGrabW float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, groupFramePad, groupFrameRadius, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, renameSelectionMix, insetMix, tabXHoverMix float32
-	// The error toasts of packages/workbench/app.css.
-	errorPadY, errorPadX, errorBorder, errorClosePadX, errorToastBottom, errorToastMaxWidth float32
+	// The toasts of the notice path (#toasts, .toast and .toast__more of packages/workbench/app.css): the top right position, the card width,
+	// the paddings, the gap, the height of the line form, the stack offset of the deck form, the bar and the counter padding.
+	toastTop, toastRight, toastWidth, toastGap, toastPadTop, toastPadRight, toastPadBottom, toastPadX, toastLineH, toastDeckLift, toastDeckScale, toastBar, toastMorePadX float32
+	// noticeCenterW, noticeCenterMaxH, noticeEntryPad, noticeGlyph and noticeDotSize are the sizes of the notice center (notice-center-w and the others of workbench.json).
+	noticeCenterW, noticeCenterMaxH, noticeEntryPad, noticeGlyph, noticeDotSize float32
+	// noticeLineH, noticeLineGap and noticeToneMix are the status line of a card notice (notice-line-h, notice-line-gap and notice-tone-mix of workbench.json).
+	noticeLineH, noticeLineGap, noticeToneMix float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
 	debugW, debugH float32
 	// The grip of a divider, the dots of a folded side and the lines of the boundaries (.sp-divider, .card-sidebar__grip and .sp-rule of
@@ -138,11 +142,6 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		*into = float32(value)
 	}
 	for name, into := range map[string]*float32{"space-1": &m.space1, "space-2": &m.space2, "space-3": &m.space3, "space-4": &m.space4,
-		"library-footer-h": &m.libraryFooterH, "library-sort-w": &m.librarySortW, "library-search-w": &m.librarySearchW,
-		"library-card-min-w": &m.libraryCardMinW, "library-card-min-w-narrow": &m.libraryCardMinWNarrow, "library-narrow-w": &m.libraryNarrowW,
-		"library-preview-h": &m.libraryPreviewH, "library-mark": &m.libraryMark, "library-mark-stroke": &m.libraryMarkStroke,
-		"preview-line-h": &m.previewLineH, "preview-line-step": &m.previewLineStep, "preview-line-opacity": &m.previewLineOpacity,
-		"preview-sidebar-opacity": &m.previewSidebarOpacity, "library-add-h": &m.libraryAddH, "library-form-w": &m.libraryFormW,
 		"field-pad-y": &m.fieldPadY, "select-arrow-room": &m.selectArrowRoom, "select-arrow-inset": &m.selectArrowInset} {
 		read(name, into)
 	}
@@ -229,12 +228,26 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("icon-stroke", &m.iconStroke)
 	read("card-group-frame-pad", &m.groupFramePad)
 	read("card-group-frame-radius", &m.groupFrameRadius)
-	read("error-pad-y", &m.errorPadY)
-	read("error-pad-x", &m.errorPadX)
-	read("error-border", &m.errorBorder)
-	read("error-close-pad-x", &m.errorClosePadX)
-	read("error-toast-bottom", &m.errorToastBottom)
-	read("error-toast-max-width", &m.errorToastMaxWidth)
+	read("toast-top", &m.toastTop)
+	read("toast-right", &m.toastRight)
+	read("toast-width", &m.toastWidth)
+	read("toast-gap", &m.toastGap)
+	read("toast-pad-top", &m.toastPadTop)
+	read("toast-pad-right", &m.toastPadRight)
+	read("toast-pad-bottom", &m.toastPadBottom)
+	read("toast-pad-x", &m.toastPadX)
+	read("toast-line-h", &m.toastLineH)
+	read("toast-deck-lift", &m.toastDeckLift)
+	read("toast-deck-scale", &m.toastDeckScale)
+	read("toast-bar", &m.toastBar)
+	read("toast-more-pad-x", &m.toastMorePadX)
+	read("notice-center-w", &m.noticeCenterW)
+	read("notice-center-max-h", &m.noticeCenterMaxH)
+	read("notice-entry-pad", &m.noticeEntryPad)
+	read("notice-glyph", &m.noticeGlyph)
+	read("notice-dot-size", &m.noticeDotSize)
+	read("notice-line-h", &m.noticeLineH)
+	read("notice-line-gap", &m.noticeLineGap)
 	read("disabled-opacity", &m.disabledOpacity)
 	read("notice-dot-inset", &m.noticeDotInset)
 	read("r-xs-ratio", &m.radiusSmallRatio)
@@ -250,16 +263,13 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	}
 	mix("chip-sel-mix", &m.chipSelMix)
 	mix("rename-selection-mix", &m.renameSelectionMix)
-	mix("preview-border-mix", &m.previewBorderMix)
-	mix("preview-fill-mix", &m.previewFillMix)
-	mix("preview-ink-mix", &m.previewInkMix)
-	mix("preview-line-w", &m.previewLineW)
 	mix("drop-mix", &m.dropMix)
 	mix("chip-mix", &m.chipMix)
 	mix("chip-hover-mix", &m.chipHoverMix)
 	mix("chip-on-mix", &m.chipOnMix)
 	mix("project-tab-mix", &m.projectTabMix)
 	mix("inset-mix", &m.insetMix)
+	mix("notice-tone-mix", &m.noticeToneMix)
 	mix("tab-x-hover-mix", &m.tabXHoverMix)
 	mix("sp-grip-mix", &m.gripMix)
 	mix("sp-line-crossing-mix", &m.lineCrossingMix)
@@ -348,6 +358,8 @@ func (record *projectRecord) take(members map[string]any) error {
 
 // Shell is the workbench of one window.
 type Shell struct {
+	// toastStackHovered states whether the pointer or the focus was on a toast of the last draw, which spreads the deck form.
+	toastStackHovered bool
 	// roles holds the last role status of each tab, and rolesMu guards it (roles_status.go).
 	rolesMu sync.Mutex
 	roles   map[string]map[string]any
@@ -432,7 +444,7 @@ type Shell struct {
 	controlsWidth float32
 	held          *heldDivider
 	drag          *boundaryDrag
-	library       libraryState
+	home          homeState
 	tabs          *shellTabs
 	installed     []InstalledPlugin
 
@@ -476,6 +488,7 @@ type Shell struct {
 	surfaces surfaceState
 
 	pluginOperations *PluginOperations
+	outdatedNotices  *OutdatedNotices
 	appUpdates       *AppUpdates
 	// setupOperations are the setup parts of the agents of the machine (docs/spec/settings.md#agents).
 	setupOperations *SetupOperations
@@ -571,7 +584,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		return nil, fmt.Errorf("environment declaration: %w", err)
 	}
 	s := &Shell{closedTabs: map[string]bool{}, dissolved: map[string]bool{}, groupRequests: map[string]map[string]map[string]string{}, asked: map[string]bool{}, windowProjects: map[string]bool{}, savedGeometry: map[string]json.RawMessage{}, cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
-		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
+		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, home: newHomeState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	// Every frame that the shell asks for passes this count: a command answers after the frame that its run asked for.
 	invalidate := options.Invalidate
 	s.options.Invalidate = func() {
@@ -595,8 +608,9 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.pointer.released = s.keyboardPressed
 	s.binder.Attach(s.pointer, s.exposedFocus)
 	s.starter = environment.pluginStarter
-	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, func() map[string]string { return s.requirers }, s.options.Invalidate)
-	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, s.options.Invalidate)
+	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, func() map[string]string { return s.requirers }, s.settingsInputsChanged)
+	s.outdatedNotices = NewOutdatedNotices(s.errors)
+	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, s.settingsInputsChanged)
 	s.setupOperations = NewSetupOperations(s.calls, s.options.Invalidate, s.fail)
 	s.accounts = NewAccounts(s)
 	s.registry.Elements(options.Elements)
@@ -641,17 +655,14 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	})
 	s.requests = NewRequests(s.registry, s.calls, options.Post, s.events.Error)
 	s.linkSurfaces()
-	s.registry.Status("core.workbench.error", func() any {
-		// The errors of the workbench show as toasts at the bottom of the window; the status names the newest open one.
-		if toasts := s.errors.Toasts(); len(toasts) > 0 {
-			return &toasts[len(toasts)-1]
-		}
-		return (*string)(nil)
+	s.registry.Status("core.toasts", func() any {
+		return s.errors.ToastStatuses()
 	})
 	s.sidebars, err = NewSidebars(SidebarsOptions{Declared: options.Declared, Registry: s.registry, Binder: s.binder,
 		Look:        func() (float32, float32) { return s.palette.BorderWidth, s.textCaption() },
 		Environment: options.Environment, Installed: installed, Changed: s.settle, Seat: s.drawSectionSeat,
-		Progress: s.sectionProgress, Rail: func() ui.Color { return s.palette.Rail }})
+		Progress: s.sectionProgress, Rail: func() ui.Color { return s.palette.Rail }, Warn: func() ui.Color { return s.palette.Focus },
+		Plugin: s.missingPluginLine})
 	if err != nil {
 		return nil, err
 	}
@@ -674,16 +685,24 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if options.Tabs != nil {
 		s.connectTabs(options.Tabs(s))
 	}
-	s.keys, err = NewShortcuts(options.Declared.Shortcuts, s.shortcutConditions(), func(command string) error {
-		_, err := s.registry.Run(command, nil)
+	s.keys, err = NewShortcuts(options.Declared.Shortcuts, s.shortcutConditions(), func(command string, params map[string]any) error {
+		var raw json.RawMessage
+		if params != nil {
+			encoded, err := json.Marshal(params)
+			if err != nil {
+				return err
+			}
+			raw = encoded
+		}
+		_, err := s.registry.Run(command, raw)
 		return err
 	}, func(_ string, err error) { s.fail(err) })
 	if err != nil {
 		return nil, err
 	}
 	if s.tabs != nil {
-		s.errors.startToastExpiry(func(expire func()) func() {
-			return s.tabs.after(s.errors.deadline, expire)
+		s.errors.StartToastExpiry(func(ms int64, expire func()) func() {
+			return s.tabs.after(ms, expire)
 		}, s.options.Invalidate)
 	}
 	return s, nil
@@ -697,15 +716,21 @@ func NewShell(options ShellOptions) (*Shell, error) {
 // native modal menu, because it draws the picker itself and keeps the keyboard, and it always runs with the chrome of a host.
 func (s *Shell) shortcutConditions() map[string]func() bool {
 	never := func() bool { return false }
-	library := func() bool { return s.browsing || s.opened() == nil }
+	home := func() bool { return s.inHome() }
+	// The home has no form field focus of its own: while its form is open, the field takes the keys of the form.
+	formOpen := func() bool { return s.inHome() && s.home.formMode != "" }
+	noForm := func() bool { return s.inHome() && s.home.formMode == "" }
 	return map[string]func() bool{
-		"No host chrome (browser build)":                     never,
-		"A card has the focus":                               func() bool { return !library() && s.focused != "" },
-		"The library is shown":                               library,
-		"The tab rename field has focus":                     never,
-		"A library form field has focus":                     func() bool { return library() && s.library.formMode != "" },
-		"A picker layer is open":                             never,
-		"A native modal menu is open and has keyboard focus": never,
+		"No host chrome (browser build)": never,
+		"The project home is shown":      home,
+		"The project home is shown and no form field has focus; the command gets step -1":        noForm,
+		"The project home is shown and no form field has focus; the command gets step 1":         noForm,
+		"The project home search field holds a non-empty query; the command gets an empty query": func() bool { return home() && s.home.query != "" },
+		"The tab rename field has focus":                                           never,
+		"A project home form field has focus":                                      formOpen,
+		"The project home is shown, a row is selected and no form field has focus": func() bool { return noForm() && len(s.homeRows()) > 0 },
+		"A picker layer is open":                                                   never,
+		"A native modal menu is open and has keyboard focus":                       never,
 	}
 }
 
@@ -772,7 +797,7 @@ func (s *Shell) StartFailed(err error) {
 }
 
 // showRequested shows the project that the address of the window names and then runs done. A window whose project is gone, or
-// whose project cannot be opened, starts at the library.
+// whose project cannot be opened, starts at the project home.
 func (s *Shell) showRequested(done func()) {
 	if s.options.Project == "" {
 		done()
@@ -887,8 +912,8 @@ func (s *Shell) isOpen(id string) bool { return s.windowProjects[id] || s.otherO
 // opened returns the project that the window shows, or nil.
 func (s *Shell) opened() *projectRecord { return s.project(s.active) }
 
-// returnable is the project that the way back of the library opens: the shown project, else the project that the library address
-// names while a window holds it open, as returnable of packages/workbench/projects.js.
+// returnable is the project that the way back of the project home opens: the shown project, else the project that the `library` address
+// parameter names while a window holds it open, as returnable of packages/workbench/projects.js.
 func (s *Shell) returnable() *projectRecord {
 	if project := s.opened(); project != nil {
 		return project
@@ -1023,8 +1048,7 @@ func (s *Shell) View(c *ui.Context) {
 	clear(s.picker.drawn)
 	clear(s.heads)
 	clear(s.surfaces.seated)
-	s.surfaces.drawnPlane, s.surfaces.drawnLibrary = nil, false
-	s.library.drawnPreviews = nil
+	s.surfaces.drawnPlane, s.surfaces.drawnHome = nil, false
 	s.surfaces.row = s.chromeHeight()
 	width, height := c.Size()
 	s.followSize(width, height)
@@ -1040,7 +1064,8 @@ func (s *Shell) View(c *ui.Context) {
 	outline := s.options.Declared.ChromeNumber("focus-outline", "px")
 	theme.Focus, theme.FocusRingWidth, theme.FocusRingOffset = s.palette.Focus, float32(outline), -float32(outline)
 	c.SetTheme(&theme)
-	settings := s.settingsForFrame(c, width, height)
+	contentHeight := max(0, height-s.chromeHeight()-s.statusBarHeight())
+	s.settingsForFrame(c, width, contentHeight)
 	dialogOpen := s.dialogOpen()
 	s.keys.Declare(c)
 	// Korean breaks at the spaces, as body of packages/workbench/app.css says. It is inherited, except by an overlay, whose root takes it.
@@ -1052,20 +1077,26 @@ func (s *Shell) View(c *ui.Context) {
 	}
 	root.Children(func() {
 		s.drawChrome(c, width)
-		contentHeight := max(0, height-s.chromeHeight())
-		if s.browsing || s.opened() == nil {
-			s.drawLibrary(c, width, contentHeight)
-		} else {
+		switch {
+		case s.settingsTabInFront():
+			// The settings tab stands in the content rectangle and no surface of the window is drawn meanwhile, so each surface stays
+			// hidden with its session, as a hidden tab keeps it (docs/spec/settings.md#opening-and-closing).
+		case s.browsing || s.opened() == nil:
+			s.drawHome(c, width, contentHeight)
+		default:
 			s.drawWorkArea(c, width, contentHeight)
 		}
+		s.drawClosedSettingsHint(c)
+		s.drawStatusBar(c, width)
 	})
 	s.drawViewsBehindDialog(c)
 	s.drawDialogSurface(c, width, height)
 	if !dialogOpen {
 		ui.Overlay(c, func() { s.drawErrorToasts(c, width) })
+		ui.Overlay(c, func() { s.drawNoticeCenter(c, width, height) })
 	}
 	s.drawPicker(c, width, height)
-	s.drawSettings(c, width, height, settings)
+	s.drawSettingsTabHost(c, width, height)
 	s.drawDebug(c, width)
 	s.tellBackground()
 	s.forgetUnseated()

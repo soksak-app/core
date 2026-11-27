@@ -8,6 +8,11 @@ import declaration from "./workbench.json" with { type: "json" };
 export const declaredIcons = declaration.icons;
 
 const PATHS = {
+  "bell": declaredIcons["bell"],
+  "notice-success": declaredIcons["notice-success"],
+  "notice-info": declaredIcons["notice-info"],
+  "notice-warning": declaredIcons["notice-warning"],
+  "notice-error": declaredIcons["notice-error"],
   "panel-left": declaredIcons["panel-left"],
   "panel-right": declaredIcons["panel-right"],
   "panel-top": declaredIcons["panel-top"],

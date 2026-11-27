@@ -108,8 +108,9 @@ func TestTheAgentGroupChangesTheDesiredPathState(t *testing.T) {
 	}
 	f := newShell(t, stored)
 	f.click("core.chrome.settings", "")
+	f.run("core.settings-tab.nav", map[string]any{"page": "agents"})
 	for _, control := range f.modal().Controls {
-		if control.Name == "core.settings-modal.setup-change" {
+		if control.Name == "core.settings-tab.setup-change" {
 			if control.Command == nil || control.Command.Name != "core.setup.change" ||
 				!reflect.DeepEqual(control.Command.Params, map[string]any{"part": "path", "enabled": false}) {
 				t.Fatalf("the path control runs %+v", control.Command)
@@ -119,7 +120,7 @@ func TestTheAgentGroupChangesTheDesiredPathState(t *testing.T) {
 				t.Fatalf("changing the PATH state sent %q", changed)
 			}
 			for _, after := range f.modal().Controls {
-				if after.Name == "core.settings-modal.setup-change" && after.Command != nil &&
+				if after.Name == "core.settings-tab.setup-change" && after.Command != nil &&
 					reflect.DeepEqual(after.Command.Params, map[string]any{"part": "path", "enabled": true}) {
 					f.audit()
 					return
@@ -174,11 +175,12 @@ func TestTheAgentGroupShowsAndInstallsTheSetupParts(t *testing.T) {
 		t.Fatalf("a window that does not show the group read the parts: %+v, %d reads", status, host.count())
 	}
 	f.click("core.chrome.settings", "")
+	f.run("core.settings-tab.nav", map[string]any{"page": "agents"})
 	if host.count() != 1 {
 		t.Fatalf("showing the group read the parts %d times", host.count())
 	}
 	modal := f.modal()
-	if labels, want := modal.labels("core.settings-modal.setup"), []string{
+	if labels, want := modal.labels("core.settings-tab.setup"), []string{
 		"명령 경로설치 안 됨/Users/person/.local/bin/sok끄기",
 		"스킬다름/Users/person/.claude/skills/soksak/SKILL.md",
 		"MCP 등록설치 안 됨/Users/person/.claude.json",
@@ -186,11 +188,11 @@ func TestTheAgentGroupShowsAndInstallsTheSetupParts(t *testing.T) {
 	}; !slices.Equal(labels, want) {
 		t.Fatalf("the rows are %q, not %q", labels, want)
 	}
-	if keys := modal.keys("core.settings-modal.setup-install"); !slices.Equal(keys, []string{"setup-install"}) {
+	if keys := modal.keys("core.settings-tab.setup-install"); !slices.Equal(keys, []string{"setup-install"}) {
 		t.Fatalf("설치 is %v", keys)
 	}
 	for _, control := range modal.Controls {
-		if control.Name == "core.settings-modal.setup-install" && !reflect.DeepEqual(control.Command.Params, map[string]any{"parts": []any{"skill", "mcp"}}) {
+		if control.Name == "core.settings-tab.setup-install" && !reflect.DeepEqual(control.Command.Params, map[string]any{"parts": []any{"skill", "mcp"}}) {
 			t.Fatalf("설치 runs %+v", control.Command)
 		}
 	}
@@ -200,8 +202,8 @@ func TestTheAgentGroupShowsAndInstallsTheSetupParts(t *testing.T) {
 		t.Fatalf("설치 sent %v", host.args)
 	}
 	status := f.setupStatus()
-	if status.Running != nil || len(status.Parts) != 4 || status.Parts[1].State != "ok" || f.has("core.settings-modal.setup-install", "") {
-		t.Fatalf("after the install the status is %+v and 설치 is shown: %v", status, f.has("core.settings-modal.setup-install", ""))
+	if status.Running != nil || len(status.Parts) != 4 || status.Parts[1].State != "ok" || f.has("core.settings-tab.setup-install", "") {
+		t.Fatalf("after the install the status is %+v and 설치 is shown: %v", status, f.has("core.settings-tab.setup-install", ""))
 	}
 	// window-active and setup-changed read the parts again while the group is shown, and not after it is hidden.
 	f.shell.Event("window-active", nil)
@@ -236,6 +238,7 @@ func TestTheSetupFailuresAreShownAndKeepTheParts(t *testing.T) {
 	}
 	f := setupShell(t, host)
 	f.click("core.chrome.settings", "")
+	f.run("core.settings-tab.nav", map[string]any{"page": "agents"})
 	for _, parts := range []any{[]string{}, []string{"path"}, []string{"skill", "skill"}, "skill", nil, []string{"mcp", "other"}} {
 		var refused *workbench.Refusal
 		if err := f.finish("core.setup.install", map[string]any{"parts": parts}); !errors.As(err, &refused) || refused.Code != workbench.InvalidParams {
@@ -267,8 +270,8 @@ func TestTheSetupFailuresAreShownAndKeepTheParts(t *testing.T) {
 	}
 	f.run("core.settings.close", map[string]any{})
 	f.click("core.chrome.settings", "")
-	if modal := f.modal(); len(modal.labels("core.settings-modal.setup")) != 0 || f.has("core.settings-modal.setup-install", "") || !f.has("core.settings-modal.setup-check", "") {
-		t.Fatalf("a machine without parts shows %v", modal.labels("core.settings-modal.setup"))
+	if modal := f.modal(); len(modal.labels("core.settings-tab.setup")) != 0 || f.has("core.settings-tab.setup-install", "") || !f.has("core.settings-tab.setup-check", "") {
+		t.Fatalf("a machine without parts shows %v", modal.labels("core.settings-tab.setup"))
 	}
 	if !slices.Contains(f.tester.Texts(), "이 컴퓨터에서 설정할 에이전트 항목이 없습니다.") {
 		t.Fatalf("a machine without parts does not say so: %q", f.tester.Texts())

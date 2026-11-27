@@ -12,13 +12,13 @@
 //
 // --trace 0|1 sets the trace state with core.settings.change before the measurement (scripts/measure-trace.mjs); --trace frame-records,
 // which needs --step pointer, sets the trace state of the frame records (FRAME_RECORDS) for both moves of the pointer step. --state
-// prepares a state of B3 through declared commands in a window of 1200 by 760 points: S0 (the library screen without a plugin view), S0b (the window after its
+// prepares a state of B3 through declared commands in a window of 1200 by 760 points: S0 (the project home without a plugin view), S0b (the window after its
 // project closed, each WebContent process of a view page or a document region read before the close exited), S1 (one tab of the plugin
 // --tab-plugin and beside it one tab of the plugin --page-plugin, which exposes the command <id>.navigate and the status <id>.location, on a
 // blank page of a loopback server that ends with the measurement; the script names no plugin, and S1, S9, S11, S12 and S15 require both
-// options), S9 (S1 under a second library window that covers it),
+// options), S9 (S1 under a second window that covers it),
 // S11 (S1 with a second project window beside it), S12 (S1 after one layout draw that fails), S14 (S0 10 seconds after one character in the
-// library search) and S15 (S1 with the settings window open). --idle waits for the cursor idle timeout of every tab whose plugin exposes a
+// project home search) and S15 (S1 with the settings tab open). --idle waits for the cursor idle timeout of every tab whose plugin exposes a
 // cursor status <id>.cursor and then for 3 seconds without a change of frames of host.window, or 3 seconds on a window
 // whose frames is null. --step pointer moves the pointer across the window, already the key window and not occluded, with the moves of
 // input.pointer, which take no permission and leave the cursor, reads the CPU time over the move and the footprints before and after it, and
@@ -591,12 +591,12 @@ export async function newWindow(s) {
   return s.on(list.find(isNew).window);
 }
 
-/** S0 and S14 start from one window on the library screen without a plugin view. */
-async function requireLibrary(s, state) {
+/** S0 and S14 start from one window on the project home without a plugin view. */
+async function requireHome(s, state) {
   const windows = await s.get("host.windows");
   if (windows.length !== 1) throw new Error(`${state} requires one window; the application has ${windows.length}`);
   const { screen } = await s.get("core.screen");
-  if (screen !== "library") throw new Error(`${state} requires the library screen; window ${s.window} shows ${screen}`);
+  if (screen === "workspace") throw new Error(`${state} requires the project home; window ${s.window} shows ${screen}`);
   const surfaces = await s.get("core.surfaces");
   if (surfaces.length > 0) {
     throw new Error(`${state} requires a window without plugin views; window ${s.window} shows ${surfaces.map((surface) => surface.surface).join(", ")}`);
@@ -622,7 +622,7 @@ async function closeProject(s) {
   if (closed !== true) throw new Error(`core.project.close kept the project ${project.id} (closed ${closed})`);
   for (const pid of exited) await s.request("diagnostics.process.exit", { pid });
   const { screen } = await s.get("core.screen");
-  if (screen !== "library") throw new Error(`S0b requires the library screen after the close; window ${s.window} shows ${screen}`);
+  if (screen === "workspace") throw new Error(`S0b requires the project home after the close; window ${s.window} shows ${screen}`);
   return { exited };
 }
 
@@ -700,9 +700,9 @@ export async function prepareState(s, state, deps, plugins = {}) {
   }
   if (state === "S0" || state === "S14") {
     await applyTraceOf(s, deps.trace);
-    await requireLibrary(s, state);
+    await requireHome(s, state);
     if (state === "S14") {
-      await s.run("core.library.search.focus");
+      await s.run("core.home.search.focus");
       await s.request("input.key", { key: "a", phase: "down" });
       await s.request("input.key", { key: "a", phase: "up" });
       // S14 reads 10 seconds after the key while the caret blinks; no status marks that time, so the caller waits keyReadingWaitMs from keyAt.
@@ -735,7 +735,7 @@ export async function prepareState(s, state, deps, plugins = {}) {
     context.faultLog = position;
   } else if (state === "S15") {
     await s.run("core.settings.open");
-    await s.until("core.settings-modal", (modal) => modal?.open === true, `the settings window of window ${s.window} did not open`);
+    await s.until("core.settings-tab", (tab) => tab !== null, `the settings tab of window ${s.window} did not open`);
   }
   return context;
 }

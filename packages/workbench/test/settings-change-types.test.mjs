@@ -49,7 +49,7 @@ async function start(t) {
   const { installCoreExposure } = await import("../core-exposure.js");
   await installCoreExposure({
     memorySaver: await pageMemorySaver(),
-    library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+    home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   });
   return { memory, registry, settings, change: (key, value) => registry.run("core.settings.change", { key, value, scope: "common" }) };
 }
@@ -156,24 +156,26 @@ test("core.settings.change gives each setting a value of its declared type", asy
 
   await t.test("error toast preferences accept and reload saved whole seconds", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
-    await assert.rejects(change("errorToastDismissSeconds", "2.5"), /Invalid setting errorToastDismissSeconds/);
-    assert.equal(Object.hasOwn(memory.common, "errorToastDismissSeconds"), false);
-    await change("errorToastDismissSeconds", "7");
-    await change("autoDismissErrorToasts", "true");
-    assert.equal(memory.common.errorToastDismissSeconds, 7);
-    assert.equal(memory.common.autoDismissErrorToasts, true);
+    await assert.rejects(change("problemToastDismissSeconds", "2.5"), /Invalid setting problemToastDismissSeconds/);
+    assert.equal(Object.hasOwn(memory.common, "problemToastDismissSeconds"), false);
+    await change("problemToastDismissSeconds", "7");
+    await change("autoDismissProblemToasts", "true");
+    assert.equal(memory.common.problemToastDismissSeconds, 7);
+    assert.equal(memory.common.autoDismissProblemToasts, true);
     const saved = structuredClone(memory);
-    await change("errorToastDismissSeconds", 2);
-    await change("autoDismissErrorToasts", false);
+    await change("problemToastDismissSeconds", 2);
+    await change("autoDismissProblemToasts", false);
     settings.beginSettings(saved, null);
-    assert.equal(settings.value("errorToastDismissSeconds"), 7);
-    assert.equal(settings.value("autoDismissErrorToasts"), true);
+    assert.equal(settings.value("problemToastDismissSeconds"), 7);
+    assert.equal(settings.value("autoDismissProblemToasts"), true);
     const { errorToasts } = await import("../shown-errors.js");
+    const { notificationStore } = await import("../tab-reports.js");
     const errors = errorToasts(document);
     errors.show("restored preference", "", "settings fixture");
+    const shownTitles = () => notificationStore().toasts().map((toast) => toast.title);
     t.mock.timers.tick(6999);
-    assert.equal(errors.newest(), "restored preference");
+    assert.deepEqual(shownTitles(), ["restored preference"]);
     t.mock.timers.tick(1);
-    assert.equal(errors.newest(), null);
+    assert.deepEqual(shownTitles(), [], "the delay of the restored setting closes the problem toast");
   });
 });

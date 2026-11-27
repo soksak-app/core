@@ -11,6 +11,8 @@
     {"reply":{"result":{"common":{},"pluginData": {}, "projects":[{"id":"prj-clearing-removed","root":"/work/prj-clearing-removed","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-prj-clearing-removed","spaces":[{"id":"spc-prj-clearing-removed","title":"SPACE1","layout":{"state":{"root":{"card":"card-prj-clearing-removed","data":{"tabs":[{"id":"tab-clearing-removed","plugin":"fixture","role":null}]}}}}}],"settings":{}},{"id":"prj-clearing-next","root":"/work/prj-clearing-next","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-prj-clearing-next","spaces":[{"id":"spc-prj-clearing-next","title":"SPACE1","layout":{"state":{"root":{"card":"card-prj-clearing-next","data":{"tabs":[{"id":"tab-clearing-next","plugin":"fixture","role":null}]}}}}}],"settings":{}}],"open":[]}}},
     {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
     {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"notices"}}},
+    {"reply":{"result":null}},
     {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
     {"reply":{"result":[]}},
     {"call":{"name":"windowReady"}},

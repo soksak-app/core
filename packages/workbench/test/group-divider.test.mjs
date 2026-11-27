@@ -13,7 +13,7 @@ globalThis.addEventListener = window.addEventListener.bind(window);
 const { installCoreExposure } = await import("../core-exposure.js");
 const { pageMemorySaver } = await import("./support/memory-saver.mjs");
 const { registry } = await import("../exposure.js");
-await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+await installCoreExposure({ home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   memorySaver: await pageMemorySaver() });
 
 const content = (id) => {

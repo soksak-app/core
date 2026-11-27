@@ -1,4 +1,4 @@
-// What the first window of a main page reads (docs/spec/native-host.md#page-start): the settings modal and the debug
+// What the first window of a main page reads (docs/spec/native-host.md#page-start): the settings tab and the debug
 // view load at their first use, and a screen that never loaded answers its status as closed.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -32,7 +32,7 @@ function firstWindowModules() {
 
 const LATER = ["settings-ui.js", "debug-ui.js", "debug-state.js", "debug-timeline.js", "debug-order.js", "scroll-keep.js"];
 
-test("the first window of a main page reads no module of the settings modal or the debug view", () => {
+test("the first window of a main page reads no module of the settings tab or the debug view", () => {
   const reached = firstWindowModules();
   assert.ok(reached.has("core-exposure.js") && reached.has("plane.js"), "the walk reached no module of the page");
   assert.deepEqual(LATER.filter((name) => reached.has(name)), []);
@@ -56,26 +56,28 @@ async function start(t) {
   const { installCoreExposure } = await import("../core-exposure.js");
   await installCoreExposure({
     memorySaver: await pageMemorySaver(),
-    library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+    home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   });
   return registry;
 }
 
-test("a screen that never loaded answers its status as closed, and its first command loads it", async (t) => {
+test("a settings tab that never loaded answers its status as absent, and its first command loads it", async (t) => {
   const registry = await start(t);
   const status = async (name) => (await registry.handle({ method: "status.get", params: { name } })).result;
   const debugBefore = await status("core.debug");
-  const settingsBefore = await status("core.settings-modal");
-  assert.deepEqual(settingsBefore, { open: false, controls: [] });
+  assert.equal(await status("core.settings-tab"), null);
   const { debugState } = await import("../debug-ui.js");
   assert.deepEqual(debugBefore, debugState());
   await registry.run("core.debug.close");
   await registry.run("core.settings.close");
-  assert.equal(document.querySelector(".set-scrim"), null);
+  const { settingsTabFront, onSettingsTabFront } = await import("../core-exposure.js");
+  assert.equal(settingsTabFront(), false);
+  const fronts = [];
+  onSettingsTabFront((front) => fronts.push(front));
   await registry.run("core.settings.open");
-  assert.notEqual(document.querySelector(".set-scrim"), null, "the first command did not open the modal");
-  assert.equal((await status("core.settings-modal")).open, true);
+  assert.equal(settingsTabFront(), true, "the first command did not load the settings tab");
+  assert.deepEqual(fronts, [true]);
   await registry.run("core.settings.close");
-  assert.equal(document.querySelector(".set-scrim"), null);
-  assert.deepEqual((await status("core.settings-modal")).open, false);
+  assert.equal(settingsTabFront(), false);
+  assert.deepEqual(fronts, [true, false]);
 });

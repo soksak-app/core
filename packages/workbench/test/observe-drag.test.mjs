@@ -51,7 +51,7 @@ const plane = await import("../plane.js");
 // The release of a divider drag runs core.boundary.move, which the core exposure of the page registers.
 const { installCoreExposure } = await import("../core-exposure.js");
 const { pageMemorySaver } = await import("./support/memory-saver.mjs");
-await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+await installCoreExposure({ home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   memorySaver: await pageMemorySaver() });
 plane.onLayout((made, draw) => draw());
 plane.adopt(plane.fresh(), "spc-aaaaaa");

@@ -1,32 +1,57 @@
+// The occurrences of an error shown as toasts: equal text from two origins shares one toast, each recovery leaves the other origin's error
+// open, and a dismissed occurrence reopens after its origin recovers. The store keeps its timers on the clock of the page (test/runtime/page-clock.js),
+// so the remaining time moves only by `clock.advance`, not by the run time of the test.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { installExposure } from "../exposure.js";
-import { rawConsole } from "../page-log.js";
-import { beginSettings } from "../settings.js";
-import { errorToasts } from "../shown-errors.js";
+import { createNotices } from "../notices.js";
+import { mountNoticeView } from "../notice-view.js";
+import { createPageClock } from "./runtime/page-clock.js";
 
 installExposure(JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")));
-
-/** Applies the automatic dismissal through the common settings, as a settings snapshot of the host does. */
-function dismissal(auto, seconds) {
-  beginSettings({ common: { autoDismissErrorToasts: auto, errorToastDismissSeconds: seconds }, projects: [] }, null);
-}
 
 function fixture(t) {
   const dom = new JSDOM("<body></body>");
   t.after(() => dom.window.close());
   const { document } = dom.window;
-  // The settings install their values on the global document of the page.
-  Object.assign(globalThis, { window: dom.window, document });
-  beginSettings({ common: {}, projects: [] }, null);
-  const { show, withdraw, dismiss, place, text } = errorToasts(document);
-  const log = t.mock.method(rawConsole, "error", () => {});
+  const clock = createPageClock();
+  // The common settings of the page, read by the store; dismissal changes them and tells the store, as a settings snapshot does.
+  const settingValues = { autoDismissProblemToasts: false, problemToastDismissSeconds: 5, quietToasts: false, noticeCenterStyle: "popover" };
+  const records = [];
+  const view = {
+    setTimeout: (callback, ms) => {
+      const timer = { cancelled: false };
+      clock.after(() => { if (!timer.cancelled) callback(); }, ms);
+      return timer;
+    },
+    clearTimeout: (timer) => { timer.cancelled = true; },
+  };
+  // The view draws the notices again when the store changes, as the page draws them through its change notification.
+  let ui = null;
+  const store = createNotices({
+    settings: (key) => settingValues[key],
+    view,
+    log: (level, line) => { if (level === "error") records.push(line); },
+    onChange: () => ui.redraw(),
+    now: clock.now,
+  });
+  ui = mountNoticeView(document, store);
+  // An error shown by the workbench: the text is the title, the detail is kept in the record, and the origin names the place that failed.
+  const show = (reason, detail = "", origin = "", where = "workbench") => {
+    store.show({ kind: "error", title: reason, text: "", origin: origin === "" ? null : origin, detail, where, logText: reason });
+  };
+  const dismissal = (auto, seconds) => {
+    settingValues.autoDismissProblemToasts = auto;
+    settingValues.problemToastDismissSeconds = seconds;
+    store.settingsChanged();
+  };
   return {
-    document, show, clear: withdraw, dismiss, place, text,
-    open: () => [...document.querySelectorAll("#errorToasts > .error-toast")].map((toast) => toast.dataset.text),
-    records: () => log.mock.calls.map(({ arguments: [line] }) => line),
+    document, clock, dismissal, show, clear: (origin) => store.withdrawOrigin(origin), dismiss: (text) => store.closeMessage(text),
+    place: ui.place, text: (origin) => store.textOf(origin),
+    open: () => [...document.querySelectorAll("#toasts > .toast")].map((toast) => toast.querySelector(".toast__title").textContent),
+    records: () => records,
   };
 }
 
@@ -35,7 +60,7 @@ test("equal text from two origins shares a toast and records both occurrences", 
   display.show("failed", " from layout", "layout");
   display.show("failed", " from activity", "activity tab");
   display.show("failed", " from layout", "layout");
-  assert.deepEqual(display.open(), ["failed"]);
+  assert.deepEqual(display.open(), ["failed ×2"], "the merged notice reads its occurrence count (docs/spec/notifications.md#toasts)");
   assert.deepEqual(display.records(), ["workbench: failed from layout", "workbench: failed from activity"]);
 });
 
@@ -45,7 +70,7 @@ test("recovering either origin leaves another origin's equal error open", (t) =>
     display.show("failed", "", first);
     display.show("failed", "", second);
     display.clear(second);
-    assert.deepEqual(display.open(), ["failed"], `clearing ${second} removed the error of ${first}`);
+    assert.deepEqual(display.open(), ["failed ×2"], `clearing ${second} removed the error of ${first}`);
     display.clear(first);
     assert.deepEqual(display.open(), []);
   }
@@ -70,21 +95,20 @@ test("a dismissed occurrence stays closed on repaint and can reopen after recove
 });
 
 test("a toast expires after four seconds across repaint and movement into a dialog", (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
   const display = fixture(t);
-  const { document } = display;
+  const { document, clock } = display;
   const dialog = document.createElement("div");
   dialog.setAttribute("role", "dialog");
   document.body.append(dialog);
-  dismissal(true, 4);
+  display.dismissal(true, 4);
   display.show("failed", "", "layout");
-  t.mock.timers.tick(2000);
+  clock.advance(2000);
   display.show("failed", "", "layout");
   display.place(dialog);
-  assert.ok(dialog.querySelector(".error-toast"));
-  t.mock.timers.tick(1999);
+  assert.ok(dialog.querySelector(".toast"));
+  clock.advance(1999);
   assert.deepEqual(display.open(), ["failed"]);
-  t.mock.timers.tick(1);
+  clock.advance(1);
   assert.deepEqual(display.open(), []);
   assert.equal(display.text("layout"), "failed", "the occurrence remains current after the toast expires");
   display.show("failed", "", "layout");
@@ -94,48 +118,48 @@ test("a toast expires after four seconds across repaint and movement into a dial
 });
 
 test("a cancelled toast timer leaves a later occurrence of the same text open", (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
   const display = fixture(t);
-  dismissal(true, 4);
+  const { clock } = display;
+  display.dismissal(true, 4);
   display.show("failed", "", "layout");
-  t.mock.timers.tick(1000);
+  clock.advance(1000);
   assert.equal(display.dismiss("failed"), true);
   display.clear("layout");
   display.show("failed", "", "layout");
-  t.mock.timers.tick(3000);
+  clock.advance(3000);
   assert.deepEqual(display.open(), ["failed"]);
-  t.mock.timers.tick(1000);
+  clock.advance(1000);
   assert.deepEqual(display.open(), []);
   assert.deepEqual(display.records(), ["workbench: failed", "workbench: failed"]);
 });
 
 test("toasts default to manual stacking and live settings replace or cancel their deadlines", (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout"] });
   const display = fixture(t);
+  const { clock } = display;
   display.show("earlier", "", "layout");
   display.show("later", "", "activity");
-  t.mock.timers.tick(5000);
-  assert.deepEqual(display.open(), ["earlier", "later"], "the default is manual dismissal");
+  clock.advance(5000);
+  assert.deepEqual(display.open(), ["later", "earlier"], "the default is manual dismissal, newest first");
   assert.equal(display.dismiss("earlier"), true);
   assert.deepEqual(display.open(), ["later"], "one manual close leaves other toasts open");
 
-  dismissal(true, 5);
-  t.mock.timers.tick(3000);
-  dismissal(true, 2);
-  t.mock.timers.tick(1999);
+  display.dismissal(true, 5);
+  clock.advance(3000);
+  display.dismissal(true, 2);
+  clock.advance(1999);
   assert.deepEqual(display.open(), ["later"]);
-  t.mock.timers.tick(1);
+  clock.advance(1);
   assert.deepEqual(display.open(), []);
 
   display.clear("activity");
   display.show("later", "", "activity");
-  t.mock.timers.tick(1000);
-  dismissal(false, 2);
-  t.mock.timers.tick(10000);
+  clock.advance(1000);
+  display.dismissal(false, 2);
+  clock.advance(10000);
   assert.deepEqual(display.open(), ["later"], "turning the switch off cancels an open toast's deadline");
   display.clear("layout");
   display.show("earlier", "", "layout");
-  t.mock.timers.tick(5000);
-  assert.deepEqual(display.open(), ["later", "earlier"]);
+  clock.advance(5000);
+  assert.deepEqual(display.open(), ["earlier", "later"], "the newest toast is first");
   assert.deepEqual(display.records(), ["workbench: earlier", "workbench: later", "workbench: later", "workbench: earlier"]);
 });

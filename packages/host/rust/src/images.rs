@@ -840,13 +840,12 @@ impl Images {
         self.changed();
     }
 
-    /// Records the visibility state of the outer SurfaceHost and reports whether it changed. A change makes the drawing state of
-    /// each region of the surface differ from the state that its supplier holds, so the caller sends the drawing states
-    /// (docs/spec/native-surfaces.md#image-regions).
-    pub fn set_surface_visible(&self, surface: &str, visible: bool) -> bool {
+    /// Records the visibility state of the outer SurfaceHost. The drawing states that the visibility changes are sent by the
+    /// layout that calls it (composition.rs refresh_image_rasters).
+    pub fn set_surface_visible(&self, surface: &str, visible: bool) {
         let mut inner = self.lock();
         if inner.surface_visibility.get(surface).copied() == Some(visible) {
-            return false;
+            return;
         }
         inner
             .surface_visibility
@@ -867,7 +866,6 @@ impl Images {
             }
         }
         self.changed();
-        true
     }
 
     /// Takes a name. It returns an error when there is no sidecar or it is an empty string.

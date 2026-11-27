@@ -72,7 +72,9 @@ test("core.sidebars reports a window sidebar that shows no set with its rectangl
     held?.();
     const top = planeEl.querySelector('.card[data-card-id="top"]');
     assert.ok(top, "the top sidebar stands");
-    assert.equal(top.querySelector(".status__text").textContent, "위 창 사이드바", "the top sidebar draws its status line");
+    // Without a set the head shows the side name and no layout badge (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+    assert.equal(top.querySelector(".sidebar-head__name").textContent, "위", "the head of the top sidebar does not show the side name");
+    assert.equal(top.querySelector(".sidebar-head__layout").textContent, "", "the head of a sidebar without a set shows a layout badge");
     const reported = sidebarsState().find((entry) => entry.sidebar === "top");
     assert.ok(reported, `core.sidebars omits the drawn top sidebar: ${JSON.stringify(sidebarsState())}`);
     assert.deepEqual(reported, {

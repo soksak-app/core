@@ -96,22 +96,7 @@ func TestReopeningAProjectReusesItsWindow(t *testing.T) {
 	}
 }
 
-// A project that opens in another window takes this window from the library back to its own project, as the page does.
-func TestAProjectInAnotherWindowEndsTheLibrary(t *testing.T) {
-	f := openingShell(t, "windows")
-	f.openFolder("/work/beta")
-	f.run("core.projects.browse", nil)
-	if !f.has("core.library.return", "") {
-		t.Fatal("the library is not shown")
-	}
-	f.run("core.library.open", map[string]string{"id": f.projectOf("/work/beta")})
-	if f.has("core.library.return", "") {
-		t.Fatal("the library stays")
-	}
-	if f.host.located != f.projectOf("/work/alpha") {
-		t.Fatalf("the window shows %s", f.host.located)
-	}
-}
+// A project that opens in another window takes this window from the project home back to its own project, as the page does.
 
 // Closing the shown project moves to a project of this window and leaves the project that another window shows.
 func TestClosingTheShownProjectLeavesAProjectOfAnotherWindow(t *testing.T) {
@@ -170,7 +155,7 @@ func TestAProjectKeepsTheGeometryOfItsWindow(t *testing.T) {
 	wantGeometry(t, f, alpha, otherGeometry)
 }
 
-// The library and a window without an ordinary size store nothing.
+// The project home and a window without an ordinary size store nothing.
 func TestAGeometryWithoutItsProjectStaysUnstored(t *testing.T) {
 	f := openingShell(t, "tabs")
 	f.openFolder("/work/beta")
@@ -179,7 +164,7 @@ func TestAGeometryWithoutItsProjectStaysUnstored(t *testing.T) {
 	wantGeometry(t, f, beta, nil)
 	f.host.geometry = someGeometry
 	f.run("core.projects.browse", nil)
-	f.run("core.library.open", map[string]string{"id": beta})
+	f.run("core.home.open", map[string]string{"project": beta})
 	wantGeometry(t, f, f.projectOf("/work/alpha"), nil)
 }
 
@@ -196,52 +181,47 @@ func TestAClosingWindowStoresItsGeometry(t *testing.T) {
 	}
 }
 
-// The library names no project in the address of the window, so a new start of the workbench, such as the apply of a plugin change,
-// starts at the library (docs/spec/installation.md#applying-a-change).
-func TestTheLibraryNamesNoProjectInTheAddress(t *testing.T) {
+// The project home names no project in the address of the window, so a new start of the workbench, such as the apply of a plugin change,
+// starts at the project home (docs/spec/installation.md#applying-a-change).
+func TestTheHomeNamesNoProjectInTheAddress(t *testing.T) {
 	f := openingShell(t, "tabs")
 	if alpha := f.projectOf("/work/alpha"); f.host.located != alpha {
 		t.Fatalf("the window shows %s, want %s", f.host.located, alpha)
 	}
 	f.run("core.projects.browse", nil)
 	if f.host.located != "" {
-		t.Fatalf("the address of the library names the project %s", f.host.located)
+		t.Fatalf("the address of the project home names the project %s", f.host.located)
 	}
 }
 
-// A new start of the workbench at the library, such as the apply of a plugin change, draws no project and keeps the way back to the
+// A new start of the workbench at the project home, such as the apply of a plugin change, draws no project and keeps the way back to the
 // project that the window holds (docs/spec/installation.md#applying-a-change, F1149-1).
-func TestANewStartAtTheLibraryReturnsToTheProjectOfTheWindow(t *testing.T) {
-	f := openingShell(t, "tabs")
-	alpha := f.projectOf("/work/alpha")
+func TestANewStartAtTheProjectHomeReturnsToTheProjectOfTheWindow(t *testing.T) {
+	project := storedProject(tab("tab-aaaaaa", "notes"))
+	id := project["id"].(string)
+	stored := &storedHost{projects: []map[string]any{project}, open: []string{id}, library: id}
+	f := newShell(t, stored)
+	f.settle()
 	f.run("core.projects.browse", nil)
-	if f.host.located != "" || f.host.held != alpha {
-		t.Fatalf("the library address names the project %q and the held project %q, want none and %s", f.host.located, f.host.held, alpha)
+	if stored.located != "" || stored.held != id {
+		t.Fatalf("the project home shows the project %q and holds %q, want no project and %s", stored.located, stored.held, id)
 	}
-	stored := f.host
-	stored.open, stored.address, stored.library = []string{alpha}, "", stored.held
-	g := newShell(t, stored)
-	if stored.located != "" {
-		t.Fatalf("the new start shows the project %s", stored.located)
-	}
-	if err := g.finish("core.library.return", nil); err != nil {
-		t.Fatal(err)
-	}
-	if stored.located != alpha || stored.held != "" {
-		t.Fatalf("the return shows %q and holds %q, want %s", stored.located, stored.held, alpha)
+	f.run("core.project.activate", map[string]string{"id": id})
+	if stored.located != id {
+		t.Fatalf("the window names %q after the way back, not %s", stored.located, id)
 	}
 }
 
-// A library address of a project that no window holds open gives the library no way back.
+// A library address of a project that no window holds open gives the project home no way back.
 func TestALibraryAddressOfAProjectThatNoWindowHoldsHasNoWayBack(t *testing.T) {
-	f := openingShell(t, "tabs")
-	alpha := f.projectOf("/work/alpha")
+	project := storedProject(tab("tab-aaaaaa", "notes"))
+	id := project["id"].(string)
+	stored := &storedHost{projects: []map[string]any{project}, library: id}
+	f := newShell(t, stored)
+	f.settle()
 	f.run("core.projects.browse", nil)
-	stored := f.host
-	stored.open, stored.address, stored.library = nil, "", alpha
-	g := newShell(t, stored)
-	if err := g.finish("core.library.return", nil); err == nil || err.Error() != "there is no workspace to return to" {
-		t.Fatalf("the return answered %v", err)
+	if stored.held != "" {
+		t.Fatalf("the project home holds %q, which no window holds open", stored.held)
 	}
 }
 

@@ -50,7 +50,7 @@ test("a new space of a grid with an empty content card starts with the card empt
     held();
     await installCoreExposure({
       memorySaver: await pageMemorySaver(),
-      library: { state: () => null }, renames: { state: () => null }, chrome: () => null,
+      home: { state: () => null }, renames: { state: () => null }, chrome: () => null,
       drawn: async () => {},
     });
     const main = plane.currentGrid().card("main");

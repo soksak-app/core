@@ -365,12 +365,15 @@ var commonOnlyCases = []struct {
 	value any
 	file  string
 }{
-	{"autoDismissErrorToasts", true, `true`},
-	{"errorToastDismissSeconds", 5, `5`},
+	{"autoDismissProblemToasts", true, `true`},
 	{"memorySaver", false, `false`},
 	{"memorySaverDelay", 30, `30`},
+	{"noticeCenterStyle", "popover", `"popover"`},
+	{"problemToastDismissSeconds", 5, `5`},
 	{"projectOpening", "tabs", `"tabs"`},
+	{"quietToasts", false, `false`},
 	{"textSize", 1.5, `1.5`},
+	{"toastStyle", "card", `"card"`},
 	{"viewProcess", "view", `"view"`},
 }
 

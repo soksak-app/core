@@ -88,7 +88,7 @@ fn host_declarations() -> Value {
                 "scale": {"type": "number"}}}},
         }, {
             "name": "host.sidecars",
-            "description": "The surfaces whose closed the host has sent and the sidecar has not answered, sorted by sidecar and surface, and the persistent sidecars whose service runs another version than the installed one, sorted by sidecar, with the running version (null when the service sent none), the installed version (null when the sidecar is no longer declared) and the number of open surfaces of the service: {closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}.",
+            "description": "The surfaces whose closed the host has sent and the sidecar has not answered, sorted by sidecar and surface, and the persistent sidecars whose service runs another version than the installed one, sorted by sidecar, with the running version (null when the service sent none), the installed version (null when the sidecar is no longer declared) and the number of open surfaces of the service: {closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions, surfaces}]}, where surfaces lists the surfaces that sessions counts, sorted.",
             "schema": {"type": "object", "properties": {
                 "closing": {"type": "array", "items": {"type": "object", "properties": {
                     "sidecar": {"type": "string"}, "surface": {"type": "string"}}}},

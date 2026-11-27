@@ -1692,9 +1692,6 @@ fn apply_surfaces(
     let (platform, scale) = (*platform, *scale);
     let surface_hosts = &context.surface_hosts;
     let mut targets = Vec::with_capacity(request.surfaces.len());
-    // A surface that this layout shows or hides changes the drawing state of its image regions. No window change announces that
-    // to the suppliers, so the drawing states are sent after the layout (composition::send_image_drawing).
-    let mut visibility_changed = false;
     for s in &request.surfaces {
         context
             .compositions
@@ -1712,9 +1709,7 @@ fn apply_surfaces(
             .insert(s.id.clone(), s.plugin.clone());
         // A webview of size 0 is not visible and some platforms reject it, so it is handled as a hidden surface.
         let visible = s.visible && s.w >= 1.0 && s.h >= 1.0;
-        if context.images.set_surface_visible(&s.id, visible) {
-            visibility_changed = true;
-        }
+        context.images.set_surface_visible(&s.id, visible);
         let (ax, ay, aw, ah) = aligned(s.x, s.y, s.w.max(1.0), s.h.max(1.0), scale);
         let solid = if s.dim { 0.45 } else { 1.0 };
         let existing = surface_hosts
@@ -1819,14 +1814,6 @@ fn apply_surfaces(
         return Err(format!("surface close: {}", close_failures.join("; ")));
     }
 
-    if visibility_changed {
-        let drawing = window.clone();
-        crate::routine::spawn_named("image-drawing", move || {
-            if let Err(error) = crate::composition::send_image_drawing(&drawing) {
-                log_error("image drawing", error);
-            }
-        });
-    }
     // Returns the actual position of each surface. The host fits the rectangles that the page declared to display
     // pixels, so the difference between the two values is reported to the page.
     targets

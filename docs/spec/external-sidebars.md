@@ -30,21 +30,25 @@ The title bar row of a window shows only the tools that apply to the screen in f
 
 | Screen in front | Tools, from left to right |
 | --- | --- |
-| Work screen | The four side switches, a separator, and the settings button |
-| Settings tab | None |
-| Project home | The settings button |
+| Work screen | The four side switches, a separator, the settings button, and the bell |
+| Settings tab | The bell |
+| Project home | The settings button and the bell |
 
-The SOKSAK logo is the first element of the row on every screen. It runs `core.projects.browse`, which shows the project home in the window and keeps the current work. The row has no other element: the card auto-arrange button, the light and dark mode switch and the plugin update control are not in the row.
+The SOKSAK logo is the first element of the row on every screen, the element `core.chrome.projects`. It runs `core.projects.browse`, which shows the project home in the window and keeps the current work. Apart from the bell, the row has no other element: the card auto-arrange button, the light and dark mode switch and the plugin update control are not in the row.
 
 The settings button is the element `core.chrome.settings`. It runs `core.settings.open` and has the tooltip 설정 열기. Each screen has one settings entry, so the settings button is absent while the settings tab is in front.
 
 The work screen title bar has one switch for each side, in the fixed order `left`, `right`, `top`, `bottom`, with the elements `core.chrome.left`, `core.chrome.right`, `core.chrome.top` and `core.chrome.bottom`, the icons `panel-left`, `panel-right`, `panel-top` and `panel-bottom`, and the tooltips 왼쪽 사이드바 보이기, 오른쪽 사이드바 보이기, 위 사이드바 보이기 and 아래 사이드바 보이기. A switch shows the applied value of its side and runs `core.settings.change {key: <side>, value: <the negated applied value>, scope}` with the scope that the applied value comes from: `project` while the selected project overrides the side, otherwise `common`. So a press changes the value that the switch shows and adds no project value ([scope of a control](settings.md#scope-of-a-control)), and the switch is pressed while the applied value is true. The press applies the value in its own turn: the frame that follows the press draws the plane with the switched sidebar and places its section surfaces, and neither that frame nor its placement waits for the write of the settings, which follows it; the command answers once the host wrote the settings.
 
-The window tools declare these elements and commands: the elements `core.chrome.settings`, `core.chrome.left`, `core.chrome.right`, `core.chrome.top`, `core.chrome.bottom`, `core.sidebar.fold` and `core.sidebar.edge`, and the commands `core.settings.open`, `core.settings.change` and `core.projects.browse`.
+The bell is the element `core.chrome.notices`, the last element of the title bar on every screen; it runs `core.notices.toggle` ([bell](notifications.md#bell)). The window tools declare these elements and commands: the elements `core.chrome.projects`, `core.chrome.settings`, `core.chrome.notices`, `core.chrome.left`, `core.chrome.right`, `core.chrome.top`, `core.chrome.bottom`, `core.sidebar.fold` and `core.sidebar.edge`, and the commands `core.settings.open`, `core.settings.change`, `core.projects.browse` and `core.notices.toggle`.
+
+## Status bar
+
+The main window has a status bar at its bottom edge while the work screen or the settings tab is in front. The project home has none. The bar shows, from left to right: the name of the project of the window (element `core.statusbar.project`, from the status `core.project`), the number of cards of the grid as `카드 n` (element `core.statusbar.cards`, from the status `core.grid`; the four side names are not cards and are left out), the theme and the mode of the window separated by `·` (element `core.statusbar.theme`, from the settings `theme` and `mode`), and at the right the key hint `⌘, 설정`. The key hint is text and not an element, because each screen has one settings entry ([settings](settings.md#opening-and-closing)). The bar takes its texts when it draws, and its height is the token `statusbar-h`.
 
 ## Sidebar head and edge
 
-The head of each drawn window sidebar shows the position of its side in the placement order, as the number of the side in `sidebarOrder` counted from 1. While the pointer is over the sidebar or the sidebar has focus, the head also shows a × button. It is the element `core.sidebar.fold`, and it runs `core.settings.change {key: <side>, value: false, scope}` with the scope that the applied value of its side comes from.
+The head of each drawn window sidebar is the top row of the sidebar, and it has no status line below its set. From left to right the head shows the position of its side in the placement order, as the number of the side in `sidebarOrder` counted from 1 (the element `core.sidebar.head` holds it as text), the name of the set that the sidebar shows, the layout badge `탭` or `목록` of that set, and a × button at the right. Without a set the head shows the side name (왼쪽, 오른쪽, 위, 아래) and no badge. While the pointer is over the sidebar or the sidebar has focus, the × button is shown. It is the element `core.sidebar.fold`, and it runs `core.settings.change {key: <side>, value: false, scope}` with the scope that the applied value of its side comes from.
 
 A side that is hidden and has a choice shows a button `+ <side>` while the pointer is over its edge, where the sidebar would stand. The side names are 왼쪽, 오른쪽, 위 and 아래. The button runs `core.settings.change {key: <side>, value: true, scope}`, the command of the side switch, with the scope of the side. Its element is `core.sidebar.edge`, which the implementation declares with the button.
 

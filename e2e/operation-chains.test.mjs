@@ -125,10 +125,7 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
     s.cleanupSteps(
       async () => {
-        if ((await s.get("core.screen")).screen === "library") {
-          await s.run("core.library.page", { page: "projects" });
-          await s.run("core.library.return");
-        }
+        if ((await s.get("core.settings-tab")) !== null) await s.run("core.settings.close");
       },
       async () => {
         await restoreRegistry(s);
@@ -137,10 +134,10 @@ for (const app of Object.values(APPS)) {
     await useRegistry(s, address);
     await s.until("core.app", (value) => value.available?.version === NEWER, "the registry with a newer core did not list an update");
     await s.run("core.plugins.show-updates");
-    await s.until("core.library", (library) => library.page === "plugins", "the plugin page did not show");
+    await s.until("core.settings-tab", (tab) => tab?.page === "installed", "the settings tab did not show 설치됨");
     since = await tailOf(s);
     s.expectError(/application update 99\.0\.0: /);
-    await s.act("core.library.app.update", "click");
+    await s.act("core.settings-tab.plugins.app-update", "click");
     await s.until("core.app", (value) => value.operation?.state === "failed", "the update operation did not report its failure");
     await chainOf(s, chains, "update", since, { action: "update", version: NEWER });
 

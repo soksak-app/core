@@ -32,6 +32,8 @@ type Shortcut struct {
 	Command string `json:"command"`
 	Menu    string `json:"menu"`
 	When    string `json:"when"`
+	// Params are the parameters that the command of a workbench row gets, or nil.
+	Params map[string]any `json:"params"`
 }
 
 // Declarations are the names and the values that the workbench reads from its declaration copies.

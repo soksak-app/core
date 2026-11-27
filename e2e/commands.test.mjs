@@ -7,7 +7,6 @@ import test from "node:test";
 
 import { APPS, open, recordingSummary } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
-import { retainDesignStateCapture } from "./still-capture.mjs";
 
 /** The card with the card id. */
 const cardOf = (grid, id) => grid?.cards.find((c) => c.id === id);
@@ -113,55 +112,34 @@ for (const app of Object.values(APPS)) {
     await s.until("core.grid", (grid) => ids(grid).join() === ids(start).join(), "closing the second split did not restore the layout");
   });
 
-  test(`${app.name}: settings modal commands change its section, scope, and position`, async (t) => {
+  test(`${app.name}: settings tab commands change its page, scope, and mode`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     await s.run("core.settings.open");
-    const opened = await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
-    for (const section of ["sidebars", "plugins", "general"]) {
-      await s.run("core.settings-modal.nav", { section });
-      await s.until("core.settings-modal", (modal) => modal.section === section, `settings did not show ${section}`);
+    await s.until("core.settings-tab", (tab) => tab !== null, "settings did not open");
+    for (const page of ["sets", "installed", "look"]) {
+      await s.run("core.settings-tab.nav", { page });
+      await s.until("core.settings-tab", (tab) => tab?.page === page, `settings did not show ${page}`);
     }
-    await s.run("core.settings-modal.scope", { scope: "project" });
-    const project = await s.until("core.settings-modal", (modal) => modal.scope === "project", "settings did not select project scope");
-    const tab = project.controls.find((c) => c.key === "pick:scope:project");
-    assert.equal(tab?.on, true, "the project scope tab must be selected");
-    assert.deepEqual(tab.command, { name: "core.settings-modal.scope", params: { scope: "project" } });
-    await s.run("core.settings-modal.scope", { scope: "common" });
-    await s.until("core.settings-modal", (modal) => modal.scope === "common", "settings did not select common scope");
-
-    await s.presented();
-    const beforeCard = await s.rect("core.settings-modal.card");
-    const beforeOrigin = { x: beforeCard.document.x + beforeCard.x, y: beforeCard.document.y + beforeCard.y };
-    assert.deepEqual(beforeOrigin, { x: opened.card.x, y: opened.card.y },
-      "the actual named settings card must match its public position before moving");
-    await s.run("core.settings-modal.move", { dx: 40, dy: 20 });
-    const moved = await s.until("core.settings-modal",
-      (modal) => modal.card.x === opened.card.x + 40 && modal.card.y === opened.card.y + 20,
-      "core.settings-modal.move did not move the card by 40,20");
-    // This named element is shared by native and WebView modals. Its declared
-    // document origin is applied once; core.modal.document exists only for
-    // hosts that render the modal in a WebView.
-    await s.presented();
-    const afterCard = await s.rect("core.settings-modal.card");
-    const afterOrigin = { x: afterCard.document.x + afterCard.x, y: afterCard.document.y + afterCard.y };
-    assert.deepEqual(afterOrigin, { x: moved.card.x, y: moved.card.y },
-      "the actual named settings card did not follow its public moved position");
-    assert.deepEqual({ dx: afterOrigin.x - beforeOrigin.x, dy: afterOrigin.y - beforeOrigin.y }, { dx: 40, dy: 20 },
-      "the actual named settings card did not move by exactly 40,20");
-    await retainDesignStateCapture(s, t, "settings-command-moved");
+    await s.run("core.settings-tab.scope", { scope: "project" });
+    const project = await s.until("core.settings-tab", (tab) => tab?.scope === "project", "settings did not select project scope");
+    const tab = project.controls.find((c) => c.name === "core.settings-tab.scope" && c.command?.params?.scope === "project");
+    assert.equal(tab?.on, true, "the project scope button must be selected");
+    assert.deepEqual(tab.command, { name: "core.settings-tab.scope", params: { scope: "project" } });
+    await s.run("core.settings-tab.scope", { scope: "common" });
+    await s.until("core.settings-tab", (value) => value.scope === "common", "settings did not select common scope");
 
     const mode = (await s.get("core.settings")).values.mode;
     const other = mode === "dark" ? "light" : "dark";
-    // The mode is a select box. The chosen value goes to the command as value (Controls in docs/spec/settings.md).
-    const pick = moved.controls.find((c) => c.key === "mode");
-    assert.ok(pick?.command, "the appearance control must name its command");
-    assert.ok(pick.options.includes(other), `the mode select box does not offer ${other}`);
-    await s.run(pick.command.name, { ...pick.command.params, value: other });
+    // The mode is a choice of segments: each segment names core.settings.change with the value it sets (Controls in docs/spec/settings.md).
+    const { controls } = await s.get("core.settings-tab");
+    const pick = controls.find((c) => c.name === "core.settings-tab.choice" && c.key === "mode" && c.command?.params?.value === other);
+    assert.ok(pick?.command, `the mode choice must offer ${other} with its command`);
+    await s.run(pick.command.name, pick.command.params);
     await s.until("core.settings", (value) => value.values.mode === other && !value.saving, "the control command did not change the mode");
 
     await s.run("core.settings.close");
-    await s.until("core.settings-modal", (modal) => !modal.open, "settings did not close");
+    await s.until("core.settings-tab", (tab) => tab === null, "settings did not close");
   });
 
   test(`${app.name}: native clicks reach every chrome icon at wide window sizes`, { timeout: 180000 }, async (t) => {
@@ -255,7 +233,7 @@ for (const app of Object.values(APPS)) {
     const measurements = [];
     // A click that the workbench owns runs the command of its button, and the change of the status is the effect of that command.
     // The command can end after the next presented frame: core.settings.open loads the settings screen at its first run, and
-    // core.projects.browse waits for the projects before it shows the library. So the judgement waits for the change of the
+    // core.projects.browse waits for the projects before it shows the project home. So the judgement waits for the change of the
     // status, which the command makes, and has no time limit of its own: a click without effect holds the check until the limit
     // of the test, whose output names the step of the click.
     const clickEffect = (owner, name, predicate, message) => owner.kind === "workbench" ? s.until(name, predicate, message) : undefined;
@@ -297,12 +275,12 @@ for (const app of Object.values(APPS)) {
         t.diagnostic(`resize-and-project-click at ${width}: ${recordingSummary(stopped)}`);
       }
       projects.before = projectBefore;
-      await clickEffect(projects.owner, "core.screen", (value) => value.screen === "library", `projects icon did not open the library at ${width}`);
+      await clickEffect(projects.owner, "core.screen", (value) => value.screen !== "workspace", `projects icon did not open the project home at ${width}`);
       projects.after = (await s.get("core.screen")).screen;
-      projects.effect = projects.after === "library";
+      projects.effect = projects.after !== "workspace";
       outcomes.push(projects);
       if (projects.effect) {
-        await s.run("core.library.return");
+        await s.run("core.home.open", { project: (await s.get("core.project")).id });
         await s.until("core.screen", (value) => value.screen === "workspace", `workspace did not return at ${width}`);
         await s.presented();
       }
@@ -317,22 +295,13 @@ for (const app of Object.values(APPS)) {
         await restoreSetting(key);
       }
 
-      const mode = initialSettings.values.mode;
-      const modeClick = await clickChrome("core.chrome.mode");
-      const nextMode = mode === "dark" ? "light" : "dark";
-      await clickEffect(modeClick.owner, "core.settings", (settings) => settings.values.mode === nextMode,
-        `theme icon did not change the mode at ${width}`);
-      const observedMode = (await s.get("core.settings")).values.mode;
-      outcomes.push({ ...modeClick, before: mode, after: observedMode, effect: observedMode !== mode });
-      await restoreSetting("mode");
-
       const settingsClick = await clickChrome("core.chrome.settings");
-      await clickEffect(settingsClick.owner, "core.settings-modal", (modal) => modal.open, `settings icon did not open settings at ${width}`);
-      const settingsOpen = (await s.get("core.settings-modal")).open;
+      await clickEffect(settingsClick.owner, "core.settings-tab", (tab) => tab !== null, `settings icon did not open settings at ${width}`);
+      const settingsOpen = (await s.get("core.settings-tab")) !== null;
       outcomes.push({ ...settingsClick, effect: settingsOpen });
       if (settingsOpen) {
         await s.run("core.settings.close");
-        await s.until("core.settings-modal", (modal) => !modal.open, `settings did not close at ${width}`);
+        await s.until("core.settings-tab", (tab) => tab === null, `settings did not close at ${width}`);
       }
 
       const failed = outcomes.filter(({ owner, effect, inWorkbench, hitViewContains }) =>
@@ -349,39 +318,36 @@ for (const app of Object.values(APPS)) {
     `the width sweep activated or keyed the tested application: ${JSON.stringify(measurements.map(({ width, active, key, finalActive, finalKey }) => ({ width, active, key, finalActive, finalKey })))}`);
   });
 
-  test(`${app.name}: library commands search, sort, and edit the form`, async (t) => {
+  test(`${app.name}: project home commands search, pin, and edit the form`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const project = await s.get("core.project");
     await s.run("core.projects.browse");
-    const start = await s.until("core.library", (library) => library.shown.length === 1 && library.returnVisible,
-      "the library did not list the project with a return button");
+    await s.until("core.home", (home) => home.rows.includes(project.id), "the project home did not list the project");
 
-    await s.run("core.focus.set", { name: "core.library.search" });
-    await s.until("core.focus", (focus) => focus?.name === "core.library.search", "core.focus.set did not focus search");
-    await s.run("core.library.search", { query: "no such project" });
-    await s.until("core.library", (library) => library.noResults && library.shown.length === 0,
-      "core.library.search did not filter the library");
-    await s.run("core.library.search", { query: "" });
-    await s.until("core.library", (library) => library.shown.length === 1 && !library.noResults, "clearing search did not restore the list");
-    const order = start.sort === "name" ? "recent" : "name";
-    await s.run("core.library.sort", { order });
-    await s.until("core.library", (library) => library.sort === order, "core.library.sort did not change the order");
+    await s.run("core.focus.set", { name: "core.home.search" });
+    await s.until("core.focus", (focus) => focus?.name === "core.home.search", "core.focus.set did not focus search");
+    await s.run("core.home.search", { query: "no such project" });
+    await s.until("core.home", (home) => home.rows.length === 0, "core.home.search did not filter the project home");
+    await s.run("core.home.search", { query: "" });
+    await s.until("core.home", (home) => home.rows.includes(project.id), "clearing search did not restore the list");
 
-    await s.run("core.library.pin", { id: project.id, pinned: true });
-    await s.until("core.library", (library) => library.pinned.includes(project.id), "core.library.pin did not pin the project");
-    await s.run("core.library.pin", { id: project.id, pinned: false });
-    await s.until("core.library", (library) => !library.pinned.includes(project.id), "core.library.pin did not unpin the project");
+    const pinned = (await s.get("core.projects")).find((item) => item.id === project.id).pinned;
+    await s.run("core.home.pin", { project: project.id });
+    await s.until("core.projects", (projects) => projects.find((item) => item.id === project.id).pinned === !pinned,
+      "core.home.pin did not change the pin of the project");
+    await s.run("core.home.pin", { project: project.id });
+    await s.until("core.projects", (projects) => projects.find((item) => item.id === project.id).pinned === pinned,
+      "core.home.pin did not restore the pin of the project");
 
-    await s.run("core.library.form.open", { mode: "create" });
-    await s.until("core.library", (library) => library.formState?.mode === "create", "the create form did not open");
-    await s.run("core.library.form.set", { field: "name", value: "draft" });
-    await s.until("core.library", (library) => library.formState?.name === "draft", "core.library.form.set did not fill the name");
-    await s.run("core.library.form.cancel");
-    await s.until("core.library", (library) => !library.form, "core.library.form.cancel did not close the form");
+    await s.run("core.home.form.open", { mode: "create" });
+    await s.rect("core.home.form.name");
+    await s.run("core.home.form.set", { field: "name", value: "draft" });
+    await s.run("core.home.form.cancel");
+    await assert.rejects(s.rect("core.home.form.name"), /core\.home\.form\.name/, "core.home.form.cancel did not close the form");
 
-    await s.run("core.library.return");
-    await s.until("core.screen", (screen) => screen.screen === "workspace", "core.library.return did not return to the workspace");
+    await s.run("core.home.open", { project: project.id });
+    await s.until("core.screen", (screen) => screen.screen === "workspace", "core.home.open did not return to the workspace");
   });
 
   test(`${app.name}: layout commands return after the new layout is drawn`, async (t) => {

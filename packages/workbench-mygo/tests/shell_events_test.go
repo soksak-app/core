@@ -96,13 +96,13 @@ func TestTheSettingsItemOfTheMenuOpensTheSettingsWindow(t *testing.T) {
 	queue.drain(t)
 	tester := ui.NewTester(view, 900, 700)
 	tester.Frame()
-	if slices.Contains(tester.Texts(), "일반") {
+	if slices.Contains(tester.Texts(), "모양") {
 		t.Fatal("the settings window shows before the menu opened it")
 	}
 	app.Emit(window, "menu-command", map[string]any{"name": "core.settings.open"})
 	queue.drain(t)
 	tester.Frame()
-	if !slices.Contains(tester.Texts(), "일반") {
+	if !slices.Contains(tester.Texts(), "모양") {
 		t.Fatalf("the menu did not open the settings window: %q", tester.Texts())
 	}
 }
@@ -166,7 +166,7 @@ func flushProjects(t *testing.T, f *tabShell, stored *storedHost) ([]string, err
 
 // The flush of packages/workbench/projects.js writes what is pending and reads nothing; the same input makes the same writes here:
 //
-//	the window shows the library                -> no write
+//	the window shows the project home           -> no write
 //	the spaces differ from the ones stored last -> a patch of the spaces
 //	the spaces are the ones stored last         -> no write
 //	the store refused the last write            -> the next flush writes the spaces again
@@ -223,13 +223,13 @@ func TestTheFlushOfTheProjectsAnswersWhenTheStoreHoldsThem(t *testing.T) {
 	}
 }
 
-// The library has no spaces to keep, so its flush neither writes nor reads the store.
-func TestTheFlushOfTheLibraryTakesNoWorkspaceCall(t *testing.T) {
+// The project home has no spaces to keep, so its flush neither writes nor reads the store.
+func TestTheFlushOfTheHomeTakesNoWorkspaceCall(t *testing.T) {
 	stored := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}}
 	f := newTabShell(t, stored)
 	taken, failure := flushProjects(t, f, stored)
 	if failure != nil || len(taken) > 0 {
-		t.Fatalf("the flush of the library answered %v after the workspace calls %v", failure, taken)
+		t.Fatalf("the flush of the project home answered %v after the workspace calls %v", failure, taken)
 	}
 }
 

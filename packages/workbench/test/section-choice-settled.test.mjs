@@ -75,7 +75,7 @@ test("folding, selecting and sizing a section lay out the plane again", { timeou
     const { installCoreExposure } = await import("../core-exposure.js");
     await installCoreExposure({
       memorySaver: await pageMemorySaver(),
-      library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+      home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
     });
     await registry.run("core.sidebar.section.fold", { sidebar: "fixture-list", section: "fixture.marks" });
     await registry.run("core.sidebar.section.select", { sidebar: "fixture-tabs", section: "fixture.tree" });

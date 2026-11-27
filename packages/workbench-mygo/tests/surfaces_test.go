@@ -422,9 +422,9 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 	}, 1200, 800)
 	shell.Start()
 	f.settle()
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	return f
 }
 
@@ -558,12 +558,12 @@ func TestSplitPlacesTheViewOfTheNewCard(t *testing.T) {
 	}
 }
 
-func TestLibraryHidesTheViews(t *testing.T) {
+func TestTheHomeHidesTheViews(t *testing.T) {
 	f, stored := surfaceShell(t)
 	f.run("core.projects.browse", nil)
 	for id, surface := range stored.lastSurfaces(t) {
 		if surface["visible"] != false {
-			t.Fatalf("surface %s stays visible over the library", id)
+			t.Fatalf("surface %s stays visible over the project home", id)
 		}
 	}
 }
@@ -1294,7 +1294,7 @@ func TestARecoveredPlacementWithdrawsItsError(t *testing.T) {
 		t.Fatalf("the fault showed %q", shown)
 	}
 	f.settle()
-	if got := f.status("core.workbench.error"); got != "null" {
+	if got := f.workbenchError(); got != "null" {
 		t.Fatalf("after the placement that succeeded the banner holds %s", got)
 	}
 }
@@ -1316,7 +1316,7 @@ func TestAFaultOfTheSameLinesIsWithdrawnByTheNextPlacement(t *testing.T) {
 	if stored.placed <= placed {
 		t.Fatal("the frames after the fault placed nothing")
 	}
-	if got := f.status("core.workbench.error"); got != "null" {
+	if got := f.workbenchError(); got != "null" {
 		t.Fatalf("after the window came back the banner holds %s", got)
 	}
 }
@@ -1329,20 +1329,20 @@ func TestAPlacementThatKeepsFailingKeepsItsError(t *testing.T) {
 	f.shownErrors()
 	f.tester.SetSize(1100, 800)
 	f.shownErrors()
-	if got := f.status("core.workbench.error"); !strings.Contains(got, "the host refused the placement") {
+	if got := f.workbenchError(); !strings.Contains(got, "the host refused the placement") {
 		t.Fatalf("while the placement fails the banner holds %s", got)
 	}
 	stored.presentFailure = nil
 	f.tester.SetSize(1160, 800)
 	f.settle()
-	if got := f.status("core.workbench.error"); got != "null" {
+	if got := f.workbenchError(); got != "null" {
 		t.Fatalf("after the placement that succeeded the banner holds %s", got)
 	}
 }
 
 // While a surface has not presented, the placement of another change leaves the failure, because it is still true. A wait for the
 // presentation that fails withdraws nothing and no timer asks again; the next placement that succeeds asks again and withdraws it
-// (core.workbench.error in docs/spec/exposure.md).
+// (core.toasts in docs/spec/exposure.md).
 func TestAFailureStaysUntilTheSurfacesPresent(t *testing.T) {
 	var asks atomic.Int32
 	var presented atomic.Value
@@ -1362,7 +1362,7 @@ func TestAFailureStaysUntilTheSurfacesPresent(t *testing.T) {
 	stored.presentFailure = nil
 	f.tester.SetSize(1100, 800)
 	f.settle()
-	if got := f.status("core.workbench.error"); !strings.Contains(got, "did not present") {
+	if got := f.workbenchError(); !strings.Contains(got, "did not present") {
 		t.Fatalf("while the surface has not presented the banner holds %s", got)
 	}
 	asked := asks.Load()
@@ -1371,12 +1371,12 @@ func TestAFailureStaysUntilTheSurfacesPresent(t *testing.T) {
 	if got := asks.Load(); got != asked {
 		t.Fatalf("the workbench asked the host for the presentation %d more times without a placement", got-asked)
 	}
-	if got := f.status("core.workbench.error"); !strings.Contains(got, "did not present") {
+	if got := f.workbenchError(); !strings.Contains(got, "did not present") {
 		t.Fatalf("without a later placement the banner holds %s", got)
 	}
 	f.tester.SetSize(1160, 800)
 	f.settle()
-	if got := f.status("core.workbench.error"); got != "null" {
+	if got := f.workbenchError(); got != "null" {
 		t.Fatalf("after the next placement that succeeded the banner holds %s", got)
 	}
 }
@@ -1396,7 +1396,7 @@ func TestARecoveredPlacementLeavesAnotherError(t *testing.T) {
 	f.shell.Registry().RunLater("core.card.add-tab", raw, func(any, error) {})
 	f.shownErrors()
 	f.shownErrors()
-	if got := f.status("core.workbench.error"); !strings.Contains(got, "the host refused the declaration") {
+	if got := f.workbenchError(); !strings.Contains(got, "the host refused the declaration") {
 		t.Fatalf("after the placement that succeeded the banner holds %s", got)
 	}
 }
@@ -1445,7 +1445,7 @@ func textScope(t *testing.T, f *shellFixture) workbench.TextScope {
 // leaveForTheFrame presses the frame, so that the scope is not the one that the focused card gives.
 func leaveForTheFrame(t *testing.T, f *shellFixture) {
 	t.Helper()
-	pressElement(f, "core.brand", "")
+	pressElement(f, "core.chrome.projects", "")
 	f.tester.Release(0, 0)
 	f.settle()
 	if got := textScope(t, f); got != workbench.FrameScope() {
@@ -1532,7 +1532,7 @@ func TestAPressMovesTheTextScope(t *testing.T) {
 		cards := f.tabbedCards()
 		f.run("core.card.focus", map[string]string{"card": cards[1]})
 		f.settle()
-		pressElement(f, "core.brand", "")
+		pressElement(f, "core.chrome.projects", "")
 		if got := textScope(t, f); got != workbench.FrameScope() {
 			t.Fatalf("after the press on the frame the scope is %+v", got)
 		}
@@ -1599,7 +1599,7 @@ func TestAPressMovesTheTextScope(t *testing.T) {
 	})
 	t.Run("the frame", func(t *testing.T) {
 		f, _ := surfaceShell(t)
-		for _, element := range []struct{ name, item string }{{"core.brand", ""}, {"core.space-tab.add", ""}} {
+		for _, element := range []struct{ name, item string }{{"core.chrome.projects", ""}, {"core.space-tab.add", ""}} {
 			f.run("core.card.focus", map[string]string{"card": f.tabbedCards()[0]})
 			pressElement(f, "core.card.header", f.tabbedCards()[0])
 			f.tester.Release(0, 0)
@@ -1746,8 +1746,8 @@ func TestAnotherSpaceDoesNotTakeThePressOfACard(t *testing.T) {
 	}
 }
 
-// The library shows no card, so a press on a card does not stay the scope behind it.
-func TestTheLibraryDoesNotKeepThePressOfACard(t *testing.T) {
+// The project home shows no card, so a press on a card does not stay the scope behind it.
+func TestTheHomeDoesNotKeepThePressOfACard(t *testing.T) {
 	f, _ := surfaceShell(t)
 	cards := f.tabbedCards()
 	pressCardHead(f, cards[1])
@@ -1761,7 +1761,7 @@ func TestTheLibraryDoesNotKeepThePressOfACard(t *testing.T) {
 // A press on the frame stays the scope in another space: it is the place pressed last, and the frame does not leave.
 func TestAnotherSpaceKeepsThePressOfTheFrame(t *testing.T) {
 	f, _ := surfaceShell(t)
-	pressElement(f, "core.brand", "")
+	pressElement(f, "core.chrome.projects", "")
 	f.tester.Release(0, 0)
 	f.settle()
 	f.run("core.space.add", nil)
@@ -1820,11 +1820,11 @@ func TestClosingATabWithdrawsItsErrors(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := terminalSurface(t, stored)
 	viewCallShowing(t, f, stored, surface, "tab.error", "late")
-	if got := f.status("core.workbench.error"); got != `"late"` {
+	if got := f.workbenchError(); got != `"late"` {
 		t.Fatalf("the shown error is %s", got)
 	}
 	f.run("core.tab.close", map[string]string{"tab": surface})
-	if got := f.status("core.workbench.error"); got != "null" {
+	if got := f.workbenchError(); got != "null" {
 		t.Fatalf("the error of the closed tab %s stays shown: %s", surface, got)
 	}
 }
@@ -1963,37 +1963,37 @@ func TestSurfaceDeclarationsShareOneWindowObservationPerView(t *testing.T) {
 	}
 }
 
-// core.library.open answers once the window shows the project again and the host presented its surfaces: the opening reads the
-// geometry store first, so a command that answered at the end of its run would answer while the window still shows the library.
+// core.home.open answers once the window shows the project again and the host presented its surfaces: the opening reads the
+// geometry store first, so a command that answered at the end of its run would answer while the window still shows the project home.
 // A check that reads host.window after the answer finds the views of the project where the frame stands them.
 func TestAProjectReturnAnswersWhenItsSurfacesArePresented(t *testing.T) {
 	f, stored := surfaceShell(t)
 	surface := anySurface(t, stored)
 	f.run("core.projects.browse", struct{}{})
 	if stored.lastSurfaces(t)[surface]["visible"] != false {
-		t.Fatalf("the library shows the surface: %v", stored.lastSurfaces(t)[surface])
+		t.Fatalf("the project home shows the surface: %v", stored.lastSurfaces(t)[surface])
 	}
-	raw, err := json.Marshal(map[string]string{"id": f.host.projects[0]["id"].(string)})
+	raw, err := json.Marshal(map[string]string{"project": f.host.projects[0]["id"].(string)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	answered, visible, presented := false, any(nil), false
-	f.shell.Registry().RunLater("core.library.open", raw, func(_ any, err error) {
+	f.shell.Registry().RunLater("core.home.open", raw, func(_ any, err error) {
 		if err != nil {
-			t.Errorf("core.library.open: %v", err)
+			t.Errorf("core.home.open: %v", err)
 		}
 		answered, visible = true, stored.lastSurfaces(t)[surface]["visible"]
 		presented = stored.placed == len(stored.requests)
 	})
 	f.settle()
 	if !answered || visible != true || !presented {
-		t.Fatalf("core.library.open answered %t with the surface visible %v and its placement presented %t", answered, visible, presented)
+		t.Fatalf("core.home.open answered %t with the surface visible %v and its placement presented %t", answered, visible, presented)
 	}
 }
 
 // Each placement gives the host the height of the first row that its frame draws, round(max(40, 36 × frame factor)), as the page
 // gives it with each preparation (frameLayout of packages/workbench/frame-text.js), so the window buttons move with the row that
-// shows them. A change of the factor alone places again, with no surface, as on the library screen.
+// shows them. A change of the factor alone places again, with no surface, as on the project home screen.
 func TestEachPlacementGivesTheFirstRowOfItsFrame(t *testing.T) {
 	f, stored := surfaceShell(t)
 	titlebar := func() float64 {
@@ -2019,7 +2019,7 @@ func TestEachPlacementGivesTheFirstRowOfItsFrame(t *testing.T) {
 	f.run("core.settings.set", map[string]any{"patch": map[string]any{"textSize": 3}, "scope": "common"})
 	f.settle()
 	if got := titlebar(); got != 108 {
-		t.Fatalf("the library at factor 3 gives the first row %v, want 108", got)
+		t.Fatalf("the project home at factor 3 gives the first row %v, want 108", got)
 	}
 }
 
@@ -2089,7 +2089,7 @@ func TestAPlacementAtTheAnswerGivesTheFirstRowItsFrameDrew(t *testing.T) {
 
 // A restarted workbench shows its first screen over the last frame of the workbench before it, which the window holds until then, and
 // the title bar keeps the row of that frame: the row of its settings goes to the window with the layout of its first screen, also on
-// the library, which places no surface. A window whose title bar already has that row, as a new window, places nothing for it.
+// the project home, which places no surface. A window whose title bar already has that row, as a new window, places nothing for it.
 func TestTheFirstScreenGivesItsRowToAWindowWithAnotherTitleBar(t *testing.T) {
 	for _, held := range []struct {
 		titlebar float64
@@ -2102,10 +2102,10 @@ func TestTheFirstScreenGivesItsRowToAWindowWithAnotherTitleBar(t *testing.T) {
 		}
 		first := stored.requests[0]
 		surfaces, _ := first["surfaces"].([]any)
-		library := len(surfaces) == 0
-		if library != held.places || first["titlebar"] != 72.0 {
-			t.Fatalf("over the title bar %v the first placement gives the first row %v for the library %t, want the row 72 placed for the library %t",
-				held.titlebar, first["titlebar"], library, held.places)
+		home := len(surfaces) == 0
+		if home != held.places || first["titlebar"] != 72.0 {
+			t.Fatalf("over the title bar %v the first placement gives the first row %v for the project home %t, want the row 72 placed for the project home %t",
+				held.titlebar, first["titlebar"], home, held.places)
 		}
 	}
 }
@@ -2259,12 +2259,21 @@ func TestTheStatusRowHoldsNoErrorText(t *testing.T) {
 	})
 }
 
-// errorOnlyInToast requires that the window shows text and that no status row of a card holds it.
+// errorOnlyInToast requires that the window shows the title and the text of the error in toast elements, and that no status row of a card holds it.
+// The title is the first 120 characters of the text and the text is the rest (docs/spec/notifications.md#notices).
 func errorOnlyInToast(t *testing.T, f *shellFixture, text string) {
 	t.Helper()
 	tree := f.tester.ElementTree()
-	if !labelled(tree, text) {
-		t.Fatalf("the window shows no element labelled %q", text)
+	runes := []rune(text)
+	title, body := string(runes), ""
+	if len(runes) > 120 {
+		title, body = string(runes[:120]), string(runes[120:])
+	}
+	if !labelled(tree, title) {
+		t.Fatalf("the window shows no element labelled %q", title)
+	}
+	if body != "" && !labelled(tree, body) {
+		t.Fatalf("the window shows no element labelled with the text %q", body)
 	}
 	var walk func(nodes []ui.ElementNode)
 	walk = func(nodes []ui.ElementNode) {
@@ -2334,5 +2343,62 @@ func TestALoadingSurfaceRecordsEachFrameRequestWithItsSurface(t *testing.T) {
 		if !named || !strings.Contains(text, "loading") {
 			t.Fatalf("frame request record %s, want a placed surface and the reason loading", text)
 		}
+	}
+}
+
+// The close control of an error toast takes the pointer over the view of a surface (docs/spec/native-modals.md#toast-overlay): the
+// toast draws above the surfaces, so the view under it does not take the click of its close control.
+func TestTheCloseOfAToastOverAViewTakesThePointer(t *testing.T) {
+	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
+	f := surfaceShellOn(t, installedDocument, stored)
+	stored.elements, stored.ownViews = true, true
+	f.tester.SetScale(float32(stored.window.Scale))
+	f.settle()
+	// A text of several lines makes a toast taller than its close control.
+	const failure = "tab state of tab-aaaaaa: open /Users/person/Library/Application Support/app.soksak.mygo/.settings-3562104304: no space left on device"
+	// The toast records its error on purpose, so the frames run without the check of settle that refuses a recorded error.
+	frames := func() {
+		f.pending.drain(t)
+		f.tester.Frame()
+		f.pending.drain(t)
+		f.tester.Frame()
+	}
+	f.shell.StartFailed(errors.New(failure))
+	frames()
+	close := element(t, f.tester, "core.notices.close", f.noticeFor(failure))
+	x, y := close.Bounds.X+close.Bounds.W/2, close.Bounds.Y+close.Bounds.H/2
+	// The toast sits under the bell at the top right; a point in the left quarter of a surface slot lies outside the toast and on a view.
+	var slot ui.Rect
+	var find func(nodes []ui.ElementNode) bool
+	find = func(nodes []ui.ElementNode) bool {
+		for _, node := range nodes {
+			if _, ok := node.Key.(workbench.SurfaceSlot); ok {
+				slot = node.Bounds
+				return true
+			}
+			if find(node.Children) {
+				return true
+			}
+		}
+		return false
+	}
+	if !find(f.tester.ElementTree()) {
+		t.Fatal("the window has no surface slot")
+	}
+	if f.tester.WebViewAt(slot.X+slot.W/4, slot.Y+slot.H/2) == nil {
+		t.Fatalf("no view lies in the surface slot %+v", slot)
+	}
+	if f.tester.WebViewAt(x, y) != nil {
+		t.Fatalf("the view of a surface takes the pointer at the close control of the toast %+v", close.Bounds)
+	}
+	// A person moves the pointer to the close control and rests on it, so its tooltip shows before the click.
+	f.tester.Move(x, y)
+	frames()
+	f.tester.Advance(2 * time.Second)
+	frames()
+	f.tester.ClickAt(x, y)
+	frames()
+	if f.tester.HasText(failure) {
+		t.Fatalf("the click on the close control left the toast open")
 	}
 }

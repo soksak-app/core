@@ -15,7 +15,7 @@
     { "notice": { "event": "view-call", "payload": { "surface": "fixture-tab-state-view-surface", "plugin": "fixture-tab-state-view", "generation": 1, "id": 1, "command": "tab.state.read", "params": null } } },
     { "notice": { "event": "view-call", "payload": { "surface": "fixture-tab-state-view-surface", "plugin": "fixture-tab-state-view", "generation": 1, "id": 2, "command": "tab.title", "params": "Early" } } },
     { "notice": { "event": "view-call", "payload": { "surface": "fixture-tab-state-view-surface", "plugin": "fixture-tab-state-view", "generation": 1, "id": 3, "command": "tab.state.write", "params": { "page": 4 } } } },
-    { "call": { "name": "workspace", "payload": { "kind": "tabSessions" } } },
+    {"call":{"name":"workspace","payload":{"kind":"notices"}}},{"reply":{"result":null}},{ "call": { "name": "workspace", "payload": { "kind": "tabSessions" } } },
     { "reply": { "result": [] } },
     { "call": { "name": "compositionDeclare", "payload": { "plugin": "fixture-tab-state-view", "composition": { "kind": "view", "page": "ui/page.html" }, "surface": "fixture-tab-state-view-surface" } } },
     { "reply": { "result": null } },

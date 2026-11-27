@@ -26,6 +26,7 @@ export { createLinkBridge } from "./links.js";
 export { drawList } from "./list.js";
 export { createOperationCids } from "./operation.js";
 export { causeCids, createCalls, ENDED_CALLS_KEPT, PEER_LOST_REASONS } from "./calls.js";
+export { checkNotice, checkNoticeDone, checkNoticeProgress, NOTICE_KINDS } from "./tab-notice.js";
 
 export const ENVIRONMENT = "environment.json";
 export const MANIFEST = "plugin.json";

@@ -57,6 +57,7 @@
     "view-commands.js",
     "view-events.js",
     "view-answer.js",
+    "tab-notice.js",
     "view-host.js",
     "contract/"
   ],

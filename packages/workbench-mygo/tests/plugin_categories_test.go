@@ -92,9 +92,9 @@ func enabledPlugins(ids ...string) *pluginsHost {
 // requires, the error display names it, and the other plugins start (docs/spec/plugins.md#plugin-categories).
 func TestAPluginThatRequiresAMissingCategoryIsNotLoadedAndTheOthersStart(t *testing.T) {
 	f := categoryShell(t, enabledPlugins("boxprobe", "textprobe"), categoryDocument)
-	f.runQuiet("core.library.form.open", map[string]string{"mode": "open"})
-	f.runQuiet("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	if err := f.runQuiet("core.library.form.submit", nil); err != nil {
+	f.runQuiet("core.home.form.open", map[string]string{"mode": "open"})
+	f.runQuiet("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	if err := f.runQuiet("core.home.form.submit", nil); err != nil {
 		t.Fatal(err)
 	}
 	placeholders := map[string]string{}
@@ -142,7 +142,7 @@ var settingsWithTerminal = `{"plugins":[` +
 func controlOf(f *shellFixture, key string) *categoryControl {
 	f.t.Helper()
 	for _, control := range f.modal().Controls {
-		if control.Name == "core.settings-modal.set" && control.Key != nil && *control.Key == key {
+		if (control.Name == "core.settings-tab.set" || control.Name == "core.settings-tab.choice") && control.Key != nil && *control.Key == key {
 			return &categoryControl{Options: control.Options, Value: control.Value}
 		}
 	}
@@ -161,8 +161,8 @@ type categoryControl struct {
 func TestAPluginSettingChoosesFromThePluginsOfItsCategory(t *testing.T) {
 	f := categoryShell(t, enabledPlugins("card", "term-a", "term-b"), settingsWithTerminal)
 	f.clickQuiet("core.chrome.settings", "")
-	f.runQuiet("core.settings-modal.nav", map[string]any{"section": "plugins"})
-	f.clickQuiet("core.settings-modal.plugin", "plugin:card")
+	f.runQuiet("core.settings-tab.nav", map[string]any{"page": "installed"})
+	f.clickQuiet("core.settings-tab.plugin", "plugin:card")
 	control := controlOf(f, "card.terminal")
 	if !slices.Equal(control.Options, []string{"term-a", "term-b"}) || control.Value != nil {
 		t.Fatalf("the select of card.terminal is %+v", control)
@@ -196,8 +196,8 @@ func TestAPluginSettingOfTheOnlyPluginOfItsCategoryHasThatPlugin(t *testing.T) {
 		`,` + categoryPlugin("term-a", `,"categories":["terminal"]`) + `]}`
 	f := categoryShell(t, enabledPlugins("card", "term-a"), document)
 	f.clickQuiet("core.chrome.settings", "")
-	f.runQuiet("core.settings-modal.nav", map[string]any{"section": "plugins"})
-	f.clickQuiet("core.settings-modal.plugin", "plugin:card")
+	f.runQuiet("core.settings-tab.nav", map[string]any{"page": "installed"})
+	f.clickQuiet("core.settings-tab.plugin", "plugin:card")
 	if got := controlOf(f, "card.terminal"); got.Value == nil || *got.Value != "term-a" {
 		t.Fatalf("the select of card.terminal is %+v", got)
 	}
@@ -222,8 +222,8 @@ func TestAStoredPluginSettingMustNameALoadedPluginOfItsCategory(t *testing.T) {
 		t.Fatalf("the load error %q was not shown; the records are %v", text, f.host.written("workbench.record.error"))
 	}
 	f.clickQuiet("core.chrome.settings", "")
-	f.runQuiet("core.settings-modal.nav", map[string]any{"section": "plugins"})
-	f.clickQuiet("core.settings-modal.plugin", "plugin:card")
+	f.runQuiet("core.settings-tab.nav", map[string]any{"page": "installed"})
+	f.clickQuiet("core.settings-tab.plugin", "plugin:card")
 	if got := controlOf(f, "card.terminal"); got.Value != nil && *got.Value == "gone" {
 		t.Fatalf("the stored value that names no plugin of the category is shown: %+v", got)
 	}

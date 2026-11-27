@@ -84,7 +84,8 @@ const KINDS = Object.values(EXPOSE_KINDS);
  * for a sidecar message of a routed session: {event: "sidecar.message", data: {id, cids, body}}, the message that the host posts to the view.
  *
  *     options   the options of answerViewCall (view-answer.js of this package)
- *     observed  tab: the last title, footer, directory, modified, error and focus, and the lists notify and keep
+ *     observed  page: the lists notify, progress and done of the page notices
+     observed  tab: the last title, footer, directory, modified, error and focus, and the lists notify, progress, done and keep
  *               data: each stored value {key, value}; sidecar: each send {sidecar, id, body, cids}; commands: each run {name, params,
  *               cids, surface}; document: the host calls of the view in order, native calls as {name, payload} and pushes as
  *               {name: "viewEvent", payload: {event, data}}; errors: each report line; links: each opened URL; programs: each run {name, args};
@@ -121,7 +122,8 @@ export function createTestHost(fixtures) {
   // default: a name is declared when the plugin, core or a dependency of the plugin declares it.
   const declares = (kind, name) => pluginDeclared.has(declarationKey(kind, name)) || coreDeclared.has(declarationKey(kind, name)) || dependencyDeclared.has(declarationKey(kind, name));
   const observed = {
-    tab: { title: null, footer: null, directory: null, modified: null, error: null, focus: null, notify: [], keep: [] },
+    tab: { title: null, footer: null, directory: null, modified: null, error: null, focus: null, notify: [], progress: [], done: [], keep: [] },
+    page: { notify: [], progress: [], done: [] },
     data: [], sidecar: [], commands: [], document: [], errors: [], links: [], programs: [], dialogs: [], closes: [], failures: [], events: [], contributions: [], timers: [],
   };
   const works = new Set();
@@ -341,13 +343,22 @@ export function createTestHost(fixtures) {
   });
   const registeredCommands = new Set();
 
+  // default: the notice ids follow the order of the notices, as the workbench assigns them, so a test names the notice it updates.
+  let noticeCount = 0;
+  const page = {
+    notify: (fields) => { observed.page.notify.push(fields); noticeCount += 1; return `notice-${noticeCount}`; },
+    progress: (id, progress) => { observed.page.progress.push({ id, progress }); },
+    done: (id, kind, title) => { observed.page.done.push({ id, kind, title }); },
+  };
   const tab = {
     title: (text) => { observed.tab.title = text; },
     footer: (text) => { observed.tab.footer = text; },
     directory: (path) => { observed.tab.directory = path; },
     modified: (value) => { observed.tab.modified = value; },
     error: (text) => { observed.tab.error = text; },
-    notify: (text, policy) => { observed.tab.notify.push({ text, policy }); },
+    notify: (fields) => { observed.tab.notify.push(fields); noticeCount += 1; return `notice-${noticeCount}`; },
+    progress: (id, progress) => { observed.tab.progress.push({ id, progress }); },
+    done: (id, kind, title) => { observed.tab.done.push({ id, kind, title }); },
     keep: (reason, on) => { observed.tab.keep.push({ reason, on }); },
     focus: (value) => { observed.tab.focus = checkViewFocus(value); },
   };
@@ -376,6 +387,7 @@ export function createTestHost(fixtures) {
     surface,
     pending: new Map(),
     tab,
+    page,
     contributions: connected,
     // default: a fixture without shortcuts declares no shortcut.
     shortcuts: fixtures.shortcuts ?? [],

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217: Both pages draw the design: one notice store with the bell, the notice center, the card status line and the toast forms; the settings tab with its row component and plugin pages; the project home in place of the library; the status bar, the closed hint, the sidebar head row and project tabs in four places (F1217-1, F1217-3, F1217-5, F1217-6, F1217-7, F1217-11 to F1217-15). The outdated service notice shows in both pages and the outdated entries list their surfaces (F1161).
 - F715-3: The test-link check points the F715-2 library and settings links at the current home, settings and e2e tests and removes the library pane entry that the project home has no rule for.
 - F1107: Tests pin that the main page forwards a status read to the named one of two surfaces that register the status, and that a view answers the read of the named surface; the CLI and the host pass the named surface.
 - F1220-1: The page log and performance cases record the loss of a refused batch in the next batch, and their tests flush at their own points; the logging specification names the reason of that loss (Red: 9 page log tests and 1 performance test failed after F1220).

@@ -11,152 +11,28 @@ import (
 
 // The plugin screen in a window: the commands and statuses of the plugin operations and the events of the host that change them.
 
-const pluginsPage = "plugins"
-
 type pluginParam struct {
 	Plugin string `json:"plugin"`
 	// End is nil when the params have no end, and a button that binds the params writes none.
 	End *bool `json:"end,omitempty"`
 }
 
-// libraryPlugins is `plugins` of `core.library`.
-type libraryPlugins struct {
-	Query   string         `json:"query"`
-	Shown   []string       `json:"shown"`
-	Actions []PluginAction `json:"actions"`
-}
-
-// libraryForm is `formState` of `core.library`.
-type libraryForm struct {
-	Mode   string  `json:"mode"`
-	Name   *string `json:"name"`
-	Parent *string `json:"parent"`
-}
-
-// libraryStatus is the value of `core.library`.
-type libraryStatus struct {
-	Page          string            `json:"page"`
-	Plugins       libraryPlugins    `json:"plugins"`
-	Shown         []string          `json:"shown"`
-	Pinned        []string          `json:"pinned"`
-	Count         string            `json:"count"`
-	Query         string            `json:"query"`
-	Sort          string            `json:"sort"`
-	Form          bool              `json:"form"`
-	FormState     *libraryForm      `json:"formState"`
-	ReturnVisible bool              `json:"returnVisible"`
-	Pending       bool              `json:"pending"`
-	Empty         bool              `json:"empty"`
-	NoResults     bool              `json:"noResults"`
-	Error         *string           `json:"error"`
-	Previews      map[string]any    `json:"previews"`
-	PreviewErrors map[string]string `json:"previewErrors"`
-	FolderErrors  map[string]string `json:"folderErrors"`
-}
-
-// pluginPage returns what the plugin page draws.
-func (s *Shell) pluginPage() PluginPage {
-	status := s.pluginOperations.Status()
-	page := PluginPage{Hosted: true, Core: status.Core, Query: s.library.pluginQuery, Failure: s.pluginOperations.Failure(), Plugins: status.Plugins,
-		Operation: status.Operation, Updates: status.Updates, Outdated: status.Outdated, Held: status.Held, App: s.appUpdates.Status()}
-	for _, entry := range s.contributions.Status() {
-		contribution := PluginContribution{Plugin: entry.Plugin, Point: entry.Point, Index: entry.Index, State: entry.State}
-		if entry.Reason != nil {
-			contribution.Reason = *entry.Reason
-		}
-		page.Contributions = append(page.Contributions, contribution)
+// showSettingsPage opens the settings tab on page, and on the filter of 설치됨 when filter is not empty, as core.settings.open opens it
+// (docs/spec/settings.md#plugins). The page scrolls to its top, as the page of a command does.
+func (s *Shell) showSettingsPage(page, filter string) error {
+	if err := s.dialogRefusal(); err != nil {
+		return err
 	}
-	return page
-}
-
-// drawPlugins draws the plugin page, which brings the update list into view once after core.plugins.show-updates.
-func (s *Shell) drawPlugins(c *ui.Context, width float32) {
-	page := s.pluginPage()
-	page.Reveal, s.library.revealUpdates = s.library.revealUpdates, false
-	DrawPluginPage(c, s.binder, page, s.errors, s.pluginLook(width))
-}
-
-func (s *Shell) libraryStatus() libraryStatus {
-	page := s.pluginPage()
-	// Each page reports only the cards that it shows, as render of packages/workbench/library.js empties the plugin list on the
-	// project page and the project grid on the plugin page.
-	plugins := s.library.page == pluginsPage
-	cards, actions := []string{}, []PluginAction{}
-	if plugins {
-		cards, actions = ShownPlugins(page), PluginPageActions(page)
-	}
-	shown, pinned := []string{}, []string{}
-	var projects []projectRecord
-	if !plugins {
-		projects = s.projects
-		for _, project := range s.shownProjects() {
-			shown = append(shown, project.ID)
-			if project.Pinned {
-				pinned = append(pinned, project.ID)
-			}
-		}
-	}
-	status := libraryStatus{Page: s.library.page, Plugins: libraryPlugins{Query: page.Query, Shown: cards, Actions: actions},
-		Shown: shown, Pinned: pinned, Count: fmt.Sprintf("프로젝트 %d · 열림 %d", len(s.projects), s.openCount()), Query: s.library.query, Sort: s.library.order,
-		Form: s.library.formMode != "", ReturnVisible: s.opened() != nil, Empty: !plugins && len(s.projects) == 0,
-		NoResults: len(projects) > 0 && len(shown) == 0, Previews: map[string]any{}, PreviewErrors: map[string]string{}, FolderErrors: map[string]string{}}
-	for _, project := range projects {
-		if reason, failed := s.library.folderErrors[project.Root]; failed {
-			status.FolderErrors[project.ID] = reason
-		}
-		if reason, failed := s.library.previewErrors[project.ID]; failed {
-			status.PreviewErrors[project.ID] = reason
-		}
-		if panes, drawn := s.library.previews[project.ID]; drawn {
-			status.Previews[project.ID] = panes
-		}
-	}
-	if text, ok := s.errors.Text(libraryErrorPlace); ok {
-		status.Error = &text
-	}
-	if status.Form {
-		parent := s.library.parent
-		status.FormState = &libraryForm{Mode: s.library.formMode, Parent: &parent}
-		if s.library.formMode == "create" {
-			name := s.library.name
-			status.FormState.Name = &name
-		}
-	}
-	return status
-}
-
-func (s *Shell) openCount() int {
-	count := 0
-	for _, project := range s.projects {
-		if s.isOpen(project.ID) {
-			count++
-		}
-	}
-	return count
-}
-
-// showLibraryPage shows a page of the library. The plugin page reads the state of the host when it is shown.
-func (s *Shell) showLibraryPage(page string) error {
-	if page != "projects" && page != pluginsPage {
-		return Refuse(InvalidParams, "unknown library page %s", page)
-	}
-	s.library.page = page
-	if page == pluginsPage {
-		s.pluginOperations.Refresh(func() {})
-		s.pluginOperations.RefreshOutdated(func() {})
-		s.appUpdates.Refresh(func() {})
+	s.closeDebug()
+	s.closePicker()
+	w := &s.settingsWindow
+	w.open = true
+	w.page, w.chosen, w.scroll = page, "", ui.ScrollState{}
+	if filter != "" {
+		w.filter = filter
 	}
 	s.options.Invalidate()
 	return nil
-}
-
-// browsePlugins closes the settings window and shows the plugin page of the library.
-func (s *Shell) browsePlugins() error {
-	s.settingsWindow.open = false
-	if err := s.browse(); err != nil {
-		return err
-	}
-	return s.showLibraryPage(pluginsPage)
 }
 
 // startPlugins reads the plugin state of a window that started and runs the starter job of a first run. The window then loads what
@@ -164,7 +40,7 @@ func (s *Shell) browsePlugins() error {
 func (s *Shell) startPlugins(done func(installed bool)) {
 	s.pluginOperations.Refresh(func() {
 		s.showStartFailures()
-		s.pluginOperations.RefreshOutdated(func() {
+		s.refreshOutdated(func() {
 			s.pluginOperations.InstallStarter(s.starter.Pack, s.starter.Registry, func(text string) {
 				s.fail(fmt.Errorf("%s", text))
 			}, done)
@@ -189,7 +65,6 @@ func laterCommand[T any](s *Shell, name string, run func(value T, answer func(er
 // registerPlugins adds the statuses and the commands of the plugin operations.
 func (s *Shell) registerPlugins() {
 	s.registry.Status("core.plugins", func() any { return s.pluginOperations.Status() })
-	s.registry.Status("core.library", func() any { return s.libraryStatus() })
 	s.registry.Status("core.app", func() any { return s.appUpdates.Status() })
 	operation := func(action string) func(value pluginParam, answer func(err error)) error {
 		return func(value pluginParam, answer func(err error)) error {
@@ -245,18 +120,8 @@ func (s *Shell) registerPlugins() {
 		s.appUpdates.OpenRelease(answer)
 		return nil
 	})
-	act(s, "core.plugins.browse", func(struct{}) error { return s.browsePlugins() })
-	act(s, "core.plugins.show-updates", func(struct{}) error {
-		s.library.revealUpdates = true
-		return s.browsePlugins()
-	})
-	act(s, "core.library.plugins.search", func(value struct {
-		Query string `json:"query"`
-	}) error {
-		s.library.pluginQuery = value.Query
-		s.options.Invalidate()
-		return nil
-	})
+	act(s, "core.plugins.browse", func(struct{}) error { return s.showSettingsPage("installed", "") })
+	act(s, "core.plugins.show-updates", func(struct{}) error { return s.showSettingsPage("installed", "updates") })
 }
 
 // pluginStarter is what the environment declaration says of the first run: the starter pack and the default registry index.
@@ -365,4 +230,13 @@ func (s *Shell) showStartFailures() {
 	for _, failure := range s.pluginOperations.StartFailures() {
 		s.errors.Show(failure.Where, failure.Text, "")
 	}
+}
+
+// pluginUnits is the plugins of the window as the check of a stored layout reads them.
+func (s *Shell) pluginUnits() []layout.PluginUnit {
+	units := make([]layout.PluginUnit, 0, len(s.plugins))
+	for _, plugin := range s.plugins {
+		units = append(units, layout.PluginUnit{ID: plugin.ID, Surface: plugin.Surface})
+	}
+	return units
 }

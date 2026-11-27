@@ -1,8 +1,11 @@
 package workbench
 
 import (
+	"fmt"
 	"slices"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -10,20 +13,35 @@ import (
 // workbenchErrorPlace is the place of the error banner, as createErrorDisplay of packages/workbench/page-layout.js names it.
 const workbenchErrorPlace = "workbench"
 
-// libraryErrorPlace is the place of the error line of the library, as perform of packages/workbench/library.js names it.
-const libraryErrorPlace = "library"
+// homeErrorPlace is the place of the error line of the project home.
+const homeErrorPlace = "home"
 
-// ShownErrors records the error of an origin when it appears and holds the errors that the window displays.
+// The limits of a notice of packages/workbench/notices.js: the title is its first line, and the text is the rest.
+const (
+	toastTitleMax = 120
+	toastTextMax  = 1024
+	// toastCardLimit is the number of toasts that the card form shows before it counts the rest (TOAST_LIMIT of notice-view.js).
+	toastCardLimit = 3
+)
+
+// ShownErrors records the error of an origin when it appears and holds the error notices that the window displays.
 type ShownErrors struct {
 	report      func(line string)
 	occurrences map[errorOrigin]string
-	toasts      []*errorToast
-	schedule    func(expire func()) (cancel func())
-	expired     func()
+	// toasts holds the shown notices, oldest first. An occurrence whose title matches a shown notice merges into it.
+	toasts []*errorToast
+	seq    int
+	// schedule starts a timer of ms milliseconds that calls expire, and returns the function that cancels it.
+	schedule func(ms int64, expire func()) (cancel func())
+	expired  func()
+	now      func() time.Time
 	// autoDismiss states whether a toast closes by its own deadline, and deadline the delay in milliseconds; the settings of
 	// the workbench hold both and ConfigureToastDeadline applies their change.
 	autoDismiss bool
 	deadline    int64
+	// noticeOpen is whether the notice center is open, and noticeFilter its filter (notice_store.go).
+	noticeOpen   bool
+	noticeFilter string
 }
 
 type errorOrigin struct {
@@ -31,18 +49,66 @@ type errorOrigin struct {
 	source string
 }
 
-// errorToast is a visible row shared by the origins that reported its text, in the order in which it first appeared.
+// errorToast is a shown error notice. Its count is the number of occurrences that merged into it (docs/spec/notifications.md#notices).
+// A toast with a deadline runs its timer for span milliseconds from startedAt; a held toast keeps span as its remaining time and runs no timer.
 type errorToast struct {
+	id      string
+	title   string
 	text    string
+	count   int
 	origins map[errorOrigin]struct{}
+	timed   bool
+	held    bool
 	cancel  func()
+	// startedAt and span are the start and the length of the running deadline.
+	startedAt time.Time
+	span      int64
+	// kind, source, actions, at, read and progress are the fields of the notice (notice_store.go); an error toast has kind error.
+	kind     string
+	source   NoticeSource
+	actions  []NoticeAction
+	at       time.Time
+	read     bool
+	progress *float64
+	// closed is set when the toast is closed: the record stays an entry of the center.
+	closed bool
+	// origin is the origin that shows the notice through NotifyFrom, "" for a notice without one.
+	origin string
 }
 
 // NewShownErrors returns the display that writes each line with report.
 func NewShownErrors(report func(line string)) *ShownErrors {
 	return &ShownErrors{
-		report: report, occurrences: map[errorOrigin]string{},
+		report: report, occurrences: map[errorOrigin]string{}, now: time.Now, noticeFilter: "all",
 	}
+}
+
+// UseClock sets the clock that the deadlines of the toasts read.
+func (e *ShownErrors) UseClock(now func() time.Time) {
+	e.now = now
+}
+
+// splitNotice returns the title and the text of an error: the first line is the title and the rest is the text, and each is cut
+// to its limit. The cut text of the title moves into the text, as titleAndText of packages/workbench/shown-errors.js does.
+func splitNotice(message string) (title, text string) {
+	first, rest, hasRest := strings.Cut(message, "\n")
+	body := []string{}
+	if utf8.RuneCountInString(first) > toastTitleMax {
+		runes := []rune(first)
+		body = append(body, string(runes[toastTitleMax:]))
+		first = string(runes[:toastTitleMax])
+	}
+	if hasRest {
+		body = append(body, rest)
+	}
+	text = strings.Join(body, "\n")
+	if runes := []rune(text); len(runes) > toastTextMax {
+		text = string(runes[:toastTextMax])
+	}
+	if first == "" {
+		first = "error"
+	}
+	return first, text
 }
 
 // Show shows the error of where in the window's toast component; the control whose operation failed keeps its label
@@ -57,8 +123,17 @@ func (e *ShownErrors) ShowToast(where, text, detail string) {
 }
 
 func (e *ShownErrors) showToast(origin errorOrigin, text, detail string) {
+	title, body := splitNotice(text)
 	if previous, ok := e.occurrences[origin]; ok {
 		if previous == text {
+			return
+		}
+		// The same origin with a new text of the same title merges into its notice.
+		if at := e.toastIndex(title); at != -1 && slices.Contains(e.originsOf(e.toasts[at]), origin) {
+			e.occurrences[origin] = text
+			e.toasts[at].text = body
+			e.toasts[at].count++
+			e.report(origin.where + ": " + text + detail)
 			return
 		}
 		if origin.where != workbenchErrorPlace || origin.source != "" {
@@ -66,24 +141,38 @@ func (e *ShownErrors) showToast(origin errorOrigin, text, detail string) {
 		}
 	}
 	e.occurrences[origin] = text
-	at := e.toastIndex(text)
+	at := e.toastIndex(title)
 	if at == -1 {
-		toast := &errorToast{text: text, origins: map[errorOrigin]struct{}{origin: {}}}
+		e.seq++
+		toast := &errorToast{id: fmt.Sprintf("notice-%d", e.seq), kind: "error", title: title, text: body, count: 1,
+			origins: map[errorOrigin]struct{}{origin: {}}, source: NoticeSource{Kind: "core"}, actions: []NoticeAction{}, at: e.now()}
 		e.toasts = append(e.toasts, toast)
 		e.scheduleToast(toast)
 	} else {
+		e.toasts[at].text = body
+		e.toasts[at].count++
 		e.toasts[at].origins[origin] = struct{}{}
 	}
 	e.report(origin.where + ": " + text + detail)
 }
 
-func (e *ShownErrors) toastIndex(text string) int {
-	return slices.IndexFunc(e.toasts, func(toast *errorToast) bool { return toast.text == text })
+// originsOf returns the origins that hold the notice.
+func (e *ShownErrors) originsOf(toast *errorToast) []errorOrigin {
+	origins := make([]errorOrigin, 0, len(toast.origins))
+	for origin := range toast.origins {
+		origins = append(origins, origin)
+	}
+	return origins
 }
 
-// DismissToast closes the open toast with the text. The occurrences stay active until the owning operation withdraws them.
-func (e *ShownErrors) DismissToast(text string) bool {
-	at := e.toastIndex(text)
+func (e *ShownErrors) toastIndex(title string) int {
+	return slices.IndexFunc(e.toasts, func(toast *errorToast) bool { return !toast.closed && toast.kind == "error" && toast.title == title })
+}
+
+// CloseNotice closes the toast with the id and reports whether it was shown. Its occurrences stay active, so a redraw of the same
+// text does not show it again; a new text of its origin shows a new toast.
+func (e *ShownErrors) CloseNotice(id string) bool {
+	at := slices.IndexFunc(e.toasts, func(toast *errorToast) bool { return !toast.closed && toast.id == id })
 	if at == -1 {
 		return false
 	}
@@ -93,7 +182,7 @@ func (e *ShownErrors) DismissToast(text string) bool {
 
 func (e *ShownErrors) closeToast(at int) {
 	toast := e.toasts[at]
-	e.toasts = slices.Delete(e.toasts, at, at+1)
+	toast.closed = true
 	toast.stopTimer()
 }
 
@@ -104,11 +193,35 @@ func (toast *errorToast) stopTimer() {
 	}
 }
 
-// startToastExpiry also starts the clocks of any errors found before the window connected its ports.
-func (e *ShownErrors) startToastExpiry(schedule func(func()) func(), expired func()) {
+// Hold pauses the deadline of the toast with the id while held is true, and resumes it with its remaining time when held is false.
+// The window calls it with the pointer or the keyboard focus on the toast, so a person who reads the toast keeps it open.
+func (e *ShownErrors) Hold(id string, held bool) {
+	toast := e.recordOf(id)
+	if toast == nil || toast.closed {
+		return
+	}
+	if toast.held == held {
+		return
+	}
+	if !toast.timed {
+		toast.held = held
+		return
+	}
+	if held {
+		toast.span = e.remainingOf(toast)
+		toast.stopTimer()
+		toast.held = true
+		return
+	}
+	toast.held = false
+	e.scheduleSpan(toast, toast.span)
+}
+
+// StartToastExpiry also starts the clocks of any errors found before the window connected its ports.
+func (e *ShownErrors) StartToastExpiry(schedule func(int64, func()) func(), expired func()) {
 	e.schedule, e.expired = schedule, expired
-	for _, toast := range e.toasts {
-		e.scheduleToast(toast)
+	for _, toast := range e.shownToasts() {
+		e.scheduleNotice(toast)
 	}
 }
 
@@ -116,24 +229,45 @@ func (e *ShownErrors) startToastExpiry(schedule func(func()) func(), expired fun
 // open toasts take the new deadline or drop their timer.
 func (e *ShownErrors) ConfigureToastDeadline(auto bool, milliseconds int64) {
 	e.autoDismiss, e.deadline = auto, milliseconds
-	for _, toast := range e.toasts {
+	for _, toast := range e.shownToasts() {
 		toast.stopTimer()
-		if auto {
-			e.scheduleToast(toast)
-		}
+		toast.timed, toast.held = false, false
+		e.scheduleNotice(toast)
 	}
 }
 
+// scheduleToast gives a new toast the deadline of the settings.
 func (e *ShownErrors) scheduleToast(toast *errorToast) {
-	if e.schedule == nil || !e.autoDismiss {
+	if !e.autoDismiss {
+		toast.timed = false
 		return
 	}
-	toast.cancel = e.schedule(func() {
+	e.scheduleSpan(toast, e.deadline)
+	toast.timed = true
+}
+
+// scheduleSpan runs the deadline of the toast for span milliseconds, unless the toast is held or no clock is connected.
+func (e *ShownErrors) scheduleSpan(toast *errorToast, span int64) {
+	toast.stopTimer()
+	toast.span, toast.startedAt, toast.timed = span, e.now(), true
+	if e.schedule == nil || toast.held {
+		return
+	}
+	toast.cancel = e.schedule(span, func() {
 		if at := slices.Index(e.toasts, toast); at >= 0 {
 			e.closeToast(at)
 			e.expired()
 		}
 	})
+}
+
+// remainingOf returns the milliseconds left before the toast closes: the span while it is held or waits for a clock, and the
+// span less the time that the running timer has taken otherwise.
+func (e *ShownErrors) remainingOf(toast *errorToast) int64 {
+	if toast.held || toast.cancel == nil {
+		return toast.span
+	}
+	return max(0, toast.span-e.now().Sub(toast.startedAt).Milliseconds())
 }
 
 func (e *ShownErrors) stopToastExpiry() {
@@ -143,13 +277,48 @@ func (e *ShownErrors) stopToastExpiry() {
 	}
 }
 
-// Toasts returns the texts of the open toasts in the order in which they appeared.
-func (e *ShownErrors) Toasts() []string {
-	texts := make([]string, 0, len(e.toasts))
-	for _, toast := range e.toasts {
-		texts = append(texts, toast.text)
+// ToastStatus is one entry of core.toasts (docs/spec/notifications.md#commands-and-statuses): a shown error notice whose remaining
+// time is null when no deadline runs.
+type ToastStatus struct {
+	ID        string `json:"id"`
+	Kind      string `json:"kind"`
+	Title     string `json:"title"`
+	Count     int    `json:"count"`
+	Remaining *int64 `json:"remaining"`
+}
+
+// ToastStatuses returns the shown notices, newest first.
+func (e *ShownErrors) ToastStatuses() []ToastStatus {
+	shown := e.shownToasts()
+	statuses := make([]ToastStatus, 0, len(shown))
+	for i := len(shown) - 1; i >= 0; i-- {
+		toast := shown[i]
+		status := ToastStatus{ID: toast.id, Kind: toast.kind, Title: displayTitle(toast), Count: toast.count}
+		if toast.timed {
+			remaining := e.remainingOf(toast)
+			status.Remaining = &remaining
+		}
+		statuses = append(statuses, status)
 	}
-	return texts
+	return statuses
+}
+
+// displayTitle is the title of a notice with its count when occurrences merged into it, as titleOf of notices.js writes it.
+func displayTitle(toast *errorToast) string {
+	if toast.count > 1 {
+		return fmt.Sprintf("%s ×%d", toast.title, toast.count)
+	}
+	return toast.title
+}
+
+// Toasts returns the titles of the open toasts in the order in which they appeared.
+func (e *ShownErrors) Toasts() []string {
+	shown := e.shownToasts()
+	titles := make([]string, 0, len(shown))
+	for _, toast := range shown {
+		titles = append(titles, displayTitle(toast))
+	}
+	return titles
 }
 
 // Hide withdraws every error of where so its next occurrence is recorded.
@@ -159,6 +328,24 @@ func (e *ShownErrors) Hide(where string) {
 			e.withdraw(origin)
 		}
 	}
+}
+
+// ShownLine is an error line that the display shows: the where of its origin and its text.
+type ShownLine struct {
+	Where string
+	Text  string
+}
+
+// Lines returns the error lines that are shown whose where matches, sorted by where. Several origins with one text are one line each.
+func (e *ShownErrors) Lines(match func(where string) bool) []ShownLine {
+	lines := []ShownLine{}
+	for origin, text := range e.occurrences {
+		if match(origin.where) {
+			lines = append(lines, ShownLine{Where: origin.where, Text: text})
+		}
+	}
+	slices.SortFunc(lines, func(a, b ShownLine) int { return strings.Compare(a.Where, b.Where) })
+	return lines
 }
 
 // ShowFrom shows an error whose source can withdraw it with HideFrom.
@@ -187,14 +374,17 @@ func (e *ShownErrors) withdraw(origin errorOrigin) bool {
 }
 
 func (e *ShownErrors) removeToastOrigin(origin errorOrigin) {
-	e.toasts = slices.DeleteFunc(e.toasts, func(toast *errorToast) bool {
-		delete(toast.origins, origin)
-		if len(toast.origins) != 0 {
-			return false
+	for _, toast := range e.toasts {
+		if _, owned := toast.origins[origin]; !owned {
+			continue
 		}
-		toast.stopTimer()
-		return true
-	})
+		delete(toast.origins, origin)
+		if len(toast.origins) == 0 && !toast.closed {
+			// The withdrawn error closes its toast and its status line; its entry stays, read, until it is cleared (docs/spec/notifications.md#notices).
+			toast.closed, toast.read = true, true
+			toast.stopTimer()
+		}
+	}
 }
 
 // WithdrawTab withdraws the errors that name the closed tab: its operation error, the error of its restored session, the error of
@@ -219,10 +409,11 @@ func (e *ShownErrors) WithdrawFrom(source string) {
 // Text returns the current error of where. The workbench returns its newest open toast.
 func (e *ShownErrors) Text(where string) (string, bool) {
 	if where == workbenchErrorPlace {
-		if len(e.toasts) == 0 {
+		shown := e.shownToasts()
+		if len(shown) == 0 {
 			return "", false
 		}
-		return e.toasts[len(e.toasts)-1].text, true
+		return shown[len(shown)-1].title, true
 	}
 	for origin, text := range e.occurrences {
 		if origin.where == where {
@@ -232,65 +423,155 @@ func (e *ShownErrors) Text(where string) (string, bool) {
 	return "", false
 }
 
-type toastRow struct {
-	text                     string
-	width, height, textWidth float32
-}
-
-// drawErrorToasts draws the floating component inside either the window overlay or the active modal.
+// drawErrorToasts draws the notice toasts under the bell at the top right of the window, in the form of the setting toastStyle
+// (#toasts of packages/workbench/app.css). The card form shows toastCardLimit toasts and counts the rest, the line form shows the
+// newest toast and the count of the rest, and the deck form shows the stack, which spreads while the pointer or the focus is on it.
+// Each toast closes with core.notices.close and holds its deadline while the pointer or the focus is on it.
 func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
-	if len(s.errors.toasts) == 0 {
+	if len(s.errors.shownToasts()) == 0 {
 		return
 	}
 	m := s.metrics
 	theme := c.Theme()
 	font := ui.Font{Family: theme.Font, Size: theme.FontSize, Lang: c.Locale(), LineHeight: m.lineHeight}
-	glyphWidth, closeHeight := ui.ShapeText("×", font, 0).Size()
-	closeWidth := glyphWidth + 2*m.errorClosePadX
-	otherWidth := closeWidth + 3*m.errorPadX + 2*m.errorBorder
-	maxWidth := min(m.errorToastMaxWidth, width-2*m.space4)
-	stackWidth := float32(0)
-	stackHeight := float32(len(s.errors.toasts)-1) * m.errorPadY
-	rows := make([]toastRow, 0, len(s.errors.toasts))
-	for _, toast := range s.errors.toasts {
-		shape := ui.TextShape{Direction: c.Direction(), KeepAll: true}
-		spans := []ui.Span{{Text: toast.text}}
-		textWidth, textHeight := ui.ShapeRichTextWith(spans, font, shape).Size()
-		shape.Width = max(1, maxWidth-otherWidth)
-		if textWidth > shape.Width {
-			textWidth = shape.Width
-			_, textHeight = ui.ShapeRichTextWith(spans, font, shape).Size()
-		}
-		row := toastRow{toast.text, textWidth + otherWidth, max(textHeight, closeHeight) + 2*(m.errorPadY+m.errorBorder), textWidth}
-		rows = append(rows, row)
-		stackWidth, stackHeight = max(stackWidth, row.width), stackHeight+row.height
+	style := s.toastStyle()
+	statuses := s.errors.ToastStatuses()
+	shownCount := len(statuses)
+	switch style {
+	case "card":
+		shownCount = min(shownCount, toastCardLimit)
+	case "line":
+		shownCount = min(shownCount, 1)
 	}
+	rest := len(statuses) - shownCount
+	maxWidth := min(m.toastWidth, width-2*m.toastRight)
+	closeGlyph, closeHeight := ui.ShapeText("×", font, 0).Size()
+	closeWidth := closeGlyph + 2*m.toastMorePadX
+	textWidth := max(1, maxWidth-m.toastPadX-m.toastPadRight-closeWidth-m.toastGap)
+	rows := make([]toastRow, 0, shownCount)
+	for _, status := range statuses[:shownCount] {
+		toast := s.errors.toastByID(status.ID)
+		_, titleH := ui.ShapeRichTextWith([]ui.Span{{Text: status.Title}}, font, ui.TextShape{Direction: c.Direction(), KeepAll: true, Width: textWidth}).Size()
+		bodyH := float32(0)
+		if toast.text != "" && style != "line" {
+			_, bodyH = ui.ShapeRichTextWith([]ui.Span{{Text: toast.text}}, font, ui.TextShape{Direction: c.Direction(), KeepAll: true, Width: textWidth}).Size()
+		}
+		height := titleH + bodyH + m.toastPadTop + m.toastPadBottom
+		if style == "line" {
+			height = m.toastLineH
+		}
+		rows = append(rows, toastRow{status: status, body: toast.text, width: maxWidth,
+			height: max(height, closeHeight+m.toastPadTop+m.toastPadBottom)})
+	}
+	stackHovered := false
 	drawRows := func() {
-		for _, row := range rows {
-			ui.Row(c).Size(row.width, row.height).Shrink(0).AlignItems(ui.Start).Gap(m.errorPadX).Padding(m.errorPadY, m.errorPadX).
-				Background(s.palette.Card).Border(m.errorBorder, theme.Danger).Radius(s.radiusMiddle()).Children(func() {
-				drawErrorText(c, row.text).Width(row.textWidth).Shrink(0).LineHeight(font.LineHeight).KeepAll()
-				close := s.binder.Press(c, "core.error.dismiss", "core.error.dismiss", row.text, map[string]any{"text": row.text})
-				close.Size(closeWidth, closeHeight).Shrink(0).PaddingX(m.errorClosePadX).Center().
-					Label("오류 닫기").Tooltip("오류 닫기").Cursor(ui.CursorPointer).Children(func() {
+		for i, row := range rows {
+			box := ui.Row(c).Size(row.width, row.height).Shrink(0).AlignItems(ui.Start).Gap(m.toastGap).Padding(m.toastPadTop, m.toastPadRight, m.toastPadBottom, m.toastPadX).
+				Background(s.palette.Card).Radius(s.radiusMiddle())
+			// The deck form lifts and shrinks each toast after the first until the pointer is on the stack (#toasts of app.css).
+			if style == "deck" && i > 0 {
+				if s.toastStackHovered {
+					box = box.Margin(m.toastGap, 0, 0, 0)
+				} else {
+					box = box.Margin(m.toastDeckLift, 0, 0, 0).Scale(m.toastDeckScale, m.toastDeckScale)
+				}
+			}
+			held := box.Hovered() || box.FocusWithin()
+			s.errors.Hold(row.status.ID, held)
+			stackHovered = stackHovered || held
+			box.Children(func() {
+				ui.Column(c).Width(textWidth).Shrink(0).Gap(m.toastGap).Children(func() {
+					drawErrorText(c, row.status.Title).Width(textWidth).Shrink(0).LineHeight(font.LineHeight).KeepAll()
+					if row.body != "" && style != "line" {
+						ui.Text(c, row.body).Wrap().TextColor(s.palette.Muted).Label(row.body).Width(textWidth).Shrink(0).LineHeight(font.LineHeight).KeepAll()
+					}
+				})
+				close := s.binder.Press(c, "core.notices.close", "core.notices.close", row.status.ID, map[string]any{"id": row.status.ID})
+				close.Size(closeWidth, closeHeight).Shrink(0).PaddingX(m.toastMorePadX).Center().
+					Label("닫기").Tooltip("닫기").Cursor(ui.CursorPointer).Children(func() {
 					ui.Text(c, "×").SingleLine().LineHeight(font.LineHeight).TextColor(s.palette.Fg)
 				})
 			})
 		}
 	}
+	// extra is the top margin of the row at index i beyond the gap between rows: the deck form lifts its stack, and spreads it
+	// by the gap while the pointer is on it.
+	extra := func(i int) float32 {
+		if style != "deck" || i == 0 {
+			return 0
+		}
+		if s.toastStackHovered {
+			return m.toastGap
+		}
+		return m.toastDeckLift
+	}
+	stackHeight := float32(0)
+	for i, row := range rows {
+		stackHeight += row.height
+		if i > 0 {
+			stackHeight += m.toastGap + extra(i)
+		}
+	}
 	_, height := c.Size()
 	visibleHeight := min(stackHeight, height/2)
-	popup := ui.Box(c).Absolute().Left((width-stackWidth)/2).Bottom(m.errorToastBottom).Size(stackWidth, visibleHeight)
+	popup := ui.Box(c).Absolute().Top(m.toastTop).Right(m.toastRight).Size(maxWidth, visibleHeight)
+	if rest > 0 {
+		ui.Text(c, counterText(style, rest)).SingleLine().TextColor(s.palette.Muted).Absolute().Top(m.toastTop + stackHeight + m.toastGap)
+	}
 	if stackHeight > visibleHeight {
 		popup.Children(func() {
-			ui.Scroll(c).Fill().Column().AlignItems(ui.Center).Gap(m.errorPadY).Children(drawRows)
+			ui.Scroll(c).Fill().Column().AlignItems(ui.End).Gap(m.toastGap).Children(drawRows)
 		})
-		return
+	} else {
+		popup.PassThrough().Column().AlignItems(ui.End).Gap(m.toastGap).Children(drawRows)
 	}
-	popup.PassThrough().Column().AlignItems(ui.Center).Gap(m.errorPadY).Children(drawRows)
+	s.toastStackHovered = stackHovered
 }
 
-// drawErrorText draws the text of a toast, the one element that takes the error color.
+// toastRow is one drawn notice: the status it draws and the measured sizes of its content.
+type toastRow struct {
+	status ToastStatus
+	body   string
+	width  float32
+	height float32
+}
+
+// toastStyle returns the toastStyle setting, which names the form of the toasts.
+func (s *Shell) toastStyle() string {
+	if style, ok := s.settings.Value("toastStyle").(string); ok && style != "" {
+		return style
+	}
+	return "card"
+}
+
+// counterText is the count of the toasts that a form does not show, as notice-view.js writes it.
+func counterText(style string, rest int) string {
+	if style == "line" {
+		return fmt.Sprint(rest)
+	}
+	return fmt.Sprintf("+%d개 더", rest)
+}
+
+// toastByID returns the shown toast with the id, which the status of the same redraw reported.
+func (e *ShownErrors) toastByID(id string) *errorToast {
+	at := slices.IndexFunc(e.toasts, func(toast *errorToast) bool { return !toast.closed && toast.id == id })
+	return e.toasts[at]
+}
+
+// drawErrorText draws the title of a toast, the one element that takes the error color.
 func drawErrorText(c *ui.Context, text string) ui.Element {
 	return ui.Text(c, text).Wrap().TextColor(c.Theme().Danger).Role(ui.RoleStatus).Label(text)
+}
+
+// WithdrawNotice withdraws the shown notice id because its origin no longer holds it: the toast and the status line close, and the entry
+// stays in the center, read (docs/spec/notifications.md#commands-and-statuses). It reports whether a shown notice has id.
+func (e *ShownErrors) WithdrawNotice(id string) bool {
+	at := slices.IndexFunc(e.toasts, func(toast *errorToast) bool { return !toast.closed && toast.id == id })
+	if at == -1 {
+		return false
+	}
+	e.toasts[at].read = true
+	e.toasts[at].origin = ""
+	e.closeToast(at)
+	return true
 }

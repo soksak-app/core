@@ -87,8 +87,8 @@ func UpdateSet(sets []StoredSet, id string, title, layout *string) ([]StoredSet,
 	return next, nil
 }
 
-// ChangeRow changes one section row of a set: choose replaces the row index with section, up and down swap it with a
-// neighbour, remove deletes it, and add appends the first of registered that the set does not have.
+// ChangeRow changes the section rows of a set (docs/spec/settings.md#사이드바-세트): add appends section, which must be registered and
+// absent from the set, and remove deletes the row at index. A section moves by removing it and adding it again.
 func ChangeRow(sets []StoredSet, id, action string, index int, section string, registered []string) ([]StoredSet, error) {
 	at, err := setIndex(sets, id)
 	if err != nil {
@@ -96,49 +96,22 @@ func ChangeRow(sets []StoredSet, id, action string, index int, section string, r
 	}
 	next := clonedSets(sets)
 	rows := next[at].Sections
-	row := func() error {
-		if index < 0 || index >= len(rows) {
-			return fmt.Errorf("set %s has no row %d", id, index)
-		}
-		return nil
-	}
-	if action != "add" {
-		if !slices.Contains([]string{"choose", "up", "down", "remove"}, action) {
-			return nil, fmt.Errorf("unknown row action %s", action)
-		}
-		if err := row(); err != nil {
-			return nil, err
-		}
-	}
 	switch action {
-	case "choose":
+	case "remove":
+		if index < 0 || index >= len(rows) {
+			return nil, fmt.Errorf("set %s has no row %d", id, index)
+		}
+		rows = slices.Delete(rows, index, index+1)
+	case "add":
 		if !slices.Contains(registered, section) {
 			return nil, fmt.Errorf("unknown section %s", section)
 		}
-		for i, other := range rows {
-			if i != index && other == section {
-				return nil, fmt.Errorf("section %s is already in set %s", section, id)
-			}
+		if slices.Contains(rows, section) {
+			return nil, fmt.Errorf("section %s is already in set %s", section, id)
 		}
-		rows[index] = section
-	case "up":
-		if index == 0 {
-			return nil, fmt.Errorf("row %d cannot move up", index)
-		}
-		rows[index-1], rows[index] = rows[index], rows[index-1]
-	case "down":
-		if index == len(rows)-1 {
-			return nil, fmt.Errorf("row %d cannot move down", index)
-		}
-		rows[index], rows[index+1] = rows[index+1], rows[index]
-	case "remove":
-		rows = slices.Delete(rows, index, index+1)
-	case "add":
-		free := slices.IndexFunc(registered, func(candidate string) bool { return !slices.Contains(rows, candidate) })
-		if free < 0 {
-			return nil, fmt.Errorf("set %s already contains every registered section", id)
-		}
-		rows = append(rows, registered[free])
+		rows = append(rows, section)
+	default:
+		return nil, fmt.Errorf("unknown row action %s", action)
 	}
 	next[at].Sections = rows
 	return next, nil

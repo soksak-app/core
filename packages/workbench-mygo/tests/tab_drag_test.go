@@ -160,9 +160,9 @@ func TestTheBandsHaveTheDeclaredWidth(t *testing.T) {
 	}
 	f := startedShellOf(t, acme(), declared.WithChrome("drop-band", "40px"))
 	f.settle()
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	cards := f.tabbedCards()
 	card, other := cards[0], cards[1]
 	f.click("core.card.add", card)

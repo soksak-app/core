@@ -34,7 +34,7 @@ test("a failed file drop is reported with its reason and every drop is logged", 
   try {
     await installCoreExposure({
       memorySaver: await pageMemorySaver(),
-      library: { state: () => null }, renames: { state: () => null }, chrome: () => null,
+      home: { state: () => null }, renames: { state: () => null }, chrome: () => null,
       drawn: async () => {},
     });
     // The host delivers each drop as the notice files-dropped. dropFiles logs and reports each of these drops before its first await,

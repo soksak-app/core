@@ -159,7 +159,7 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		OpenLayout:  func() (uint64, error) { return 0, nil },
 		Declared:    declared,
 		Calls:       workbench.NewCalls(table, f.pending.post),
-		Environment: environment(t),
+		Environment: environmentOf(t, stored),
 		Installed:   []byte(installed),
 		Invalidate:  func() {},
 		Post:        f.pending.post,
@@ -198,6 +198,8 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 			step()
 		}
 	}, 1200, 800)
+	// The search field of the settings menu draws its magnifier, as the shell fixture of the window does.
+	f.tester.SetSystemSymbols(squareSymbols)
 	shell.Start()
 	if refused != nil || stored.startFails {
 		f.pending.drain(t)

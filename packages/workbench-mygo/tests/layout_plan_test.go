@@ -221,8 +221,9 @@ func TestAPlanBelowTheMinimumStatesThePlaneAndTheNearestGrid(t *testing.T) {
 	before := f.described()
 	plan := f.mustPlan(terminalRow(30))
 	// 30 cards of 96 points and 29 corridors of 12 points need 3228 points across.
-	want := "card 1 of the tree would be 14 × 710 points, below the minimum 96 × 96 points; the tree needs a plane of 3228 × 96 points and " +
-		"the plane is 782 × 710 points"
+	// The plane is 24 points lower than the window: the status bar takes the height statusbar-h (docs/spec/external-sidebars.md#status-bar).
+	want := "card 1 of the tree would be 14 × 686 points, below the minimum 96 × 96 points; the tree needs a plane of 3228 × 96 points and " +
+		"the plane is 782 × 686 points"
 	if plan.Feasible || plan.Reason == nil || *plan.Reason != want {
 		t.Fatalf("the plan is feasible %v with the reason %v", plan.Feasible, plan.Reason)
 	}
@@ -252,7 +253,7 @@ func TestAPlanBelowTheMinimumStatesThePlaneAndTheNearestGrid(t *testing.T) {
 	}
 	// A tree whose corridors leave its cards no extent states the plane.
 	wide := f.mustPlan(terminalRow(70))
-	if wide.Feasible || wide.Reason == nil || *wide.Reason != "the cards of the tree have no extent in the plane of 782 × 710 points" ||
+	if wide.Feasible || wide.Reason == nil || *wide.Reason != "the cards of the tree have no extent in the plane of 782 × 686 points" ||
 		wide.Needed != nil || len(wide.Cards) != 0 {
 		t.Fatalf("the plan of 70 cards is %+v", wide)
 	}

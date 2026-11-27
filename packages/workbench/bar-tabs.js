@@ -2,6 +2,9 @@
 import { keepChildren } from "./keep-children.js";
 import { drawActivity } from "./activity.js";
 
+/** The places of the project tabs (settings projectTabs). */
+const PLACES = ["top", "bottom", "left", "right"];
+
 /**
  * Creates the strips. projects is the project module, bind and run are the command functions, redraw draws the bars
  * again, changed reports a change of the rename state, and activities reads the value of core.activity, whose project and space
@@ -9,7 +12,7 @@ import { drawActivity } from "./activity.js";
  * group (docs/spec/groups.md#headers): name(id), the name of a group card, rename(id, name), its rename, and redraw(), the draw of
  * the plane that shows the rename field in the header of the group card.
  */
-export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, run, redraw, keyboardOwed, changed, activities, groups }) {
+export function createBarTabs({ projects, projectBar, projectRow, spaceBar, workarea, bind, run, redraw, keyboardOwed, changed, activities, groups }) {
   /**
    * Creates one tab. A click switches, a double click renames, and ✕ closes. All three are commands.
    *
@@ -137,10 +140,15 @@ export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, 
     return b;
   }
 
-  function draw(left) {
+  /**
+   * Draws the strips. position is the place of the project tabs, one of top (the chrome row), bottom (a row below the work area), left
+   * and right (a column at that side of the work area). The project home has no project tab in any place.
+   */
+  function draw(position) {
+    if (!PLACES.includes(position)) throw new Error(`project tabs position ${String(position)} is not one of ${PLACES.join(", ")}`);
     const here = projects.active();
-    const browsing = projects.inLibrary();
-    const toLeft = !browsing && left;
+    const browsing = projects.inHome();
+    const place = browsing ? "top" : position;
     // A project or a space without an activity is not listed in core.activity.
     const shown = activities().projects;
     const projectActivity = (id) => (Object.hasOwn(shown, id) ? shown[id].activity : null);
@@ -152,17 +160,21 @@ export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, 
        sets display and .project-column is display:flex, so hiding it would leave an empty
        area. The chrome row, in contrast, is always kept. Even when empty, that row pushes the buttons
        to the right. */
+    const sided = place === "left" || place === "right";
     let column = workarea.querySelector(".project-column");
-    if (toLeft && !column) {
-      column = document.createElement("div");
-      column.className = "project-column";
-      column.dataset.expose = "core.projects.column";
-      workarea.prepend(column);
-    } else if (!toLeft && column) {
+    if (column && (!sided || !column.classList.contains(`project-column--${place}`))) {
       column.remove();
       column = null;
     }
-    const into = toLeft ? column : projectBar;
+    if (sided && !column) {
+      column = document.createElement("div");
+      column.className = `project-column project-column--${place}`;
+      column.dataset.expose = "core.projects.column";
+      // The left column stands before the work area and the right column after it, so the column is the outer edge of the window.
+      if (place === "left") workarea.prepend(column);
+      else workarea.append(column);
+    }
+    const into = sided ? column : place === "bottom" ? projectRow : projectBar;
     // A draw keeps the tabs that did not change: replacing a pressed tab between its press and its release would lose the click.
     const projectTab = (p) => {
       const el = tab(p.title, p.id === here?.id, {
@@ -195,7 +207,10 @@ export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, 
     }));
     if (!browsing) projectTabs.push({ key: "add", create: () => addTabButton("+", "core.projects.browse", "core.project-tab.add") });
     keepChildren(into, projectTabs);
-    if (column) keepChildren(projectBar, []);
+    // The strips that the position does not use hold no project tab.
+    if (into !== projectBar) keepChildren(projectBar, []);
+    if (into !== projectRow) keepChildren(projectRow, []);
+    projectRow.hidden = place !== "bottom";
 
     const spaces = here?.spaces ?? []; // default: a window with no project has no space tabs.
     const spaceTabs = spaces.map((sp) => ({

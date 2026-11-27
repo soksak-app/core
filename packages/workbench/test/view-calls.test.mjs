@@ -23,6 +23,7 @@ const reports = await import("../tab-reports.js");
 const { viewFocusOf } = await import("../view-focus.js");
 const { HostWorkspaceStore } = await import("../host-store.js");
 const projects = await import("../projects.js");
+const { endNoticesWriter } = await import("../notices-file.js");
 
 setSurfaceTextSize(() => 1);
 // The plugin probe declares surface.menu, and the plugin probe-bare declares none (null, as the declaration of a plugin without it).
@@ -66,7 +67,7 @@ registry.configure({ surfacePlugin: (surface) => owners.get(surface) ?? null, pr
 // The core commands that the tests run. A core command is registered by the module that owns it; these record the params that they receive.
 const ran = { core: [] };
 const failing = new Set();
-for (const name of ["core.tab.select", "core.library.search.focus", "core.surface.menu", "core.file.place"]) {
+for (const name of ["core.tab.select", "core.home.search.focus", "core.surface.menu", "core.file.place"]) {
   registry.command(name, async (params, context) => {
     ran.core.push({ name, params, cids: context?.cids });
     if (failing.has(name)) throw new Error("no focus target");
@@ -115,6 +116,9 @@ const declarations = probeExposes;
  * and opens the project store of the window over the case.
  */
 async function mountView(name, { id = "probe-surface", plugin = "probe", unload = false, project, regions = [], store: opensStore = false } = {}) {
+  // The gate counts the refused events of every test of this file until a flush reports them. The drain reports the counts of the
+  // earlier tests before this case is selected, so the case counts only its own events.
+  await flushEvents();
   wire = selectPageWire(`view-calls-${name}`);
   const store = unload || project !== undefined || opensStore ? await openTabStateStore() : null;
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
@@ -173,6 +177,8 @@ async function mountView(name, { id = "probe-surface", plugin = "probe", unload 
       await modules.disposeSurface(surfaceId);
       owners.delete(surfaceId);
     }
+    // The notice writer ends with its test, so no later test's change reaches this case's wire.
+    endNoticesWriter();
     if (store) await store.flush();
     await flushEvents();
     dom.window.close();
@@ -601,14 +607,15 @@ test("the tab reports of a view reach the handlers of its surface and reply null
   reports.reportModified(h.id, false);
 });
 
-test("tab.notify takes {text, policy} and tab.keep takes {reason, on} from the params", { timeout: 5000 }, async () => {
+test("tab.notify takes the notice record and replies its id, tab.progress and tab.done take their fields, and tab.keep takes {reason, on}", { timeout: 5000 }, async () => {
   const h = await mountView("tab-notify-keep");
-  // tab.notify {text, policy: "system"} with the Korean text of the case
+  // tab.notify {kind: "progress", title, action, system: true}, which replies the id of the notice
+  assert.equal((await h.call()).result, "notice-1");
+  // tab.progress {id: "notice-1", progress: 0.5}, then tab.done {id, kind: "success", title}, then tab.keep {reason: "busy", on: true}
   assert.equal((await h.call()).result, null);
-  // tab.keep {reason: "busy", on: true}
   assert.equal((await h.call()).result, null);
-  assert.deepEqual(reports.tabNotices().filter(([tab]) => tab === h.id), [[h.id, "끝났습니다"]]);
-  assert.equal(reports.tabNotice(h.id), null, "a notice with the policy system is not the notice of the tab");
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(reports.tabNotices().filter(([tab]) => tab === h.id), [[h.id, "빌드"]], "the system notice is kept under its tab");
   assert.deepEqual(reports.tabKeeps(h.id), ["keep:busy"]);
   await h.close();
 });
@@ -646,12 +653,23 @@ test("core.file.place runs the core command with the params of the view and repl
   await h.close();
 });
 
-test("tab.notify and tab.keep refuse params that are not the recorded objects and run nothing", { timeout: 5000 }, async () => {
+test("tab.notify, tab.progress, tab.done and tab.keep refuse the params that the check refuses, and run nothing", { timeout: 5000 }, async () => {
   const h = await mountView("tab-notify-keep-refused");
-  // tab.notify with the text of the case as a string instead of an object
-  assert.match((await h.call()).error.message, /requires an object/);
-  // tab.keep null
-  assert.match((await h.call()).error.message, /requires an object/);
+  // The refusals of the case in order: a string, the policy field, an invalid kind, title, text and action, system, progress, id, done kind, and keep null
+  const refusals = [
+    "view call tab.notify requires an object",
+    "a notice takes only kind, title, text, action and system; found policy",
+    "a notice kind must be success, info, warning, error or progress",
+    "a notice title must be 1 to 120 characters without control characters",
+    "a notice text must be 0 to 1024 characters without control characters",
+    "a notice action label must be 1 to 24 characters",
+    "a notice system must be true or false",
+    "a notice progress must be a number from 0 to 1, or null while the amount is unknown",
+    "a notice id must be a non-empty string",
+    "a finished notice must be success or error",
+    "view call tab.keep requires an object",
+  ];
+  for (const message of refusals) assert.equal((await h.call()).error.message, message);
   assert.deepEqual([reports.tabNotice(h.id), reports.tabKeeps(h.id)], [null, []]);
   await h.close();
 });
@@ -754,10 +772,14 @@ test("runtime.shortcuts.read returns the rows of the workbench and view owners, 
   // runtime.shortcuts.read: the rows of packages/workbench/shortcuts.json whose owner is the workbench or the view
   assert.deepEqual((await h.call()).result, [
     { key: "shift+cmd+n", owner: "workbench", command: "core.window.new" },
-    { key: "cmd+k", owner: "workbench", command: "core.library.search.focus" },
+    { key: "cmd+k", owner: "workbench", command: "core.home.search.focus" },
+    { key: "ArrowUp", owner: "workbench", command: "core.home.select" },
+    { key: "ArrowDown", owner: "workbench", command: "core.home.select" },
+    { key: "Escape", owner: "workbench", command: "core.home.search" },
     { key: "Enter", owner: "workbench", command: "core.rename.commit" },
     { key: "Escape", owner: "workbench", command: "core.rename.cancel" },
-    { key: "Enter", owner: "workbench", command: "core.library.form.submit" },
+    { key: "Enter", owner: "workbench", command: "core.home.form.submit" },
+    { key: "Enter", owner: "workbench", command: "core.home.open" },
     { key: "Escape", owner: "workbench", command: "core.picker.close" },
     { key: "Escape", owner: "workbench", command: "core.modal.dismiss" },
     { key: "Escape", owner: "view", command: "none" },
@@ -787,15 +809,15 @@ test("runtime.command runs a core command through runCore, and a failed workbenc
   const before = ran.core.length;
   const failures = () => wire.calls.slice(from).filter(({ name, payload }) => name === "log" && payload.action === "batch")
     .flatMap(({ payload }) => payload.events).filter(({ event }) => event === "workbench.input.shortcut.failed").map(({ level, fields }) => [level, fields]);
-  // core.library.search.focus is a row of the workbench in shortcuts.json: it runs, then it fails; core.tab.select is no row and fails
+  // core.home.search.focus is a row of the workbench in shortcuts.json: it runs, then it fails; core.tab.select is no row and fails
   assert.equal((await h.call()).result, null);
-  assert.deepEqual(ran.core.slice(before), [{ name: "core.library.search.focus", params: {}, cids: undefined }]);
-  failing.add("core.library.search.focus");
+  assert.deepEqual(ran.core.slice(before), [{ name: "core.home.search.focus", params: {}, cids: undefined }]);
+  failing.add("core.home.search.focus");
   failing.add("core.tab.select");
   try {
     assert.match((await h.call()).error.message, /no focus target/);
     await flushEvents();
-    assert.deepEqual(failures(), [["error", { plugin: "probe", command: "core.library.search.focus" }]]);
+    assert.deepEqual(failures(), [["error", { plugin: "probe", command: "core.home.search.focus" }]]);
     assert.match((await h.call()).error.message, /no focus target/);
     await flushEvents();
     assert.equal(failures().length, 1, "a core command that is not a workbench row wrote a shortcut record");

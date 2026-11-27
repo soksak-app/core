@@ -69,7 +69,7 @@
     { "reply": { "result": "$snapshot" } },
     { "call": { "name": "workspace", "payload": { "kind": "tabState" } } },
     { "reply": { "result": null } },
-    { "call": { "name": "workspace", "payload": { "kind": "tabSessions" } } },
+    {"call":{"name":"workspace","payload":{"kind":"notices"}}},{"reply":{"result":null}},{ "call": { "name": "workspace", "payload": { "kind": "tabSessions" } } },
     { "reply": { "result": [] } },
     { "call": { "name": "windowReady" } },
     { "reply": { "result": null } },

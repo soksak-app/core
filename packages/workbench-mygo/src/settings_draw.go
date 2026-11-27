@@ -18,14 +18,16 @@ type settingsPane struct {
 	navW, navGap, navPadY, navPadX, navItemPadY, navItemPadX, navMarkInset, navMarkW, navMarkR float32
 	headH, headGap, headPadStart, headPadEnd                                                   float32
 	shadowY, shadowBlur, shadowAlpha                                                           float32
-	rowNameW, rowH, gap                                                                        float32
+	controlW, rowH, gap, indent                                                                float32
 	segGap, segPad, segButtonPadY, segButtonPadX                                               float32
 	scopeGap, scopePadY, scopePadX, scopeMark, nameGap, captionGap, lineHeight, tracking       float32
 	paneTop, paneX, paneBottom, rowGap, fieldPadY, buttonPadX, fieldPadX, arrowInset           float32
-	swatchMinW, gridGap, gridMargin, swatchGap, swatchPad, boxH, boxBorder                     float32
-	railW, pairLeft, pairInset, dotInset, dot                                                  float32
-	focusOutline, focusOffset                                                                  float32
-	switchW, switchH, knobInset, knob, knobOn, switchOnMix, slideGap, trackH, thumb            float32
+	// fieldH is the height of an input and a select, and buttonSmH the height of a small button (docs/spec/settings.md#controls).
+	fieldH, buttonSmH                                                               float32
+	swatchMinW, gridGap, gridMargin, swatchGap, swatchPad, boxH, boxBorder          float32
+	railW, pairLeft, pairInset, dotInset, dot                                       float32
+	focusOutline, focusOffset                                                       float32
+	switchW, switchH, knobInset, knob, knobOn, switchOnMix, slideGap, trackH, thumb float32
 }
 
 func (s *Shell) readSettingsPane() settingsPane {
@@ -38,11 +40,12 @@ func (s *Shell) readSettingsPane() settingsPane {
 		navMarkInset: metric("set-nav-mark-inset"), navMarkW: metric("set-nav-mark-w"), navMarkR: metric("set-nav-mark-r"),
 		headH: metric("set-card-head-h"), headGap: metric("set-card-head-gap"), headPadStart: metric("set-card-head-pad-start"), headPadEnd: metric("set-card-head-pad-end"),
 		shadowY: metric("set-card-shadow-y"), shadowBlur: metric("set-card-shadow-blur"), shadowAlpha: metric("set-card-shadow-alpha"),
-		rowNameW: metric("set-row-name-w"), rowH: metric("set-row-h"), gap: metric("set-group-gap"),
+		controlW: metric("set-control-w"), rowH: metric("set-row-h"), gap: metric("set-group-gap"),
+		indent: metric("space-3"),
 		segGap: metric("seg-gap"), segPad: metric("seg-pad"), segButtonPadY: metric("seg-button-pad-y"), segButtonPadX: metric("seg-button-pad-x"),
 		scopeGap: metric("space-4"), scopePadY: metric("space-2"), scopePadX: metric("space-1"), scopeMark: metric("scope-tab-mark"),
-		paneTop: metric("set-pane-pad-top"), paneX: metric("set-pane-pad-x"), paneBottom: metric("set-pane-pad-bottom"), rowGap: metric("set-row-gap"),
-		fieldPadY: metric("field-pad-y"), buttonPadX: metric("space-3"), fieldPadX: metric("space-2"), arrowInset: metric("select-arrow-inset"),
+		paneTop: metric("set-pane-pad-top"), paneX: metric("set-pane-pad-x"), paneBottom: metric("set-pane-pad-bottom"), rowGap: metric("space-2"),
+		fieldH: metric("field-h"), buttonSmH: metric("button-sm-h"), fieldPadY: metric("field-pad-y"), buttonPadX: metric("space-3"), fieldPadX: metric("space-2"), arrowInset: metric("select-arrow-inset"),
 		swatchMinW: metric("theme-swatch-min-w"), gridGap: metric("theme-grid-gap"), gridMargin: metric("theme-grid-margin"), swatchGap: metric("theme-swatch-gap"),
 		swatchPad: metric("theme-swatch-pad"), boxH: metric("theme-box-h"), boxBorder: metric("theme-box-border"), railW: metric("theme-rail-w"),
 		pairLeft: metric("theme-pair-left"), pairInset: metric("theme-pair-inset"), dotInset: metric("theme-dot-inset"), dot: metric("theme-dot"),
@@ -53,68 +56,81 @@ func (s *Shell) readSettingsPane() settingsPane {
 	}
 }
 
-// settingsForFrame builds the settings model before the window chooses its foreground focus scope.
-func (s *Shell) settingsForFrame(c *ui.Context, width, height float32) *settingsModel {
+// settingsForFrame updates the model of the tab before the window chooses its foreground focus scope. The model is built again only when
+// its key changed (docs/spec/settings.md#performance).
+func (s *Shell) settingsForFrame(c *ui.Context, width, height float32) {
 	w := &s.settingsWindow
 	w.width, w.height = float64(width), float64(height)
-	s.tellLanguage(c.Locale())
-	// Showing the agent group reads the setup parts (docs/spec/settings.md#agents); the group stands in the common scope of
-	// the general section, and the scope is common while no project is selected.
-	s.setupOperations.Show(w.open && w.section == "general" && (w.scope == "common" || s.settings.Project() == ""))
-	// Showing the page of a plugin with accounts reads their state (docs/spec/plugins.md#accounts).
+	w.locale = c.Locale()
+	s.tellLanguage(w.locale)
+	// Showing the agent page reads the setup parts (docs/spec/settings.md#에이전트); the page stands in the common scope while no
+	// project is selected.
+	s.setupOperations.Show(w.open && w.page == "agents" && (w.scope == "common" || s.settings.Project() == ""))
+	// Showing the plugin page reads the accounts of the plugin (docs/spec/plugins.md#accounts).
 	shown := ""
-	if w.open && w.section == "plugins" {
+	if w.open && w.page == "plugin" {
 		shown = w.chosen
 	}
 	s.accounts.Show(shown)
 	if !w.open {
-		return nil
+		w.model = nil
+		return
 	}
-	model, err := s.settingsBuild()
-	if err != nil {
+	if _, err := s.settingsModelNow(); err != nil {
 		s.closeSettings()
 		s.setupOperations.Show(false)
 		s.accounts.Show("")
 		s.fail(err)
-		return nil
 	}
-	return model
 }
 
-// drawSettings draws the scrim and the card over a window of width and height.
-func (s *Shell) drawSettings(c *ui.Context, width, height float32, model *settingsModel) {
-	if model == nil {
+// settingsModelNow returns the model of the current state. It builds the model only when the key of the state changed.
+func (s *Shell) settingsModelNow() (*settingsModel, error) {
+	w := &s.settingsWindow
+	key := s.settingsKeyOf(w.locale)
+	if w.model != nil && w.key == key {
+		return w.model, nil
+	}
+	model, err := s.settingsBuild()
+	if err != nil {
+		return nil, err
+	}
+	w.model, w.key = model, key
+	return model, nil
+}
+
+// settingsKeyOf returns the key of the model of the current state. The plugins are fixed for the life of the window, so len(s.plugins)
+// is a sufficient key.
+func (s *Shell) settingsKeyOf(locale string) settingsKey {
+	w := &s.settingsWindow
+	// The operation of a plugin is part of the key, so a running action and its end redraw the plugin rows (docs/spec/settings.md#설치됨).
+	var operation PluginOperation
+	if current := s.pluginOperations.Status().Operation; current != nil {
+		operation = *current
+	}
+	return settingsKey{
+		inputs: w.inputs, setup: s.setupOperations.Generation(), plugins: len(s.plugins), operation: operation,
+		locale: locale, project: s.settings.Project(),
+		page: w.page, scope: w.scope, query: w.query, find: w.find, filter: w.filter, chosen: w.chosen, editing: w.editing, browse: w.browse, confirm: w.confirm,
+		accountPlugin: w.accountPlugin, accountName: w.accountName, accountKind: w.accountKind,
+		accountEdit: w.accountEdit, accountEditName: w.accountEditName,
+	}
+}
+
+// drawSettingsTab draws the settings tab into rect of the frame while the tab is in front (settingsTabInFront). The menu stands at the
+// left of the rect and the page at its right; the tab has no scrim, no card and no drag (docs/spec/settings.md#opening-and-closing).
+func (s *Shell) drawSettingsTab(c *ui.Context, rect ui.Rect) {
+	model := s.settingsWindow.model
+	if !s.settingsTabInFront() || model == nil {
 		return
 	}
-	w := &s.settingsWindow
-	if w.moved {
-		s.clampCard()
-	}
-	// default: the card takes its height from its rows, and this frame measures that height again into drawnHeight below, so the
-	// height of the last frame is not needed here.
-	x, y, cardW, _ := s.settingsCard()
 	pane := s.readSettingsPane()
-	ui.Overlay(c, func() {
-		scrim := s.binder.Watched(s.exposedBox(c, "core.settings-modal.scrim", "", ""))
-		scrim.Absolute().Left(0).Top(0).Size(width, height).Background(s.dialogScrim()).KeepAll().Modal().Role(ui.RoleGroup).Label("core.settings-modal.scrim")
-		scrim.Children(func() {
-			card := s.exposedBox(c, "core.settings-modal.card", "", "")
-			// The card takes the focus of the dialog, so a key presses no control before Tab or a press reaches one.
-			card.Focusable().FocusRing(false).LineHeight(pane.lineHeight)
-			// The card ends with its content, and past its largest height the pane scrolls, as a card with max-height does.
-			w.drawnHeight = float64(card.Bounds().H)
-			card.Absolute().Left(float32(x)).Top(float32(y)).Width(float32(cardW)).Column().Background(s.palette.Card).
-				Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusMiddle()).Clip().Shadow(0, pane.shadowY, pane.shadowBlur, 0, ui.RGBA(0, 0, 0, pane.shadowAlpha)).
-				Role(ui.RoleDialog).Label(settingsName).Children(func() {
-				// The border of the card takes its width and height from the content.
-				border := 2 * s.palette.BorderWidth
-				s.drawSettingsHead(c, model, float32(cardW)-border, pane)
-				ui.Row(c).FillWidth().AlignItems(ui.Stretch).Children(func() {
-					s.drawSettingsNav(c, model, pane)
-					s.drawSettingsBody(c, model, float32(cardW)-border-pane.navW, float32(s.settingsCardMost())-border-pane.headH, pane)
-				})
-			})
-			s.drawErrorToasts(c, width)
+	tab := s.exposedBox(c, "core.settings-tab", "", "")
+	tab.Absolute().Left(rect.X).Top(rect.Y).Size(rect.W, rect.H).Background(s.palette.Card).Clip().Row().Children(func() {
+		s.drawSettingsMenu(c, model, pane)
+		ui.Column(c).FillWidth().Children(func() {
+			s.drawSettingsHead(c, model, rect.W-pane.navW, pane)
+			s.drawSettingsBody(c, model, rect.W-pane.navW, rect.H-s.settingsHeadHeight(pane), pane)
 		})
 	})
 }
@@ -124,22 +140,40 @@ func (s *Shell) exposedBox(c *ui.Context, name, command, item string) ui.Element
 	return ui.Box(c.Key(Exposed{Name: name, Command: command, Item: item}))
 }
 
-func (s *Shell) drawSettingsHead(c *ui.Context, model *settingsModel, width float32, pane settingsPane) {
-	// The whole head moves the card, as the header of the page does, and the button that closes it stands inside.
-	grip := s.exposedBox(c, "core.settings-modal.grip", "core.settings-modal.move", "")
-	grip.Size(width, pane.headH).Padding(0, pane.headPadEnd, 0, pane.headPadStart).Gap(pane.headGap).Row().AlignItems(ui.Center).
-		BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Cursor(ui.CursorGrab).Role(ui.RoleGroup).Label(settingsName).Children(func() {
-		ui.Text(c, settingsName).Grow(1).FontSize(s.textControl()).TextColor(s.palette.Fg)
-		closing := model.close
-		s.drawAct(c, s.binder.Press(c, closing.Name, closing.Command.Name, closing.item(), closing.Command.Params), closing.Label, "close", false, 1)
-	})
-	if dx, dy, pressed := grip.Dragged(); pressed && (dx != 0 || dy != 0) {
-		s.binder.run("core.settings-modal.move", windowParam{DX: float64(dx), DY: float64(dy)})
-	}
+// settingsTabInFront tells whether the settings tab is in front. The chrome of the window draws the tab only while this is true.
+func (s *Shell) settingsTabInFront() bool { return s.settingsWindow.open }
+
+// settingsHeadHeight is the height of the page head, which stays above the scrolling content.
+func (s *Shell) settingsHeadHeight(pane settingsPane) float32 {
+	return pane.headH
 }
 
-func (s *Shell) drawSettingsNav(c *ui.Context, model *settingsModel, pane settingsPane) {
+// drawSettingsHead draws the title of the page, its description and the scope control with the folder caption of the project scope.
+func (s *Shell) drawSettingsHead(c *ui.Context, model *settingsModel, width float32, pane settingsPane) {
+	w := &s.settingsWindow
+	head := ui.Column(c).Size(width, pane.headH).Padding(pane.paneTop, pane.paneX, 0, pane.paneX)
+	head.Children(func() {
+		ui.Text(c, settingsPageTitle(w)).FontSize(s.textControl()).TextColor(s.palette.Fg)
+		if description := settingsPageDescription(w.page); description != "" {
+			ui.Text(c, description).FontSize(s.textSmall()).TextColor(s.palette.Muted)
+		}
+		if len(model.scopes) > 0 {
+			ui.Row(c).FillWidth().Gap(pane.scopeGap).Margin(0, 0, pane.scopeGap, 0).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("설정 범위").Children(func() {
+				for _, control := range model.scopes {
+					s.drawSettingsScope(c, control, pane)
+				}
+			})
+		}
+		if model.folder != "" {
+			ui.Text(s.binder.Name(c, "core.settings-tab.folder", ""), model.folder).LineHeight(s.metrics.lineHeight).TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
+		}
+	})
+}
+
+// drawSettingsMenu draws the menu at the left of the tab: the pages of 설정 and 플러그인, each as a button of its page.
+func (s *Shell) drawSettingsMenu(c *ui.Context, model *settingsModel, pane settingsPane) {
 	ui.Column(c).Width(pane.navW).Gap(pane.navGap).Padding(pane.navPadY, pane.navPadX).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).Children(func() {
+		s.drawSearchControl(c, model.find)
 		for _, control := range model.nav {
 			s.drawSettingsNavItem(c, control, pane)
 		}
@@ -170,23 +204,15 @@ func (s *Shell) drawSettingsNavItem(c *ui.Context, control *SettingsControl, pan
 
 func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width, most float32, pane settingsPane) {
 	w := &s.settingsWindow
-	key := fmt.Sprint(w.section, w.scope, w.chosen, w.editing)
+	key := fmt.Sprint(w.page, w.scope, w.chosen, w.editing)
 	if key != w.scrollKey {
 		w.scrollKey, w.scroll.X, w.scroll.Y = key, 0, 0
 	}
-	scroll := ui.Scroll(c.Key(Exposed{Name: "core.settings-modal.pane"}))
+	scroll := ui.Scroll(c.Key(Exposed{Name: "core.settings-tab.pane"}))
 	scroll.TrackScroll(&w.scroll).Width(width).MaxHeight(most).Children(func() {
 		// The pane fills the room the scroll container gives it, beside its classic bar when the content overflows, as the pane of
 		// packages/workbench/app.css does.
 		ui.Column(c).FillWidth().Padding(pane.paneTop, pane.paneX, pane.paneBottom, pane.paneX).Children(func() {
-			ui.Row(c).FillWidth().Gap(pane.scopeGap).Margin(0, 0, pane.scopeGap, 0).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("설정 범위").Children(func() {
-				for _, control := range model.scopes {
-					s.drawSettingsScope(c, control, pane)
-				}
-			})
-			if model.folder != "" {
-				ui.Text(s.binder.Name(c, "core.settings-modal.folder", ""), model.folder).TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
-			}
 			for index, group := range model.groups {
 				s.drawSettingsGroup(c, group, pane, index == len(model.groups)-1)
 			}
@@ -229,6 +255,10 @@ func (s *Shell) drawSettingsGroup(c *ui.Context, group settingsGroup, pane setti
 }
 
 func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPane) {
+	if row.side {
+		s.drawSideRow(c, row, pane)
+		return
+	}
 	if len(row.controls) > 0 && row.controls[0].kind == controlSwatch {
 		// .th-grid: as many columns of the least width as the pane holds, which share the free width.
 		ui.Grid(c).ColumnTracks(ui.Fr(1).Min(pane.swatchMinW).AutoFill()).FillWidth().Gap(pane.gridGap).Margin(0, 0, pane.gridMargin, 0).Children(func() {
@@ -239,37 +269,15 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 		return
 	}
 	if len(row.controls) > 0 && row.controls[0].kind == controlCaption {
-		// A row with a caption has the columns 1fr and auto, and its buttons stand in a segment at its end.
-		ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Children(func() {
+		// A row with a caption is a column: the caption line, then its buttons in a wrapping line (docs/spec/settings.md#설치됨).
+		ui.Column(c).FillWidth().Gap(pane.nameGap).Children(func() {
 			s.drawControl(c, row.controls[0], pane)
-			ui.Row(c).Shrink(0).Gap(pane.segGap).Padding(pane.segPad).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
-				for _, control := range row.controls[1:] {
-					s.drawSegmentButton(c, control, pane)
-				}
-			})
-		})
-		return
-	}
-	if row.value != "" {
-		// An order row: the name column, then a segment of the name of its value and the segment of its buttons, as orderRows of
-		// packages/workbench/settings-ui.js draws it; the name is a text of the segment, which inherits the body size of the page,
-		// and a mark stands after the segment.
-		ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Children(func() {
-			s.drawRowName(c, row.name, pane)
-			ui.Row(c).Shrink(0).Gap(pane.segGap).Padding(pane.segPad).AlignItems(ui.Center).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
-				ui.Text(c, row.value).NoWrap().FontSize(s.textBody()).TextColor(s.palette.Fg)
-				ui.Row(c).Shrink(0).Gap(pane.segGap).Padding(pane.segPad).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
-					for _, control := range row.controls {
-						if control.Name == "core.settings-modal.order" {
-							s.drawSegmentButton(c, control, pane)
-						}
+			if len(row.controls) > 1 {
+				ui.Row(c).FillWidth().Wrap().Gap(pane.nameGap).AlignItems(ui.Center).Children(func() {
+					for _, control := range row.controls[1:] {
+						s.drawControl(c, control, pane)
 					}
 				})
-			})
-			for _, control := range row.controls {
-				if control.Name != "core.settings-modal.order" {
-					s.drawControl(c, control, pane)
-				}
 			}
 		})
 		return
@@ -283,30 +291,91 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 		return
 	}
 	// A row that wraps stacks its lines at its start, so a control stands in the middle of its row only in a row that does not.
-	line := ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center)
-	if slices.ContainsFunc(row.controls, func(control *SettingsControl) bool {
+	marked := slices.ContainsFunc(row.controls, func(control *SettingsControl) bool {
 		return strings.HasPrefix(control.item(), "reset:") || control.kind == controlMark
-	}) {
+	})
+	line := ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center)
+	if marked {
 		line.Wrap()
 	}
-	line.Children(func() {
-		s.drawRowName(c, row.name, pane)
-		for _, control := range row.controls {
-			s.drawControl(c, control, pane)
-		}
-	})
-	if row.description != "" {
-		ui.Text(c, row.description).Wrap().TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
+	if row.indent {
+		// A dependent row is indented at its start; its control area keeps the end of the row.
+		line.Padding(0, 0, 0, pane.indent)
 	}
+	line.Children(func() {
+		s.drawLabelArea(c, row.name, row.description, pane)
+		// The control area is 260 points at the end of the row, so the controls of every row start at the same x and end at its end. A
+		// disabled row takes no press in its control area. The reset marks of the project scope wrap inside it, so each mark stays inside
+		// the window.
+		area := ui.Row(c).Width(pane.controlW).Shrink(0).Gap(pane.rowGap).AlignItems(ui.Center).Justify(ui.End).Disabled(row.disabled)
+		if marked {
+			area.Wrap()
+		}
+		area.Children(func() {
+			for _, control := range row.controls {
+				s.drawControl(c, control, pane)
+			}
+		})
+	})
 }
 
-// drawRowName draws the name column of a row, which a row without a name keeps empty as the grid of the page does.
-func (s *Shell) drawRowName(c *ui.Context, name string, pane settingsPane) {
-	if name != "" {
-		ui.Text(c, name).Width(pane.rowNameW).FontSize(s.textControl()).TextColor(s.palette.Muted)
+// drawSideRow draws a row of the sidebar list (docs/spec/settings.md#작업-공간) as the web grid of .set-side: the number, the name
+// that fills the row, the badges of the side, then the set select sized to its widest option, the switch and the order buttons, with a
+// gap of space-2 between the columns. The list has no 260-point control column.
+func (s *Shell) drawSideRow(c *ui.Context, row settingsRow, pane settingsPane) {
+	ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, row.number).FontSize(s.textControl()).TextColor(s.palette.Muted)
+		ui.Row(c).Grow(1).Basis(0).MinWidth(0).Gap(pane.nameGap).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, row.name).FontSize(s.textControl()).TextColor(s.palette.Fg)
+			for _, control := range row.controls {
+				if control.kind == controlBadge || control.kind == controlMark {
+					s.drawControl(c, control, pane)
+				}
+			}
+		})
+		for _, control := range row.controls {
+			if control.kind == controlBadge || control.kind == controlMark {
+				continue
+			}
+			wrap := ui.Row(c).Disabled(control.Disabled).Shrink(0)
+			wrap.Children(func() {
+				if control.kind == controlSelect {
+					s.drawSelect(c, control, pane, s.sideSelectWidth(c, control, pane))
+					return
+				}
+				s.drawControl(c, control, pane)
+			})
+		}
+	})
+}
+
+// sideSelectWidth is the width of the set select of a side: the width of its widest option with the padding and the arrow, as a native
+// select sizes to its longest option (docs/spec/settings.md#작업-공간).
+func (s *Shell) sideSelectWidth(c *ui.Context, control *SettingsControl, pane settingsPane) float32 {
+	var widest float32
+	for _, id := range control.Options {
+		widest = max(widest, spanWidth(c, ui.Span{Text: control.labels[id], Size: s.textControl(), Font: s.fontFamily()}))
+	}
+	arrow := spanWidth(c, ui.Span{Text: "▾", Size: s.textCaption(), Font: s.fontFamily()})
+	return widest + pane.fieldPadX + pane.arrowInset + arrow + 2*s.palette.BorderWidth
+}
+
+// drawLabelArea draws the label area of a row, which takes the width that the control area leaves: the name, and under it the
+// description of the row (docs/spec/settings.md#rows). A row without a label keeps the area empty.
+func (s *Shell) drawLabelArea(c *ui.Context, name, description string, pane settingsPane) {
+	if name == "" && description == "" {
+		ui.Box(c).Grow(1).Basis(0)
 		return
 	}
-	ui.Box(c).Width(pane.rowNameW)
+	ui.Column(c).Grow(1).Basis(0).Gap(pane.nameGap).Children(func() {
+		if name != "" {
+			// .set-row__name: one line that ends with an ellipsis, so a long label does not grow the row.
+			ui.Text(c, name).SingleLine().Ellipsis("…").MinWidth(0).FontSize(s.textControl()).TextColor(s.palette.Muted)
+		}
+		if description != "" {
+			ui.Text(c, description).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
+		}
+	})
 }
 
 func (s *Shell) drawControl(c *ui.Context, control *SettingsControl, pane settingsPane) {
@@ -318,19 +387,47 @@ func (s *Shell) drawControl(c *ui.Context, control *SettingsControl, pane settin
 	case controlSwitch:
 		s.drawSwitch(c, control, pane)
 	case controlSelect:
-		s.drawSelect(c, control, pane)
+		s.drawSelect(c, control, pane, 0)
+	case controlSegment:
+		s.drawSegment(c, control, pane)
 	case controlSlider:
 		s.drawSlider(c, control, pane)
+	case controlStepper:
+		s.drawStepper(c, control, pane)
 	case controlText:
 		s.drawTextControl(c, control)
 	case controlCaption:
-		s.exposedBox(c, control.Name, "", "").Grow(1).Basis(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
+		// A caption without an element name is a plain box: the spec names no element for it (docs/spec/settings.md#controls).
+		box := ui.Box(c)
+		if control.Name != "" {
+			box = s.exposedBox(c, control.Name, "", control.item())
+		}
+		box.Grow(1).Basis(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
 			ui.Text(c, control.Label).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
 		})
 	case controlSetup:
 		s.drawSetupRow(c, control, pane)
 	case controlAccount:
 		s.drawAccountRow(c, control, pane)
+	case controlChip:
+		// The chip of a section: its name in a box of the card edge (docs/spec/settings.md#사이드바-세트). A section of a plugin that is
+		// not loaded has a dashed edge in the muted tone and its name struck through, with the tooltip that names the plugin.
+		chip := s.exposedBox(c, control.Name, "", control.item()).Shrink(0).Padding(0, pane.fieldPadX).BorderWidth(s.palette.BorderWidth).BorderColor(s.palette.Edge).
+			Radius(s.radiusSmall()).Role(ui.RoleGroup).Label(control.Label)
+		if control.missingTip != "" {
+			chip.BorderColor(s.palette.Muted).BorderStyle(ui.BorderDashed).Tooltip(control.missingTip)
+		}
+		chip.Children(func() {
+			name := ui.Text(c, control.Label).NoWrap().FontSize(s.textCaption()).TextColor(s.palette.Fg)
+			if control.missingTip != "" {
+				name.Strikethrough().TextColor(s.palette.Muted)
+			}
+		})
+	case controlBadge:
+		// A badge of a row: ok and acc take the rail token, warn the focus token, err the no token and neutral the muted token (docs/spec/settings.md#controls).
+		s.exposedBox(c, control.Name, "", control.item()).Shrink(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
+			ui.Text(c, control.Label).NoWrap().FontSize(s.textCaption()).TextColor(s.badgeColor(control.tone))
+		})
 	case controlMark:
 		// The mark that the project value applies, the .set-applied of packages/workbench/app.css (docs/spec/settings.md#scope-of-a-control).
 		s.exposedBox(c, control.Name, "", control.item()).Shrink(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
@@ -371,24 +468,16 @@ func (s *Shell) drawButton(c *ui.Context, control *SettingsControl, pane setting
 	if on {
 		fill = faded(s.palette.Fg, s.metrics.chipSelMix)
 	}
-	button.Padding(pane.fieldPadY, pane.buttonPadX).Border(s.palette.BorderWidth, edge).Radius(s.radiusSmall()).Background(fill).AlignItems(ui.Center).Label(control.Label).Children(func() {
+	button.Padding(pane.fieldPadY, pane.buttonPadX).Border(s.palette.BorderWidth, edge).Radius(s.radiusSmall()).Background(fill).AlignItems(ui.Center).Label(control.Label)
+	if control.small {
+		button.Height(pane.buttonSmH)
+	}
+	if control.title != "" {
+		// The title of the button shows as its tip, as the title attribute of the button does (docs/spec/settings.md#작업-공간).
+		button.Tooltip(control.title)
+	}
+	button.Children(func() {
 		ui.Text(c, control.Label).FontSize(s.textControl()).TextColor(s.palette.Fg)
-	})
-}
-
-// drawSegmentButton draws a button of a segment, the .set-seg button of packages/workbench/app.css.
-func (s *Shell) drawSegmentButton(c *ui.Context, control *SettingsControl, pane settingsPane) {
-	button := s.binder.Press(c, control.Name, control.Command.Name, control.item(), control.Command.Params)
-	color := s.palette.Muted
-	if button.Hovered() {
-		color = s.palette.Fg
-	}
-	if control.On != nil && *control.On {
-		color = s.palette.Fg
-		button.Background(faded(s.palette.Fg, s.metrics.chipSelMix))
-	}
-	button.Padding(pane.segButtonPadY, pane.segButtonPadX).Radius(s.radiusSmall()).AlignItems(ui.Center).Label(control.Label).Children(func() {
-		ui.Text(c, control.Label).NoWrap().FontSize(s.textSmall()).TextColor(color)
 	})
 }
 
@@ -463,7 +552,7 @@ func (s *Shell) drawSwitch(c *ui.Context, control *SettingsControl, pane setting
 	})
 }
 
-func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl, pane settingsPane) {
+func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl, pane settingsPane, width float32) {
 	// A select of a plugin setting has no value while nothing is chosen, and then it shows no option.
 	value := ""
 	if control.Value != nil {
@@ -481,7 +570,14 @@ func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl, pane setting
 	}
 	// .select-field select:focus-visible: the focus color on the border, without an outline. The select has the width of its column
 	// and no minimum (min-width:0), so the label of a long choice is cut at its end and does not widen it.
-	selector.Trigger.FocusRing(false).Grow(1).Shrink(1).MinWidth(0).Clip().Row().Padding(pane.fieldPadY, pane.arrowInset, pane.fieldPadY, pane.fieldPadX).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, edge).Background(s.palette.Bg).AlignItems(ui.Center).Label(control.Label).Children(func() {
+	trigger := selector.Trigger.FocusRing(false).Clip().Row().Height(pane.fieldH).Padding(pane.fieldPadY, pane.arrowInset, pane.fieldPadY, pane.fieldPadX).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, edge).Background(s.palette.Bg).AlignItems(ui.Center).Label(control.Label)
+	// A side select has the width of its widest option; the select of a setting fills its column and cuts a long label at its end.
+	if width > 0 {
+		trigger.Width(width).Shrink(0)
+	} else {
+		trigger.Grow(1).Shrink(1).MinWidth(0)
+	}
+	trigger.Children(func() {
 		ui.Text(c, control.labels[value]).FontSize(s.textControl()).TextColor(s.palette.Fg).NoWrap().Grow(1).Shrink(1).MinWidth(0)
 		ui.Text(c, "▾").FontSize(s.textCaption()).TextColor(s.palette.Muted)
 	})
@@ -574,6 +670,71 @@ func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl, pane setting
 	})
 }
 
+// drawSegment draws a segment of two or three listed values: one button per value in the declared order, the current value pressed. Each
+// button runs the setting command with its value.
+func (s *Shell) drawSegment(c *ui.Context, control *SettingsControl, pane settingsPane) {
+	s.binder.Control(c, control.Name, control.Command.Name, control.item())
+	ui.Row(c).Shrink(0).Gap(pane.segGap).Padding(pane.segPad).AlignItems(ui.Center).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
+		for _, value := range control.Options {
+			params := make(map[string]any, len(control.Command.Params)+1)
+			for key, param := range control.Command.Params {
+				params[key] = param
+			}
+			if control.param != "" {
+				params[control.param] = value
+			}
+			button := s.binder.Press(c, control.Name, control.Command.Name, control.item()+":"+value, params)
+			on := value == *control.Value
+			color := s.palette.Muted
+			if on {
+				color = s.palette.Fg
+				button.Background(faded(s.palette.Fg, s.metrics.chipSelMix))
+			} else if button.Hovered() {
+				color = s.palette.Fg
+			}
+			label := control.labels[value]
+			button.Padding(pane.segButtonPadY, pane.segButtonPadX).Radius(s.radiusSmall()).AlignItems(ui.Center).Label(label).Children(func() {
+				ui.Text(c, label).NoWrap().FontSize(s.textSmall()).TextColor(color)
+			})
+		}
+	})
+}
+
+// drawStepper draws a stepper, the segment − value unit +: each button runs the setting command with the value one step lower or
+// higher, held within the bounds of the setting (docs/spec/settings.md#controls).
+func (s *Shell) drawStepper(c *ui.Context, control *SettingsControl, pane settingsPane) {
+	value, err := strconv.ParseFloat(*control.Value, 64)
+	if err != nil {
+		s.fail(fmt.Errorf("the setting %s is not a number: %s", control.item(), *control.Value))
+		return
+	}
+	s.binder.Control(c, control.Name, control.Command.Name, control.item())
+	ui.Row(c).Shrink(0).Gap(pane.segGap).Padding(pane.segPad).AlignItems(ui.Center).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
+		s.drawStepButton(c, control, "−", "down", math.Max(control.lo, value-1), pane)
+		ui.Text(c, *control.Value+" "+control.unit).NoWrap().FontSize(s.textSmall()).TextColor(s.palette.Fg)
+		s.drawStepButton(c, control, "+", "up", math.Min(control.hi, value+1), pane)
+	})
+}
+
+// drawStepButton draws one button of a stepper; its item is the setting key and the direction, and it runs the setting command with next.
+func (s *Shell) drawStepButton(c *ui.Context, control *SettingsControl, mark, direction string, next float64, pane settingsPane) {
+	params := make(map[string]any, len(control.Command.Params)+1)
+	for key, param := range control.Command.Params {
+		params[key] = param
+	}
+	if control.param != "" {
+		params[control.param] = next
+	}
+	button := s.binder.Press(c, control.Name, control.Command.Name, control.item()+":"+direction, params)
+	color := s.palette.Muted
+	if button.Hovered() {
+		color = s.palette.Fg
+	}
+	button.Padding(pane.segButtonPadY, pane.segButtonPadX).Radius(s.radiusSmall()).AlignItems(ui.Center).Label(mark).Children(func() {
+		ui.Text(c, mark).NoWrap().FontSize(s.textSmall()).TextColor(color)
+	})
+}
+
 // drawTextControl draws a one-line field. A setting takes its text when the field submits or loses the focus, as the change
 // of an input does, and the search takes each change.
 func (s *Shell) drawTextControl(c *ui.Context, control *SettingsControl) {
@@ -588,7 +749,7 @@ func (s *Shell) drawTextControl(c *ui.Context, control *SettingsControl) {
 		value = *control.Value
 	}
 	s.binder.Control(c, control.Name, control.Command.Name, key)
-	field := s.plainControls().field(c, s.binder.Bound(ui.TextInputBase(c, &value), control.Name)).Label(key).Placeholder(control.Label).Grow(1)
+	field := s.plainControls().field(c, s.binder.Bound(ui.TextInputBase(c, &value), control.Name)).Label(key).Placeholder(control.Label).Grow(1).Height(s.readSettingsPane().fieldH)
 	if field.Changed() {
 		w.drafts[key] = value
 		drafted = true
@@ -608,9 +769,15 @@ func (s *Shell) drawSearchControl(c *ui.Context, control *SettingsControl) {
 		if field.Changed() {
 			s.runControl(control, value)
 		}
-		// The browser empties a search on Escape as its cancel does. An empty search leaves the key to the window.
-		if value != "" && (plain.drawSearchCancel(c) || field.Shortcut(0, ui.KeyEscape)) {
-			s.runControl(control, "")
+		// The browser empties a search on Escape as its cancel does, and the cancel keeps the focus in the field. An empty search leaves
+		// the key to the window.
+		if value != "" {
+			if plain.drawSearchCancel(c) {
+				field.Focus()
+				s.runControl(control, "")
+			} else if field.Shortcut(0, ui.KeyEscape) {
+				s.runControl(control, "")
+			}
 		}
 	})
 }
@@ -619,34 +786,50 @@ func (s *Shell) drawSearchControl(c *ui.Context, control *SettingsControl) {
 func (s *Shell) drawSetupRow(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	row := control.setup
 	s.exposedBox(c, control.Name, "", control.item()).FillWidth().Row().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Role(ui.RoleGroup).Label(control.Label).Children(func() {
-		s.drawRowName(c, row.name, pane)
-		ui.Column(c).Grow(1).Basis(0).Gap(pane.captionGap).Children(func() {
-			// A failed part keeps a state label; the error text shows in the error toast.
-			if row.failed {
-				ui.Text(c, "오류").Wrap().FontSize(s.textControl()).TextColor(s.palette.Muted)
-			} else {
-				ui.Text(c, row.state).Wrap().FontSize(s.textControl()).TextColor(s.palette.Fg)
+		s.drawLabelArea(c, row.name, "", pane)
+		// The state, the file and the action are in the control area, which starts at the same x as the controls of every row.
+		ui.Row(c).Width(pane.controlW).Shrink(0).Gap(pane.rowGap).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).Grow(1).Basis(0).Gap(pane.captionGap).Children(func() {
+				// A failed part keeps a state label; the error text shows in the error toast.
+				if row.failed {
+					ui.Text(c, "오류").Wrap().FontSize(s.textControl()).TextColor(s.palette.Muted)
+				} else {
+					ui.Text(c, row.state).Wrap().FontSize(s.textControl()).TextColor(s.palette.Fg)
+				}
+				ui.Text(c, row.file).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
+			})
+			if row.action != nil {
+				s.drawButton(c, row.action, pane)
 			}
-			ui.Text(c, row.file).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
 		})
-		if row.action != nil {
-			s.drawButton(c, row.action, pane)
-		}
 	})
 }
 
 // drawAccountRow draws a row of the group 계정: the line of the account, its usage lines, and its controls in one line.
 func (s *Shell) drawAccountRow(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	row := control.account
-	s.exposedBox(c, control.Name, "", control.item()).FillWidth().Column().Gap(pane.captionGap).Padding(pane.captionGap).Role(ui.RoleGroup).Label(control.Label).Children(func() {
+	s.exposedBox(c, control.Name, "", control.item()).FillWidth().Column().Gap(pane.rowGap).Role(ui.RoleGroup).Label(control.Label).Children(func() {
 		ui.Text(c, row.line).Wrap().FontSize(s.textControl()).TextColor(s.palette.Fg)
 		for _, line := range row.usage {
 			ui.Text(c, line).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
 		}
-		ui.Row(c).FillWidth().Wrap().Gap(pane.rowGap).AlignItems(ui.Center).Children(func() {
+		ui.Row(c).FillWidth().Wrap().Gap(pane.nameGap).AlignItems(ui.Center).Children(func() {
 			for _, item := range row.controls {
 				s.drawControl(c, item, pane)
 			}
 		})
 	})
+}
+
+// badgeColor returns the theme token of a badge tone; an unknown tone is rejected by the caller that builds the badge.
+func (s *Shell) badgeColor(tone string) ui.Color {
+	switch tone {
+	case "ok", "acc":
+		return s.palette.Rail
+	case "warn":
+		return s.palette.Focus
+	case "err":
+		return s.palette.No
+	}
+	return s.palette.Muted
 }

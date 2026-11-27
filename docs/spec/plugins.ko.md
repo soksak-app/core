@@ -292,7 +292,7 @@ category의 interface는 고정되며, 바뀌면 다른 이름의 새 category�
 - 시작할 때 workbench는 manifest를 읽은 뒤 category를 검사한다. 창의 불러오고 켜진 plugin 중 어떤 것도 제공하지 않는 category를 요구하는 켜진 plugin은 불러오지 않으며, 이유는 [불러오지 않은 플러그인](#불러오지-않은-플러그인)의 `requires`다. 오류 표시는 `plugin <id> requires a <category> plugin, and no loaded plugin is one`을 보인다. 나머지 plugin은 시작한다.
 - 상태 `core.plugin-categories`는 `{ "<category>": [ { "id", "name" }, ... ] }`이며, core의 각 plugin category와 창의 불러오고 켜진 그 category의 plugin을 id 순서로 담는다.
 
-`{ "type": "plugin", "category": "<category>" }` 형식의 설정은 그 category의 plugin 하나를 가리킨다([설정 선언](#설정-선언)). 이 설정은 `default`를 갖지 않는다. 값은 저장된 값이며 모든 저장 값과 같이 검사한다. 불러오고 켜진 그 category의 plugin을 가리키지 않는 값은 명시적인 로딩 오류 `<plugin>.<key>: plugin <value> is not a <category> plugin`이며 대체하지 않는다. `environment.json`의 값도 같은 방식으로 검사한다. 저장된 값이 없는 동안 값은 창에 그 category의 plugin이 정확히 하나 있을 때 그 plugin이다. 그 밖에는 설정에 값이 없고, 사용자가 고를 때까지 오류 표시가 `<plugin>.<key>: choose a <category> plugin`을 보인다. 설정 탭은 category의 plugin을 이름으로 가진 선택 상자를 보인다.
+`{ "type": "plugin", "category": "<category>" }` 형식의 설정은 그 category의 plugin 하나를 가리킨다([설정 선언](#설정-선언)). 이 설정은 `default`를 갖지 않는다. 값은 저장된 값이며 모든 저장 값과 같이 검사한다. 불러오고 켜진 그 category의 plugin을 가리키지 않는 값은 그 key 하나의 명시적인 로딩 오류 `<plugin>.<key>: plugin <value> is not a <category> plugin`이며 오류 표시가 보인다. 저장된 값은 대체하지 않고 남기며, 설정에는 값이 없고, 다른 설정은 불러와 적용한다. status `core.settings-tab`은 그 key를 `missing`에 나열하고, control은 배지 `<value> 필요`를 보인다. 참조하는 plugin은 설정이 유효한 채로 제거되거나 꺼질 수 있기 때문이다. `environment.json`의 값도 같은 방식으로 검사한다. 저장된 값이 없는 동안 값은 창에 그 category의 plugin이 정확히 하나 있을 때 그 plugin이다. 그 밖에는 설정에 값이 없고, 사용자가 고를 때까지 오류 표시가 `<plugin>.<key>: choose a <category> plugin`을 보인다. 설정 탭은 category의 plugin을 이름으로 가진 선택 상자를 보인다.
 
 이유: category의 plugin을 요구하는 plugin에서 그 category의 plugin을 없애는 작업은 다음 시작에서 실패하므로 installer가 먼저 거부한다. 시작은 요구하는 plugin만 거부하는데, 다른 plugin이 그 plugin에 의존하지 않기 때문이다. `plugin` 형식의 설정은 `default`가 없는데, 어떤 plugin도 애플리케이션이 설치한 plugin을 알지 못하고, 같은 category의 plugin을 하나 더 설치해도 저장된 값이 가리키는 plugin이 바뀌지 않기 때문이다.
 
@@ -342,21 +342,21 @@ Wails와 Tauri host의 OS 창마다 앱 DOM WebView가 하나 있고, mygo host�
 
 ## 탭 알림
 
-표면 컨텍스트에는 `tab.title(text)`, `tab.footer(text)`, `tab.directory(path)`, `tab.notify(text, policy)`, `tab.modified(value)`, `tab.error(text)`, 고정된 `origin` 객체, 고정된 `project` 객체가 있다.
+표면 컨텍스트에는 `tab.title(text)`, `tab.footer(text)`, `tab.directory(path)`, `tab.notify({kind, title, text, action, system})`, `tab.modified(value)`, `tab.error(text)`, 고정된 `origin` 객체, 고정된 `project` 객체가 있다.
 
 `tab.modified(value)`는 표면이 저장하지 않은 변경을 가졌는지를 `true`나 `false`로 알린다. 다른 값은 예외를 던진다. 탭이 수정된 동안 탭은 이름 앞에 점을 보이고, `core.grid`는 탭마다 `modified`를 보고하며, 이 상태는 layout에 저장하지 않는다. `surface.save`가 있으면 표면의 변경을 저장하는 `exposes`의 명령을 가리킨다. `core.tab.close`와 `core.card.close`는 수정된 탭을 닫지 않는다. workbench는 탭에 `<이름> 탭에 저장하지 않은 변경이 있습니다` 선택 레이어를 저장하고 닫기(`surface.save`가 있을 때만), 저장하지 않고 닫기, 닫지 않기와 함께 열고, 명령은 `{closed: false}`로 답한다. 저장하고 닫기는 표면에서 저장 명령을 실행하고, 명령이 성공하고 탭이 더는 수정되지 않았으면 탭을 닫는다. 실패한 저장은 `저장하지 못했습니다 · <command>: <error>`를 탭의 오류로 알리고 탭을 둔다. 저장하지 않고 닫기는 탭을 닫고 변경을 버리며, 닫지 않기와 레이어 닫기는 탭을 둔다. 창 닫기, 애플리케이션 끝내기, space 제거, project 제거는 진행하기 전에 수정된 탭마다 같은 방식으로 묻는다.
 
 실패한 save는 같은 modified tab의 다음 close 요청에서 save를 선택하는 것을 막지 않는다. Retry는 그 tab에 새 save command를 실행하고 clean 보고 뒤에도 응답이 대기 중이면 tab을 열린 상태로 유지한다. 성공 응답과 clean 상태가 모두 충족되어야 닫으며, 앞서 실패한 시도가 나중에 해당 tab이나 다른 tab을 닫을 수 없다. Retry 시작은 이전 error를 지우지 않는다. 새 error 보고는 이를 교체할 수 있고 표면은 이를 지울 수 있다.
 
-`tab.error(text)`는 표면이 준비된 뒤 실패한 표면 작업(예: 저장)의 오류를 제어 문자 없는 1자부터 1024자까지의 글로 보이고, `tab.error(null)`은 그것을 지운다. 다른 값은 예외를 던진다. 그 글은 창의 오류 toast로 보이며([exposure](exposure.md)), 글이 나타날 때 애플리케이션 로그에 `error workbench tab error <tab id>: <text>`를 쓴다. 카드 상태 행은 그 글을 따로 보이지 않는다. `core.grid`는 탭마다 `error`를 글이나 `null`로 보고하고, 이 오류는 layout에 저장하지 않는다. 표면 자체의 실패는 표면 상태가 `error`로 두며, 이는 탭이 닫힐 때까지 남는다.
+`tab.error(text)`는 표면이 준비된 뒤 실패한 표면 작업(예: 저장)의 오류를 제어 문자 없는 1자부터 1024자까지의 글로 보이고, `tab.error(null)`은 그것을 지운다. 다른 값은 예외를 던진다. 그 글은 카드의 오류 notice로 보인다. 카드 status line이 그것을 보이고, [표시 자리](notifications.ko.md#표시-자리)에 따라 toast로도 보인다. 글이 나타날 때 그 notice의 오류 log 줄을 쓴다([알림 기록](notifications.ko.md#알림-기록)). `core.grid`는 탭마다 `error`를 글이나 `null`로 보고하고, 이 오류는 layout에 저장하지 않는다. 표면 자체의 실패는 표면 상태가 `error`로 두며, 이는 탭이 닫힐 때까지 남는다.
 
 `tab.title(text)`는 표면의 탭이 이름 대신 보일 제목을 정하고, `tab.title(null)`은 그 제목을 지워 탭이 다시 이름을 보이게 한다. 텍스트는 제어 문자(U+0000–U+001F, U+007F–U+009F)가 없는 1–256자의 문자열이며, 다른 값은 예외를 던진다. 제목은 레이아웃과 함께 저장하지 않는다. `core.grid`는 각 탭이 보이는 제목을 `label`로, 없으면 `null`로 알리고, plugin의 mark 없는 저장된 이름을 `title`로 알린다([card tabs](example-model.md#card-tabs)). plugin이 `surface.unload`를 `{format, maxBytes}`로 선언한 탭이면 워크벤치는 `memorySaver` 설정과 상관없이 마지막 제목을 탭의 `label`로 `tab-state.json`에 둔다. 그래서 마운트되지 않은 탭은 restore 뒤 첫 제목 알림이 그것을 바꿀 때까지 그것을 보인다. `tab.title(null)`은 그것을 지운다([메모리 절약](#메모리-절약)).
 
-`tab.footer(text)`는 표면이 카드의 활성 탭인 동안 그 카드의 내용 발이 보일 글을 정한다. 터미널의 작업 디렉터리나 브라우저 문서에서 포인터 아래 링크의 주소가 그 예다. `tab.footer(null)`은 그 글을 지운다. 텍스트는 제어 문자가 없는 1–1024자의 문자열이며, 다른 값은 예외를 던진다. 하단 글은 레이아웃과 함께 저장하지 않는다. `core.grid`는 각 탭의 하단 글을 `footer`로, 없으면 `null`로, 각 카드가 보이는 발을 `status`로 알린다.
+`tab.footer(text)`는 표면이 카드의 활성 탭인 동안 그 카드의 내용 발이 보일 글을 정한다. 터미널의 작업 디렉터리나 브라우저 문서에서 포인터 아래 링크의 주소가 그 예다. `tab.footer(null)`은 그 글을 지운다. 텍스트는 제어 문자가 없는 1–1024자의 문자열이며, 다른 값은 예외를 던진다. 하단 글은 레이아웃과 함께 저장하지 않는다. `core.grid`는 각 탭의 하단 글을 `footer`로, 없으면 `null`로, 각 카드가 보이는 발을 `status`로, 보이는 notice를 `notice`로 알린다. 카드에 notice가 있는 동안 내용 발은 그 notice를 보인다([카드 상태줄](notifications.ko.md#카드-상태줄)).
 
-`tab.notify(text, policy)`는 탭이 포커스된 카드의 활성 탭이 아닐 때 그 탭에 알림을 둔다. `policy`는 `tab`이나 `system`이고 생략하면 `tab`이다. 터미널 플러그인은 `terminal.notifications` 설정값을 전달한다. 그 탭이면 표면이 보이고 있으므로 아무것도 바꾸지 않는다. 텍스트는 제목 규칙을 따르되 최대 1024자이며, 다른 값은 예외를 던진다. `tab`은 `core.grid`에 점과 도움말을 보이고, `system`은 호스트 알림 센터에만 보내며 grid의 `notice`는 `null`이다. 알림은 탭이 포커스된 카드의 활성 탭이 되거나 닫히면 지워지고, 나중 알림이 앞의 알림을 바꾼다. 워크벤치는 알림을 저장하지 않는다.
+`tab.notify({kind, title, text, action, system})`는 카드에 [플러그인 알림](notifications.ko.md#플러그인-알림)의 필드와 kind를 가진 notice를 준다. `action`은 선택 사항인 `{label, command, params}`이고, `system`은 선택 사항인 불리언이다. Notice는 카드 status line에 보이고, [표시 자리](notifications.ko.md#표시-자리)에 따라 toast로도 보이며, 탭의 점은 바꾸지 않는다. 이 호출은 notice의 `id`를 돌려준다. 포커스된 카드의 notice는 그 카드의 status line에만 보인다([표시 자리](notifications.ko.md#표시-자리)).
 
-`system` 정책은 시스템 알림이다. 창의 호스트는 운영체제의 알림 센터로 탭의 이름을 제목, 알림 텍스트를 본문으로 하여 알림을 게시하며, 애플리케이션이 활성일 때도 게시한다. 호스트가 알림 센터를 시작할 수 없으면 네이티브 오류를 보고하고 탭 알림으로 조용히 바꾸거나 버리지 않는다. 탭의 나중 알림은 그 탭의 시스템 알림을 바꾸고, 알림이 지워지면 시스템 알림도 지워진다. 시스템 알림을 누르면 그 창이 키 창이 되고 그 탭에 `core.tab.select`를 실행한다. `core.notifications`는 `{authorization, error, posted}`를 알린다. `authorization`은 `notDetermined`, `denied`, `authorized`, `provisional` 중 하나이고, `error`는 권한 요청, 게시, 제거의 마지막 실패 또는 `null`이며, `posted`는 알림 센터가 알림을 받아들인 뒤 지워지지 않은 이 창의 탭을 순서대로 나열한다. 권한이 거부된 동안 알림이 있는 탭과 그 카드의 탭 목록 버튼의 도움말은 `System notifications are turned off for this application.` 줄로 끝난다.
+`system: true`인 notice도 시스템 알림이다. 창의 호스트는 운영체제의 알림 센터로 탭의 이름을 제목, 알림 텍스트를 본문으로 하여 알림을 게시하며, 애플리케이션이 활성일 때도 게시한다. 호스트가 알림 센터를 시작할 수 없으면 네이티브 오류를 보고하고 알림을 조용히 버리지 않는다. 탭의 나중 알림은 그 탭의 시스템 알림을 바꾸고, 알림이 지워지면 시스템 알림도 지워진다. 시스템 알림을 누르면 그 창이 키 창이 되고 그 탭에 `core.tab.select`를 실행한다. `core.notifications`는 `{authorization, error, posted}`를 알린다. `authorization`은 `notDetermined`, `denied`, `authorized`, `provisional` 중 하나이고, `error`는 권한 요청, 게시, 제거의 마지막 실패 또는 `null`이며, `posted`는 알림 센터가 알림을 받아들인 뒤 지워지지 않은 이 창의 탭을 순서대로 나열한다. 권한이 거부된 동안 알림이 있는 탭과 그 카드의 탭 목록 버튼의 도움말은 `System notifications are turned off for this application.` 줄로 끝난다.
 
 `tab.directory(path)`는 표면의 작업 디렉터리인 절대 경로를 기록하고, `tab.directory(null)`은 그것을 지운다. 다른 값은 예외를 던진다. 워크벤치는 이를 위해 파일 시스템을 읽지 않고 저장하지 않는다. `+`나 쪼개기가 탭을 만들면, 새 표면의 `origin.directory`는 탭을 더하거나 쪼갠 카드의 활성 탭이 그 순간 기록한 디렉터리이고, 없으면 `null`이다.
 
@@ -454,11 +454,20 @@ plugin 저장소의 catalog 검사(`sok-check events`)는 `runtime.log.<level>(`
 | `requires` | <plugin> 플러그인에 필요한 <category> 플러그인이 없습니다. | 없음. 설정 탭이 그 category의 plugin을 설치하거나 켜며, 시작 때 오류 표시가 그 오류를 보였다 |
 
   이유는 `installed.json`이 플러그인을 끈 상태로 나열하면 `disabled`, 켠 상태로 나열하고 창이 그 entry나 manifest를 거부했으면 `refused`, `installed.json`이 플러그인을 켠 상태로 나열하는데 창의 불러오고 켜진 plugin 중 그 plugin이 요구하는 category의 plugin이 없으면 `requires`([plugin categories](#plugin-categories)), 그 밖에 켠 상태로 나열하면 `reload`, 나열하지 않으면 `missing`, host가 없으면 `host`, [plugin 상태](installation.ko.md#애플리케이션-안의-plugin-작업)를 읽지 못하면 `unread`다. 워크벤치는 첫 스페이스를 열기 전에 plugin 상태를 읽는다. 카드는 `plugins-changed` event마다 이유를 다시 정한다.
-- 그런 플러그인을 가리키는 사이드바 연결은 유지하며 아무 내용도 고르지 않는다. 플러그인(첫 `.` 앞의 id)을 불러오지 않은 세트 섹션은 세트에 유지하되 보이지 않으며 어떤 layout도 그 surface를 쥐지 않는다. 세트 편집은 그 행을 "<section id> (불러오지 않음)"과 ▲, ▼, −로 보여 준다.
+- 그런 플러그인을 가리키는 사이드바 연결은 유지하며 아무 내용도 고르지 않는다. 플러그인(첫 `.` 앞의 id)을 불러오지 않은 세트 섹션은 세트에 유지하되 보이지 않으며 어떤 layout도 그 surface를 쥐지 않는다. 세트 편집과 사이드바는 [없는 플러그인](#없는-플러그인)대로 보인다.
 - 그런 플러그인의 `plugins.<plugin id>` 아래 프로젝트 데이터는 바꾸지 않고 유지한다.
 - 그런 플러그인을 가리키는 `environment.json` 항목은 유지한다. 그 `settings`는 검사하지도 적용하지도 않고, 그 `workspace` 탭은 placeholder 카드로 열린다. 그래서 환경이 가리키는 플러그인을 끄거나 제거해도 애플리케이션은 시작한다.
 
 다시 시작한 뒤 불러온 플러그인은 유지된 탭, 연결, 섹션, 데이터를 다시 쓴다.
+
+## 없는 플러그인
+
+플러그인을 불러오지 않은 섹션, 사이드바 연결, 탭은 그릴 수 없다. Workbench는 그 플러그인과 불러오는 방법을 밝히고, `불러오지 않음`이라는 말은 보이지 않는다. 그 말은 원인도 고치는 방법도 알려 주지 않기 때문이다. `<name>`은 registry의 catalog가 그 플러그인에 주는 이름이며, catalog에 없으면 id다.
+
+- 세트 편집의 칩은 흐린 점선 테두리와 취소선을 긋은 이름을 보이고, 툴팁은 `<name>(<id>) 플러그인 필요`다.
+- 세트 줄과 사이드바는 섹션 위에 그런 플러그인마다 경고 줄 하나를 보인다. 세트가 그 플러그인의 섹션을 몇 개 가지든 한 번이다. 플러그인이 설치되어 있지 않으면 `<name>(<id>) 플러그인이 없어 섹션 <n>개를 못 보여 준다.`와 `core.plugins.install {plugin}`을 실행하는 버튼 `<name> 설치`, 설치되었으나 꺼져 있으면 `<name>(<id>) 플러그인이 꺼져 있어 섹션 <n>개를 못 보여 준다.`와 `core.plugins.enable {plugin}`을 실행하는 버튼 `켜기`, 설치되었으나 거절되었거나 요구하는 플러그인을 기다리면 `<name>(<id>) 플러그인을 불러오지 못해 섹션 <n>개를 못 보여 준다.`와 `core.plugins.browse`를 실행하는 버튼 `설치됨 보기`다. catalog에 없는 플러그인에는 설치 버튼이 없다. 이 줄은 매개변수 `plugin`을 가진 element `core.sidebar.missing`이며 warning 톤이다.
+- 사이드바는 그릴 수 있는 섹션만 그린다. 탭 배치에서는 없는 섹션의 탭이 세트 순서의 자리를 지키며, 흐리게 하고 섹션 id에 취소선을 긋는다.
+- 플러그인이 불러와지면 다른 입력 없이 그 섹션이 그려지고 그 플러그인의 경고 줄이 사라진다.
 
 ## 스테이징 배치
 

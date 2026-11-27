@@ -71,8 +71,9 @@ test("one presentation timeout writes one workbench error line", async () => {
     await connectExposure({ settled: page.drawn, report });
     await surfaces.theme({ scheme: "light", tokens: {} });
     const declared = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes;
-    const dismiss = declared.commands.find(({ name }) => name === "core.error.dismiss");
-    registry.declare("core", { status: [], element: [], commands: [dismiss, {
+    // The notice commands of the declaration, which the toasts and the center bind.
+    const notices = declared.commands.filter(({ name }) => name.startsWith("core.notices."));
+    registry.declare("core", { status: [], element: [], commands: [...notices, {
       name: "core.fixture.split", description: "Splits.", params: { type: "object", properties: {} }, result: { type: "null" },
     }] });
     registry.command("core.fixture.split", () => {

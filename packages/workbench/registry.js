@@ -20,7 +20,7 @@ const registeredDialogs = [];
  *        @param {string} plugin.name  name shown in the `+` menu
  *        @param {string} plugin.mark  mark on the right of the menu and prefix of the tab title
  *        @param {string} plugin.svg   icon path on a 16×16 viewBox
- *        @param {string|null} plugin.ink theme token name of the library preview color; the default color if absent
+ *        @param {string|null} plugin.ink theme token name of the plugin color; the default color if absent
  *        @param {object|null} plugin.background declaration of the persistent background session
  *        @param {string[]} [plugin.activity] the names of the statuses that declare activity (docs/spec/activity.md)
  *        @param {string|null} [plugin.program] the name of the status that carries the program state of the tabs (docs/spec/program-state.md)
@@ -122,4 +122,5 @@ export function sectionSurfacePlugin(surface) {
 }
 
 /** Section name. The section of a plugin that is not loaded is shown as its id and the Korean text for "not loaded" in parentheses. */
-export const sectionNames = (ids) => ids.map((id) => (hasSection(id) ? section(id).name : `${id} (불러오지 않음)`));
+// A section that is not loaded has no name, so its id names it (docs/spec/plugins.md#missing-plugins).
+export const sectionNames = (ids) => ids.map((id) => (hasSection(id) ? section(id).name : id));

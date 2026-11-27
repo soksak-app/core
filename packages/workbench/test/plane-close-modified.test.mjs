@@ -68,7 +68,7 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   // The registry of the page connects to the host, so it forwards the command of a surface to the surface.
   await installCoreExposure({
     memorySaver: await pageMemorySaver(),
-    library: { state: () => null }, renames: { state: () => null }, chrome: () => null,
+    home: { state: () => null }, renames: { state: () => null }, chrome: () => null,
     drawn: async () => {},
   });
   // The lines that the plane wrote to the application log: the error records of the log batches that the page sent to the host.
@@ -136,6 +136,7 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   await ask(id);
   plane.pickItem(0);
   await drained();
+  await flushEvents();
   assert.deepEqual(saves(), [id], "save targets the tab that requested closure");
   assert.equal(has(id), true, "a pending save cannot close its tab");
   let decided = decision(id);
@@ -152,6 +153,7 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   await ask(id);
   plane.pickItem(0);
   await drained();
+  await flushEvents();
   decided = decision(id);
   wire.release();
   await decided;
@@ -173,6 +175,7 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
       await ask(dirty);
       plane.pickItem(0);
       await drained();
+      await flushEvents();
       const failed = decision(dirty);
       wire.release();
       await failed;
@@ -187,6 +190,7 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
       await ask(dirty);
       plane.pickItem(0);
       await drained();
+      await flushEvents();
       assert.deepEqual(saves(), [dirty, dirty], "retry must run save again for the same dirty tab");
       assert.equal(has(dirty), true, "the retry must retain the same tab while its save is pending");
       assert.equal(reports.tabModified(dirty), true);
@@ -222,6 +226,7 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   await ask(id);
   plane.pickItem(0);
   await drained();
+  await flushEvents();
   decided = decision(id);
   reports.reportModified(id, false);
   assert.equal(has(id), true, "a clean report still waits for the pending save reply");
@@ -242,6 +247,7 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   assert.equal(plane.pickerState().open, true);
   plane.pickItem(0);
   await drained();
+  await flushEvents();
   wire.release();
   assert.equal(await allowed, false, "window closure must be refused when a save leaves unsaved edits");
   assert.equal(has(id), true);
@@ -252,6 +258,7 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   allowed = plane.settleModifiedTabsToClose();
   plane.pickItem(0);
   await drained();
+  await flushEvents();
   reports.reportModified(id, false);
   wire.release();
   assert.equal(await allowed, true, "a clean completed save permits window closure");

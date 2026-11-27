@@ -34,7 +34,7 @@ const settings = (s, patch, scope) => s.run("core.settings.set", { patch, scope 
 /** One window of the window list that is not in known. */
 const added = (list, known) => list.find((w) => !known.includes(w.window)).window;
 
-/** Waits until the settings modal control appears and returns that control. */
+/** Waits until the settings tab control appears and returns that control. */
 /** Activates the project and, if it fails, reports the page state and the native state of that window. */
 async function activate(s, id, label) {
   try {
@@ -47,12 +47,12 @@ async function activate(s, id, label) {
 }
 
 async function control(s, name, key, predicate = () => true, message = `settings control ${key} did not appear`) {
-  const { controls } = await s.until("core.settings-modal",
+  const { controls } = await s.until("core.settings-tab",
     (modal) => modal.controls.some((c) => c.name === name && c.key === key && predicate(c)), message);
   return controls.find((c) => c.name === name && c.key === key);
 }
 
-/** Runs the command that a settings modal control points to. value is the value of a value input control. */
+/** Runs the command that a settings tab control points to. value is the value of a value input control. */
 async function press(s, name, key, value) {
   const { command } = await control(s, name, key);
   const params = { ...command.params };
@@ -60,26 +60,29 @@ async function press(s, name, key, value) {
   await s.run(command.name, params);
 }
 
-/** Waits until the settings modal is open and shown (settingsShown). */
+/** Waits until the settings tab is open and shown (settingsShown). */
 async function openSettings(s) {
   await s.run("core.settings.open");
   await settingsShown(s, "settings did not render");
 }
 
-/** Closes the settings modal and waits until it is gone (settingsClosed). */
+/** Closes the settings tab and waits until it is gone (settingsClosed). */
 async function closeSettings(s) {
   await s.run("core.settings.close");
   await settingsClosed(s, "settings did not close");
 }
 
-/** The settings scope tabs: title, whether selected, and index. */
+/** The settings scope buttons: label, whether selected, and index. */
 async function scopeTabs(s) {
-  const { controls } = await s.until("core.settings-modal",
-    (modal) => modal.controls.some((c) => c.name === "core.settings-modal.scope"), "scope tabs did not render");
-  return controls.filter((c) => c.name === "core.settings-modal.scope");
+  const { controls } = await s.until("core.settings-tab",
+    (tab) => tab.controls.some((c) => c.name === "core.settings-tab.scope"), "scope tabs did not render");
+  return controls.filter((c) => c.name === "core.settings-tab.scope");
 }
 
-const hasKey = async (s, key) => (await s.get("core.settings-modal")).controls.some((c) => c.key === key);
+/** Shows the scope of the settings tab: scope is common or project. */
+const pressScope = (s, scope) => s.run("core.settings-tab.scope", { scope });
+
+const hasKey = async (s, key) => (await s.get("core.settings-tab")).controls.some((c) => c.key === key);
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: two independent project states repeat create-use-close-recreate in one instance`, { timeout: 30000 }, async (t) => {
@@ -214,67 +217,61 @@ for (const app of Object.values(APPS)) {
 
     await settings(s, { mode: "dark" }, "common");
     await openSettings(child);
-    assert.equal((await s.get("core.window.workbench")).background, false);
-    assert.equal((await child.get("core.window.workbench")).background, true);
     await openSettings(s);
     const tabs = await scopeTabs(child);
-    assert.equal((await child.get("core.settings-modal")).controls
-      .filter((c) => c.name === "core.settings-modal.nav" && c.key?.startsWith("pick:scope:")).length, 0);
     assert.deepEqual(tabs.map((b) => b.label), ["전역", "프로젝트"]);
     assert.deepEqual(tabs.map((b) => b.on), [true, false]);
-    const [globalTab, projectTab] = await Promise.all(tabs.map((b) => child.rect("core.settings-modal.scope", b.index)));
+    const [globalTab, projectTab] = await Promise.all(tabs.map((b) => child.rect("core.settings-tab.scope", b.index)));
     assert.equal(globalTab.y, projectTab.y);
     assert.ok(globalTab.x < projectTab.x);
-    await press(child, "core.settings-modal.scope", "pick:scope:project");
-    await control(child, "core.settings-modal.scope", "pick:scope:project", (c) => c.on, "folder settings scope was not selected");
+    await pressScope(child, "project");
+    await child.until("core.settings-tab", (tab) => tab.scope === "project", "folder settings scope was not selected");
     assert.equal(await hasKey(child, "projectOpening"), false);
-    await press(child, "core.settings-modal.set", "mode", "light");
-    await child.until("core.settings", (value) => value.values.mode === "light", "modal did not update its project");
+    await press(child, "core.settings-tab.choice", "mode", "light");
+    await child.until("core.settings", (value) => value.values.mode === "light", "settings tab did not update its project");
     await child.until("core.settings", (value) => !value.saving, "the project setting was not saved");
     assert.equal(await mode(s), "dark");
     assert.equal(read(join(second.root, ".soksak/settings.json")).mode, "light");
     assert.equal(read(join(config, "settings.json")).mode, "dark");
     const commonWidth = read(join(config, "settings.json")).sidebarWidth;
     // The project scope is kept even after a visit to another section.
-    await press(child, "core.settings-modal.nav", "nav:sidebars");
-    await press(child, "core.settings-modal.nav", "nav:general");
-    await press(child, "core.settings-modal.set", "sidebarWidth", "240");
+    await press(child, "core.settings-tab.nav", "nav:sets");
+    await press(child, "core.settings-tab.nav", "nav:look");
+    await press(child, "core.settings-tab.set", "sidebarWidth", "240");
     await child.until("core.settings", (value) => value.overridden.includes("sidebarWidth") && !value.saving,
       "category change did not retain project scope");
     assert.equal(read(join(second.root, ".soksak/settings.json")).sidebarWidth, 240);
     assert.equal(read(join(config, "settings.json")).sidebarWidth, commonWidth);
-    await press(child, "core.settings-modal.reset", "reset:sidebarWidth");
+    await press(child, "core.settings-tab.reset", "sidebarWidth");
     await child.until("core.settings", (value) => !value.overridden.includes("sidebarWidth") && !value.saving,
       "project override was not removed");
     assert.equal(read(join(second.root, ".soksak/settings.json")).sidebarWidth, undefined);
-    await press(child, "core.settings-modal.nav", "nav:general");
-    await control(child, "core.settings-modal.scope", "pick:scope:project", (c) => c.on,
-      "General did not retain the selected project tab");
-    await press(child, "core.settings-modal.scope", "pick:scope:common");
-    await control(child, "core.settings-modal.set", "projectOpening", () => true,
+    await press(child, "core.settings-tab.nav", "nav:look");
+    await child.until("core.settings-tab", (tab) => tab.scope === "project", "Look did not retain the selected project tab");
+    await pressScope(child, "common");
+    await control(child, "core.settings-tab.choice", "projectOpening", () => true,
       "Global tab did not display the common-only setting");
-    // In the Global tab a setting that the project overrides shows the project value with its project mark (core.settings-modal.applied) and writes the
+    // In the Global tab a setting that the project overrides shows the project value with its project mark (core.settings-tab.applied) and writes the
     // project scope; every other setting shows and writes the common value (docs/spec/settings.md#scope-of-a-control).
-    const projectMode = await control(child, "core.settings-modal.set", "mode");
+    const projectMode = await control(child, "core.settings-tab.choice", "mode");
     assert.deepEqual({ value: projectMode.value, scope: projectMode.command.params.scope }, { value: "light", scope: "project" },
       "the Global tab mode control must show and write the project value of mode");
-    await control(child, "core.settings-modal.applied", "applied:mode", () => true,
+    await control(child, "core.settings-tab.applied", "applied:mode", () => true,
       "the Global tab did not mark the project value of mode");
     const globalWidth = commonWidth + 10;
-    await press(child, "core.settings-modal.set", "sidebarWidth", String(globalWidth));
+    await press(child, "core.settings-tab.set", "sidebarWidth", String(globalWidth));
     await s.until("core.settings", (value) => value.values.sidebarWidth === globalWidth,
       "Global tab did not update the other project");
     await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
     assert.equal(read(join(config, "settings.json")).sidebarWidth, globalWidth);
     assert.equal(read(join(second.root, ".soksak/settings.json")).sidebarWidth, undefined,
       "the Global tab added a project value");
-    await press(child, "core.settings-modal.set", "sidebarWidth", String(commonWidth));
+    await press(child, "core.settings-tab.set", "sidebarWidth", String(commonWidth));
     await s.until("core.settings", (value) => value.values.sidebarWidth === commonWidth,
       "Global tab did not restore the common width");
     await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
-    await press(child, "core.settings-modal.scope", "pick:scope:project");
-    await control(child, "core.settings-modal.scope", "pick:scope:project", (c) => c.on,
-      "project scope was not selected before leaving the workspace");
+    await pressScope(child, "project");
+    await child.until("core.settings-tab", (tab) => tab.scope === "project", "project scope was not selected before leaving the workspace");
     await closeSettings(child);
     await settingsShown(s, "settings of the other project closed with the settings of the child");
     await closeSettings(s);
@@ -282,24 +279,24 @@ for (const app of Object.values(APPS)) {
     await settings(s, { mode: "dark" }, "common");
     const projectSettings = read(join(second.root, ".soksak/settings.json"));
     await child.run("core.projects.browse");
-    assert.equal((await child.get("core.screen")).screen, "library");
-    assert.equal(await mode(child), "dark", "library must apply common settings after leaving a project");
+    assert.equal((await child.get("core.screen")).screen, "home");
+    assert.equal(await mode(child), "dark", "the project home must apply common settings after leaving a project");
     assert.equal((await child.get("core.window.workbench")).scheme, "dark");
     await openSettings(child);
-    const libraryTabs = await scopeTabs(child);
-    assert.deepEqual(libraryTabs.map((b) => ({ label: b.label, on: b.on })), [{ label: "전역", on: true }]);
+    const homeTabs = await scopeTabs(child);
+    assert.deepEqual(homeTabs.map((b) => ({ label: b.label, on: b.on })), [{ label: "전역", on: true }]);
     assert.equal(await hasKey(child, "projectOpening"), true);
-    await press(child, "core.settings-modal.set", "mode", "light");
-    await s.until("core.settings", (value) => value.values.mode === "light", "library settings did not update common settings");
+    await press(child, "core.settings-tab.choice", "mode", "light");
+    await s.until("core.settings", (value) => value.values.mode === "light", "project home settings did not update common settings");
     await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
     assert.equal(read(join(config, "settings.json")).mode, "light");
     assert.deepEqual(read(join(second.root, ".soksak/settings.json")), projectSettings);
     await closeSettings(child);
     await child.run("core.settings.set", { patch: { mode: "dark" } });
-    await s.until("core.settings", (value) => value.values.mode === "dark", "library appearance action did not update common settings");
+    await s.until("core.settings", (value) => value.values.mode === "dark", "project home appearance action did not update common settings");
     await child.until("core.settings", (value) => !value.saving, "the common setting was not saved");
     assert.deepEqual(read(join(second.root, ".soksak/settings.json")), projectSettings);
-    await activate(child, second.id, "return from the library window");
+    await activate(child, second.id, "return from the project home window");
     assert.equal(await mode(child), "light", "workspace must restore its project override");
     assert.equal((await child.get("core.window.workbench")).scheme, "light");
     await openSettings(child);
@@ -495,10 +492,9 @@ for (const app of Object.values(APPS)) {
     write(join(config, "projects.json"), records);
     const stored = readFileSync(join(config, "projects.json"), "utf8");
 
-    // The library draws that tab as a placeholder cell (docs/spec/plugins.md).
+    // The project home draws no preview of a layout, so the check lists the saved project and opens it.
     await s.run("core.projects.browse");
-    const library = await s.until("core.library", (value) => value.previews?.[saved.id]?.length > 0, "the library did not draw the saved layout");
-    assert.equal(library.previewErrors?.[saved.id], undefined, "the library reported the layout of a plugin that is not loaded as an error");
+    await s.until("core.home", (home) => home.rows.includes(saved.id), "the project home did not list the saved project");
     // When opened, that tab is a placeholder that gives the reason why it is not installed, and the other tabs open as they are.
     await settings(s, { projectOpening: "tabs" }, "common");
     await s.run("core.project.activate", { id: saved.id });
@@ -519,12 +515,12 @@ for (const app of Object.values(APPS)) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the first project opened from the library replies and replaces the library in the same window`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the first project opened from the project home replies and replaces the project home in the same window`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     // Turns the performance record on so that the stage of a late reply is reported.
     await fresh(s, { performanceTrace: true });
     for (const project of await s.get("core.projects")) await s.run("core.project.close", { id: project.id });
-    assert.equal(await s.get("core.project"), null, "the check did not start from the library");
+    assert.equal(await s.get("core.project"), null, "the check did not start from the project home");
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-first-open-")));
     s.cleanup(() => rmSync(root, { recursive: true, force: true }));
     s.cleanup(async () => {
@@ -549,8 +545,8 @@ for (const app of Object.values(APPS)) {
     }
     t.diagnostic(`core.project.open replied in ${(performance.now() - started).toFixed(0)}ms; ${systemState()}`);
     assert.equal(opened.root, root);
-    await s.windows(1, "the first project opened another window instead of replacing the library");
-    await s.until("core.project", (project) => project?.id === opened.id, "the library window did not show the project");
+    await s.windows(1, "the first project opened another window instead of replacing the project home");
+    await s.until("core.project", (project) => project?.id === opened.id, "the project home window did not show the project");
     // If a page error occurs in the process of closing and opening the project, the check fails. The error is shown only on the screen and the command succeeds.
     assert.equal(await s.get("core.workbench.error"), null, "closing and opening projects reported a page error");
   });
@@ -584,9 +580,9 @@ for (const app of Object.values(APPS)) {
     const probeSurfaces = (surfaces) => surfaces.filter((item) => item.kind === "section" && item.sidebar === "left"
       && probeIds.includes(item.surface));
     for (const item of await s.get("core.projects")) await s.run("core.project.close", { id: item.id });
-    assert.equal(await s.get("core.project"), null, "the check did not start from the library");
+    assert.equal(await s.get("core.project"), null, "the check did not start from the project home");
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
-      `the library window still reports project ${await project()}`);
+      `the project home window still reports project ${await project()}`);
     const opened = await s.run("core.project.open", { root, color: "#7db4ff" });
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === root,
       "the window did not report the opened project");
@@ -605,11 +601,11 @@ for (const app of Object.values(APPS)) {
     await s.until("host.windows", (list) => list.find((item) => item.window === s.window)?.project === null,
       `the window still reports the closed project ${await project()}`);
     await s.until("core.sidebars", (sidebars) => probeSections(sidebars).every((section) => section === undefined),
-      "the library still draws probe sidebar sections after project close");
+      "the project home still draws probe sidebar sections after project close");
     await s.until("core.surfaces", (all) => probeSurfaces(all).length === 0,
       "the section surfaces of the closed project are still registered");
     assert.equal(await s.get("core.workbench.error"), null, "closing the shown project reported an application error");
-    // The title of a window that shows the library does not hold the name of the closed project.
+    // The title of a window that shows the project home does not hold the name of the closed project.
     const { title } = (await s.get("host.windows")).find((item) => item.window === s.window);
     assert.ok(!title.includes(basename(root)), `the window title still names the closed project: ${title}`);
     // Reopening the project mounts its first probe section again.

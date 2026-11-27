@@ -22,7 +22,8 @@
 }}
 </script>
 <link rel="stylesheet" href="./app.css">
-<link rel="stylesheet" href="./library.css">
+<link rel="stylesheet" href="./home.css">
+<link rel="stylesheet" href="./settings.css">
 <!-- This module draws the first screen before the first await. It is a render-blocking script in head, so the document is not drawn before its execution ends,
      and WebKit keeps the previous page of a reload on screen (docs/spec/native-host.md#page-start). The module runs after the document
      is fully read. -->
@@ -31,7 +32,7 @@
    at the time a function is called. */
 import { pageStart } from "./page-start-errors-install.js";
 import { defaultRegistry, installEnvironment, pluginUnits, starterPack } from "./environment.js";
-import { appUpdate, onPluginOperations, pluginOperations } from "./installed-plugins.js";
+import { appUpdate, pluginOperations } from "./installed-plugins.js";
 import { installExposure } from "./exposure.js";
 import { storedSpaceTabs, surfaceKindOf } from "./surface-listing.js";
 /* The declaration files and the installed list are imported as a module graph so that the first screen is drawn before the first await (docs/spec/native-host.md#page-start). */
@@ -48,7 +49,7 @@ import { installTheme } from "soksak";
 /* Values outside the plane belong to settings. This document recreates the plane when a value changes.
    If settings called the plane directly, a function to call would have to be chosen for each added setting. */
 import {
-  appliedPatch, halfGap, install, installTokens, modeName, onSettingsChange, value, connectSettings, pluginChoiceErrors,
+  appliedPatch, halfGap, install, installTokens, onSettingsChange, value, connectSettings, pluginChoiceErrors, missingPluginErrors,
 } from "./settings.js";
 
 /* Simulates and reports the surfaces. The plane only records values on the slot elements, and measuring and reporting
@@ -67,7 +68,7 @@ import { onTabReports, reportTabState, reportTitle, setMountedTab, settleLeftTab
 /* One plane. This document does not know how the plane renders and only receives the render completion. */
 import {
   activeTab, currentGrid, groupRenames, nameWindow, onLayout, onRender, plane, redrawActivities, setActivityReader, setGap, settle,
-  settleModifiedTabsToClose, tabsOf, useGroupRename,
+  setSurfacesHidden, settleModifiedTabsToClose, tabsOf, useGroupRename,
 } from "./plane.js";
 import { observePlaneGrid } from "./device-grid.js";
 
@@ -85,7 +86,7 @@ import { pressesFrame, setTextScope } from "./text-size.js";
 import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 
 /* Public entries and diagnostic methods of the core. The registry answers requests of the host. */
-import { activityState, coreChanged, followPlugins, installCoreExposure, installErrorExposure, onActivity, onActivityError, onProgramError, redrawSettings, setVerify, syncActivity } from "./core-exposure.js";
+import { activityState, coreChanged, followPlugins, installCoreExposure, installErrorExposure, mountSettingsTab, onActivity, onActivityError, onProgramError, onSettingsTabFront, redrawSettings, setVerify, settingsTabFront, syncActivity } from "./core-exposure.js";
 /* The setup parts of the agents of this machine, which the settings window shows (docs/spec/settings.md#agents). */
 import { installSetupExposure } from "./setup-exposure.js";
 import { installAccountsExposure } from "./accounts-exposure.js";
@@ -99,18 +100,23 @@ import * as registry from "./registry.js";
 
 /* Settings modal. The registered plugins determine the list of places to connect sidebars. */
 import { bind, run } from "./commands.js";
+import { createBell } from "./notice-view.js";
+import { titleTools } from "./title-tools.js";
+import { notificationStore } from "./tab-reports.js";
 import { icon } from "./icons.js";
 import { adopt, capture, clear, onDrag } from "./plane.js";
 import { checkStoredLayout } from "./stored-layout.js";
 import { mountPlacedSections, onChoicesChange, restoreSection, unloadedSections, unloadSections } from "./sidebar-sections.js";
 
-import { createLibrary } from "./library.js";
-import { followLibraryWidth, gripMetrics, installBrandLogo, installChromeMetrics } from "./chrome-metrics.js";
+import { createHome } from "./home.js";
+import { createSettingsChip } from "./settings-chip.js";
+import { createSidebarEdges } from "./sidebar-edges.js";
+import { createStatusBar } from "./statusbar.js";
+import { gripMetrics, installBrandLogo, installChromeMetrics } from "./chrome-metrics.js";
 
 /* The chrome metrics and the tokens of the default theme are set on the root before anything is drawn, so the first screen and an error
    that stops the start read every length of the stylesheets (chrome-metrics.js). */
 installChromeMetrics(document.documentElement);
-followLibraryWidth(document.documentElement, window);
 installTokens(document.documentElement);
 
 /* Install the toast command before a failed startup can show a close control. */
@@ -169,7 +175,7 @@ onRun((going) => {
 
 function check() {
   // Without a plane nothing is verified. The rows still replace the earlier rows, so a failure that was ended is not kept.
-  const drawn = Boolean(currentGrid()) && !projects.inLibrary();
+  const drawn = Boolean(currentGrid()) && !projects.inHome();
   const rows = verificationRows({
     drawn,
     rows: () => {
@@ -234,7 +240,7 @@ function dormant(shown, holders = null) {
   for (const card of currentGrid()?.cards ?? []) for (const t of tabsOf(card)) add(t, card, "the current plane");
   // Tabs of the other spaces. For the active space, the plane above is correct, not the stored layout.
   const here = projects.active();
-  const current = (p, space) => !projects.inLibrary() && p === here && space.id === here.activeSpaceId;
+  const current = (p, space) => !projects.inHome() && p === here && space.id === here.activeSpaceId;
   for (const { tab, card, holder } of storedSpaceTabs(projects.local(), current)) add(tab, card, holder);
   return out;
 }
@@ -494,12 +500,12 @@ function act(name, title, on, command, params, expose) {
   return b;
 }
 
-const barTabs = createBarTabs({ projects, projectBar, spaceBar, workarea, bind, run, redraw: () => drawBars(), keyboardOwed, changed: () => coreChanged(),
+const barTabs = createBarTabs({ projects, projectBar, projectRow: document.getElementById("projectRow"), spaceBar, workarea, bind, run, redraw: () => drawBars(), keyboardOwed, changed: () => coreChanged(),
   activities: activityState, groups: groupRenames });
 useGroupRename(barTabs.renames);
 // The plane draws the activities of the tabs and the group cards of the shown space (docs/spec/activity.md#drawing).
 setActivityReader(() => {
-  const shown = projects.inLibrary() ? null : projects.active();
+  const shown = projects.inHome() ? null : projects.active();
   const space = shown ? activityState().projects[shown.id]?.spaces[shown.activeSpaceId] : undefined;
   // default: a space without an activity is not listed in core.activity.
   return { tabs: activityState().tabs, groups: space?.groups ?? {} };
@@ -507,76 +513,65 @@ setActivityReader(() => {
 onActivity(() => { redrawActivities(); drawBars(); });
 
 function drawBars() {
-  const browsing = projects.inLibrary();
-  document.body.dataset.screen = browsing ? "library" : "workspace";
-  barTabs.draw(value("projectTabs") === "left");
-
-  // The chrome buttons keep an element once created and fix only the changed attributes. Recreating one would replace the pressed button between press and release, so
-  // the browser would not produce a click (G1.4-14-4-3).
-  // The library screen has no layout, so the project list and auto-arrange buttons are left out there.
-  const updates = pluginOperations.status().updates.length + (appUpdate.status().available ? 1 : 0);
-  if (updates > 0 && updatesButton.textContent !== `업데이트 ${updates}`) updatesButton.textContent = `업데이트 ${updates}`;
-  // The library has no layout and no window sidebars, so it leaves out the layout buttons and the sidebar switches, as mygo does.
-  const base = browsing ? [modeButton, settingsButton]
-    : [...layoutButtons, ...sidebarSwitches.map(({ button }) => button), modeButton, settingsButton];
-  const wanted = updates > 0 ? [updatesButton, ...base] : base;
-  if (wanted.length !== chromeActs.children.length || wanted.some((button, index) => chromeActs.children[index] !== button)) {
-    chromeActs.replaceChildren(...wanted);
+  const browsing = projects.inHome();
+  document.body.dataset.screen = browsing ? "home" : "workspace";
+  barTabs.draw(value("projectTabs"));
+  // The window tools of the screen in front (docs/spec/external-sidebars.md#window-tools): the work screen shows the four side switches, a separator
+  // and the settings button; the project home shows the settings button; the settings tab in front shows none.
+  const chip = settingsChip.draw(!browsing);
+  document.getElementById("work").hidden = chip.front;
+  const tools = titleTools({ front: chip.front, browsing, sidebarButtons: sidebarSwitches.map(({ button }) => button), separator, settingsButton, bell });
+  bell.refresh();
+  if (tools.length !== chromeActs.children.length || tools.some((button, index) => chromeActs.children[index] !== button)) {
+    chromeActs.replaceChildren(...tools);
   }
   for (const { side, button } of sidebarSwitches) button.dataset.on = String(value(side));
-  const arrange = value("cardArrange") === "even" ? "layout-grid" : "columns-3";
-  if (balanceButton.dataset.icon !== arrange) {
-    balanceButton.innerHTML = icon(arrange);
-    balanceButton.dataset.icon = arrange;
-  }
-  const mode = modeName() === "dark" ? "sun" : "moon";
-  if (modeButton.dataset.icon !== mode) {
-    modeButton.innerHTML = icon(mode);
-    modeButton.dataset.icon = mode;
-  }
+  // The project home and the settings tab in front have no window sidebar, so they show no edge.
+  sideEdges.draw(browsing || chip.front);
+  // The status bar shows on the work screen and in the settings tab, not on the project home.
+  statusBar.draw(!browsing);
 }
 
 /* The logo is one declaration for both workbenches. */
 installBrandLogo(document.querySelector(".brand__logo"));
 
-/* Chrome buttons: project list, card auto-arrange, a switch for the sidebar of each window side, light/dark, settings. The command arguments
-   are computed from the values at the time of the press. Each button has a name, so a new button moves no other. */
-// The icon shows the operation that the setting cardArrange chooses; it changes with the setting (chrome draw below).
-const balanceButton = act("columns-3", "카드 자동 정렬", false, "core.layout.balance", {}, "core.chrome.balance");
-const layoutButtons = [
-  act("projects", "프로젝트 목록", false, "core.projects.browse", {}, "core.chrome.projects"),
-  // Keeps the layout and gives the cards a fair share (packages/soksak/docs/layout.md#balancing).
-  balanceButton,
-];
-// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom (docs/spec/external-sidebars.md#window-tools),
-// and writes the scope that the applied value of the side comes from (docs/spec/settings.md#scope-of-a-control).
+/* Window tools (docs/spec/external-sidebars.md#window-tools). The logo is the first element of the row and runs core.projects.browse. */
+// The settings module draws the content and holds the state of the settings tab (docs/spec/settings.md#opening-and-closing). Its tab is
+// open while it is in front: the module keeps no other open state.
+const settingsChip = createSettingsChip(document.getElementById("settingsChip"), document.getElementById("settingsTab"),
+  { mount: mountSettingsTab, front: settingsTabFront, open: settingsTabFront, hint: document.getElementById("closedHint") });
+// The tab in front hides the native surfaces of the window, the way a hidden tab hides its surface (plane.js).
+onSettingsTabFront((front) => { setSurfacesHidden(front); drawBars(); });
+bind(document.querySelector(".brand"), "core.projects.browse", {});
+// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom. Its command is core.settings.change with the
+// key, the negated applied value and the scope that the applied value comes from (docs/spec/settings.md#scope-of-a-control).
 const sidebarSwitches = chromeSwitches().map(({ side, icon: name, title, expose }) =>
-  ({ side, button: act(name, title, value(side), "core.settings.set", () => appliedPatch(side, !value(side)), expose) }));
-// The same path as the mode segment of the modal. The theme command also applies the shape values of the theme
-// again, so calling it would revert the passage and corners that the user set.
-const modeButton = act(modeName() === "dark" ? "sun" : "moon", "밝게 / 어둡게", false,
-  "core.settings.set", () => appliedPatch("mode", modeName() === "dark" ? "light" : "dark"), "core.chrome.mode");
-modeButton.dataset.icon = modeName() === "dark" ? "sun" : "moon";
-// While the modal is open, the overlay covers this button, so it cannot be pressed again. The on
-// state is not shown either. This is the same as settings-toggle of the former project.
-const settingsButton = act("settings", "설정", false, "core.settings.open", {}, "core.chrome.settings");
+  ({ side, button: act(name, title, value(side), "core.settings.change", () => ({ key: side, value: !value(side), scope: appliedPatch(side, !value(side)).scope }), expose) }));
+// The edge of a hidden side that has a choice shows its + <side> button (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+const sideEdges = createSidebarEdges(document.getElementById("sidebarEdges"), { appliedPatch, links: () => value("links"), value });
+const separator = document.createElement("span");
+separator.className = "chrome-sep";
+separator.setAttribute("aria-hidden", "true");
+const settingsButton = act("settings", "설정 열기", false, "core.settings.open", {}, "core.chrome.settings");
+// The bell is the last element of the title bar on every screen (docs/spec/external-sidebars.md#window-tools).
+const bell = createBell(document, notificationStore());
 
-/* The update control with the count N is in the bar only while the registry lists an update (docs/spec/installation.md). */
-const updatesButton = document.createElement("button");
-updatesButton.className = "act act--text";
-updatesButton.dataset.expose = "core.chrome.updates";
-updatesButton.type = "button";
-updatesButton.title = "플러그인 업데이트 목록";
-bind(updatesButton, "core.plugins.show-updates", {});
-onPluginOperations(() => drawBars());
+// The window sides are reserved card IDs, so the card count leaves them out (docs/spec/external-sidebars.md#status-bar).
+const SIDE_CARDS = ["left", "right", "top", "bottom"];
+const statusBar = createStatusBar(document.getElementById("statusBar"), {
+  project: () => projects.active(),
+  cards: () => (currentGrid()?.cards ?? []).filter((card) => !SIDE_CARDS.includes(card.id)).length,
+  theme: () => value("theme"),
+  mode: () => value("mode"),
+});
 
-const library = createLibrary(document.getElementById("library"), coreChanged);
+const home = createHome(document.getElementById("home"));
 
-/* First screen. The start document applies the button margin and the settings, and the plane of the project that the window opens or the library is drawn before the first await.
+/* First screen. The start document applies the button margin and the settings, and the plane of the project that the window opens or the project home is drawn before the first await.
    WebKit keeps the previous page of a reload on screen until the new page first draws visible content, so the first frame is
    this screen (docs/spec/native-host.md#page-start). The layout queue is connected after it so that the first draw of the plane does not wait for
    the native preparation. The plugin content and the native surfaces are filled in afterwards. */
-projects.onChange(() => { drawBars(); redrawSettings(); library.refreshFolders(); library.render(); syncActivity(); coreChanged(); });
+projects.onChange(() => { drawBars(); redrawSettings(); home.refreshFolders(); home.render(); syncActivity(); coreChanged(); });
 prepareSourceOriginIngress();
 // The surfaces whose image detach is pending wait for its end before they mount (docs/spec/sidecars.md).
 holdImageDetachSurfaces(start.pendingSurfaces);
@@ -592,14 +587,14 @@ projects.begin(start.workspace);
    error is shown under the origin of its setting, and an error whose setting now has a value is withdrawn. */
 let shownChoices = new Set();
 function showChoices() {
-  const needed = pluginChoiceErrors();
+  const needed = [...pluginChoiceErrors(), ...missingPluginErrors()];
   const keys = new Set(needed.map(({ key }) => key));
   for (const key of shownChoices) if (!keys.has(key)) withdrawError(`settings ${key}`);
   for (const { key, text } of needed) showError(text, "", `settings ${key}`, `settings ${key}`);
   shownChoices = keys;
 }
 showChoices();
-// The first draw of the plane writes the frame scale to the document. The first screen without a plane (library) has no such draw, so it is written here.
+// The first draw of the plane writes the frame scale to the document. The first screen without a plane (project home) has no such draw, so it is written here.
 applyFrameText(value("textSize"));
 onLayout(pageLayout.onLayout);
 // The host creates the window with a 40pt title bar. When the first row differs, a layout containing the first row is prepared.
@@ -624,12 +619,12 @@ onSettingsChange(() => {
 // The core public entries are registered before the first await. The sidebar sections of the first screen are mounted asynchronously after that and can follow the core state
 // (docs/spec/plugins.md#sections). The connection with the host is awaited below.
 const coreExposure = installCoreExposure({
-  library, renames: barTabs.renames, memorySaver,
+  home, renames: barTabs.renames, memorySaver,
   // Draw order of the plane. A core command that changed the layout replies after awaiting this (page-layout.js).
   drawn: pageLayout.drawn,
   chrome: () => ({
     controlsWidth,
-    projectTabs: workarea.querySelector(".project-column") ? "left" : "top",
+    projectTabs: value("projectTabs"),
   }),
 });
 installSetupExposure({ showError, changed: redrawSettings });
@@ -660,9 +655,9 @@ onDrag(coreChanged);
 addEventListener("keydown", (event) => {
   if (!(event.metaKey || event.ctrlKey)) return;
   if (!chrome && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); return run("core.window.new"); }
-  if (event.key.toLowerCase() === "k" && projects.inLibrary()) {
+  if (event.key.toLowerCase() === "k" && projects.inHome()) {
     event.preventDefault();
-    return run("core.library.search.focus", {});
+    return run("core.home.search.focus", {});
   }
 });
 /* When a frame outside the plane is pressed, the scope of the text size is the frame (docs/spec/text-size.md). */
@@ -727,8 +722,8 @@ if (!chrome) addEventListener("pagehide", () => { projects.flush().catch(showErr
 
 </script>
 </head>
-<body data-screen="library">
-<section id="library" aria-label="프로젝트 라이브러리"></section>
+<body data-screen="home">
+<section id="home" aria-label="프로젝트 홈"></section>
 
 
 
@@ -740,26 +735,35 @@ if (!chrome) addEventListener("pagehide", () => { projects.flush().catch(showErr
        would move even when a button is pressed. -->
   <div class="chrome-bar__drag" id="winDrag"></div>
   <!-- soksak logo. The color of the icon tile is fixed, and the letters follow the .brand color of app.css by mode. -->
-  <div class="brand" data-expose="core.brand" role="img" aria-label="soksak">
+  <div class="brand" data-expose="core.chrome.projects" role="img" aria-label="soksak">
     <svg class="brand__logo" aria-hidden="true"></svg>
   </div>
   <div class="tabs tabs--project" id="projectBar"></div>
+  <div class="settings-chip" id="settingsChip" hidden></div>
   <div class="chrome-bar__acts" id="chromeActs"></div>
 </header>
 
 <!-- When the project tabs stand on the left, the rail is created at the first place inside this. It starts above the space row
      and goes down to the bottom, because a project contains spaces. -->
 <div class="workarea" id="workarea">
-  <div class="work">
+  <!-- The content of the settings tab, mounted while the tab is in front (docs/spec/settings.md#opening-and-closing). -->
+  <section class="settings-tab" id="settingsTab" aria-label="설정" hidden></section>
+  <div class="work" id="work">
+  <!-- The hint of a closed settings tab on the work screen (docs/spec/settings.md#opening-and-closing). -->
+  <div class="closed-hint" id="closedHint" hidden></div>
   <!-- Space row. The planes inside one project. -->
   <div class="tabs tabs--space" id="spaceBar"></div>
 
-<main class="stage"><div class="plane" id="plane">
+<main class="stage"><div class="sidebar-edges" id="sidebarEdges"></div><div class="plane" id="plane">
   <svg class="rail" id="rail"><path id="railPath"></path></svg>
   <div class="drop" id="drop" data-expose="core.drop" hidden></div>
   <div class="picker" id="picker" data-native-modal="menu" hidden></div>
   <div class="focus-mark" id="focusMark" hidden></div>
 </div></main>
+  <!-- The project tabs at the bottom (settings projectTabs = bottom). Hidden in the other places. -->
+  <div class="tabs tabs--project tabs--bottom" id="projectRow" hidden></div>
+  <!-- The status bar of the window: the project, the cards, the theme and the mode (docs/spec/external-sidebars.md#status-bar). -->
+  <div id="statusBar" hidden></div>
   </div>
 </div>
 

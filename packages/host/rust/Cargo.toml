@@ -41,6 +41,13 @@ name = "view_binary_test"
 harness = false
 required-features = ["host-test"]
 
+# The surface fixture installs the probe plugin of the surface tests into a configuration folder; the surface tests run on the main
+# thread of their process, so this target answers --list and --exact as the harness does.
+[[test]]
+name = "surface_fixture_test"
+harness = false
+required-features = ["host-test"]
+
 # The close of a window ends its native layout transactions, which run only on the main thread, so this target runs its tests on the
 # main thread of its process with a real window; it answers --list and --exact as the harness does.
 [[test]]

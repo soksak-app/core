@@ -45,7 +45,7 @@ func TestASwitchedWindowSidebarKeepsItsSectionSurfaces(t *testing.T) {
 	}
 	f.click("core.chrome.left", "")
 	f.settle()
-	if f.has("core.sidebar.status", "left") {
+	if f.has("core.sidebar.head", "left") {
 		t.Fatal("the left sidebar still stands")
 	}
 	hidden := leftSections(t, stored)
@@ -56,7 +56,7 @@ func TestASwitchedWindowSidebarKeepsItsSectionSurfaces(t *testing.T) {
 	}
 	f.click("core.chrome.left", "")
 	f.settle()
-	element(t, f.tester, "core.sidebar.status", "left")
+	element(t, f.tester, "core.sidebar.head", "left")
 	again := leftSections(t, stored)
 	for id := range shown {
 		if !again[id] {
@@ -75,7 +75,7 @@ func TestAnArrangementKeepsTheSectionsOfTheSidebarThatStays(t *testing.T) {
 	placements := len(stored.requests)
 	f.click("core.chrome.right", "")
 	f.settle()
-	if f.has("core.sidebar.status", "right") {
+	if f.has("core.sidebar.head", "right") {
 		t.Fatal("the right sidebar still stands")
 	}
 	for _, request := range stored.requests[placements:] {
@@ -110,7 +110,7 @@ func TestTheSwitchDrawsThePlaneBeforeTheSettingsWriteAnswers(t *testing.T) {
 	if len(stored.settings) != writes {
 		t.Fatalf("the host wrote the settings %v before the release", stored.settings[writes:])
 	}
-	if f.has("core.sidebar.status", "left") {
+	if f.has("core.sidebar.head", "left") {
 		t.Fatal("the frame after the press still draws the left sidebar while the settings write runs")
 	}
 	if stored.placed == presented {

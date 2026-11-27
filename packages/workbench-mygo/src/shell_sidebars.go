@@ -3,6 +3,7 @@ package workbench
 import (
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/egoist/mygo/ui"
 
@@ -33,6 +34,8 @@ func (s *Shell) drawSidebarCard(c *ui.Context, id string, rect layout.Rect, inse
 		return
 	}
 	frame.Scope = s.settings.Source(id)
+	// The head shows the place of the side in sidebarOrder, counted from 1 (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+	frame.Number = slices.Index(s.sidebarOrder(), id) + 1
 	// The border takes its width from every edge of the card, so the set with its status line stands in what lies inside it.
 	edge := float64(s.palette.CardBorder())
 	box := layout.Rect{X: rect.X + float64(originX) + edge, Y: rect.Y + float64(originY) + edge, W: rect.W - 2*edge, H: rect.H - 2*edge}

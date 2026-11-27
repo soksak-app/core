@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"math"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,17 +17,27 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
-// modalStatus is the value of core.settings-modal.
+// modalStatus is the value of core.settings-tab.
 type modalStatus struct {
-	Open    bool     `json:"open"`
-	Section string   `json:"section"`
+	Open    bool     `json:"-"`
+	Page    string   `json:"page"`
 	Scope   string   `json:"scope"`
 	Query   string   `json:"query"`
 	Listed  []string `json:"listed"`
 	Plugin  *string  `json:"plugin"`
 	Editing *string  `json:"editing"`
 	Scroll  float64  `json:"scroll"`
-	Rows    []struct {
+	Errors  []struct {
+		Key  string `json:"key"`
+		Text string `json:"text"`
+	} `json:"errors"`
+	Missing []string `json:"missing"`
+	Results *struct {
+		Settings []string `json:"settings"`
+		Plugins  []string `json:"plugins"`
+		Catalog  int      `json:"catalog"`
+	} `json:"results"`
+	Rows []struct {
 		Key         string  `json:"key"`
 		Name        string  `json:"name"`
 		Description *string `json:"description"`
@@ -41,14 +49,15 @@ type modalStatus struct {
 		X, Y, W, H float64
 	} `json:"pane"`
 	Controls []struct {
-		Name    string   `json:"name"`
-		Index   int      `json:"index"`
-		Key     *string  `json:"key"`
-		Label   string   `json:"label"`
-		On      *bool    `json:"on"`
-		Value   *string  `json:"value"`
-		Options []string `json:"options"`
-		Groups  []struct {
+		Name     string   `json:"name"`
+		Index    int      `json:"index"`
+		Key      *string  `json:"key"`
+		Label    string   `json:"label"`
+		On       *bool    `json:"on"`
+		Value    *string  `json:"value"`
+		Options  []string `json:"options"`
+		Disabled bool     `json:"disabled"`
+		Groups   []struct {
 			Label  string   `json:"label"`
 			Values []string `json:"values"`
 		} `json:"groups"`
@@ -61,7 +70,7 @@ type modalStatus struct {
 
 func (f *shellFixture) modal() modalStatus {
 	f.t.Helper()
-	value, err := f.shell.Registry().Read("core.settings-modal")
+	value, err := f.shell.Registry().Read("core.settings-tab")
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -73,6 +82,7 @@ func (f *shellFixture) modal() modalStatus {
 	if err := json.Unmarshal(text, &status); err != nil {
 		f.t.Fatal(err)
 	}
+	status.Open = value != nil
 	return status
 }
 
@@ -84,6 +94,18 @@ func (s modalStatus) keys(name string) []string {
 		}
 	}
 	return keys
+}
+
+// labelsWithKeyPrefix is the labels of the controls of one name whose keys start with prefix, so the chips of one set are counted
+// on their own: a set that is edited draws its chips in its row and in its editor (docs/spec/settings.md#사이드바-세트).
+func (s modalStatus) labelsWithKeyPrefix(name, prefix string) []string {
+	var labels []string
+	for _, control := range s.Controls {
+		if control.Name == name && control.Key != nil && strings.HasPrefix(*control.Key, prefix) {
+			labels = append(labels, control.Label)
+		}
+	}
+	return labels
 }
 
 func (s modalStatus) labels(name string) []string {
@@ -139,64 +161,13 @@ func TestARefusedSettingsChangeIsInvalidParams(t *testing.T) {
 	}
 }
 
-func TestTheSettingsButtonOpensTheCardWithItsThreeSections(t *testing.T) {
-	f := newShell(t, acme())
-	if f.modal().Open || f.has("core.settings-modal.card", "") {
-		t.Fatal("the settings are open before the button")
-	}
-	f.click("core.chrome.settings", "")
-	status := f.modal()
-	if !status.Open || status.Section != "general" || status.Scope != "common" {
-		t.Fatalf("status %+v", status)
-	}
-	for _, name := range []string{"core.settings-modal.card", "core.settings-modal.scrim", "core.settings-modal.grip", "core.settings-modal.close"} {
-		if !f.has(name, "") {
-			t.Fatalf("no element %s", name)
-		}
-	}
-	if got := status.keys("core.settings-modal.nav"); !slices.Equal(got, []string{"nav:general", "nav:plugins", "nav:sidebars"}) {
-		t.Fatalf("nav %q", got)
-	}
-	if got := status.labels("core.settings-modal.nav"); !slices.Equal(got, []string{"일반", "플러그인", "사이드바"}) {
-		t.Fatalf("nav labels %q", got)
-	}
-	if status.Card.W != 560 || status.Card.X != (1200-560)/2 || status.Card.Y != 72 {
-		t.Fatalf("card %+v", status.Card)
-	}
-}
-
-func TestOnlyTheCloseButtonClosesTheCardAndTheScrimBlocksWhatIsBelow(t *testing.T) {
-	f := openedShell(t)
-	projects, ok := exposedNode(f.tester.ElementTree(), "core.chrome.projects", "")
-	if !ok {
-		t.Fatal("no projects button")
-	}
-	f.click("core.chrome.settings", "")
-	card, _ := exposedNode(f.tester.ElementTree(), "core.settings-modal.card", "")
-	f.tester.ClickAt(projects.Bounds.X+projects.Bounds.W/2, projects.Bounds.Y+projects.Bounds.H/2)
-	f.tester.ClickAt(card.Bounds.X-40, card.Bounds.Y+40)
-	f.tester.Key(0, ui.KeyEscape)
-	f.settle()
-	if !f.modal().Open {
-		t.Fatal("a press outside or Escape closed the card")
-	}
-	f.audit()
-	f.click("core.settings-modal.close", "")
-	if f.modal().Open || f.has("core.settings-modal.scrim", "") {
-		t.Fatal("the close button leaves the card")
-	}
-	if !f.has("core.chrome.projects", "") {
-		t.Fatal("a press reached below the scrim")
-	}
-}
-
-func TestTheSectionPluginSearchAndEditedSetLastUntilTheCardOpensAgain(t *testing.T) {
+func TestTheSearchOfThePluginsPersistsWhileTheTabIsReopened(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]any{"section": "plugins"})
-	f.run("core.settings-modal.search", map[string]any{"query": "acm"})
-	f.click("core.settings-modal.close", "")
+	f.run("core.settings-tab.nav", map[string]any{"page": "installed"})
+	f.run("core.settings-tab.search", map[string]any{"query": "acm"})
+	f.run("core.settings.close", nil)
 	f.click("core.chrome.settings", "")
-	if status := f.modal(); status.Section != "plugins" || status.Query != "acm" || !slices.Equal(status.Listed, []string{"acme"}) {
+	if status := f.modal(); status.Page != "installed" || status.Query != "acm" || !slices.Equal(status.Listed, []string{"acme"}) {
 		t.Fatalf("after opening again %+v", status)
 	}
 }
@@ -204,74 +175,25 @@ func TestTheSectionPluginSearchAndEditedSetLastUntilTheCardOpensAgain(t *testing
 func TestTheProjectScopeExistsOnlyWhileAProjectIsSelected(t *testing.T) {
 	f := newShell(t, &storedHost{})
 	f.click("core.chrome.settings", "")
-	if got := f.modal().keys("core.settings-modal.scope"); !slices.Equal(got, []string{"pick:scope:common"}) {
+	if got := f.modal().keys("core.settings-tab.scope"); !slices.Equal(got, []string{"pick:scope:common"}) {
 		t.Fatalf("scopes %q", got)
 	}
-	_, err := f.shell.Registry().Run("core.settings-modal.scope", json.RawMessage(`{"scope":"project"}`))
+	_, err := f.shell.Registry().Run("core.settings-tab.scope", json.RawMessage(`{"scope":"project"}`))
 	if err == nil || err.Error() != "scope project is not available" {
 		t.Fatalf("project without a project: %v", err)
 	}
 }
 
-func TestTheGeneralSectionDrawsEachFormWithItsOneControl(t *testing.T) {
-	f := opened(t)
-	status := f.modal()
-	if got := status.keys("core.settings-modal.set"); !slices.Contains(got, "projectOpening") || !slices.Contains(got, "mode") ||
-		!slices.Contains(got, "gap") || !slices.Contains(got, "left") || !slices.Contains(got, "link:left:") ||
-		!slices.Contains(got, "sidebarWidth") || !slices.Contains(got, "memorySaverDelay") {
-		t.Fatalf("settings %q", got)
-	}
-	for _, want := range []string{"top", "bottom", "link:right:", "link:top:", "link:bottom:"} {
-		if !slices.Contains(status.keys("core.settings-modal.set"), want) {
-			t.Fatalf("no control %s", want)
-		}
-	}
-	// The order of the window sidebars: one row per side with ▲ (not on the first row) and ▼ (not on the last row), each running
-	// core.settings.change with the whole new order (docs/spec/settings.md#controls).
-	if got := status.keys("core.settings-modal.order"); !slices.Equal(got, []string{"order:sidebarOrder:0:down", "order:sidebarOrder:1:up",
-		"order:sidebarOrder:1:down", "order:sidebarOrder:2:up", "order:sidebarOrder:2:down", "order:sidebarOrder:3:up"}) {
-		t.Fatalf("order %q", got)
-	}
-	for _, control := range status.Controls {
-		if control.Name == "core.settings-modal.order" && *control.Key == "order:sidebarOrder:0:down" {
-			if got, _ := json.Marshal(control.Command); string(got) != `{"name":"core.settings.change","params":{"key":"sidebarOrder","scope":"common","value":["right","left","top","bottom"]}}` {
-				t.Fatalf("the first ▼ runs %s", got)
-			}
-		}
-	}
-	if !f.tester.HasText("한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.") {
-		t.Fatalf("the sidebar group does not state one fixed sidebar per side")
-	}
-	if got := len(status.keys("core.settings-modal.theme")); got != 10 {
-		t.Fatalf("%d theme swatches", got)
-	}
-	if got := status.labels("core.settings-modal.debug"); len(got) != 1 {
-		t.Fatalf("debug %q", got)
-	}
-	for _, control := range status.Controls {
-		if control.Name == "core.settings-modal.set" && control.Key != nil && *control.Key == "mode" {
-			if !slices.Equal(control.Options, []string{"dark", "light"}) || *control.Value != "dark" || control.Command.Name != "core.settings.change" {
-				t.Fatalf("mode %+v", control)
-			}
-		}
-		if control.Name == "core.settings-modal.set" && control.Key != nil && *control.Key == "link:left:" {
-			if !slices.Equal(control.Options, []string{"off", "set-1"}) || control.Command.Name != "core.settings.link" {
-				t.Fatalf("link %+v", control)
-			}
-		}
-	}
-}
-
 func TestASwitchAndASwatchRunTheirCommandAndTheChangeIsWritten(t *testing.T) {
 	f := opened(t)
-	f.click("core.settings-modal.theme", "theme:paper")
+	f.click("core.settings-tab.theme", "theme:paper")
 	values := f.settingValues()
 	if values["theme"] != "paper" {
 		t.Fatalf("theme %v", values["theme"])
 	}
 	f.tester.SetSize(1200, 2400)
 	f.settle()
-	f.click("core.settings-modal.set", "dim")
+	f.click("core.settings-tab.set", "dim")
 	if f.settingValues()["dim"] != true {
 		t.Fatalf("dim %v", f.settingValues()["dim"])
 	}
@@ -285,15 +207,21 @@ func TestASelectBoxASliderAndADebugSwitchChangeTheirSettings(t *testing.T) {
 	// The window is tall enough to show the whole general section, whose sidebar group holds the four sides and their order.
 	f.tester.SetSize(1200, 3200)
 	f.settle()
-	f.click("core.settings-modal.set", "mode")
-	if err := f.tester.Click("밝음"); err != nil {
-		t.Fatalf("%v; the texts are %q", err, f.tester.Texts())
-	}
+	// A choice of two or three values is a segment, and a choice of more is a select box (docs/spec/settings.md#controls).
+	f.click("core.settings-tab.choice", "mode:light")
 	f.settle()
 	if f.settingValues()["mode"] != "light" {
 		t.Fatalf("mode %v", f.settingValues()["mode"])
 	}
-	slider, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "gap")
+	f.click("core.settings-tab.choice", "font")
+	if err := f.tester.Click("JetBrains Mono"); err != nil {
+		t.Fatalf("%v; the texts are %q", err, f.tester.Texts())
+	}
+	f.settle()
+	if f.settingValues()["font"] != "mono-jet" {
+		t.Fatalf("font %v", f.settingValues()["font"])
+	}
+	slider, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.step", "gap")
 	if !ok {
 		t.Fatal("no slider of the gap")
 	}
@@ -302,7 +230,9 @@ func TestASelectBoxASliderAndADebugSwitchChangeTheirSettings(t *testing.T) {
 	if got := f.settingValues()["gap"].(float64); got == 12 || got != float64(int(got)) {
 		t.Fatalf("gap %v", got)
 	}
-	f.click("core.settings-modal.debug", "")
+	f.run("core.settings-tab.nav", map[string]any{"page": "diag"})
+	f.settle()
+	f.click("core.settings-tab.debug", "")
 	if value := f.settingValues()["diagnostics.performance"]; value != true {
 		t.Fatalf("the debug switch %v", value)
 	}
@@ -310,44 +240,56 @@ func TestASelectBoxASliderAndADebugSwitchChangeTheirSettings(t *testing.T) {
 
 func TestTheKeysOfAnOpenSelectBoxChooseItsItem(t *testing.T) {
 	f := opened(t)
-	f.click("core.settings-modal.set", "mode")
+	f.click("core.settings-tab.choice", "font")
 	f.tester.Key(0, ui.KeyDown)
 	f.tester.Key(0, ui.KeyEnter)
 	f.settle()
-	if f.settingValues()["mode"] != "light" {
-		t.Fatalf("mode %v", f.settingValues()["mode"])
+	if f.settingValues()["font"] != "mono-sf" {
+		t.Fatalf("font %v", f.settingValues()["font"])
 	}
-	if _, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.close", ""); !ok {
+	if !f.modal().Open {
 		t.Fatal("the keys closed the settings window")
 	}
 }
 
 func TestATitleIsSavedWhenTheFieldSubmits(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]any{"section": "sidebars"})
-	f.run("core.settings-modal.edit", map[string]any{"set": "set-1"})
-	f.click("core.settings-modal.set", "title:set-1")
+	f.run("core.settings-tab.nav", map[string]any{"page": "sets"})
+	f.run("core.settings-tab.edit", map[string]any{"set": "set-1"})
+	// The saved title is the label of the row control set-title:set-1, which changes only when the field submits.
+	savedTitle := func() string {
+		for _, control := range f.modal().Controls {
+			if control.Name == "core.settings-tab.set-title" && control.Key != nil && *control.Key == "set-title:set-1" {
+				return control.Label
+			}
+		}
+		return ""
+	}
+	f.click("core.settings-tab.set-title", "title:set-1")
 	f.tester.Key(ui.Super, ui.KeyA)
 	f.tester.Type("둘")
 	f.settle()
-	if strings.Contains(strings.Join(f.modal().labels("core.settings-modal.set-caption"), ""), "둘") {
+	if savedTitle() == "둘" {
 		t.Fatal("a key saved the title")
 	}
 	f.tester.Key(0, ui.KeyEnter)
 	f.settle()
-	if got := f.modal().labels("core.settings-modal.set-caption"); !slices.Equal(got, []string{"둘 · 목록 · 파일"}) {
-		t.Fatalf("captions %q", got)
+	if got := savedTitle(); got != "둘" {
+		t.Fatalf("the saved title is %q", got)
 	}
 }
 
-func TestThePositionOfTheContentHoldsUntilAnotherContentShows(t *testing.T) {
+func TestThePositionOfThePaneHoldsUntilAnotherPageShows(t *testing.T) {
 	f := opened(t)
-	card, _ := exposedNode(f.tester.ElementTree(), "core.settings-modal.card", "")
-	f.tester.Scroll(card.Bounds.X+300, card.Bounds.Y+300, 0, 200)
+	f.tester.SetSize(1200, 360)
+	f.settle()
+	pane, _ := exposedNode(f.tester.ElementTree(), "core.settings-tab.pane", "")
+	// The pointer stays inside the pane, which spans y 84 to 360 of the 360 pt window; a point below the window reaches no element.
+	f.tester.Scroll(pane.Bounds.X+300, pane.Bounds.Y+pane.Bounds.H/2, 0, 200)
 	f.settle()
 	moved := 0.0
 	read := func() float64 {
-		value, err := f.shell.Registry().Read("core.settings-modal")
+		value, err := f.shell.Registry().Read("core.settings-tab")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -365,7 +307,7 @@ func TestThePositionOfTheContentHoldsUntilAnotherContentShows(t *testing.T) {
 	if got := read(); got != moved {
 		t.Fatalf("a change moved the content from %v to %v", moved, got)
 	}
-	f.run("core.settings-modal.nav", map[string]any{"section": "plugins"})
+	f.run("core.settings-tab.nav", map[string]any{"page": "installed"})
 	if got := read(); got != 0 {
 		t.Fatalf("another section starts at %v", got)
 	}
@@ -374,13 +316,13 @@ func TestThePositionOfTheContentHoldsUntilAnotherContentShows(t *testing.T) {
 func TestTheProjectScopeShowsTheFolderAndResetsAnOverride(t *testing.T) {
 	f := openedShell(t)
 	f.click("core.chrome.settings", "")
-	f.run("core.settings-modal.scope", map[string]any{"scope": "project"})
+	f.run("core.settings-tab.scope", map[string]any{"scope": "project"})
 	f.run("core.settings.change", map[string]any{"key": "gap", "value": 2.0, "scope": "project"})
 	status := f.modal()
-	if got := status.keys("core.settings-modal.reset"); !slices.Equal(got, []string{"reset:gap"}) {
+	if got := status.keys("core.settings-tab.reset"); !slices.Equal(got, []string{"reset:gap"}) {
 		t.Fatalf("resets %q", got)
 	}
-	if slices.Contains(status.keys("core.settings-modal.set"), "projectOpening") {
+	if slices.Contains(status.keys("core.settings-tab.set"), "projectOpening") {
 		t.Fatal("the project scope has a common-only setting")
 	}
 	last := f.host.settings[len(f.host.settings)-1]
@@ -389,9 +331,68 @@ func TestTheProjectScopeShowsTheFolderAndResetsAnOverride(t *testing.T) {
 	}
 	f.tester.SetSize(1200, 2400)
 	f.settle()
-	f.click("core.settings-modal.reset", "reset:gap")
-	if len(f.modal().keys("core.settings-modal.reset")) != 0 {
+	f.click("core.settings-tab.reset", "reset:gap")
+	if len(f.modal().keys("core.settings-tab.reset")) != 0 {
 		t.Fatal("the reset leaves the override")
+	}
+}
+
+// The ↑ and ↓ buttons of the sidebar list are titled 위로 and 아래로, and the title shows as a tip while the pointer rests on the button
+// (docs/spec/settings.md#작업-공간).
+func TestTheSidebarOrderButtonsShowTheirTitlesAsTips(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-tab.nav", map[string]any{"page": "workspace"})
+	f.tester.SetSize(1200, 3200)
+	f.settle()
+	tipCount := func(text string) int {
+		count := 0
+		for _, got := range f.tester.Texts() {
+			if got == text {
+				count++
+			}
+		}
+		return count
+	}
+	for _, button := range []struct{ key, title string }{{"order:sidebarOrder:1:up", "위로"}, {"order:sidebarOrder:0:down", "아래로"}} {
+		node, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.order", button.key)
+		if !ok {
+			t.Fatalf("no order button %s", button.key)
+		}
+		before := tipCount(button.title)
+		f.tester.Move(node.Bounds.X+node.Bounds.W/2, node.Bounds.Y+node.Bounds.H/2)
+		f.tester.Advance(700 * time.Millisecond)
+		if got := tipCount(button.title); got != before+1 {
+			t.Errorf("the tip %s of %s does not show: %d, then %d", button.title, button.key, before, got)
+		}
+	}
+}
+
+// The project scope marks for reset each overridden side switch, the side links and sidebarOrder, and a reset removes only its key
+// (docs/spec/settings.md#작업-공간).
+func TestTheProjectScopeResetsEachOverriddenSideSetting(t *testing.T) {
+	f := openedShell(t)
+	f.click("core.chrome.settings", "")
+	f.run("core.settings-tab.scope", map[string]any{"scope": "project"})
+	f.run("core.settings-tab.nav", map[string]any{"page": "workspace"})
+	f.run("core.settings.change", map[string]any{"key": "top", "value": false, "scope": "project"})
+	f.run("core.settings.change", map[string]any{"key": "sidebarOrder", "value": []string{"top", "left", "right", "bottom"}, "scope": "project"})
+	// The project sets and its left link are written together, because a link names a set of the same write.
+	sets := []any{map[string]any{"id": "set-p", "title": "프로젝트", "sections": []any{"acme.files"}, "layout": "list"}}
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"sets": sets, "links": []any{map[string]any{"place": "left", "plugin": nil, "set": "set-p"}}}, "scope": "project"})
+	f.tester.SetSize(1200, 3200)
+	f.settle()
+	if got := f.modal().keys("core.settings-tab.reset"); !slices.Equal(got, []string{"reset:top", "reset:links", "reset:sidebarOrder"}) {
+		t.Fatalf("the reset marks are %q", got)
+	}
+	// Every reset mark stands inside the window, which is 1200 pt wide, so each one takes a press.
+	for _, key := range []string{"reset:top", "reset:links", "reset:sidebarOrder"} {
+		if node, _ := exposedNode(f.tester.ElementTree(), "core.settings-tab.reset", key); node.Bounds.X+node.Bounds.W > 1200 {
+			t.Fatalf("the reset mark %s stands at %+v, past the window", key, node.Bounds)
+		}
+	}
+	f.click("core.settings-tab.reset", "reset:sidebarOrder")
+	if got := f.modal().keys("core.settings-tab.reset"); !slices.Equal(got, []string{"reset:top", "reset:links"}) {
+		t.Fatalf("after the reset of sidebarOrder the marks are %q", got)
 	}
 }
 
@@ -429,42 +430,48 @@ func TestTheWindowBehindTheSurfacesTakesTheCardColorOfTheTheme(t *testing.T) {
 
 func TestThePluginListFiltersByNameIdAndDescription(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]any{"section": "plugins"})
+	f.run("core.settings-tab.nav", map[string]any{"page": "installed"})
 	if status := f.modal(); !slices.Equal(status.Listed, []string{"acme", "plain"}) {
 		t.Fatalf("listed %q", status.Listed)
 	}
-	f.run("core.settings-modal.search", map[string]any{"query": "NOTHING"})
+	f.run("core.settings-tab.search", map[string]any{"query": "NOTHING"})
 	if status := f.modal(); !slices.Equal(status.Listed, []string{"plain"}) {
 		t.Fatalf("listed %q", status.Listed)
 	}
-	f.run("core.settings-modal.search", map[string]any{"query": "zzz"})
-	if !f.tester.HasText("찾는 플러그인이 없습니다.") {
+	f.run("core.settings-tab.search", map[string]any{"query": "zzz"})
+	if !f.tester.HasText("맞는 플러그인이 없다.") {
 		t.Fatalf("texts %q", f.tester.Texts())
 	}
 }
 
 func TestAPluginPageShowsItsSettingsSectionsAndSidebarChoices(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]any{"section": "plugins"})
-	f.click("core.settings-modal.plugin", "plugin:acme")
+	f.run("core.settings-tab.nav", map[string]any{"page": "installed"})
+	f.click("core.settings-tab.plugin", "plugin:acme")
 	status := f.modal()
 	if status.Plugin == nil || *status.Plugin != "acme" || len(status.Rows) != 2 || status.Rows[0].Name != "수준" || *status.Rows[0].Description != "높을수록 많다" {
 		t.Fatalf("status %+v", status)
 	}
-	keys := status.keys("core.settings-modal.set")
+	// A setting control keeps the element name of its form, so the keys are read from every control.
+	var keys []string
+	for _, control := range status.Controls {
+		if control.Key != nil {
+			keys = append(keys, *control.Key)
+		}
+	}
 	for _, want := range []string{"acme.level", "acme.mode", "link:window-left:acme", "link:window-right:acme", "link:window-top:acme", "link:window-bottom:acme", "link:card-left:acme", "link:card-bottom:acme"} {
 		if !slices.Contains(keys, want) {
 			t.Fatalf("no control %s in %q", want, keys)
 		}
 	}
-	if !f.tester.HasText("파일, 변경") {
+	if !f.tester.HasText("파일") || !f.tester.HasText("변경") {
 		t.Fatalf("texts %q", f.tester.Texts())
 	}
-	f.click("core.settings-modal.back", "")
+	f.click("core.settings-tab.back", "")
 	if f.modal().Plugin != nil {
 		t.Fatal("목록 leaves the page")
 	}
-	_, err := f.shell.Registry().Run("core.settings-modal.plugin", json.RawMessage(`{"plugin":"gone"}`))
+	_, err := f.shell.Registry().Run("core.settings-tab.plugin", json.RawMessage(`{"plugin":"gone"}`))
 	if err == nil || err.Error() != "unknown plugin gone" {
 		t.Fatalf("unknown plugin: %v", err)
 	}
@@ -472,9 +479,9 @@ func TestAPluginPageShowsItsSettingsSectionsAndSidebarChoices(t *testing.T) {
 
 func TestAPluginWithoutASurfaceHasNoCardChoices(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]any{"section": "plugins"})
-	f.click("core.settings-modal.plugin", "plugin:plain")
-	keys := f.modal().keys("core.settings-modal.set")
+	f.run("core.settings-tab.nav", map[string]any{"page": "installed"})
+	f.click("core.settings-tab.plugin", "plugin:plain")
+	keys := f.modal().keys("core.settings-tab.set")
 	if slices.ContainsFunc(keys, func(key string) bool { return strings.HasPrefix(key, "link:card-") }) {
 		t.Fatalf("keys %q", keys)
 	}
@@ -482,63 +489,53 @@ func TestAPluginWithoutASurfaceHasNoCardChoices(t *testing.T) {
 
 func TestTheSidebarsSectionCreatesEditsAndDeletesSets(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]any{"section": "sidebars"})
-	if got := f.modal().labels("core.settings-modal.set-caption"); !slices.Equal(got, []string{"하나 · 목록 · 파일"}) {
-		t.Fatalf("captions %q", got)
+	f.run("core.settings-tab.nav", map[string]any{"page": "sets"})
+	if f.tester.HasText("· 쓰는 곳:") {
+		t.Fatalf("a set without a link shows the usage line; the texts are %q", f.tester.Texts())
 	}
-	f.click("core.settings-modal.create", "")
+	f.click("core.settings-tab.create", "")
 	status := f.modal()
 	if status.Editing == nil || *status.Editing != "set-2" {
 		t.Fatalf("the new set is not edited: %+v", status)
 	}
-	f.click("core.settings-modal.add", "add:set-2")
-	f.click("core.settings-modal.add", "add:set-2")
+	// The add action appends the section that the select 섹션 추가… names (docs/spec/settings.md#사이드바-세트).
+	// The edited set draws its chips in its row and in its editor, so each count is 2 per chip.
+	before := len(status.labelsWithKeyPrefix("core.settings-tab.row-act", "remove:set-2:"))
+	f.run("core.settings.sets.row", map[string]any{"id": "set-2", "action": "add", "section": "acme.files"})
+	f.run("core.settings.sets.row", map[string]any{"id": "set-2", "action": "add", "section": "acme.git"})
 	status = f.modal()
-	if got := status.labels("core.settings-modal.row-act"); !slices.Equal(got, []string{"▼", "−", "▲", "−"}) {
-		t.Fatalf("row acts %q", got)
+	if got := status.labelsWithKeyPrefix("core.settings-tab.row-act", "remove:set-2:"); len(got) != before+4 {
+		t.Fatalf("after two adds the chips of the set show the removal acts %q, before %d", got, before)
 	}
-	var groups []string
-	for _, control := range status.Controls {
-		if control.Name == "core.settings-modal.row" {
-			groups = append(groups, control.Groups[0].Label)
-			if !slices.Equal(control.Groups[0].Values, []string{"acme.files", "acme.git"}) {
-				t.Fatalf("row %+v", control)
-			}
-		}
+	f.run("core.settings.sets.row", map[string]any{"id": "set-2", "action": "remove", "index": 0})
+	if got := f.modal().labelsWithKeyPrefix("core.settings-tab.row-act", "remove:set-2:"); len(got) != before+2 {
+		t.Fatalf("after a removal the chips of the set show %q, before %d", got, before)
 	}
-	if !slices.Equal(groups, []string{"Acme", "Acme"}) {
-		t.Fatalf("groups %q", groups)
-	}
-	f.click("core.settings-modal.row-act", "remove:set-2:0")
-	f.click("core.settings-modal.edit", "edit:")
+	f.click("core.settings-tab.edit", "done:set-2")
 	if f.modal().Editing != nil {
 		t.Fatal("완료 leaves the editor")
 	}
-	f.click("core.settings-modal.delete", "delete:set-2")
-	if got := f.modal().labels("core.settings-modal.set-caption"); len(got) != 1 {
-		t.Fatalf("captions %q", got)
+	f.click("core.settings-tab.delete", "delete:set-2")
+	f.run("core.settings-tab.confirm", map[string]any{"kind": "set", "id": "set-2", "answer": "yes"})
+	f.settle()
+	if got := f.modal().labels("core.settings-tab.set-title"); len(got) != 1 {
+		t.Fatalf("the sets after the deletion are %q", got)
 	}
 }
 
-func TestDraggingTheHeaderMovesTheCardInsideTheWindow(t *testing.T) {
+// The select 섹션 추가… adds the section it names, and a section that the set already holds is refused (docs/spec/settings.md#사이드바-세트).
+func TestTheSectionAddAddsTheNamedSectionAndRefusesARepeat(t *testing.T) {
 	f := opened(t)
-	start := f.modal().Card
-	f.run("core.settings-modal.move", map[string]any{"dx": -40.0, "dy": 30.0})
-	if card := f.modal().Card; card.X != start.X-40 || card.Y != start.Y+30 {
-		t.Fatalf("moved to %+v from %+v", card, start)
+	f.run("core.settings-tab.nav", map[string]any{"page": "sets"})
+	f.click("core.settings-tab.create", "")
+	f.run("core.settings.sets.row", map[string]any{"id": "set-2", "action": "add", "section": "acme.git"})
+	// The chip of the row and the chip of the editor (docs/spec/settings.md#사이드바-세트).
+	if got := f.modal().labelsWithKeyPrefix("core.settings-tab.chip", "chip:set-2:"); !slices.Equal(got, []string{"변경", "변경"}) {
+		t.Fatalf("the chips of the set after adding 변경 are %q", got)
 	}
-	f.run("core.settings-modal.move", map[string]any{"dx": -4000.0, "dy": -4000.0})
-	if card := f.modal().Card; card.X != 8 || card.Y != 8 {
-		t.Fatalf("moved to %+v", card)
-	}
-	grip, _ := exposedNode(f.tester.ElementTree(), "core.settings-modal.grip", "")
-	x, y := grip.Bounds.X+40, grip.Bounds.Y+10
-	f.tester.Press(x, y)
-	f.tester.Move(x+50, y+20)
-	f.tester.Release(x+50, y+20)
-	f.settle()
-	if card := f.modal().Card; card.X != 58 || card.Y != 28 {
-		t.Fatalf("dragged to %+v", card)
+	var refused *workbench.Refusal
+	if err := f.finish("core.settings.sets.row", map[string]any{"id": "set-2", "action": "add", "section": "acme.git"}); !errors.As(err, &refused) || refused.Code != workbench.InvalidParams {
+		t.Fatalf("a repeated section answered %#v, want %d", err, workbench.InvalidParams)
 	}
 }
 
@@ -548,18 +545,6 @@ func TestTheEnvironmentValueReplacesTheDefaultOfThePlugin(t *testing.T) {
 	f.click("core.chrome.settings", "")
 	if got := f.settingValues()["textprobe.cursor.shape"]; got != "block" {
 		t.Fatalf("the setting is %v", got)
-	}
-}
-
-func TestManagingPluginsClosesTheCardAndShowsThePluginPage(t *testing.T) {
-	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]any{"section": "plugins"})
-	f.click("core.settings-modal.manage", "")
-	if f.modal().Open {
-		t.Fatal("the card stays open")
-	}
-	if !f.has("core.library.page", "plugins") {
-		t.Fatal("no plugin page of the library")
 	}
 }
 
@@ -584,13 +569,13 @@ func TestThePagesReceiveTheThemeAndTheMenuItsLanguage(t *testing.T) {
 
 func TestEveryControlOfTheCardHasItsNameAndCommand(t *testing.T) {
 	f := opened(t)
-	for _, section := range []string{"general", "plugins", "sidebars"} {
-		f.run("core.settings-modal.nav", map[string]any{"section": section})
+	for _, section := range []string{"look", "installed", "sets"} {
+		f.run("core.settings-tab.nav", map[string]any{"page": section})
 		var inCard []ui.ElementNode
 		var walk func(nodes []ui.ElementNode)
 		walk = func(nodes []ui.ElementNode) {
 			for _, node := range nodes {
-				if exposed, ok := node.Key.(workbench.Exposed); ok && exposed.Name == "core.settings-modal.card" {
+				if exposed, ok := node.Key.(workbench.Exposed); ok && exposed.Name == "core.settings-tab.pane" {
 					inCard = node.Children
 				}
 				walk(node.Children)
@@ -603,20 +588,12 @@ func TestEveryControlOfTheCardHasItsNameAndCommand(t *testing.T) {
 	}
 }
 
-func TestOpeningTheCardTwiceKeepsOneCard(t *testing.T) {
-	f := opened(t)
-	f.run("core.settings.open", map[string]any{})
-	if !reflect.DeepEqual(f.modal().keys("core.settings-modal.nav"), []string{"nav:general", "nav:plugins", "nav:sidebars"}) {
-		t.Fatalf("nav %q", f.modal().keys("core.settings-modal.nav"))
-	}
-}
-
 func TestACommonSettingOutlivesTheOpenOfAProject(t *testing.T) {
 	f := newShell(t, acme())
 	f.run("core.settings.set", map[string]any{"patch": map[string]any{"memorySaverDelay": 7}, "scope": "common"})
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	f.settle()
 	value, err := f.shell.Registry().Read("core.settings")
 	if err != nil {
@@ -647,69 +624,25 @@ func TestEnterInAnOpenedSettingsWindowClosesNothing(t *testing.T) {
 	}
 }
 
-// A dialog draws over a blurred workbench and tells the host, which blurs the documents. A menu has no background.
-func TestADialogSetsTheBackgroundOfTheWorkbench(t *testing.T) {
+// A dialog draws over a blurred workbench and tells the host, which blurs the documents. The debug view is such a dialog; the settings
+// tab is a tab of the window and sets no background (docs/spec/settings.md).
+func TestTheDebugViewSetsTheBackgroundOfTheWorkbench(t *testing.T) {
 	f := newShell(t, acme())
 	background := func() any { return status[map[string]any](t, f, "core.window.workbench")["background"] }
 	if background() != false || len(f.host.backgrounds) != 0 {
 		t.Fatalf("the background is %v and the host received %v before a dialog", background(), f.host.backgrounds)
 	}
 	f.click("core.chrome.settings", "")
+	if background() != false || len(f.host.backgrounds) != 0 {
+		t.Fatalf("the background is %v and the host received %v with the settings tab open", background(), f.host.backgrounds)
+	}
+	f.run("core.debug.open", nil)
 	if background() != true || !slices.Equal(f.host.backgrounds, []bool{true}) {
-		t.Fatalf("the background is %v and the host received %v with the settings open", background(), f.host.backgrounds)
+		t.Fatalf("the background is %v and the host received %v with the debug view open", background(), f.host.backgrounds)
 	}
-	f.click("core.settings-modal.close", "")
+	f.run("core.debug.close", nil)
 	if background() != false || !slices.Equal(f.host.backgrounds, []bool{true, false}) {
-		t.Fatalf("the background is %v and the host received %v after the settings", background(), f.host.backgrounds)
-	}
-}
-
-// The head and the sections of the settings window are those of the page: the .act of the close button and the left marked .set-nav.
-func TestTheHeadAndTheSectionsOfTheSettingsWindowAreThoseOfThePage(t *testing.T) {
-	declared, err := workbench.Declared()
-	if err != nil {
-		t.Fatal(err)
-	}
-	metric := func(name string) float32 {
-		value, ok := declared.Metric(name)
-		if !ok {
-			t.Fatalf("no metric %s", name)
-		}
-		return float32(value)
-	}
-	f := opened(t)
-	f.run("core.settings.theme", map[string]any{"name": "midnight", "mode": "dark"})
-	f.settle()
-	card, closing := f.box("core.settings-modal.card", ""), f.box("core.settings-modal.close", "close")
-	if closing.W != metric("act-w") || closing.H != metric("act-h") {
-		t.Fatalf("the close button is %v, the size of an icon switch is %v by %v", closing, metric("act-w"), metric("act-h"))
-	}
-	if end := card.X + card.W - closing.X - closing.W; end < metric("set-card-head-pad-end") || end > metric("set-card-head-pad-end")+1 {
-		t.Fatalf("the close button stands %v from the end of the card", end)
-	}
-	item := f.box("core.settings-modal.nav", "nav:general")
-	if want := metric("set-nav-w") - 2*metric("set-nav-pad-x") - 1; item.W != want {
-		t.Fatalf("the section is %v wide, want %v", item.W, want)
-	}
-	image := f.tester.Image()
-	scale := float32(image.Bounds().Dx()) / 1200
-	at := func(x, y float32) color.RGBA { return image.RGBAAt(int(x*scale), int(y*scale)) }
-	middle := item.Y + item.H/2
-	if got, want := at(item.X+metric("set-nav-mark-w")/2, middle), themeToken(t, "midnight", "dark", "rail"); got != want {
-		t.Fatalf("the mark of the shown section is %v, want %v", got, want)
-	}
-	fill := at(item.X+item.W-2, middle)
-	first := float32(-1)
-	for x := item.X + metric("set-nav-mark-w") + 1; x < item.X+item.W && first < 0; x += 0.5 {
-		for y := item.Y + 2; y < item.Y+item.H-2; y += 0.5 {
-			if at(x, y) != fill {
-				first = x - item.X
-				break
-			}
-		}
-	}
-	if pad := metric("set-nav-item-pad-x"); first < pad-1 || first > pad+2 {
-		t.Fatalf("the name of the section starts %v into it, want %v", first, pad)
+		t.Fatalf("the background is %v and the host received %v after the debug view", background(), f.host.backgrounds)
 	}
 }
 
@@ -720,7 +653,7 @@ func TestTheScopeTabsAndGroupsOfTheSettingsWindowAreThoseOfThePage(t *testing.T)
 	f.run("core.settings.theme", map[string]any{"name": "midnight", "mode": "dark"})
 	f.settle()
 	rail, card := themeToken(t, "midnight", "dark", "rail"), themeToken(t, "midnight", "dark", "card")
-	tab := f.box("core.settings-modal.scope", "pick:scope:common")
+	tab := f.box("core.settings-tab.scope", "pick:scope:common")
 	middle := tab.X + tab.W/2
 	if got := f.pixelOf(middle, tab.Y+tab.H-1); got != rail {
 		t.Fatalf("the mark of the shown scope is %v, want %v", got, rail)
@@ -737,39 +670,6 @@ func TestTheScopeTabsAndGroupsOfTheSettingsWindowAreThoseOfThePage(t *testing.T)
 		}
 	}
 	t.Fatalf("no group name in the rail color %v below the scopes", rail)
-}
-
-// The controls of the settings window are those of the page: the themes stand in a grid of named tiles, a select fills the cell of its
-// row, and each line of text takes the line height of the page.
-func TestTheControlsOfTheSettingsWindowAreThoseOfThePage(t *testing.T) {
-	f := opened(t)
-	declared, err := workbench.Declared()
-	if err != nil {
-		t.Fatal(err)
-	}
-	metric := func(name string) float32 {
-		value, ok := declared.Metric(name)
-		if !ok {
-			t.Fatalf("no metric %s", name)
-		}
-		return float32(value)
-	}
-	if !f.tester.HasText("midnight") {
-		t.Fatalf("no name of a theme in %q", f.tester.Texts())
-	}
-	first, second := f.box("core.settings-modal.theme", "theme:midnight"), f.box("core.settings-modal.theme", "theme:nord")
-	if first.W < metric("theme-swatch-min-w") || second.X-first.X != first.W+metric("theme-grid-gap") {
-		t.Fatalf("the tiles are %+v and %+v", first, second)
-	}
-	card := f.box("core.settings-modal.card", "")
-	selector := f.box("core.settings-modal.set", "projectOpening")
-	if right := card.X + card.W - 1 - metric("set-pane-pad-x"); selector.X+selector.W < right-1 {
-		t.Fatalf("the select ends at %v, want the end of the pane at %v", selector.X+selector.W, right)
-	}
-	want := metric("field-pad-y")*2 + 2 + metric("text-control-at-base")*metric("line-height")
-	if selector.H < want-1 || selector.H > want+1 {
-		t.Fatalf("the select is %v high, want %v", selector.H, want)
-	}
 }
 
 // lastLineInk returns the width of the ink on the last line of the element of a text of two lines.
@@ -796,7 +696,11 @@ func TestKoreanTextBreaksAtTheSpaces(t *testing.T) {
 	}
 	size, _ := declared.Metric("text-small-at-base")
 	f := opened(t)
-	const caption = "프로젝트를 여는 방식은 모든 프로젝트에 적용됩니다. 이미 열린 창은 유지됩니다."
+	f.run("core.settings-tab.nav", map[string]any{"page": "workspace"})
+	// A narrow window gives the caption a pane that it fills in more than one line.
+	f.tester.SetSize(520, 800)
+	f.settle()
+	const caption = "프로젝트를 여는 방식. 모든 프로젝트에 적용되며, 이미 열린 창은 그대로 둔다."
 	node, ok := nodeLabeled(f.tester.ElementTree(), caption)
 	if !ok {
 		t.Fatalf("no caption in %q", f.tester.Texts())
@@ -810,29 +714,6 @@ func TestKoreanTextBreaksAtTheSpaces(t *testing.T) {
 	}
 }
 
-// A focus of a page brings its element into view, as the focus command does with an element past the end of a pane.
-func TestTheFocusCommandBringsItsElementIntoThePane(t *testing.T) {
-	f := opened(t)
-	card := f.palette().Card
-	want := color.RGBA{card.R, card.G, card.B, 255}
-	beside := func() color.RGBA {
-		t.Helper()
-		slider, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "gap")
-		if !ok {
-			t.Fatal("no slider of the gap")
-		}
-		return f.pixelOf(slider.Bounds.X-6, slider.Bounds.Y+slider.Bounds.H/2)
-	}
-	if got := beside(); got == want {
-		t.Fatal("the slider already lies inside the pane")
-	}
-	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.set", "index": sliderIndex(t, f)})
-	f.settle()
-	if got := beside(); got != want {
-		t.Fatalf("beside the focused slider lies %v, not the pane %v", got, want)
-	}
-}
-
 // The browser rings a focused slider around its track and its thumb, in the focus color of the system.
 func TestAFocusedSliderTakesTheRingOfTheSystem(t *testing.T) {
 	f := opened(t)
@@ -841,10 +722,10 @@ func TestAFocusedSliderTakesTheRingOfTheSystem(t *testing.T) {
 	f.tester.SetPreferences(ui.Preferences{DarkFocusRing: ring})
 	f.tester.Key(0, ui.KeyTab)
 	f.settle()
-	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.set", "index": sliderIndex(t, f)})
+	f.run("core.focus.set", map[string]any{"name": "core.settings-tab.step", "index": sliderIndex(t, f)})
 	f.settle()
 	// The focus scrolled the slider into the pane.
-	slider, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "gap")
+	slider, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.step", "gap")
 	if !ok {
 		t.Fatal("no slider of the gap")
 	}
@@ -877,7 +758,7 @@ func TestAFocusedSliderTakesTheRingOfTheSystem(t *testing.T) {
 func sliderIndex(t *testing.T, f *shellFixture) int {
 	t.Helper()
 	for index := 0; ; index++ {
-		if node := positional(t, f.tester, "core.settings-modal.set", index); node.Role == ui.RoleSlider && node.Label == "gap" {
+		if node := positional(t, f.tester, "core.settings-tab.step", index); node.Role == ui.RoleSlider && node.Label == "gap" {
 			return index
 		}
 	}
@@ -992,7 +873,7 @@ func TestAFocusedSelectBoxHasTheBorderOfThePage(t *testing.T) {
 	f.settle()
 	var seen []string
 	for index := range 12 {
-		f.run("core.focus.set", map[string]any{"name": "core.settings-modal.set", "index": index})
+		f.run("core.focus.set", map[string]any{"name": "core.settings-tab.choice", "index": index})
 		f.settle()
 		for _, node := range selectBoxes(f.tester.ElementTree()) {
 			y := node.Bounds.Y + node.Bounds.H/2
@@ -1018,49 +899,25 @@ func selectBoxes(nodes []ui.ElementNode) []ui.ElementNode {
 	return found
 }
 
-// The card of the page draws no outline when it has the focus (.card): its border says which card it is.
-func TestAFocusedCardHasNoOutline(t *testing.T) {
-	f, _ := surfaceShell(t)
-	card := f.tabbedCards()[0]
-	node, ok := exposedNode(f.tester.ElementTree(), "core.card", card)
-	if !ok {
-		t.Fatalf("no card %s", card)
-	}
-	x, y := node.Bounds.X+1.5, node.Bounds.Y+node.Bounds.H/2
-	f.tester.Key(0, ui.KeyTab)
-	f.settle()
-	before := f.pixelOf(x, y)
-	f.run("core.focus.set", map[string]any{"name": "core.card", "index": 0})
-	f.settle()
-	if !f.tester.Focused(card) {
-		t.Fatalf("the keyboard did not reach the card %s", card)
-	}
-	if got := f.pixelOf(x, y); got != before {
-		t.Fatalf("the focused card has %v at its edge, %v before", got, before)
-	}
-}
-
-// The plugins of the settings window are buttons in the flow of a line (.set-list), one after the other.
-func TestThePluginsOfTheSettingsStandOnOneLine(t *testing.T) {
+// The rows of 설치됨 stand one under another, and the info button of each row stands in its row
+// (docs/spec/settings.md#설치됨).
+func TestThePluginRowsStandOneUnderAnother(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
 	f.settle()
-	first, ok := pressLabeled(f.tester.ElementTree(), "Acme")
-	second, found := pressLabeled(f.tester.ElementTree(), "Plain")
-	if !ok || !found {
-		t.Fatalf("the plugins are not listed in %q", f.tester.Texts())
-	}
-	if first.Bounds.Y != second.Bounds.Y || first.Bounds.X+first.Bounds.W != second.Bounds.X {
-		t.Fatalf("the plugins stand at %+v and %+v", first.Bounds, second.Bounds)
+	first := element(t, f.tester, "core.settings-tab.plugin", "plugin:acme")
+	second := element(t, f.tester, "core.settings-tab.plugin", "plugin:plain")
+	if second.Bounds.Y < first.Bounds.Y+first.Bounds.H {
+		t.Fatalf("the rows stand at %+v and %+v", first.Bounds, second.Bounds)
 	}
 }
 
 // The search of the settings window is an input of the page without a look of its own: the control background of its color scheme.
 func TestTheSearchOfTheSettingsHasTheBackgroundOfThePage(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
 	f.settle()
-	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.search", "")
 	if !ok {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
@@ -1068,6 +925,17 @@ func TestTheSearchOfTheSettingsHasTheBackgroundOfThePage(t *testing.T) {
 	if got := f.pixelOf(node.Bounds.X+node.Bounds.W-6, node.Bounds.Y+node.Bounds.H/2); got != want {
 		t.Fatalf("the search has the background %v, not %v", got, want)
 	}
+}
+
+// plainColor is the opaque declared color of a control without a look of its own (docs/spec/settings.md#layout-values).
+func plainColor(t *testing.T, name string) color.RGBA {
+	t.Helper()
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := ui.Hex(declared.PlainControl(name))
+	return color.RGBA{value.R, value.G, value.B, 255}
 }
 
 // plainLength is a declared length of a control without a look of its own.
@@ -1087,9 +955,9 @@ func plainLength(t *testing.T, name string) float32 {
 // The search of the settings is the input of type search of the page: a pill with a magnifier in front of the text.
 func TestTheSearchOfTheSettingsIsThePillOfThePage(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
 	f.settle()
-	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.search", "")
 	if !ok {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
@@ -1140,9 +1008,9 @@ func inputHeight(t *testing.T) float32 {
 // The browser rings a focused input outside its box, in the focus color of the system, which follows the accent color.
 func TestAFocusedSearchTakesTheRingOfTheSystem(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
 	f.settle()
-	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.search", "")
 	if !ok {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
@@ -1152,7 +1020,7 @@ func TestAFocusedSearchTakesTheRingOfTheSystem(t *testing.T) {
 	beside, around := f.pixelOf(x, y-inset/2), f.pixelOf(x, y-inset-width-.5)
 	f.tester.Key(0, ui.KeyTab)
 	f.settle()
-	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.run("core.focus.set", map[string]any{"name": "core.settings-tab.search", "index": 0})
 	f.settle()
 	for _, ring := range []ui.Color{{R: 200, G: 30, B: 90, A: 255}, {R: 40, G: 210, B: 70, A: 255}} {
 		f.tester.SetPreferences(ui.Preferences{DarkFocusRing: ring})
@@ -1172,15 +1040,15 @@ func TestAFocusedSearchTakesTheRingOfTheSystem(t *testing.T) {
 // A desktop without a ring of its own leaves a focused input the focus color of the theme.
 func TestAFocusedSearchWithoutARingOfTheSystemTakesTheFocusColor(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
 	f.settle()
-	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.search", "")
 	if !ok {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
 	f.tester.Key(0, ui.KeyTab)
 	f.settle()
-	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.run("core.focus.set", map[string]any{"name": "core.settings-tab.search", "index": 0})
 	f.settle()
 	focus := f.palette().Focus
 	width, inset := plainLength(t, "ring-w"), plainLength(t, "search-inset")
@@ -1192,27 +1060,30 @@ func TestAFocusedSearchWithoutARingOfTheSystemTakesTheFocusColor(t *testing.T) {
 // A search with a text has the cancel of the browser, which empties it and leaves it the focus.
 func TestTheCancelOfTheSearchEmptiesIt(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
 	f.settle()
-	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.search", "")
 	if !ok {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
 	box := node.Bounds
 	end, size := plainLength(t, "search-cancel-end"), plainLength(t, "search-cancel-size")
 	x, y := box.X+box.W-end-size/2, box.Y+box.H/2
-	declared, err := workbench.Declared()
-	if err != nil {
-		t.Fatal(err)
-	}
-	cancel := ui.Hex(declared.PlainControl("search-cancel"))
-	want := color.RGBA{cancel.R, cancel.G, cancel.B, 255}
+	// The cancel is drawn in its own declared color, whatever the color of the text is.
+	want := plainColor(t, "search-cancel")
 	// The left of the circle, beside the cross.
 	if got := f.pixelOf(x-size/2+1.5, y); got == want {
 		t.Fatal("an empty search has a cancel")
 	}
-	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.run("core.settings-tab.search", map[string]string{"query": "term"})
 	f.settle()
+	// The field moves with the layout of the page, so the cancel is found again after the query.
+	node, ok = exposedNode(f.tester.ElementTree(), "core.settings-tab.search", "")
+	if !ok {
+		t.Fatalf("no search after the query in %q", f.tester.Texts())
+	}
+	box = node.Bounds
+	x, y = box.X+box.W-end-size/2, box.Y+box.H/2
 	if got := f.pixelOf(x-size/2+1.5, y); got != want {
 		t.Fatalf("the cancel is %v, not %v", got, want)
 	}
@@ -1228,11 +1099,11 @@ func TestTheCancelOfTheSearchEmptiesIt(t *testing.T) {
 	}
 }
 
-// The column of a row is the free width of the pane, which the border of a theme narrows. The search, the whole field with its border,
-// is that column.
-func TestTheSearchOfTheSettingsFillsTheColumnOfItsRow(t *testing.T) {
+// The search is a control of its row, so it is as wide as the control area of 260 points, whatever the border of the theme is
+// (docs/spec/settings.md#rows).
+func TestTheSearchOfTheSettingsIsTheControlAreaOfItsRow(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
 	f.settle()
 	declared, err := workbench.Declared()
 	if err != nil {
@@ -1244,20 +1115,20 @@ func TestTheSearchOfTheSettingsFillsTheColumnOfItsRow(t *testing.T) {
 	}
 	check := func(border float32) {
 		t.Helper()
-		node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+		node, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.search", "")
 		if !ok {
 			t.Fatalf("no search in %q", f.tester.Texts())
 		}
-		want := metric("set-card-w") - 2*border - metric("set-nav-w") - 2*metric("set-pane-pad-x") - metric("set-row-name-w") - metric("set-row-gap")
+		want := metric("set-control-w")
 		if got := node.Bounds.W; got != want {
 			t.Fatalf("with a border of %v the box of the search is %v wide, not %v", border, got, want)
 		}
 	}
 	check(1)
-	f.run("core.settings-modal.nav", map[string]string{"section": "general"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "look"})
 	f.settle()
-	f.click("core.settings-modal.theme", "theme:solar")
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.click("core.settings-tab.theme", "theme:solar")
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
 	f.settle()
 	check(2)
 }
@@ -1265,11 +1136,11 @@ func TestTheSearchOfTheSettingsFillsTheColumnOfItsRow(t *testing.T) {
 // The browser empties a search on Escape and keeps it focused, as its input event tells the page. Escape closes no dialog.
 func TestEscapeEmptiesTheSearchOfTheSettings(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
-	f.run("core.settings-modal.search", map[string]string{"query": "term"})
-	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
+	f.run("core.settings-tab.search", map[string]string{"query": "term"})
+	f.run("core.focus.set", map[string]any{"name": "core.settings-tab.search", "index": 0})
 	f.settle()
-	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.search", "")
 	if !ok {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
@@ -1291,10 +1162,10 @@ func TestEscapeEmptiesTheSearchOfTheSettings(t *testing.T) {
 // The browser selects the text of a field that a script focuses for the first time, so the next key replaces it.
 func TestTheFocusCommandSelectsTheTextOfAFieldNotYetFocused(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
-	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
+	f.run("core.settings-tab.search", map[string]string{"query": "term"})
 	f.settle()
-	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.run("core.focus.set", map[string]any{"name": "core.settings-tab.search", "index": 0})
 	f.settle()
 	f.tester.Type("x")
 	f.settle()
@@ -1306,16 +1177,16 @@ func TestTheFocusCommandSelectsTheTextOfAFieldNotYetFocused(t *testing.T) {
 // The browser gives a field that had the focus its own selection back when a script focuses it again.
 func TestTheFocusCommandKeepsTheSelectionOfAFieldThatHadTheFocus(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
-	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
+	f.run("core.settings-tab.search", map[string]string{"query": "term"})
 	f.settle()
-	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.run("core.focus.set", map[string]any{"name": "core.settings-tab.search", "index": 0})
 	f.settle()
 	f.tester.Key(0, ui.KeyEnd)
 	f.settle()
-	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.manage", "index": 0})
+	f.run("core.focus.set", map[string]any{"name": "core.settings-tab.filter", "index": 0})
 	f.settle()
-	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.run("core.focus.set", map[string]any{"name": "core.settings-tab.search", "index": 0})
 	f.settle()
 	f.tester.Type("x")
 	f.settle()
@@ -1327,14 +1198,14 @@ func TestTheFocusCommandKeepsTheSelectionOfAFieldThatHadTheFocus(t *testing.T) {
 // Tab selects the text of the field it reaches, whatever selection that field had.
 func TestTabSelectsTheTextOfTheSearchItReaches(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
-	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
+	f.run("core.settings-tab.search", map[string]string{"query": "term"})
 	f.settle()
-	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.search", "index": 0})
+	f.run("core.focus.set", map[string]any{"name": "core.settings-tab.search", "index": 0})
 	f.settle()
 	f.tester.Key(0, ui.KeyEnd)
 	f.settle()
-	f.run("core.focus.set", map[string]any{"name": "core.settings-modal.manage", "index": 0})
+	f.run("core.focus.set", map[string]any{"name": "core.settings-tab.scope", "index": 0})
 	f.settle()
 	f.tester.Key(0, ui.KeyTab)
 	f.settle()
@@ -1349,8 +1220,8 @@ func TestTabSelectsTheTextOfTheSearchItReaches(t *testing.T) {
 // that it gives them.
 func TestTheSearchDrawsTheSymbolsOfTheSystem(t *testing.T) {
 	f := opened(t)
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
-	f.run("core.settings-modal.search", map[string]string{"query": "term"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
+	f.run("core.settings-tab.search", map[string]string{"query": "term"})
 	f.settle()
 	asked := map[string]float64{}
 	f.tester.SetSystemSymbols(func(name string, pointSize, scale float64) (image.Image, bool) {
@@ -1364,7 +1235,7 @@ func TestTheSearchDrawsTheSymbolsOfTheSystem(t *testing.T) {
 	if want := float64(plainLength(t, "search-cancel-pt")); asked["xmark.circle.fill"] != want {
 		t.Fatalf("asked for %v, not the cancel at %v", asked, want)
 	}
-	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.search", "")
+	node, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.search", "")
 	if !ok {
 		t.Fatalf("no search in %q", f.tester.Texts())
 	}
@@ -1389,7 +1260,8 @@ func TestTheSearchDrawsTheSymbolsOfTheSystem(t *testing.T) {
 	end, cancelSize := plainLength(t, "search-cancel-end"), plainLength(t, "search-cancel-size")
 	cx := box.X + box.W - end - cancelSize/2
 	for _, at := range [][2]float32{{cx, y}, {cx - corner, y - corner}} {
-		if got, want := f.pixelOf(at[0], at[1]), opaque("search-cancel"); got != want {
+		// The cancel is drawn in the muted color of the theme.
+		if got, want := f.pixelOf(at[0], at[1]), plainColor(t, "search-cancel"); got != want {
 			t.Fatalf("the cancel at %v is %v, not %v", at, got, want)
 		}
 	}
@@ -1404,13 +1276,14 @@ func TestTheSearchDrawsTheSymbolsOfTheSystem(t *testing.T) {
 // Every system of the host has the symbols of a search, so one without them is an error and no other drawing stands in.
 func TestASearchWithoutItsSymbolsIsAnError(t *testing.T) {
 	f := opened(t)
-	f.tester.SetSystemSymbols(func(string, float64, float64) (image.Image, bool) { return nil, false })
+	// The defer is set before the provider is installed: installing it draws the settings menu, whose search field asks for the symbol.
 	defer func() {
 		if got := fmt.Sprint(recover()); !strings.Contains(got, "no symbol magnifyingglass") {
 			t.Fatalf("a search without its symbol ended with %q", got)
 		}
 	}()
-	f.run("core.settings-modal.nav", map[string]string{"section": "plugins"})
+	f.tester.SetSystemSymbols(func(string, float64, float64) (image.Image, bool) { return nil, false })
+	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
 	f.settle()
 }
 
@@ -1487,212 +1360,385 @@ func TestTheNameOfASettingsGroupIsBold(t *testing.T) {
 	}
 }
 
-// TestScrollingTheSettingsCardRedrawsTheCardAlone checks that the wheel over the open card changes the pixels of the card,
-// not those of the blurred workbench below it, which nothing changed.
-// The status reports the pane that scrolls: the box under the fixed head of the card and beside its section nav, the only box a
-// control of the shown content is reachable in, because the head covers the content that the scroll clips (docs/spec/settings.md).
-func TestTheSettingsStatusReportsThePaneOfTheCard(t *testing.T) {
-	f := openedShell(t)
-	f.click("core.chrome.settings", "")
-	status := f.modal()
-	card, pane := status.Card, status.Pane
-	declared, err := workbench.Declared()
-	if err != nil {
-		t.Fatal(err)
-	}
-	headH, ok := declared.Metric("set-card-head-h")
-	if !ok {
-		t.Fatal("no metric set-card-head-h")
-	}
-	navW, ok := declared.Metric("set-nav-w")
-	if !ok {
-		t.Fatal("no metric set-nav-w")
-	}
-	palette, err := declared.DefaultPalette()
-	if err != nil {
-		t.Fatal(err)
-	}
-	border := float64(2 * palette.BorderWidth)
-	near := func(have, want float64) bool { return math.Abs(have-want) <= 0.01 }
-	for _, check := range []struct {
-		name string
-		have float64
-		want float64
-	}{
-		{"the pane does not start at the nav", pane.X, card.X + float64(palette.BorderWidth) + navW},
-		{"the pane does not start under the head", pane.Y, card.Y + float64(palette.BorderWidth) + headH},
-		{"the pane is not as wide as the card beside the nav", pane.W, card.W - border - navW},
-		{"the pane is not as tall as the card under the head", pane.H, card.H - border - headH},
-	} {
-		if !near(check.have, check.want) {
-			t.Errorf("%s: pane %+v of card %+v is %.2f, want %.2f", check.name, pane, card, check.have, check.want)
-		}
-	}
-	if pane.X < card.X || pane.Y < card.Y || pane.X+pane.W > card.X+card.W || pane.Y+pane.H > card.Y+card.H {
-		t.Errorf("the pane %+v does not lie inside the card %+v", pane, card)
-	}
-}
-
-func TestScrollingTheSettingsCardRedrawsTheCardAlone(t *testing.T) {
-	f := openedShell(t)
-	f.click("core.chrome.settings", "")
-	card := f.modal().Card
-	// What the shadow of the card reaches around it.
-	const reach = 40
-	bound := int((card.W + 2*reach) * (card.H + 2*reach))
-	// A frame in memory changing more than half the window draws it whole, so a bound past half tells nothing.
-	if bound*2 >= 1200*800 {
-		t.Fatalf("the card %+v with its shadow is half the window or more", card)
-	}
-	var records []ui.FrameRecord
-	var clock uint64
-	f.tester.RecordFrames(&ui.FrameRecorder{
-		Clock: func() uint64 { clock++; return clock },
-		Frame: func(r *ui.FrameRecord) { records = append(records, *r) },
-	})
-	x, y := float32(card.X+card.W*0.7), float32(card.Y+card.H*0.6)
-	f.tester.Move(x, y)
-	for range 6 {
-		f.tester.Wheel(x, y, 0, 48)
-		f.tester.Advance(20 * time.Millisecond)
-	}
-	f.settle()
-	if f.modal().Scroll <= 0 {
-		t.Fatalf("the wheel did not scroll the card: %+v", f.modal().Card)
-	}
-	drew := 0
-	for i, r := range records {
-		if r.Damage == 0 {
-			continue
-		}
-		drew++
-		if r.Damage > bound {
-			t.Errorf("frame %d of the scroll changed %d pixels, more than the %d of the card %+v", i, r.Damage, bound, card)
-		}
-	}
-	if drew == 0 {
-		t.Fatal("the scroll drew no frame")
-	}
-}
-
 // A select fills the control column of its row whatever its value, as `.select-field select` of the page has the width of its column
 // and no minimum: the label of a long choice does not widen it.
 func TestASelectWithALongChoiceKeepsTheWidthOfItsColumn(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings.sets.update", map[string]any{"id": "set-1", "title": strings.Repeat("세트이름", 10)})
 	f.run("core.settings.link", map[string]any{"place": "left", "plugin": nil, "set": "set-1", "scope": "common"})
-	f.run("core.settings-modal.nav", map[string]string{"section": "general"})
+	f.run("core.settings-tab.nav", map[string]string{"page": "workspace"})
 	f.settle()
-	long, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "link:left:")
-	short, found := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "mode")
+	long, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.link", "link:left:")
+	short, found := exposedNode(f.tester.ElementTree(), "core.settings-tab.link", "link:right:")
 	if !ok || !found {
 		t.Fatalf("the selects are not drawn in %q", f.tester.Texts())
 	}
 	if long.Bounds.X != short.Bounds.X || long.Bounds.W != short.Bounds.W {
 		t.Fatalf("the select of a long choice stands at %+v, the select of a short one at %+v", long.Bounds, short.Bounds)
 	}
-	// The text field of the long title (.text-field, width:100% and min-width:0) and the select of the layout of the edited set fill
-	// the same column.
-	f.run("core.settings-modal.nav", map[string]string{"section": "sidebars"})
-	f.run("core.settings-modal.edit", map[string]any{"set": "set-1"})
+	// The text field of the long title (.text-field, width:100% and min-width:0) fills the control column. The layout of the edited set is
+	// a segment for its two values (docs/spec/settings.md#controls), so it is not measured against the column.
+	f.run("core.settings-tab.nav", map[string]string{"page": "sets"})
+	f.run("core.settings-tab.edit", map[string]any{"set": "set-1"})
 	f.settle()
-	title, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "title:set-1")
-	layout, found := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "layout:set-1")
+	title, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.set-title", "title:set-1")
+	_, found = exposedNode(f.tester.ElementTree(), "core.settings-tab.choice", "layout:set-1:list")
 	if !ok || !found {
 		t.Fatalf("the set editor is not drawn in %q", f.tester.Texts())
 	}
-	if title.Bounds.X != layout.Bounds.X || title.Bounds.W != layout.Bounds.W || layout.Bounds.W != short.Bounds.W {
-		t.Fatalf("the title stands at %+v and the layout at %+v, a select of the column at %+v", title.Bounds, layout.Bounds, short.Bounds)
-	}
-}
-
-// An order row shows the name of its value beside its buttons, and the first row shows the name of the setting, as the page draws
-// them (docs/spec/settings.md#controls): the texts that the window draws hold the name of the setting sidebarOrder, which orderRows
-// of packages/workbench/settings-ui.js gives, once, and the names of the sides in their order after it.
-func TestAnOrderRowShowsTheNameOfItsValueAndTheFirstRowTheNameOfTheSetting(t *testing.T) {
-	f := opened(t)
-	f.tester.SetSize(1200, 3200)
-	f.settle()
-	texts := f.tester.Texts()
-	label := slices.Index(texts, "사이드바 순서")
-	if label < 0 || slices.Index(texts[label+1:], "사이드바 순서") >= 0 {
-		t.Fatalf("the window draws 사이드바 순서 not once: %q", texts)
-	}
-	end := slices.Index(texts[label:], "사이드바 크기")
-	if end < 0 {
-		t.Fatalf("no group 사이드바 크기 after the order: %q", texts)
-	}
-	var names []string
-	for _, text := range texts[label : label+end] {
-		if slices.Contains([]string{"왼쪽", "오른쪽", "위", "아래"}, text) {
-			names = append(names, text)
-		}
-	}
-	if !slices.Equal(names, []string{"왼쪽", "오른쪽", "위", "아래"}) {
-		t.Fatalf("the order rows show the names %q in %q", names, texts[label:label+end])
-	}
-	// Each name stands in the line of its buttons: the first ▼ and the name of the first row share a line.
-	first := element(t, f.tester, "core.settings-modal.order", "order:sidebarOrder:0:down").Bounds
-	name, ok := f.tester.Find("사이드바 순서")
-	if !ok || name.Y+name.H < first.Y || name.Y > first.Y+first.H {
-		t.Fatalf("the name %+v stands outside the line of the first row %+v", name, first)
-	}
-}
-
-// Under the classic scroller style the general section, whose content overflows the pane, lays its content out beside the bar, as
-// the pane of the page with overflow:auto: each control is 17 points narrower at its place, and the grid of themes has as many
-// columns of the least tile width as the narrower pane holds.
-func TestTheGeneralSettingsGiveAClassicBarItsRoom(t *testing.T) {
-	f := opened(t)
-	declared, err := workbench.ReadDeclarations()
+	declared, err := workbench.Declared()
 	if err != nil {
 		t.Fatal(err)
 	}
-	metric := func(name string) float32 {
-		value, ok := declared.Metric(name)
-		if !ok {
-			t.Fatalf("no metric %s", name)
-		}
-		return float32(value)
-	}
-	least, gap := metric("theme-swatch-min-w"), metric("theme-grid-gap")
-	tile := func(inner float32) float32 {
-		columns := float32(math.Floor(float64((inner + gap) / (least + gap))))
-		return (inner - gap*(columns-1)) / columns
-	}
-	overlay := f.box("core.settings-modal.set", "projectOpening")
-	theme := f.box("core.settings-modal.theme", "theme:midnight")
-	// The grid of themes starts at the start of the pane, and the selector ends at its end.
-	inner := overlay.X + overlay.W - theme.X
-	if !designNear(theme.W, tile(inner)) {
-		t.Fatalf("a theme is %v wide in a pane %v wide, want %v", theme.W, inner, tile(inner))
-	}
-	f.tester.SetPreferences(ui.Preferences{ClassicScrollbars: true, ClassicScrollbarWidth: 17, ThinClassicScrollbarWidth: 13})
+	areaW, _ := declared.Metric("set-control-w")
+	// The set title is a setting row, so it stands in the control column of 260 points (docs/spec/settings.md#rows). The select of a
+	// side row is sized to its options as the web grid .set-side does, so the control of a standard row on the workspace page is measured.
+	f.run("core.settings-tab.nav", map[string]string{"page": "workspace"})
 	f.settle()
-	classic := f.box("core.settings-modal.set", "projectOpening")
-	if classic.X != overlay.X || !designNear(classic.W, overlay.W-17) {
-		t.Fatalf("the selector is at x %v, %v wide under the classic style and at x %v, %v wide under the overlay style; want the same x and 17 narrower",
-			classic.X, classic.W, overlay.X, overlay.W)
+	choice, found := exposedNode(f.tester.ElementTree(), "core.settings-tab.choice", "projectTabs")
+	if !found {
+		t.Fatalf("the project tab choice is not drawn in %q", f.tester.Texts())
 	}
-	if got := f.box("core.settings-modal.theme", "theme:midnight"); got.X != theme.X || !designNear(got.W, tile(inner-17)) {
-		t.Fatalf("a theme is at x %v, %v wide beside the classic bar, want x %v and %v wide", got.X, got.W, theme.X, tile(inner-17))
+	if title.Bounds.X != choice.Bounds.X || title.Bounds.W != float32(areaW) || choice.Bounds.W != float32(areaW) {
+		t.Fatalf("the title stands at %+v and the choice of a standard row at %+v, the control column of width %v", title.Bounds, choice.Bounds, areaW)
 	}
 }
 
-// The display group of the general section draws the card auto-arrange choice: resize keeps the arrangement, even replaces it
-// with an equal grid, and the choice runs core.settings.change (docs/spec/settings.md#controls).
-func TestTheDisplayGroupDrawsTheCardArrangeChoice(t *testing.T) {
+// The sidebar list is one group of four rows, one per side in the order of sidebarOrder, each with its number, its name, its set select,
+// its switch and its ↑ and ↓ (docs/spec/settings.md#작업-공간). The first row has no enabled ↑ and the last row no enabled ↓, and the
+// caption of the shortcuts stands below the list in a fixed order.
+func TestTheSidebarListIsOneGroupOfFourRowsInTheOrderOfSidebarOrder(t *testing.T) {
 	f := opened(t)
-	status := f.modal()
-	for _, control := range status.Controls {
-		if control.Name == "core.settings-modal.set" && control.Key != nil && *control.Key == "cardArrange" {
-			if !slices.Equal(control.Options, []string{"resize", "even"}) || *control.Value != "resize" || control.Command.Name != "core.settings.change" {
-				t.Fatalf("cardArrange %+v", control)
+	f.run("core.settings-tab.nav", map[string]any{"page": "workspace"})
+	f.tester.SetSize(1200, 3200)
+	f.settle()
+	shown := f.modal()
+	if got := shown.keys("core.settings-tab.side"); !slices.Equal(got, []string{"left", "right", "top", "bottom"}) {
+		t.Fatalf("the switches of the sides are %q", got)
+	}
+	if got := shown.keys("core.settings-tab.link"); !slices.Equal(got, []string{"link:left:", "link:right:", "link:top:", "link:bottom:"}) {
+		t.Fatalf("the set selects are %q", got)
+	}
+	disabled := func(name, key string) bool {
+		t.Helper()
+		for _, control := range shown.Controls {
+			if control.Name == name && control.Key != nil && *control.Key == key {
+				return control.Disabled
 			}
-			return
+		}
+		t.Fatalf("no control %s %s", name, key)
+		return false
+	}
+	if !disabled("core.settings-tab.order", "order:sidebarOrder:0:up") || disabled("core.settings-tab.order", "order:sidebarOrder:0:down") {
+		t.Error("the first row has an enabled ↑ or a disabled ↓")
+	}
+	if disabled("core.settings-tab.order", "order:sidebarOrder:3:up") || !disabled("core.settings-tab.order", "order:sidebarOrder:3:down") {
+		t.Error("the last row has a disabled ↑ or an enabled ↓")
+	}
+	// The rows of the list show their number and name in turn; the choices 왼쪽 and 위 of 프로젝트 탭 위치 stand in another group.
+	rowsShown := func(want []string) {
+		t.Helper()
+		texts := f.tester.Texts()
+		start := slices.Index(texts, "사이드바")
+		end := slices.Index(texts, "사이드바 크기")
+		if start < 0 || end < start {
+			t.Fatalf("no group 사이드바 before 사이드바 크기 in %q", texts)
+		}
+		var rows []string
+		for _, text := range texts[start:end] {
+			if slices.Contains([]string{"1", "2", "3", "4", "왼쪽", "오른쪽", "위", "아래"}, text) {
+				rows = append(rows, text)
+			}
+		}
+		if !slices.Equal(rows, want) {
+			t.Fatalf("the rows show %q, want %q", rows, want)
+		}
+		if index := slices.Index(texts, sideShortcutCaption); index < 0 {
+			t.Fatalf("the caption of the shortcuts is not drawn in %q", texts)
 		}
 	}
-	t.Fatalf("no control for cardArrange")
+	rowsShown([]string{"1", "왼쪽", "2", "오른쪽", "3", "위", "4", "아래"})
+	// A new sidebarOrder moves the rows, their switches and their order buttons with it.
+	f.run("core.settings.change", map[string]any{"key": "sidebarOrder", "value": []string{"top", "left", "bottom", "right"}, "scope": "common"})
+	f.tester.SetSize(1200, 3200)
+	f.settle()
+	rowsShown([]string{"1", "위", "2", "왼쪽", "3", "아래", "4", "오른쪽"})
+	if got := f.modal().keys("core.settings-tab.side"); !slices.Equal(got, []string{"top", "left", "bottom", "right"}) {
+		t.Fatalf("after the new order the switches of the sides are %q", got)
+	}
+	if !disabled("core.settings-tab.order", "order:sidebarOrder:0:up") || disabled("core.settings-tab.order", "order:sidebarOrder:0:down") {
+		t.Error("after the new order the first row has an enabled ↑ or a disabled ↓")
+	}
+}
+
+// sideShortcutCaption is the caption of the shortcuts under the sidebar list (docs/spec/settings.md#작업-공간).
+const sideShortcutCaption = "⌘B 왼쪽 · ⌥⌘B 오른쪽 · ⇧⌘J 위 · ⌘J 아래"
+
+// Each setting form has exactly one control of the form (docs/spec/settings.md#controls): a switch, a segment for two or three listed
+// values, a select for more, a slider for a continuous integer and a stepper for a small one. A segment shows one button per value
+// and a stepper the buttons up and down, under the setting key; a switch, a select and a slider show no such buttons.
+func TestTheLookAndBehaviorPagesDrawEachFormWithItsOneControl(t *testing.T) {
+	f := opened(t)
+	pages := []struct {
+		page  string
+		forms []struct{ key, name, kind string }
+	}{
+		{"look", []struct{ key, name, kind string }{
+			{"mode", "core.settings-tab.choice", "segment"}, {"gap", "core.settings-tab.step", "slider"}, {"radius", "core.settings-tab.step", "slider"},
+			{"font", "core.settings-tab.choice", "select"}, {"size", "core.settings-tab.step", "stepper"}, {"textSize", "core.settings-tab.choice", "select"},
+			{"focusInd", "core.settings-tab.choice", "segment"}, {"fullRule", "core.settings-tab.choice", "segment"}, {"dim", "core.settings-tab.set", "switch"}}},
+		{"behavior", []struct{ key, name, kind string }{
+			{"language", "core.settings-tab.choice", "segment"}, {"cardArrange", "core.settings-tab.choice", "segment"},
+			{"viewProcess", "core.settings-tab.choice", "segment"}, {"memorySaver", "core.settings-tab.set", "switch"},
+			{"memorySaverDelay", "core.settings-tab.step", "slider"}, {"autoDismissProblemToasts", "core.settings-tab.set", "switch"},
+			{"problemToastDismissSeconds", "core.settings-tab.step", "stepper"}}},
+	}
+	// The first value of a segment, which its button names.
+	first := map[string]string{"mode": "dark", "focusInd": "border", "fullRule": "under", "language": "auto", "cardArrange": "resize", "viewProcess": "plugin"}
+	for _, page := range pages {
+		f.run("core.settings-tab.nav", map[string]any{"page": page.page})
+		for _, form := range page.forms {
+			var found []string
+			for _, control := range f.modal().Controls {
+				if control.Key != nil && *control.Key == form.key {
+					found = append(found, control.Name)
+				}
+			}
+			if len(found) != 1 || found[0] != form.name {
+				t.Errorf("%s: %s has the controls %q, want one %s", page.page, form.key, found, form.name)
+			}
+			switch form.kind {
+			case "segment":
+				if !f.has(form.name, form.key+":"+first[form.key]) {
+					t.Errorf("%s is not drawn as a segment: no button %s:%s", form.key, form.key, first[form.key])
+				}
+			case "stepper":
+				if !f.has(form.name, form.key+":up") || !f.has(form.name, form.key+":down") {
+					t.Errorf("%s is not drawn as a stepper: no buttons up and down", form.key)
+				}
+			case "slider", "switch", "select":
+				if f.has(form.name, form.key+":up") || f.has(form.name, form.key+":down") {
+					t.Errorf("%s is drawn with stepper buttons, want a %s", form.key, form.kind)
+				}
+			}
+		}
+	}
+}
+
+// The card arrangement is a segment of two values, and a press on one value runs core.settings.change with that value (docs/spec/settings.md#controls).
+func TestCardArrangeIsDrawnAsItsSegment(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-tab.nav", map[string]any{"page": "behavior"})
+	f.click("core.settings-tab.choice", "cardArrange:even")
+	if got := f.settingValues()["cardArrange"]; got != "even" {
+		t.Fatalf("the segment changed cardArrange to %v", got)
+	}
+	for _, control := range f.modal().Controls {
+		if control.Key != nil && *control.Key == "cardArrange" && (control.Command == nil || control.Command.Name != "core.settings.change" || control.Command.Params["scope"] != "common") {
+			t.Fatalf("the segment of cardArrange runs %+v", control.Command)
+		}
+	}
+}
+
+// Scrolling the tab redraws the tab content and nothing else: every frame of the scroll changes no more pixels than the content area of
+// the tab, and the shadow of the card no longer reaches past it (docs/spec/settings.md#rows, docs/spec/settings.md#status).
+// The wheel over the content changes only pixels of the tab content. The pixels of each scroll step are compared with the pixels before
+// the step. The renderer draws the whole window when the damage of a frame covers half of it or more (internal/raster Renderer.whole),
+// so the recorded damage of a scroll step is the whole window, and the pixels outside the content are drawn again with the same values.
+func TestScrollingTheSettingsTabRedrawsOnlyTheTabContent(t *testing.T) {
+	const width, height = 1200, 500
+	f := openedShell(t)
+	f.click("core.chrome.settings", "")
+	f.run("core.settings-tab.nav", map[string]any{"page": "look"})
+	// A short window makes the content of the look page overflow the content area.
+	f.tester.SetSize(width, height)
+	f.settle()
+	pane, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.pane", "")
+	if !ok {
+		t.Fatalf("no content pane in %q", f.tester.Texts())
+	}
+	scale := float32(f.tester.Image().Bounds().Dx()) / width
+	inside := func(px, py int) bool {
+		x, y := float32(px)/scale, float32(py)/scale
+		return x >= pane.Bounds.X && x < pane.Bounds.X+pane.Bounds.W && y >= pane.Bounds.Y && y < pane.Bounds.Y+pane.Bounds.H
+	}
+	// changed counts the pixels that differ between two images, inside and outside the content area.
+	changed := func(before, after *image.RGBA) (int, int) {
+		inner, outer := 0, 0
+		bounds := after.Bounds()
+		for py := bounds.Min.Y; py < bounds.Max.Y; py++ {
+			for px := bounds.Min.X; px < bounds.Max.X; px++ {
+				if before.RGBAAt(px, py) == after.RGBAAt(px, py) {
+					continue
+				}
+				if inside(px, py) {
+					inner++
+				} else {
+					outer++
+				}
+			}
+		}
+		return inner, outer
+	}
+	x, y := float32(pane.Bounds.X+pane.Bounds.W/2), float32(pane.Bounds.Y+pane.Bounds.H/2)
+	f.tester.Move(x, y)
+	before := cloneImage(f.tester.Image())
+	inner, outer := 0, 0
+	for range 6 {
+		f.tester.Wheel(x, y, 0, 48)
+		f.tester.Advance(20 * time.Millisecond)
+		after := cloneImage(f.tester.Image())
+		i, o := changed(before, after)
+		inner, outer = inner+i, outer+o
+		before = after
+	}
+	f.settle()
+	i, o := changed(before, f.tester.Image())
+	inner, outer = inner+i, outer+o
+	if f.modal().Scroll <= 0 {
+		t.Fatalf("the wheel did not scroll the content: %+v", pane.Bounds)
+	}
+	if inner == 0 {
+		t.Fatal("the scroll changed no pixel of the content")
+	}
+	if outer != 0 {
+		t.Errorf("the scroll changed %d pixels outside the content area %+v", outer, pane.Bounds)
+	}
+}
+
+// cloneImage copies the pixels of an image, so that a later frame does not change the copy.
+func cloneImage(src *image.RGBA) *image.RGBA {
+	return &image.RGBA{Pix: slices.Clone(src.Pix), Stride: src.Stride, Rect: src.Rect}
+}
+
+// Each row has its control area of 260 points at the right of the pane, which starts at the same x in every row: the control of a row
+// starts in that area and ends inside it (docs/spec/settings.md#rows).
+func TestEveryRowsControlStandsInTheControlArea(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	padX, _ := declared.Metric("set-pane-pad-x")
+	areaW, _ := declared.Metric("set-control-w")
+	f := opened(t)
+	f.run("core.settings-tab.nav", map[string]string{"page": "behavior"})
+	f.tester.SetSize(1200, 3200)
+	f.settle()
+	pane, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.pane", "")
+	if !ok {
+		t.Fatalf("no pane in %q", f.tester.Texts())
+	}
+	// The area is computed from the pane width, so every control of every row starts at the same x.
+	start := pane.Bounds.X + pane.Bounds.W - float32(padX) - float32(areaW)
+	checked := 0
+	for _, probe := range []struct{ name, item string }{
+		{"core.settings-tab.set", "autoDismissProblemToasts"},
+		{"core.settings-tab.set", "memorySaver"},
+		{"core.settings-tab.choice", "language:auto"},
+		{"core.settings-tab.choice", "viewProcess:plugin"},
+	} {
+		node, ok := exposedNode(f.tester.ElementTree(), probe.name, probe.item)
+		if !ok {
+			t.Fatalf("no control %s %s in %q", probe.name, probe.item, f.tester.Texts())
+		}
+		checked++
+		if node.Bounds.X < start-0.5 || node.Bounds.X+node.Bounds.W > start+float32(areaW)+0.5 {
+			t.Errorf("the control %s %s spans %v to %v, outside the control area %v to %v", probe.name, probe.item,
+				node.Bounds.X, node.Bounds.X+node.Bounds.W, start, start+float32(areaW))
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no control was checked")
+	}
+}
+
+// A setting that depends on a parent is indented under it, and is disabled while the parent is off: memorySaverDelay depends on
+// memorySaver, and problemToastDismissSeconds on autoDismissProblemToasts (docs/spec/settings.md#dependency-and-validation-rules). A
+// disabled control takes no press and no step, so its element reports no action.
+func TestTheDependentRowsAreIndentedAndDisabledWhileTheirParentIsOff(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	indent, ok := declared.Metric("space-3")
+	if !ok {
+		t.Fatal("no metric space-3")
+	}
+	f := opened(t)
+	f.run("core.settings-tab.nav", map[string]any{"page": "behavior"})
+	f.tester.SetSize(1200, 3200)
+	f.settle()
+	actions := func(name, item string) ui.Actions {
+		t.Helper()
+		node, ok := exposedNode(f.tester.ElementTree(), name, item)
+		if !ok {
+			t.Fatalf("no element %s %s in %q", name, item, f.tester.Texts())
+		}
+		return node.Actions
+	}
+	labelX := func(text string) float32 {
+		t.Helper()
+		rect, ok := f.tester.Find(text)
+		if !ok {
+			t.Fatalf("no label %s in %q", text, f.tester.Texts())
+		}
+		return rect.X
+	}
+	for _, pair := range [][2]string{{"메모리 절약", "숨긴 뒤 내리기까지"}, {"자동 닫힘", "닫힐 때까지"}} {
+		if got := labelX(pair[1]) - labelX(pair[0]); got < float32(indent)-0.5 {
+			t.Errorf("the row %s is %v points right of its parent %s, not indented by %v", pair[1], got, pair[0], indent)
+		}
+	}
+	// The defaults: memorySaver is on and autoDismissProblemToasts is off.
+	if actions("core.settings-tab.step", "memorySaverDelay")&ui.ActionIncrement == 0 {
+		t.Error("the delay of the memory saver is disabled while memorySaver is on")
+	}
+	if actions("core.settings-tab.step", "problemToastDismissSeconds:up")&ui.ActionPress != 0 {
+		t.Error("the dismissal stepper takes a press while autoDismissProblemToasts is off")
+	}
+	f.click("core.settings-tab.set", "memorySaver")
+	if actions("core.settings-tab.step", "memorySaverDelay")&(ui.ActionIncrement|ui.ActionDecrement) != 0 {
+		t.Error("the delay of the memory saver still takes steps while memorySaver is off")
+	}
+	if actions("core.settings-tab.set", "memorySaver")&ui.ActionPress == 0 {
+		t.Error("the parent switch memorySaver is disabled")
+	}
+	f.click("core.settings-tab.set", "autoDismissProblemToasts")
+	if actions("core.settings-tab.step", "problemToastDismissSeconds:up")&ui.ActionPress == 0 {
+		t.Error("the dismissal stepper is disabled while autoDismissProblemToasts is on")
+	}
+	f.click("core.settings-tab.set", "autoDismissProblemToasts")
+	if actions("core.settings-tab.step", "problemToastDismissSeconds:up")&ui.ActionPress != 0 {
+		t.Error("the dismissal stepper takes a press after autoDismissProblemToasts is switched off")
+	}
+}
+
+// The buttons of the sidebar order stand in the control area of 260 points like the controls of every row, which starts at the same x
+// in each row of the pane (docs/spec/settings.md#작업-공간 and #performance). The value name of a row stands in that area too.
+func TestTheSidebarOrderButtonsStandInTheControlArea(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	padX, _ := declared.Metric("set-pane-pad-x")
+	areaW, _ := declared.Metric("set-control-w")
+	f := opened(t)
+	f.run("core.settings-tab.nav", map[string]any{"page": "workspace"})
+	f.tester.SetSize(1200, 3200)
+	f.settle()
+	pane, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.pane", "")
+	if !ok {
+		t.Fatalf("no pane in %q", f.tester.Texts())
+	}
+	start := pane.Bounds.X + pane.Bounds.W - float32(padX) - float32(areaW)
+	for _, item := range []string{"order:sidebarOrder:0:down", "order:sidebarOrder:1:up", "order:sidebarOrder:1:down",
+		"order:sidebarOrder:2:up", "order:sidebarOrder:2:down", "order:sidebarOrder:3:up"} {
+		node := element(t, f.tester, "core.settings-tab.order", item)
+		if node.Bounds.X < start-0.5 || node.Bounds.X+node.Bounds.W > start+float32(areaW)+0.5 {
+			t.Errorf("the order button %s spans %v to %v, outside the control area %v to %v", item,
+				node.Bounds.X, node.Bounds.X+node.Bounds.W, start, start+float32(areaW))
+		}
+	}
 }
 
 // The balance button draws the icon of the arrangement that its command runs: layout-grid for even, columns-3 for resize
@@ -1708,11 +1754,12 @@ func TestTheBalanceButtonDrawsTheIconOfItsArrangement(t *testing.T) {
 
 func TestNotificationSettingsEditAndPersistToastDismissal(t *testing.T) {
 	f := opened(t)
+	f.run("core.settings-tab.nav", map[string]any{"page": "behavior"})
 	f.tester.SetSize(1200, 3200)
 	f.settle()
 
-	const dismiss, seconds = "autoDismissErrorToasts", "errorToastDismissSeconds"
-	if !f.tester.HasText("초 후 자동으로 닫힘") {
+	const dismiss, seconds = "autoDismissProblemToasts", "problemToastDismissSeconds"
+	if !f.tester.HasText("자동 닫힘") || !f.tester.HasText("닫힐 때까지") || !f.tester.HasText("초") {
 		t.Error("the notifications group has no automatic-dismissal label")
 	}
 	controls := map[string]string{}
@@ -1729,27 +1776,184 @@ func TestNotificationSettingsEditAndPersistToastDismissal(t *testing.T) {
 		if control.Value != nil {
 			controls[*control.Key] = *control.Value
 		}
+		if control.Name == "core.settings-tab.set" && *control.Key == dismiss && control.On != nil {
+			controls[dismiss] = strconv.FormatBool(*control.On)
+		}
 	}
 	if controls[dismiss] != "false" || controls[seconds] != "5" {
 		t.Fatalf("the default toast controls are %+v", controls)
 	}
 
 	writes := len(f.host.settings)
-	f.click("core.settings-modal.set", seconds)
-	f.tester.Key(ui.Super, ui.KeyA)
-	f.tester.Type("7")
-	f.tester.Key(0, ui.KeyEnter)
-	f.settle()
-	if value := f.settingValues()[seconds]; value != 7.0 {
-		t.Fatalf("the seconds field changed its setting to %v", value)
-	}
-	f.click("core.settings-modal.set", dismiss)
+	// The stepper is disabled while autoDismissProblemToasts is off (docs/spec/settings.md#dependency-and-validation-rules), so the switch
+	// turns on first.
+	f.click("core.settings-tab.set", dismiss)
 	if value := f.settingValues()[dismiss]; value != true {
 		t.Fatalf("the enable switch changed its setting to %v", value)
 	}
+	// The stepper runs core.settings.change with the value one second higher (docs/spec/settings.md#controls).
+	f.click("core.settings-tab.step", seconds+":up")
+	if value := f.settingValues()[seconds]; value != 6.0 {
+		t.Fatalf("the stepper changed its setting to %v", value)
+	}
 	if patches := f.host.settings[writes:]; len(patches) != 2 ||
-		patches[0]["id"] != "" || patches[0]["patch"].(map[string]any)[seconds] != 7.0 ||
-		patches[1]["id"] != "" || patches[1]["patch"].(map[string]any)[dismiss] != true {
+		patches[0]["patch"].(map[string]any)[dismiss] != true || patches[1]["patch"].(map[string]any)[seconds] != 6.0 {
 		t.Fatalf("the native toast controls wrote %+v", patches)
+	}
+}
+
+// The settings model is built when an input changes and not per frame: a frame that follows no change builds nothing, and a change
+// of the shown page builds the model once for the change (docs/spec/settings.md#performance).
+func TestTheSettingsModelIsBuiltOnlyWhenAnInputChanges(t *testing.T) {
+	f := newShell(t, acme())
+	f.click("core.chrome.settings", "")
+	f.settle()
+	before := f.shell.SettingsModelBuilds()
+	for range 10 {
+		f.settle()
+	}
+	if built := f.shell.SettingsModelBuilds() - before; built != 0 {
+		t.Fatalf("ten frames without a change built the settings model %d times", built)
+	}
+	f.click("core.settings-tab.nav", "nav:behavior")
+	f.settle()
+	changed := f.shell.SettingsModelBuilds() - before
+	if changed != 1 {
+		t.Fatalf("a change of the shown page built the settings model %d times, not once", changed)
+	}
+	for range 10 {
+		f.settle()
+	}
+	if built := f.shell.SettingsModelBuilds() - before - changed; built != 0 {
+		t.Fatalf("ten frames after the change built the settings model %d times", built)
+	}
+}
+
+// A setting change builds the settings model once: the change of the value and the answer of its write are one change for the model.
+func TestASettingChangeBuildsTheSettingsModelOnce(t *testing.T) {
+	f := newShell(t, acme())
+	f.click("core.chrome.settings", "")
+	f.settle()
+	f.click("core.settings-tab.nav", "nav:behavior")
+	f.settle()
+	before := f.shell.SettingsModelBuilds()
+	f.click("core.settings-tab.set", "memorySaver")
+	f.settle()
+	if built := f.shell.SettingsModelBuilds() - before; built != 1 {
+		t.Fatalf("a setting change built the settings model %d times, not once", built)
+	}
+	before = f.shell.SettingsModelBuilds()
+	for range 10 {
+		f.settle()
+	}
+	if built := f.shell.SettingsModelBuilds() - before; built != 0 {
+		t.Fatalf("ten frames after the setting change built the settings model %d times", built)
+	}
+}
+
+// Frames without a change build nothing on any page, also while an application update is available.
+func TestTheIdleSettingsFramesBuildNothingOnEveryPage(t *testing.T) {
+	stored := acme()
+	stored.appUpdate = map[string]any{"version": "1.0.0", "available": map[string]any{"version": "2.0.0",
+		"release": map[string]string{"url": "https://h/o/r/releases/download/v2/x.zip", "sha256": strings.Repeat("0", 64)}}}
+	f := newShell(t, stored)
+	f.click("core.chrome.settings", "")
+	f.settle()
+	for _, page := range []string{"look", "workspace", "sets", "behavior", "agents", "diag", "installed", "browse"} {
+		f.click("core.settings-tab.nav", "nav:"+page)
+		f.settle()
+		before := f.shell.SettingsModelBuilds()
+		for range 10 {
+			f.settle()
+		}
+		if built := f.shell.SettingsModelBuilds() - before; built != 0 {
+			t.Fatalf("page %s: ten frames without a change built the settings model %d times", page, built)
+		}
+	}
+}
+
+// An application update state change builds the settings model once, and the frames after it build nothing.
+func TestAnUpdateStateChangeBuildsTheSettingsModelOnce(t *testing.T) {
+	f, stored := updateShell(t, "")
+	f.click("core.chrome.settings", "")
+	f.settle()
+	f.click("core.settings-tab.nav", "nav:installed")
+	f.settle()
+	stored.appUpdate = map[string]any{"version": "1.0.0", "available": map[string]any{"version": "2.0.0",
+		"release": map[string]string{"url": appRelease, "sha256": strings.Repeat("0", 64)}}}
+	before := f.shell.SettingsModelBuilds()
+	answered := false
+	f.shell.Registry().RunLater("core.plugins.registry", json.RawMessage(`{"index":"file:///index.json"}`), func(_ any, err error) {
+		if err != nil {
+			t.Errorf("core.plugins.registry failed: %v", err)
+		}
+		answered = true
+	})
+	f.settle()
+	if !answered {
+		t.Fatal("core.plugins.registry did not answer")
+	}
+	if built := f.shell.SettingsModelBuilds() - before; built != 1 {
+		t.Fatalf("an application update state change built the settings model %d times, not once", built)
+	}
+	before = f.shell.SettingsModelBuilds()
+	for range 10 {
+		f.settle()
+	}
+	if built := f.shell.SettingsModelBuilds() - before; built != 0 {
+		t.Fatalf("ten frames after the update state change built the settings model %d times", built)
+	}
+}
+
+// A setting write that the host refuses builds the settings model twice: once for the changed value, and once for the stored value that
+// the refusal restores, because those are the two states that the control shows.
+func TestAFailedSettingWriteBuildsTheSettingsModelForTheChangeAndItsRestore(t *testing.T) {
+	stored := acme()
+	f := newShell(t, stored)
+	f.click("core.chrome.settings", "")
+	f.settle()
+	f.click("core.settings-tab.nav", "nav:behavior")
+	f.settle()
+	stored.failing = map[string]error{"workspace": errors.New("the configuration directory is read-only")}
+	before := f.shell.SettingsModelBuilds()
+	f.clickQuiet("core.settings-tab.set", "memorySaver")
+	f.pending.drain(f.t)
+	f.tester.Frame()
+	f.pending.drain(f.t)
+	f.tester.Frame()
+	if built := f.shell.SettingsModelBuilds() - before; built != 2 {
+		t.Fatalf("a failed setting write built the settings model %d times, not twice (the change and its restore)", built)
+	}
+	before = f.shell.SettingsModelBuilds()
+	for range 10 {
+		f.tester.Frame()
+	}
+	if built := f.shell.SettingsModelBuilds() - before; built != 0 {
+		t.Fatalf("ten frames after the failed write built the settings model %d times", built)
+	}
+}
+
+// A setting write that the host refuses restores the stored value in the store and the control, and shows its error once.
+func TestAFailedSettingWriteRestoresTheValueAndShowsItsErrorOnce(t *testing.T) {
+	stored := acme()
+	f := newShell(t, stored)
+	f.click("core.chrome.settings", "")
+	f.settle()
+	f.click("core.settings-tab.nav", "nav:behavior")
+	f.settle()
+	if value := f.settingValues()["memorySaver"]; value != true {
+		t.Fatalf("the stored value is %v before the write, not true", value)
+	}
+	stored.failing = map[string]error{"workspace": errors.New("the configuration directory is read-only")}
+	f.clickQuiet("core.settings-tab.set", "memorySaver")
+	f.pending.drain(f.t)
+	f.tester.Frame()
+	f.pending.drain(f.t)
+	f.tester.Frame()
+	if value := f.settingValues()["memorySaver"]; value != true {
+		t.Fatalf("the control shows %v after the host refused the write, not the stored true", value)
+	}
+	if shown := f.shownErrors(); len(shown) != 1 || !strings.Contains(shown[0], "the configuration directory is read-only") {
+		t.Fatalf("the shell showed %q, not one error with the host text", shown)
 	}
 }

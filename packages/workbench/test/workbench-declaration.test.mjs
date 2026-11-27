@@ -13,7 +13,8 @@ const declared = () => JSON.parse(read("workbench.json"));
 /** The stylesheets of the workbench: its CSS files and the style elements of its HTML documents. */
 function stylesheets() {
   const out = [];
-  for (const name of ["app.css", "library.css"]) out.push({ name, text: read(name) });
+  // Every stylesheet file of the workbench directory, so a renamed or removed file cannot leave the check reading a missing name.
+  for (const name of readdirSync(new URL("..", import.meta.url)).filter((file) => file.endsWith(".css")).sort()) out.push({ name, text: read(name) });
   for (const name of ["index.html", "overlay.html"]) {
     for (const [at, match] of [...read(name).matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].entries()) {
       out.push({ name: `${name} style ${at + 1}`, text: match[1] });
@@ -194,7 +195,7 @@ test("the declaration states each setting of the defaults once, with a choice li
     ...settings.switches, ...settings.commonOnly, "memorySaverDelay"]) {
     assert.ok(keys.has(key) || ["gap", "radius", "font", "size"].includes(key), `${key} has no default`);
   }
-  assert.deepEqual(settings.commonOnly, ["autoDismissErrorToasts", "errorToastDismissSeconds", "memorySaver", "memorySaverDelay", "projectOpening", "textSize", "viewProcess"]);
+  assert.deepEqual(settings.commonOnly, ["autoDismissProblemToasts", "memorySaver", "memorySaverDelay", "noticeCenterStyle", "problemToastDismissSeconds", "projectOpening", "quietToasts", "textSize", "toastStyle", "viewProcess"]);
   assert.ok(declaration.menuLanguages.some((language) => language.id === declaration.defaultLanguage));
 });
 

@@ -1,4 +1,4 @@
-// Checks a stored space layout. Opening a layout and the library preview use the same check, so the preview
+// Checks a stored space layout. Opening a layout and the project home preview use the same check, so the preview
 // filters out a layout that cannot be opened and does not draw it (docs/spec/projects.md).
 import { Soksak, checkState } from "soksak";
 import { pluginUnits } from "./environment.js";

@@ -55,7 +55,7 @@ func TestSliderDragWritesOnce(t *testing.T) {
 	f := opened(t)
 	f.tester.SetSize(1200, 3200)
 	f.settle()
-	slider, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.set", "gap")
+	slider, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.step", "gap")
 	if !ok {
 		t.Fatal("no slider of the gap")
 	}

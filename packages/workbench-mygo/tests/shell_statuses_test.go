@@ -157,26 +157,6 @@ func TestSelectingATabOfAnotherCardEndsFullscreen(t *testing.T) {
 	}
 }
 
-func TestProjectStatusesFollowTheWindow(t *testing.T) {
-	f, _ := surfaceShell(t)
-	project := status[map[string]any](t, f, "core.project")
-	if project["open"] != true || project["id"] == nil {
-		t.Fatalf("core.project is %v", project)
-	}
-	projects := status[[]map[string]any](t, f, "core.projects")
-	if len(projects) == 0 || projects[0]["open"] != true {
-		t.Fatalf("core.projects is %v", projects)
-	}
-	f.run("core.projects.browse", nil)
-	if value, err := f.shell.Registry().Read("core.project"); err != nil || value != nil {
-		t.Fatalf("core.project over the library is %v, %v", value, err)
-	}
-	library := status[map[string]any](t, f, "core.library")
-	if library["page"] != "projects" || library["form"] != false || library["returnVisible"] != true {
-		t.Fatalf("core.library is %v", library)
-	}
-}
-
 func TestLayoutStatusIsTheSavedFormOfTheSpace(t *testing.T) {
 	f, _ := surfaceShell(t)
 	layout := status[map[string]any](t, f, "core.layout")
@@ -224,7 +204,7 @@ func TestAStoredFocusOnNoCardOpensWithoutTheRing(t *testing.T) {
 	first := projectWithPlugins(t)
 	first.host.projects[0]["spaces"].([]any)[0].(map[string]any)["layout"].(map[string]any)["focusedId"] = "gone"
 	second := newShell(t, first.host)
-	second.click("core.library.open", first.host.projects[0]["id"].(string))
+	second.click("core.home.open", first.host.projects[0]["id"].(string))
 	if got := status[map[string]any](t, second, "core.layout")["focusedId"]; got != nil {
 		t.Fatalf("the focus is on %v and not on no card", got)
 	}
@@ -241,7 +221,7 @@ func TestAStoredProjectOpensWithItsFocus(t *testing.T) {
 		t.Fatalf("the space stored the focus %v and not %v", got, focused)
 	}
 	second := newShell(t, first.host)
-	second.click("core.library.open", first.host.projects[0]["id"].(string))
+	second.click("core.home.open", first.host.projects[0]["id"].(string))
 	if got := status[map[string]any](t, second, "core.layout")["focusedId"]; got != focused {
 		t.Fatalf("the focus is on %v and not on %v", got, focused)
 	}

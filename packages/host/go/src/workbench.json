@@ -18,7 +18,8 @@
         "rule": "#22242f",
         "rail": "#7279ff",
         "focus": "#ffb36b",
-        "no": "#ff7c7c", "fail": "#ff7cd3"
+        "no": "#ff7c7c",
+        "fail": "#ff7cd3"
       },
       "light": {
         "bg": "#eef0f4",
@@ -29,7 +30,8 @@
         "rule": "#e3e6ec",
         "rail": "#5962e8",
         "focus": "#c06a1f",
-        "no": "#c62c2c", "fail": "#c62c93"
+        "no": "#c62c2c",
+        "fail": "#c62c93"
       }
     },
     {
@@ -50,7 +52,8 @@
         "rule": "#3a4150",
         "rail": "#81a1c1",
         "focus": "#ebcb8b",
-        "no": "#bf616a", "fail": "#bf61a9"
+        "no": "#bf616a",
+        "fail": "#bf61a9"
       },
       "light": {
         "bg": "#eceff4",
@@ -61,7 +64,8 @@
         "rule": "#e3e8ef",
         "rail": "#5e81ac",
         "focus": "#b48a2f",
-        "no": "#a3454e", "fail": "#a3458d"
+        "no": "#a3454e",
+        "fail": "#a3458d"
       }
     },
     {
@@ -82,7 +86,8 @@
         "rule": "#073642",
         "rail": "#268bd2",
         "focus": "#cb4b16",
-        "no": "#dc322f", "fail": "#dc2f9f"
+        "no": "#dc322f",
+        "fail": "#dc2f9f"
       },
       "light": {
         "bg": "#fdf6e3",
@@ -93,7 +98,8 @@
         "rule": "#f0e7d0",
         "rail": "#268bd2",
         "focus": "#cb4b16",
-        "no": "#dc322f", "fail": "#dc2f9f"
+        "no": "#dc322f",
+        "fail": "#dc2f9f"
       }
     },
     {
@@ -114,7 +120,8 @@
         "rule": "#1a241f",
         "rail": "#3f8f6b",
         "focus": "#d9a441",
-        "no": "#e0736d", "fail": "#e06db4"
+        "no": "#e0736d",
+        "fail": "#e06db4"
       },
       "light": {
         "bg": "#eef4f0",
@@ -125,7 +132,8 @@
         "rule": "#e2ebe6",
         "rail": "#2f7a58",
         "focus": "#a8761f",
-        "no": "#b1453f", "fail": "#b13f85"
+        "no": "#b1453f",
+        "fail": "#b13f85"
       }
     },
     {
@@ -146,7 +154,8 @@
         "rule": "#271c18",
         "rail": "#c4603a",
         "focus": "#e8a33d",
-        "no": "#e05252", "fail": "#e052b1"
+        "no": "#e05252",
+        "fail": "#e052b1"
       },
       "light": {
         "bg": "#faf0ea",
@@ -157,7 +166,8 @@
         "rule": "#f3e6dd",
         "rail": "#b1552f",
         "focus": "#a56a17",
-        "no": "#b23a3a", "fail": "#b23a8a"
+        "no": "#b23a3a",
+        "fail": "#b23a8a"
       }
     },
     {
@@ -178,7 +188,8 @@
         "rule": "#2c3036",
         "rail": "#6b7480",
         "focus": "#c7ced8",
-        "no": "#d97070", "fail": "#d970b6"
+        "no": "#d97070",
+        "fail": "#d970b6"
       },
       "light": {
         "bg": "#f1f3f5",
@@ -189,7 +200,8 @@
         "rule": "#dcdfe4",
         "rail": "#7b8593",
         "focus": "#3d4854",
-        "no": "#b1453f", "fail": "#b13f85"
+        "no": "#b1453f",
+        "fail": "#b13f85"
       }
     },
     {
@@ -210,7 +222,8 @@
         "rule": "#1d2531",
         "rail": "#4c6c88",
         "focus": "#8ec5ea",
-        "no": "#dd7a74", "fail": "#dd74b4"
+        "no": "#dd7a74",
+        "fail": "#dd74b4"
       },
       "light": {
         "bg": "#eef2f5",
@@ -221,7 +234,8 @@
         "rule": "#e3eaf0",
         "rail": "#6f92ad",
         "focus": "#2f6f9f",
-        "no": "#b8453f", "fail": "#b83f8a"
+        "no": "#b8453f",
+        "fail": "#b83f8a"
       }
     },
     {
@@ -242,7 +256,8 @@
         "rule": "#221a2e",
         "rail": "#8a5cd6",
         "focus": "#e07bd0",
-        "no": "#e4707f", "fail": "#e470cc"
+        "no": "#e4707f",
+        "fail": "#e470cc"
       },
       "light": {
         "bg": "#f4eefb",
@@ -253,7 +268,8 @@
         "rule": "#ebe2f5",
         "rail": "#7a4fc0",
         "focus": "#a8459a",
-        "no": "#b6455a", "fail": "#b645a5"
+        "no": "#b6455a",
+        "fail": "#b645a5"
       }
     },
     {
@@ -274,7 +290,8 @@
         "rule": "#26221c",
         "rail": "#8a7752",
         "focus": "#d7b46a",
-        "no": "#cf6f62", "fail": "#cf629e"
+        "no": "#cf6f62",
+        "fail": "#cf629e"
       },
       "light": {
         "bg": "#f2ede4",
@@ -285,7 +302,8 @@
         "rule": "#eae3d7",
         "rail": "#a8926b",
         "focus": "#7a5c2e",
-        "no": "#a8443c", "fail": "#a83c7c"
+        "no": "#a8443c",
+        "fail": "#a83c7c"
       }
     },
     {
@@ -306,7 +324,8 @@
         "rule": "#26262a",
         "rail": "#6a6a70",
         "focus": "#e0e0e2",
-        "no": "#c96a6a", "fail": "#c96aa9"
+        "no": "#c96a6a",
+        "fail": "#c96aa9"
       },
       "light": {
         "bg": "#ffffff",
@@ -317,7 +336,8 @@
         "rule": "#e2e2e5",
         "rail": "#a0a0a6",
         "focus": "#1a1a1c",
-        "no": "#b53a3a", "fail": "#b53a8c"
+        "no": "#b53a3a",
+        "fail": "#b53a8c"
       }
     }
   ],
@@ -395,8 +415,11 @@
       "sidebarWidth": 190,
       "memorySaver": true,
       "memorySaverDelay": 120,
-      "autoDismissErrorToasts": false,
-      "errorToastDismissSeconds": 5
+      "autoDismissProblemToasts": false,
+      "problemToastDismissSeconds": 5,
+      "toastStyle": "card",
+      "noticeCenterStyle": "popover",
+      "quietToasts": false
     },
     "layoutRanges": {
       "sidebarMinWidth": [
@@ -441,7 +464,9 @@
       ],
       "projectTabs": [
         "top",
-        "left"
+        "bottom",
+        "left",
+        "right"
       ],
       "focusInd": [
         "border",
@@ -455,6 +480,15 @@
       "cardArrange": [
         "resize",
         "even"
+      ],
+      "toastStyle": [
+        "card",
+        "line",
+        "deck"
+      ],
+      "noticeCenterStyle": [
+        "popover",
+        "drawer"
       ]
     },
     "textSteps": [
@@ -473,12 +507,13 @@
       3
     ],
     "switches": [
-      "autoDismissErrorToasts",
+      "autoDismissProblemToasts",
       "bottom",
       "diagnostics.performance",
       "dim",
       "left",
       "memorySaver",
+      "quietToasts",
       "right",
       "top"
     ],
@@ -491,17 +526,20 @@
       ]
     },
     "commonOnly": [
-      "autoDismissErrorToasts",
-      "errorToastDismissSeconds",
+      "autoDismissProblemToasts",
       "memorySaver",
       "memorySaverDelay",
+      "noticeCenterStyle",
+      "problemToastDismissSeconds",
       "projectOpening",
+      "quietToasts",
       "textSize",
+      "toastStyle",
       "viewProcess"
     ],
-    "errorToastDismissSeconds": [
+    "problemToastDismissSeconds": [
       1,
-      2147483
+      60
     ]
   },
   "icons": {
@@ -530,7 +568,12 @@
     "close": "<path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/>",
     "layout-grid": "<rect width=\"7\" height=\"7\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"14\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"14\" y=\"14\" rx=\"1\"/><rect width=\"7\" height=\"7\" x=\"3\" y=\"14\" rx=\"1\"/>",
     "settings": "<path d=\"M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/>",
-    "brand-logo": "<svg x=\"0\" y=\"0\" width=\"80\" height=\"80\" viewBox=\"0 0 1024 1024\"><rect width=\"1024\" height=\"1024\" rx=\"228\" fill=\"#0E1116\"/><g transform=\"translate(512 512) scale(1.3) translate(-512 -512)\"><circle cx=\"512\" cy=\"512\" r=\"300\" fill=\"#1FE36E\"/><path d=\"M556.8 382H671.1V418H556.8ZM254.5 528H769.5A258 258 0 0 1 254.5 528Z\" fill=\"#0E1116\" stroke=\"#0E1116\" stroke-width=\"28\" stroke-linejoin=\"round\"/><path d=\"M361.2 340L465.1 400L361.2 460\" fill=\"none\" stroke=\"#0E1116\" stroke-width=\"64\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></g></svg><svg x=\"102\" y=\"19.375\" width=\"221.25\" height=\"41.25\" viewBox=\"-1 15 236 44\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M27 25 C24 20.5 19 19 15 19 C8 19 4 22.5 4 27.5 C4 33 10 35 15.5 36 C21.5 37 28 39 28 46 C28 52 22.5 55 16 55 C10.5 55 6 53 3 49\"/><circle cx=\"56\" cy=\"37\" r=\"18\"/><path d=\"M88 19 V55 M108 19 L88 37 M88 37 L110 55\"/><path transform=\"translate(120,0)\" d=\"M27 25 C24 20.5 19 19 15 19 C8 19 4 22.5 4 27.5 C4 33 10 35 15.5 36 C21.5 37 28 39 28 46 C28 52 22.5 55 16 55 C10.5 55 6 53 3 49\"/><circle cx=\"174\" cy=\"37\" r=\"18\"/><path d=\"M192 19 V55\"/><path d=\"M208 19 V55 M228 19 L208 37 M208 37 L230 55\"/></g></svg>"
+    "brand-logo": "<svg x=\"0\" y=\"0\" width=\"80\" height=\"80\" viewBox=\"0 0 1024 1024\"><rect width=\"1024\" height=\"1024\" rx=\"228\" fill=\"#0E1116\"/><g transform=\"translate(512 512) scale(1.3) translate(-512 -512)\"><circle cx=\"512\" cy=\"512\" r=\"300\" fill=\"#1FE36E\"/><path d=\"M556.8 382H671.1V418H556.8ZM254.5 528H769.5A258 258 0 0 1 254.5 528Z\" fill=\"#0E1116\" stroke=\"#0E1116\" stroke-width=\"28\" stroke-linejoin=\"round\"/><path d=\"M361.2 340L465.1 400L361.2 460\" fill=\"none\" stroke=\"#0E1116\" stroke-width=\"64\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></g></svg><svg x=\"102\" y=\"19.375\" width=\"221.25\" height=\"41.25\" viewBox=\"-1 15 236 44\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M27 25 C24 20.5 19 19 15 19 C8 19 4 22.5 4 27.5 C4 33 10 35 15.5 36 C21.5 37 28 39 28 46 C28 52 22.5 55 16 55 C10.5 55 6 53 3 49\"/><circle cx=\"56\" cy=\"37\" r=\"18\"/><path d=\"M88 19 V55 M108 19 L88 37 M88 37 L110 55\"/><path transform=\"translate(120,0)\" d=\"M27 25 C24 20.5 19 19 15 19 C8 19 4 22.5 4 27.5 C4 33 10 35 15.5 36 C21.5 37 28 39 28 46 C28 52 22.5 55 16 55 C10.5 55 6 53 3 49\"/><circle cx=\"174\" cy=\"37\" r=\"18\"/><path d=\"M192 19 V55\"/><path d=\"M208 19 V55 M228 19 L208 37 M208 37 L230 55\"/></g></svg>",
+    "bell": "<path d=\"M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8\"/><path d=\"M10.3 21a1.94 1.94 0 0 0 3.4 0\"/>",
+    "notice-success": "<path d=\"M5 12.5l4.5 4.5L19 7.5\"/>",
+    "notice-info": "<path d=\"M12 8h.01\"/><path d=\"M11 12h1v4h1\"/>",
+    "notice-warning": "<path d=\"M12 4 21 19H3z\"/><path d=\"M12 10v4M12 17h.01\"/>",
+    "notice-error": "<path d=\"M6 6l12 12M18 6 6 18\"/>"
   },
   "activities": {
     "attention": "응답 대기",
@@ -588,6 +631,7 @@
     "text-w": "20ch"
   },
   "chrome": {
+    "set-control-w": "260px",
     "divider": "6px",
     "text-control-at-base": "12",
     "text-base": "13",
@@ -620,7 +664,10 @@
     "chrome-row-h": "36px",
     "chrome-h": "40px",
     "head-h": "32px",
+    "home-w": "660px",
+    "home-row-min-h": "48px",
     "foot-h": "22px",
+    "statusbar-h": "24px",
     "tab-peek-w": "56px",
     "tab-min-w": "48px",
     "tab-grab-w": "32px",
@@ -634,7 +681,7 @@
     "tabs-gap": "4px",
     "tabs-pad": "5px",
     "space-tabs-gap": "2px",
-    "space-tab-h": "26px",
+    "space-tab-h": "22px",
     "bar-tab-gap": "6px",
     "bar-tab-max-w": "220px",
     "bar-tab-x-opacity": ".5",
@@ -751,9 +798,7 @@
     "set-caption-gap": "10px",
     "set-actions-gap": "8px",
     "set-actions-margin": "10px",
-    "set-row-name-w": "124px",
-    "set-row-gap": "12px",
-    "set-row-h": "30px",
+    "set-row-h": "36px",
     "dbg-card-w": "640px",
     "dbg-pane-pad-x": "18px",
     "dbg-pane-pad-bottom": "18px",
@@ -764,6 +809,8 @@
     "dbg-bar-gap": "12px",
     "select-arrow-inset": "10px",
     "field-pad-y": "5px",
+    "field-h": "28px",
+    "button-sm-h": "24px",
     "select-arrow-room": "26px",
     "seg-gap": "2px",
     "seg-pad": "2px",
@@ -792,12 +839,6 @@
     "theme-pair-inset": "6px",
     "theme-dot-inset": "3px",
     "theme-dot": "6px",
-    "error-pad-y": "8px",
-    "error-pad-x": "12px",
-    "error-close-pad-x": "6px",
-    "error-border": "1px",
-    "error-toast-bottom": "24px",
-    "error-toast-max-width": "420px",
     "fold-button": "18px",
     "sidebar-status-gap": "6px",
     "section-head-gap": "6px",
@@ -812,31 +853,348 @@
     "section-tab-mark": "2px",
     "section-min-h": "32px",
     "section-divider": "6px",
-    "library-footer-h": "22px",
-    "library-sort-w": "120px",
-    "library-search-w": "205px",
-    "library-card-min-w": "245px",
-    "library-preview-h": "145px",
-    "preview-border-mix": "24%",
-    "preview-fill-mix": "10%",
-    "preview-ink-mix": "65%",
-    "library-mark": "14px",
-    "library-mark-stroke": "1.25",
-    "preview-line-w": "60%",
-    "preview-line-h": "3px",
-    "preview-line-step": "7px",
-    "preview-line-opacity": ".35",
-    "preview-sidebar-opacity": ".45",
-    "library-add-h": "220px",
-    "library-form-w": "560px",
     "clip-all": "50%",
-    "library-card-min-w-narrow": "215px",
-    "library-narrow-w": "780px",
     "scrim-alpha": ".5",
     "scrim-blur": "3px",
     "picker-anchor-gap": "5px",
     "drop-band": "5px",
     "drop-band-margin": "3px",
-    "placeholder-gap": "10px"
+    "placeholder-gap": "10px",
+    "toast-width": "330px",
+    "toast-pad-top": "11px",
+    "toast-pad-x": "12px",
+    "toast-pad-right": "10px",
+    "toast-pad-bottom": "12px",
+    "toast-gap": "8px",
+    "toast-top": "48px",
+    "toast-right": "12px",
+    "toast-bar": "2px",
+    "toast-shadow": "0 10px 28px rgba(0,0,0,.28)",
+    "toast-line-h": "36px",
+    "toast-more-pad-x": "10px",
+    "notice-center-w": "360px",
+    "notice-center-max-h": "480px",
+    "notice-line-h": "22px",
+    "notice-line-gap": "6px",
+    "notice-entry-pad": "10px",
+    "notice-dot-size": "7px",
+    "notice-badge-min": "15px",
+    "notice-glyph": "12px",
+    "toast-deck-lift": "-10px",
+    "toast-deck-scale": "0.96",
+    "toast-bar-opacity": "0.7",
+    "notice-tone-mix": "12%"
+  },
+  "rows": {
+    "pages": [
+      {
+        "id": "look",
+        "name": "모양",
+        "description": "테마와 모드, 카드의 간격·모서리·글꼴."
+      },
+      {
+        "id": "workspace",
+        "name": "작업 공간",
+        "description": "프로젝트 창, 탭 위치, 사이드바 배치와 크기."
+      },
+      {
+        "id": "sets",
+        "name": "사이드바 세트",
+        "description": "사이드바에 보여 줄 섹션 묶음. 어느 변에 놓을지는 작업 공간과 플러그인에서 고른다."
+      },
+      {
+        "id": "behavior",
+        "name": "동작",
+        "description": "언어, 메모리, 알림."
+      },
+      {
+        "id": "agents",
+        "name": "에이전트 연동",
+        "description": "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목."
+      },
+      {
+        "id": "diag",
+        "name": "진단",
+        "description": "문제를 추적할 때만 켠다."
+      }
+    ],
+    "labels": {
+      "projectOpening": {
+        "windows": "별도 창",
+        "tabs": "현재 창의 새 탭"
+      },
+      "projectTabs": {
+        "top": "위",
+        "bottom": "아래",
+        "left": "왼쪽",
+        "right": "오른쪽"
+      },
+      "mode": {
+        "dark": "어두움",
+        "light": "밝음"
+      },
+      "viewProcess": {
+        "plugin": "플러그인마다 하나",
+        "view": "카드마다 하나"
+      },
+      "toastStyle": {
+        "card": "카드",
+        "line": "한 줄",
+        "deck": "덱"
+      },
+      "noticeCenterStyle": {
+        "popover": "팝오버",
+        "drawer": "서랍"
+      }
+    },
+    "groups": {
+      "look": [
+        {
+          "name": "테마",
+          "description": "테마가 색과 형태의 기본값을 정하고, 모드는 그 테마의 밝은 쪽과 어두운 쪽을 고른다.",
+          "rows": [
+            {
+              "key": "theme",
+              "label": "테마",
+              "form": "theme"
+            },
+            {
+              "key": "mode",
+              "label": "모드",
+              "form": "choice"
+            }
+          ]
+        },
+        {
+          "name": "형태",
+          "description": "테마가 준 값에서 시작한다.",
+          "rows": [
+            {
+              "key": "gap",
+              "label": "통로",
+              "form": "slider",
+              "unit": "px",
+              "description": "카드 사이 간격. 0이면 카드가 선 하나를 공유한다."
+            },
+            {
+              "key": "radius",
+              "label": "모서리",
+              "form": "slider",
+              "unit": "px",
+              "description": "카드 모서리의 둥글기."
+            },
+            {
+              "key": "font",
+              "label": "폰트",
+              "form": "choice"
+            },
+            {
+              "key": "size",
+              "label": "글자 크기",
+              "form": "stepper",
+              "unit": "px"
+            },
+            {
+              "key": "textSize",
+              "label": "textSize",
+              "form": "choice",
+              "scope": "common"
+            }
+          ]
+        },
+        {
+          "name": "표시",
+          "description": "배치는 그대로 두고 보이는 모습만 바꾼다.",
+          "rows": [
+            {
+              "key": "focusInd",
+              "label": "포커스 표시",
+              "form": "choice"
+            },
+            {
+              "key": "fullRule",
+              "label": "경계선",
+              "form": "choice"
+            },
+            {
+              "key": "dim",
+              "label": "포커스 밖 흐리게",
+              "form": "switch"
+            }
+          ]
+        }
+      ],
+      "workspace": [
+        {
+          "name": "프로젝트",
+          "description": "프로젝트를 여는 방식. 모든 프로젝트에 적용되며, 이미 열린 창은 그대로 둔다.",
+          "rows": [
+            {
+              "key": "projectOpening",
+              "label": "열기 방식",
+              "form": "choice",
+              "scope": "common"
+            }
+          ]
+        },
+        {
+          "name": "위치",
+          "description": "프로젝트 탭이 놓이는 위치. 바꾸면 카드 배치도 함께 바뀐다.",
+          "rows": [
+            {
+              "key": "projectTabs",
+              "label": "프로젝트 탭 위치",
+              "form": "choice"
+            }
+          ]
+        },
+        {
+          "name": "사이드바",
+          "description": "위에 있는 줄부터 자리를 잡는다. 먼저 놓인 변이 그 변의 전체 길이를 쓰고, 다음 변은 그만큼 빠진다. 끈 변도 자기 순서를 지킨다.",
+          "rows": [
+            {
+              "key": "sidebarOrder",
+              "label": "사이드바",
+              "form": "sidebar"
+            }
+          ]
+        },
+        {
+          "name": "사이드바 크기",
+          "description": "처음 폭은 최소 폭과 최대 폭 사이여야 한다. 위·아래 사이드바에는 높이로 적용된다.",
+          "rows": [
+            {
+              "key": "sidebarMinWidth",
+              "label": "최소 폭",
+              "form": "slider",
+              "unit": "pt"
+            },
+            {
+              "key": "sidebarMaxWidth",
+              "label": "최대 폭",
+              "form": "slider",
+              "unit": "pt"
+            },
+            {
+              "key": "sidebarWidth",
+              "label": "처음 폭",
+              "form": "slider",
+              "unit": "pt",
+              "description": "카드 안 사이드바와 저장된 크기가 없는 창 사이드바가 여는 크기."
+            }
+          ]
+        }
+      ],
+      "sets": [],
+      "agents": [],
+      "behavior": [
+        {
+          "name": "언어",
+          "description": "애플리케이션 메뉴의 언어. 자동은 시스템 언어를 따르고, 목록에 없으면 영어다.",
+          "rows": [
+            {
+              "key": "language",
+              "label": "언어",
+              "form": "choice"
+            }
+          ]
+        },
+        {
+          "name": "카드",
+          "description": "카드 자동 정렬의 방식.",
+          "rows": [
+            {
+              "key": "cardArrange",
+              "label": "카드 자동 정렬",
+              "form": "choice",
+              "description": "resize는 배치를 지키며 카드 크기를 고르게 나눈다. even은 카드를 같은 격자로 놓는다."
+            }
+          ]
+        },
+        {
+          "name": "메모리",
+          "description": "메모리 절약을 켜면 숨긴 지 정한 시간이 지난 탭을 내리고, 다시 보일 때 저장된 상태로 연다.",
+          "rows": [
+            {
+              "key": "viewProcess",
+              "label": "보기 프로세스",
+              "form": "choice",
+              "scope": "common",
+              "description": "새로 여는 보기부터 적용된다."
+            },
+            {
+              "key": "memorySaver",
+              "label": "메모리 절약",
+              "form": "switch",
+              "scope": "common"
+            },
+            {
+              "key": "memorySaverDelay",
+              "label": "숨긴 뒤 내리기까지",
+              "form": "slider",
+              "unit": "분",
+              "scope": "common",
+              "depends": "memorySaver"
+            }
+          ]
+        },
+        {
+          "name": "알림",
+          "description": "알림은 세 곳에 나온다: 카드 상태줄(그 카드의 알림), 토스트(앱 알림), 알림 센터(전부).",
+          "rows": [
+            {
+              "key": "toastStyle",
+              "label": "토스트 모양",
+              "description": "앱 알림과, 보고 있지 않은 카드의 오류·경고가 뜨는 모양. 종 아래에 나타난다.",
+              "form": "choice",
+              "scope": "common"
+            },
+            {
+              "key": "noticeCenterStyle",
+              "label": "알림 센터 모양",
+              "description": "제목줄 종을 누르면 여는 모양.",
+              "form": "choice",
+              "scope": "common"
+            },
+            {
+              "key": "quietToasts",
+              "label": "조용히",
+              "description": "켜면 오류만 토스트로 띄우고 나머지는 알림 센터에만 쌓는다.",
+              "form": "switch",
+              "scope": "common"
+            },
+            {
+              "key": "autoDismissProblemToasts",
+              "label": "오류·경고 자동 닫힘",
+              "description": "끄면 오류·경고 토스트는 ×로만 닫힌다. 성공·정보는 4초 뒤 늘 닫힌다.",
+              "form": "switch",
+              "scope": "common"
+            },
+            {
+              "key": "problemToastDismissSeconds",
+              "label": "닫힐 때까지",
+              "form": "stepper",
+              "unit": "초",
+              "scope": "common",
+              "depends": "autoDismissProblemToasts"
+            }
+          ]
+        }
+      ],
+      "diag": [
+        {
+          "name": "진단",
+          "description": "켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.",
+          "rows": [
+            {
+              "key": "debug",
+              "label": "디버그 기록",
+              "form": "debug",
+              "scope": "common"
+            }
+          ]
+        }
+      ]
+    }
   }
 }

@@ -56,7 +56,7 @@ test("core.tab.close answers after the tab close and its draw", { timeout: 5000 
     const events = [];
     await installCoreExposure({
       memorySaver: await pageMemorySaver(),
-      library: { state: () => null }, renames: { state: () => null }, chrome: () => null,
+      home: { state: () => null }, renames: { state: () => null }, chrome: () => null,
       drawn: async () => { events.push(`settled, tabs ${tabs().join(",")}, layout ${held === null ? "not scheduled" : "scheduled"}`); },
     });
     const answer = registry.run("core.tab.close", { tab: closing }).then((result) => { events.push("answered"); return result; });

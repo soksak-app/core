@@ -40,6 +40,6 @@ test("without a host, log writes an observation to the console as information", 
   const [originalInfo, originalError] = [console.info, console.error];
   console.info = (line) => info.push(line);
   console.error = (line) => errors.push(line);
-  try { log("focus in core.library.form.parent"); } finally { [console.info, console.error] = [originalInfo, originalError]; }
-  assert.deepEqual([info, errors], [["focus in core.library.form.parent"], []]);
+  try { log("focus in core.home.form.parent"); } finally { [console.info, console.error] = [originalInfo, originalError]; }
+  assert.deepEqual([info, errors], [["focus in core.home.form.parent"], []]);
 });

@@ -23,26 +23,6 @@ export function installChromeMetrics(root) {
   for (const [name, value] of Object.entries(CHROME)) root.style.setProperty(`--${name}`, value);
 }
 
-/** The media condition of the narrow library: the window is at most the chrome metric library-narrow-w wide. */
-export const libraryNarrowCondition = () => `(max-width: ${CHROME["library-narrow-w"]})`;
-
-/** Marks root with data-library-narrow while narrow is true, and removes the mark while it is false. */
-export function markLibraryNarrow(root, narrow) {
-  if (narrow) root.dataset.libraryNarrow = "";
-  else delete root.dataset.libraryNarrow;
-}
-
-/**
- * Marks root with data-library-narrow while the window is at most the chrome metric library-narrow-w wide, and keeps the mark current. A media
- * condition cannot read a custom property, so library.css reads this mark.
- */
-export function followLibraryWidth(root, view) {
-  const narrow = view.matchMedia(libraryNarrowCondition());
-  const mark = () => markLibraryNarrow(root, narrow.matches);
-  mark();
-  narrow.addEventListener("change", mark);
-}
-
 /**
  * The box of the focus mark around slot in the coordinates of host, outside the slot on every side by the chrome metric focus-mark-t:
  * the CSS lengths left, top, width and height. hostRect and slotRect are the rectangles of the host and of the slot.

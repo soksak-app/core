@@ -1164,9 +1164,6 @@ func (s *Shell) statusesAfterFrame() {
 	s.framed = true
 	s.options.Post(func() {
 		s.framed = false
-		if err := s.readPreviews(); err != nil {
-			s.failWindowRead(err)
-		}
 		s.pushStatuses()
 		waiting := s.afterFramed
 		s.afterFramed = nil

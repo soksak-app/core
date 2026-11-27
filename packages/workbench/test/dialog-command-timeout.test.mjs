@@ -7,7 +7,7 @@ import test from "node:test";
 // The host calls that show a system dialog or save panel, and the commands whose handlers await them. The declared commands
 // must match this map exactly: a new dialog command is added here in the same change.
 const DIALOG_COMMANDS = {
-  "core.library.choose-folder": "folderChoose",
+  "core.home.choose-folder": "folderChoose",
   "core.file.place": "filePlace",
   "core.debug.save": "debugSave",
   "core.debug.save-all": "debugSaveAll",

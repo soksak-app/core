@@ -70,7 +70,7 @@
     {"reply": {"result": "$snapshot"}},
     {"call": {"name": "workspace", "payload": {"kind": "tabState"}}},
     {"reply": {"result": null}},
-    {"call": {"name": "workspace", "payload": {"kind": "tabSessions"}}},
+    {"call":{"name":"workspace","payload":{"kind":"notices"}}},{"reply":{"result":null}},{"call": {"name": "workspace", "payload": {"kind": "tabSessions"}}},
     {"reply": {"result": []}},
     {"call": {"name": "projectFolder", "payload": "/work/alpha"}},
     {"reply": {"result": {"root": "/work/alpha", "identity": "alpha"}}},

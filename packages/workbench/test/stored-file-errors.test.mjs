@@ -23,7 +23,7 @@ test("the start document shows the errors of the refused stored files before the
     "the start document displays errors before the toast command is declared");
 });
 
-test("the actual start document shows and exposes a dismissible failed workspace toast before the library starts", async (t) => {
+test("the actual start document shows and exposes a dismissible failed workspace toast before the project home starts", async (t) => {
   const dom = new JSDOM(html, { url: "http://localhost/" });
   const { window } = dom;
   const { document } = window;
@@ -55,11 +55,13 @@ test("the actual start document shows and exposes a dismissible failed workspace
   const execute = new AsyncFunction(...Object.keys(bindings), startScript);
   const pending = Symbol("the exported start is waiting for a reload");
   assert.equal(await Promise.race([execute(...Object.values(bindings)), Promise.resolve(pending)]), pending);
-  assert.equal(document.querySelector(".error-toast__text")?.textContent, error);
+  assert.equal(document.querySelector(".toast__title")?.textContent, error);
   assert.equal(log.mock.callCount(), 1);
-  const read = () => registry.handle({ method: "status.get", params: { name: "core.workbench.error" } });
-  assert.equal((await read()).result, error);
-  await registry.run("core.error.dismiss", { text: error });
-  assert.equal((await read()).result, null);
-  assert.equal(document.querySelector(".error-toast"), null);
+  // The center keeps the error entry after its toast closes (docs/spec/notifications.md#toasts).
+  const read = () => registry.handle({ method: "status.get", params: { name: "core.notices" } });
+  const [entry] = (await read()).result.entries;
+  assert.equal(entry.title, error);
+  await registry.run("core.notices.close", { id: entry.id });
+  assert.equal(document.querySelector(".toast"), null);
+  assert.equal((await read()).result.entries[0].title, error);
 });

@@ -8,7 +8,7 @@ import { JSDOM } from "jsdom";
 import { selectPageWire } from "@soksak/runtime";
 
 const wire = selectPageWire("overlay-routing-toast-dialog-sync");
-const dom = new JSDOM('<div id="plane"></div><div id="errorToasts"><div class="error-toast"><button id="dismiss"></button></div></div><button id="out"></button>');
+const dom = new JSDOM('<div id="plane"></div><div id="toasts"><div class="toast"><button id="dismiss"></button></div></div><button id="out"></button>');
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
@@ -22,7 +22,7 @@ registerDialog({ plugin: "probe", name: "edit", page: "ui/edit.html", surface: (
 test("an error toast is cut out of the surface hosts and takes the pointer while a dialog surface is open", async () => {
   document.getElementById("plane").getBoundingClientRect = () => ({ left: 0, top: 0, width: 1024, height: 768 });
   // JSDOM has no layout, so the toast is given its rectangle in the page.
-  document.querySelector(".error-toast").getBoundingClientRect = () => ({ left: 300, top: 520, width: 420, height: 44 });
+  document.querySelector(".toast").getBoundingClientRect = () => ({ left: 300, top: 520, width: 420, height: 44 });
   const open = openDialog({ plugin: "probe", name: "edit", params: {}, opener: "tab-a", signal: new AbortController().signal, modal: null });
   assert.deepEqual([behindDialog(document.getElementById("dismiss")), behindDialog(document.getElementById("out"))], [false, true]);
   await surfaces.place({ surfaces: [], grabs: [], settled: true, drawn: false });

@@ -8,7 +8,6 @@ import { selectPageWire } from "@soksak/runtime";
 
 const dom = new JSDOM(`<div id="plane"></div><div id="menu" data-native-modal="menu" aria-label="Menu" style="border-top-color: rgb(7, 8, 9); background-color: rgb(10, 11, 12); border-top-left-radius: 4px"><button id="one" data-expose="core.picker.item"></button>
   <button id="two" data-expose="core.picker.item"></button><span id="name" data-expose="core.picker.item-name"></span></div>
-  <div id="settings" data-native-modal="dialog" aria-label="Settings" style="border-top-color: rgb(1, 2, 3); background-color: rgb(4, 5, 6)"><button id="switch" data-expose="core.settings-modal.set"></button></div>
   <button id="out" data-expose="core.other"></button>`);
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
@@ -19,23 +18,6 @@ const at = (id) => document.getElementById(id);
 
 // The modal documents report their elements through the overlay-pick notices of each case, so each test selects its own case and imports
 // its own instance of the host module: the instance registers its listeners on the host of its test.
-test("an element of a modal that hides with visibility, like a dialog, answers the place of the scrolled copy", async () => {
-  const wire = selectPageWire("overlay-element-rect-dialog");
-  const { overlay, overlayElementRect, orderedCallsAnswered } = await import("../host.js?overlay-element-rect-dialog");
-  at("settings").style.visibility = "hidden";
-  overlay.show(at("settings"), { x: 0, y: 0, w: 800, h: 600 }, () => {});
-  await orderedCallsAnswered();
-  assert.equal(overlayElementRect(at("settings")), null, "the modal root keeps the rectangle of the main document");
-  assert.throws(() => overlayElementRect(at("switch")), /modal settings has not reported its elements/);
-  wire.deliverNotice();
-  assert.deepEqual(overlayElementRect(at("switch")), { x: 468, y: 115, width: 40, height: 22, document: { x: 0, y: 0 } });
-  overlay.hide();
-  assert.equal(overlayElementRect(at("switch")), null);
-  await orderedCallsAnswered();
-  wire.finish();
-  at("settings").style.visibility = "";
-});
-
 test("an element of a modal that hides its box, like a menu, answers the same way and the report bounds it", async () => {
   const wire = selectPageWire("overlay-element-rect-menu");
   const { overlay, overlayElementRect, orderedCallsAnswered } = await import("../host.js?overlay-element-rect-menu");

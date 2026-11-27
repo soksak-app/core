@@ -225,9 +225,9 @@ for (const app of Object.values(APPS)) {
       const header = await s.rect("core.sidebar.section.header", sidebars.slice(0, at).filter((item) => item.layout === "list")
         .reduce((sum, item) => sum + item.sections.length, 0));
       const inside = (rect) => rect.x + rect.width / 2 > box.x && rect.x + rect.width / 2 < box.x + box.width;
-      const line = (await rects(s, "core.sidebar.status")).find(inside);
-      assert.ok(line, `${sidebar}: no status line`);
-      assert.ok(line.y >= box.y + box.height - 0.5, `${sidebar}: the status line is not below the sections`);
+      const line = (await rects(s, "core.sidebar.head")).find(inside);
+      assert.ok(line, `${sidebar}: no head row`);
+      assert.ok(line.y <= box.y + 0.5, `${sidebar}: the head row is not above the sections`);
       assert.ok(box.height > 100, `${sidebar}: the sections have only ${box.height} pt`);
       return { box, header, line };
     };
@@ -258,7 +258,7 @@ for (const app of Object.values(APPS)) {
     // The sidebar inside the card ends with its own status line, not the status line of the window sidebar, and that line is placed on the same line as the footer of the card content
     // (docs/spec/example-model.md).
     const inside = (rect) => rect.x + rect.width / 2 > box.x && rect.x + rect.width / 2 < box.x + box.width;
-    assert.deepEqual((await rects(s, "core.sidebar.status")).filter(inside), [], "the inset sidebar has a window sidebar status line");
+    assert.deepEqual((await rects(s, "core.sidebar.head")).filter(inside), [], "the inset sidebar has a window sidebar head row");
     const insetLine = (await rects(s, "core.card.sidebar.status")).find(inside);
     assert.ok(insetLine && near(box.y + box.height, insetLine.y), `${inset}: the inset sections end at ${box.y + box.height}, its status line starts at ${insetLine?.y}`);
     const footer = (await rects(s, "core.card.status")).find((rect) => rect.x >= box.x + box.width - 0.5 && rect.y >= box.y && near(rect.y, insetLine.y));
@@ -411,9 +411,9 @@ for (const app of Object.values(APPS)) {
     assert.ok(listed?.registered, `the window sidebar fold control is not declared and registered: ${JSON.stringify(listed)}`);
     await s.presented();
     const fold = await s.rect("core.sidebar.fold", 0);
-    const status = await s.rect("core.sidebar.status", 0);
+    const status = await s.rect("core.sidebar.head", 0);
     assert.ok(fold.y >= status.y - 0.5 && fold.y + fold.height <= status.y + status.height + 0.5 && fold.x + fold.width <= status.x + status.width + 0.5,
-      `the fold control is not in the status line: ${JSON.stringify({ fold, status })}`);
+      `the fold control is not in the head row: ${JSON.stringify({ fold, status })}`);
     await s.click(fold.x + fold.width / 2, fold.y + fold.height / 2);
     await s.until("core.settings", (value) => value.values.left === false && !value.saving, "the fold control did not turn the left sidebar off");
     await s.until("core.sidebars", (value) => !value.some((item) => item.sidebar === "left"), "the left window sidebar stayed");

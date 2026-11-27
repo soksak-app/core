@@ -560,7 +560,7 @@ test("a drawn placement starts unloaded every surface that it first holds hidden
   const tree = { id: "spc-aaaaaa/left/probe.tree", plugin: "fixture", kind: "section" };
   const marks = { id: "spc-aaaaaa/left/probe.marks", plugin: "fixture", kind: "section" };
   const tab = { id: "a", plugin: "fixture", kind: "tab" };
-  // The library draws no surface.
+  // The project home draws no surface.
   assert.deepEqual((await place({ drawn: true, surfaces: [] }, [], [])).surfaces, []);
   // A preparation before the draw of the plane has no complete seats, so it classifies nothing.
   await place({ drawn: false, surfaces: [] }, [tab, marks], [tab.id]);

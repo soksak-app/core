@@ -202,7 +202,7 @@ for (const app of Object.values(APPS)) {
     const project = await s.get("core.project");
     for (let round = 0; round < 3; round++) {
       await s.run("core.projects.browse");
-      await s.run("core.library.open", { id: project.id });
+      await s.run("core.home.open", { project: project.id });
       const returned = await s.get("host.window");
       assert.equal(returned.appDomWebviews, expectedAppDom,
         `return ${round} changed the app DOM webviews: expected ${expectedAppDom}, measured ${returned.appDomWebviews}`);
@@ -305,11 +305,11 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     const { shown, hidden, cardOf, notice } = await twoNoticeViews(s);
     // No notification is kept for a visible tab (the active tab of the focused card).
-    await s.run("layoutprobe.notify", { text: "SHOWN-NOTICE" }, shown);
+    await s.run("layoutprobe.notify", { kind: "info", title: "Probe", text: "SHOWN-NOTICE" }, shown);
     await s.until("layoutprobe.view", (view) => view.notice?.text === "SHOWN-NOTICE",
       "the focused view did not report its notification", { surface: shown });
     assert.equal(notice(await s.get("core.grid"), shown), null, "the tab in view received a notice");
-    await s.run("layoutprobe.notify", { text: "NOTICE-CHECK" }, hidden);
+    await s.run("layoutprobe.notify", { kind: "info", title: "Probe", text: "NOTICE-CHECK" }, hidden);
     await s.until("core.grid", (grid) => notice(grid, hidden) === "NOTICE-CHECK",
       "the view out of view did not show a tab notice");
     await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), hidden).id });
@@ -320,7 +320,7 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: a notification from a view out of view follows the system policy and then the tab policy`, async (t) => {
     const s = await open(t, app);
     const { hidden, cardOf, notice } = await twoNoticeViews(s);
-    await s.run("layoutprobe.notify", { text: "SYSTEM-POLICY", policy: "system" }, hidden);
+    await s.run("layoutprobe.notify", { kind: "warning", title: "Probe", text: "SYSTEM-POLICY", system: true }, hidden);
     await s.until("layoutprobe.view", (view) => view.notice?.text === "SYSTEM-POLICY",
       "the system notification policy did not reach the view", { surface: hidden });
     // The result of the system policy is one of: posted, native error, or denied permission. A denial is reported only through the permission state, without a post or an error
@@ -337,7 +337,7 @@ for (const app of Object.values(APPS)) {
       throw error;
     }
     assert.equal(notice(await s.get("core.grid"), hidden), null, "the system notification policy fell back to a tab notice");
-    await s.run("layoutprobe.notify", { text: "TAB-NOTICE", policy: "tab" }, hidden);
+    await s.run("layoutprobe.notify", { kind: "info", title: "Probe", text: "TAB-NOTICE" }, hidden);
     await s.until("core.grid", (grid) => notice(grid, hidden) === "TAB-NOTICE",
       "the view out of view did not show a tab notice");
     // The tab notice replaces the system notice of the tab, which removes its notification (docs/spec/plugins.md#tab-reports).
@@ -569,7 +569,7 @@ for (const app of Object.values(APPS)) {
       await s.run("core.projects.browse");
       const hidden = await s.get("host.window");
       assert.equal(hidden.regions.some((region) => region.visible), false,
-        "the library must hide every native region");
+        "the project home must hide every native region");
       for (const raster of rasters) {
         const before = regionOf(beforeHide, raster.surface);
         const after = regionOf(hidden, raster.surface);
@@ -578,7 +578,7 @@ for (const app of Object.values(APPS)) {
         assert.deepEqual(rasterIdentity(after.presented), rasterIdentity(before.presented), `hiding ${raster.surface} must retain its raster`);
       }
       try {
-        await s.run("core.library.open", { id: project.id });
+        await s.run("core.home.open", { project: project.id });
       } catch (error) {
         throw new Error(`project return set ${set}: ${error.message}; ${JSON.stringify(await s.get("host.window"))}`,
           { cause: error });

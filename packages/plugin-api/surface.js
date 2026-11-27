@@ -1,5 +1,6 @@
 // The DOM surface module contract. The workbench owns the host element and the lifecycle.
 import { createPluginRuntime } from "./plugin-runtime.js";
+import { checkNotice, checkNoticeDone, checkNoticeProgress } from "./tab-notice.js";
 
 const callable = (value, name) => {
   if (typeof value !== "function") throw new TypeError(`surface module must export ${name}()`);
@@ -30,7 +31,7 @@ export function originFault(surfaceId, origin) {
 
 export function createSurfaceContext({
   root, surfaceId, pluginId, declarations = {}, composition = null, closing, diagnostics = () => null, runtime = {},
-  tab, origin, project = null, icon,
+  tab, page, origin, project = null, icon,
   // default: the surface of a plugin without extension points has no contributions, and every point is undeclared.
   contributions = (point) => { throw new Error(`extension point ${point} is not declared by ${pluginId}`); },
 } = {}) {
@@ -43,9 +44,12 @@ export function createSurfaceContext({
     throw new TypeError("surface context requires scoped event routing");
   }
   if (typeof tab?.title !== "function" || typeof tab?.footer !== "function" || typeof tab?.directory !== "function"
-    || typeof tab?.notify !== "function" || typeof tab?.modified !== "function" || typeof tab?.error !== "function"
-    || typeof tab?.keep !== "function") {
-    throw new TypeError("surface context requires tab.title, tab.footer, tab.directory, tab.notify, tab.modified, tab.error, and tab.keep");
+    || typeof tab?.notify !== "function" || typeof tab?.progress !== "function" || typeof tab?.done !== "function"
+    || typeof tab?.modified !== "function" || typeof tab?.error !== "function" || typeof tab?.keep !== "function") {
+    throw new TypeError("surface context requires tab.title, tab.footer, tab.directory, tab.notify, tab.progress, tab.done, tab.modified, tab.error, and tab.keep");
+  }
+  if (typeof page?.notify !== "function" || typeof page?.progress !== "function" || typeof page?.done !== "function") {
+    throw new TypeError("surface context requires page.notify, page.progress and page.done");
   }
   if (tab.state !== undefined && (typeof tab.state?.read !== "function" || typeof tab.state?.write !== "function")) {
     throw new TypeError("surface context tab.state requires read and write");
@@ -83,10 +87,21 @@ export function createSurfaceContext({
     // The diagnostics module of the plugin in a diagnostic build, and null in a release build. The diagnostics module is loaded after the first screen, so the workbench reads the value that it filled in
     // before it mounts the module.
     get diagnostics() { return diagnostics(); },
+    // Page notices belong to no card: the workbench shows them with the plugin as their source (docs/spec/notifications.md#plugin-notices).
+    page: Object.freeze({
+      notify: (fields) => page.notify(checkNotice(fields)),
+      progress: (id, progress) => { const checked = checkNoticeProgress({ id, progress }); page.progress(checked.id, checked.progress); },
+      done: (id, kind, title) => { const checked = checkNoticeDone({ id, kind, title }); page.done(checked.id, checked.kind, checked.title); },
+    }),
     // Tab reports (docs/spec/plugins.md#tab-reports): report to the workbench the title shown on the tab, the bottom text of the card header and the working directory.
     // keep reports work in progress, and state, present only for a plugin that declares surface.unload as {format, maxBytes},
     // reads and writes the tab state (docs/spec/plugins.md#memory-saver).
-    tab: Object.freeze({ title: tab.title, footer: tab.footer, directory: tab.directory, notify: tab.notify, modified: tab.modified, error: tab.error,
+    // A notice is checked here, before the workbench receives it (docs/spec/notifications.md#plugin-notices); notify returns the notice id.
+    tab: Object.freeze({ title: tab.title, footer: tab.footer, directory: tab.directory,
+      notify: (fields) => tab.notify(checkNotice(fields)),
+      progress: (id, progress) => { const checked = checkNoticeProgress({ id, progress }); tab.progress(checked.id, checked.progress); },
+      done: (id, kind, title) => { const checked = checkNoticeDone({ id, kind, title }); tab.done(checked.id, checked.kind, checked.title); },
+      modified: tab.modified, error: tab.error,
       keep: tab.keep,
       ...(tab.state === undefined ? {} : { state: Object.freeze({ read: tab.state.read, write: tab.state.write }) }),
       // default: a tab opened without parameters has none (docs/spec/plugins.md#pluginjson).

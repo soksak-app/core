@@ -72,7 +72,7 @@ element 항목의 요소는 `data-expose="<이름>"` 속성을 가지며, 그 �
 - `workbench`: 워크벤치 page 또는 그 네이티브 modal이 처리하고 기본 동작을 막는 키. 행은 그 키가 실행하는 명령을 적는다.
 - `view`: view가 자기 안에서 처리하는 키, 또는 view가 넘기는 키에 대해 `runtime.command`로 실행하는 workbench 명령([plugin 프로세스](plugin-processes.ko.md) 규칙 7). view 행은 명령을 적지 않는다. view가 동기로 정하므로 바인딩이 아니라 규칙이다.
 
-키에서 `cmd`는 macOS에서 Command 키, 다른 host에서 Control 키다(`CmdOrCtrl`). `Enter`와 `Escape`는 키 이름이다.
+키에서 `cmd`는 macOS에서 Command 키, 다른 host에서 Control 키다(`CmdOrCtrl`). `Enter`, `Escape`, `ArrowUp`, `ArrowDown`는 키 이름이다. shortcuts.json의 `workbench` 행은 그 command가 받는 인자 `params`를 줄 수 있으며, 행의 When 열이 그 인자를 적는다.
 
 view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다. 주인이 `workbench` 또는 `view`인 행이다([native surface](native-surfaces.ko.md#view-표면), 입력). view는 표를 등록하지 않는다.
 
@@ -94,10 +94,14 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 | `cmd+0` | native menu | core.text.reset | view/text-default | 모든 포커스 |
 | `shift+cmd+n` | native menu | core.window.new | window/new-window | 모든 포커스 |
 | `shift+cmd+n` | workbench | core.window.new | — | host 크롬이 없음(브라우저 빌드) |
-| `cmd+k` | workbench | core.home.search.focus | — | 프로젝트 홈 또는 설정 탭의 플러그인 페이지가 보임 |
+| `cmd+k` | workbench | core.home.search.focus | — | 프로젝트 홈이 보임 |
 | `Enter` | workbench | core.rename.commit | — | 탭 이름 변경 필드에 포커스가 있음 |
 | `Escape` | workbench | core.rename.cancel | — | 탭 이름 변경 필드에 포커스가 있음 |
 | `Enter` | workbench | core.home.form.submit | — | 프로젝트 홈 양식 필드에 포커스가 있음 |
+| `ArrowUp` | workbench | core.home.select | — | 프로젝트 홈이 보이고 폼 필드에 포커스가 없음. command는 step -1을 받음 |
+| `ArrowDown` | workbench | core.home.select | — | 프로젝트 홈이 보이고 폼 필드에 포커스가 없음. command는 step 1을 받음 |
+| `Escape` | workbench | core.home.search | — | 프로젝트 홈 검색 필드에 빈 값이 아닌 검색어가 있음. command는 빈 검색어를 받음 |
+| `Enter` | workbench | core.home.open | — | 프로젝트 홈이 보이고, 행이 선택되어 있으며, 폼 필드에 포커스가 없음 |
 | `Escape` | workbench | core.picker.close | — | 선택 layer가 열려 있음 |
 | `Escape` | workbench | core.modal.dismiss | — | 네이티브 modal 메뉴가 열려 있고 키보드 포커스가 있음 |
 | `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. view가 키를 직접 처리하며, 넘길 때만 열린 picker의 Escape 명령을 실행한다 |
@@ -105,7 +109,7 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 
 네이티브 modal 메뉴는 mode가 `menu`인 modal web view이며([네이티브 modal](native-modals.ko.md)), Wails host와 Tauri host만 만든다. mygo workbench는 picker를 직접 그리고 키보드를 유지하므로, 그 host에서는 열린 picker의 Escape와 바깥 press가 registry를 거쳐 `core.picker.close`를 실행하고, `core.modal.dismiss`는 키의 답이 아니다.
 
-`core.home.search.focus`는 인자 없이 현재 표시된 page의 검색 필드에 focus한다. 프로젝트 홈에서는 `core.home.search`, 설정 탭의 플러그인 페이지에서는 `core.settings-tab.plugins.search`를 선택한다. 표시되지 않은 프로젝트 홈이나 플러그인 페이지가 없는 설정 탭은 명시적으로 거부하며, 그 화면을 열거나 page를 바꾸지 않는다. Main-page keyboard handler와 전달된 shortcut command는 같은 동작을 사용한다. `core.focus.set`은 이름으로 노출 DOM을 선택하는 일반 명령으로 유지한다.
+`core.home.search.focus`는 인자 없이 프로젝트 홈의 검색 필드 `core.home.search`에 focus한다. 표시되지 않은 프로젝트 홈은 그 화면을 보이지 않고 명시적으로 거부한다. Main-page keyboard handler와 전달된 shortcut command는 같은 동작을 사용한다. `core.focus.set`은 이름으로 노출 DOM을 선택하는 일반 명령으로 유지한다.
 
 ## 키보드 포커스
 
@@ -140,21 +144,19 @@ status `core.focus`는 창의 first responder를 가진 문서에서 키보드 �
 | --- | --- |
 | `core.window.workbench` | `{start, startedAt, readyState, visibility, scheme, background, scale, width, height}`. `start`는 워크벤치의 시작 하나를 식별하고 `startedAt`은 그 시작 시각을 epoch 이후 millisecond로 나타낸다. Wails와 Tauri 호스트에서는 메인 페이지의 page identity와 time origin이고, mygo 호스트에서는 워크벤치를 만들 때마다 새 값이다. `readyState`는 `loading`, `interactive`, `complete` 중 하나이며, mygo 호스트는 워크벤치의 첫 표시 프레임 전까지 `loading`, 그 뒤 `complete`를 알린다. `visibility`는 창이 최소화되었거나 보이지 않는 동안 `hidden`, 그 밖에는 `visible`이다. `scheme`은 워크벤치의 color scheme(`dark` 또는 `light`)이다. `background`는 열린 모달의 배경 blur로 워크벤치를 그리는지 알린다. `scale`은 창의 backing scale이다. `width`와 `height`는 창 콘텐츠 크기를 point로 나타낸다 |
 | `core.window.close` | `{step, commands}`: host가 `project-close-request`로 요청했고 워크벤치가 아직 `windowClose`나 `windowCloseKept`로 끝내지 않은 창의 close. 기다리는 close가 없으면 `step`은 `null`이고, 그 밖에는 close가 기다리는 단계다. `registry`는 창이 요청 전에 시작한 registry read(Wails와 Tauri), `tabs`는 수정된 각 탭에 대한 답, `save`는 settings, geometry, tab state의 저장, `commands`는 close를 정하기 전에 시작한 command의 답(mygo), `close`는 `windowClose`나 `windowCloseKept`에 대한 host의 답이다. `commands`는 `commands` 단계가 기다리는 command의 이름을 시작 순서로 나열하고, 다른 단계에서는 비어 있다. 끝나지 않는 close는 이 status에서 읽는다 |
-| `core.workbench.error` | workbench의 가장 최근 열린 error toast의 문장, 또는 `null`. workbench의 각 오류는 창 아래 toast 하나로 보이고 서로 다른 문장마다 하나씩이므로 여러 오류가 함께 보인다. toast의 닫기 조작은 `core.error.dismiss`를 실행해 그 toast만 닫고, 보여진 출처의 철회도 그 toast를 닫는다. 오류의 기록은 log에 남는다. 표시는 오류의 출처를 기록한다. 처음 성공한 배치는 모든 surface가 present 된 뒤 직전 배치의 실패를 거두고, 다른 출처의 오류는 남으며, 오류의 기록은 log에 남는다. 그 present 기다림이 실패하면 아무것도 거두지 않고, 다음에 성공한 배치가 다시 묻는다. 타이머로 다시 묻지 않는다 |
 | `core.workbench.audit` | `{unbound}`: audit이 나열한 워크벤치의 조작 요소([사용자 인터페이스](#사용자-인터페이스)) |
-| `core.error.dismiss` | `{text}` | `null`. workbench의 열린 error toast 가운데 그 문장의 것을 닫는다. 열린 toast가 없는 문장이나 빈 문장은 -32602다. toast는 화면에서 닫히고 오류의 기록은 log에 남는다 |
 | `core.activity` | `{projects, tabs}`: 창이 연 각 project, 그 각 space, content card, group card, 각 tab의 activity로, activity가 있는 것만 나열한다([activity](activity.ko.md#status)) |
 | `core.pointer` | `{sequence, down, up, pressedConnected, click}`: workbench가 받은 마지막 pointer sequence다. press는 `sequence`를 늘리고 나머지 member를 새로 시작한다. `down`, `up`, `click`은 대상을 가리킨다. 대상을 둘러싼 가장 가까운 exposed element의 이름이고, 없으면 tag다. Wails와 Tauri host에서 대상은 page의 element이고 tag는 tag name이다. mygo host에는 tag가 없다. 대상은 마지막 frame의 element tree에서 pointer 위치의 가장 안쪽 element이고, tag는 그 ARIA role이며, tree의 어떤 element도 없는 자리는 `unknown`이고 `pressedConnected`는 `null`이다. 빈 자리에는 document와 workbench 모두 이름을 선언하지 않는다. tab 옆의 space 줄, plane의 여백, control 옆의 프로젝트 홈 하단 줄은 여기서 `unknown`이고 page에서는 일반 tag이며, 프로젝트 홈 본문은 여기서 scroll 영역의 role `region`이고 page에서는 일반 tag다. release는 press와 release를 둘러싼 가장 가까운 element를 click하고, primary button만 click하며, press한 element가 release 전에 workbench를 떠나면 click이 없다. 버튼을 누르는 key나 assistive technology action은 press 없이 `click`을 기록한다. sequence는 workbench와 그것이 그리는 overlay를 다룬다. native view와 native modal은 별개의 document다. 이 값은 관찰을 식별할 뿐 판정에 쓰지 않는다 |
 
-mygo host에서는 워크벤치의 step이 native window가 닫힌 뒤에 실행될 수 있다. 그런 step의 `core.verify`와 `core.window.workbench` read는 native code를 부르지 않고 워크벤치 오류도 표시하지 않는다. 그 밖의 read 실패는 `core.workbench.error`로 표시한다.
+mygo host에서는 워크벤치의 step이 native window가 닫힌 뒤에 실행될 수 있다. 그런 step의 `core.verify`와 `core.window.workbench` read는 native code를 부르지 않고 워크벤치 오류도 표시하지 않는다. 그 밖의 read 실패는 오류 notice([알림 기록](notifications.ko.md#알림-기록))로 표시한다.
 
 `host.window.reload`는 창의 워크벤치를 다시 시작하고, `plugins-changed`를 받거나 `core.plugins.apply`를 실행한 창도 같은 방식으로 다시 시작한다([설치](installation.ko.md#변경-적용)). 워크벤치의 새 시작을 기다리는 window check와 측정 대상은 새 page process가 아니라 `core.window.workbench`의 새 `start`를 기다린다.
 
 ### 오류 표시
 
-사용자에게 표시하는 애플리케이션 실패는 workbench, 프로젝트 홈, 설정 탭, card, sidebar, modal view에서 같은 오류 toast component를 사용한다. 활성 document 또는 native view는 하단 중앙 근처에 작은 floating card로 toast를 표시한다. Layout 공간을 차지하지 않고 기존 focus를 유지하며 닫기 control을 둔다. 자동 닫기 설정을 켜면 열린 toast가 지정한 시간 뒤 만료된다([설정](settings.ko.md#오류-toast)). 다시 그리거나 modal로 옮겨도 표시 시간은 다시 시작하지 않는다. Plugin surface는 선언된 애플리케이션 인터페이스로 작업 실패를 보고하고 host가 같은 component로 표시한다. Terminal program 출력과 document 콘텐츠는 각각의 표시 방식을 유지한다.
+사용자에게 표시하는 애플리케이션 실패는 [알림 path](notifications.ko.md)의 오류 notice다. Workbench, 프로젝트 홈, 설정 탭, card, sidebar, modal view는 같은 notice component를 쓴다. 활성 document 또는 native view는 창의 오른쪽, 종 아래에 toast를 표시하며 하단 중앙에 두지 않는다([토스트](notifications.ko.md#토스트)). Toast는 layout 공간을 차지하지 않고 기존 focus를 유지하며, 닫기 control은 `core.notices.close`를 실행한다. 보이는 toast는 status `core.toasts`가 나열한다([명령과 status](notifications.ko.md#명령과-status)). 경고나 오류 toast는 `autoDismissProblemToasts`를 켜면 `problemToastDismissSeconds`의 지연 뒤 스스로 닫힌다([표시 자리](notifications.ko.md#표시-자리)). 다시 그리거나 modal로 옮겨도 표시 시간은 다시 시작하지 않는다. Plugin surface는 선언된 애플리케이션 인터페이스로 작업 실패를 보고하고, host는 이를 오류 notice로 표시한다. Terminal program 출력과 document 콘텐츠는 각각의 표시 방식을 유지한다.
 
-Component는 오류 style과 닫기 동작을 맡는다. 오류를 보고한 작업의 출처는 log, status, 철회에 유지한다. Toast를 닫으면 표시가 닫히고 애플리케이션 log 기록은 남는다. 실패한 작업의 control은 label과 복구 동작을 계속 제공한다. 오류 글은 toast에만 나타난다. card, 프로젝트 카드, plugin card, surface 상태 행, placeholder, 설정 행, debug view는 `실패`, `표면 오류`, `열 수 없음` 같은 짧은 상태 label을 muted 색으로 보이고, toast 밖의 어떤 element도 오류 색을 쓰지 않는다.
+알림 path가 오류 style과 닫기 동작을 맡는다. 오류를 보고한 작업의 출처는 log, status, 철회에 유지한다. Toast를 닫으면 보이는 오류가 닫히고 애플리케이션 log 기록과 알림 센터 항목은 남는다. 실패한 작업의 control은 label과 복구 동작을 계속 제공한다. 오류 글은 알림 path의 notice, 곧 toast, card 상태줄, 알림 센터에만 나타난다. Card, 프로젝트 카드, plugin card, surface 상태 행, placeholder, 설정 행, debug view는 `실패`, `표면 오류`, `열 수 없음` 같은 짧은 상태 label을 muted 색으로 보인다. 알림 path 밖의 어떤 element(toast, card 상태줄, 종, 알림 센터)도 오류 색을 쓰지 않는다.
 
 | 출처 | 표시 소유자 |
 | --- | --- |
@@ -164,7 +166,11 @@ Component는 오류 style과 닫기 동작을 맡는다. 오류를 보고한 작
 | 설정 변경, setup 또는 debug 동작 실패 | 활성 modal document 또는 native modal |
 | Card, tab, sidebar 또는 plugin surface 실패와 읽을 수 없는 plugin 또는 session | Surface를 소유한 workbench view |
 
-활성 view는 전면 focus 범위 안에 toast component를 배치한다. 프로젝트 홈과 workbench는 창 경계 안에 toast를 배치한다. Modal은 modal focus 순서 안에 닫기 control을 둔다. 진행 중이거나 복구된 애플리케이션 상태는 자신이 소유한 오류만 제거한다. Tab을 닫으면 그 tab을 가리키는 오류, 곧 tab의 작업 오류, 복원된 session의 오류, 멈춘 surface의 오류, program과 activity 오류를 철회한다. 각 오류가 설명하는 상태가 tab과 함께 끝났기 때문이다. 다른 tab과 workbench의 오류는 유지한다. 한 tab의 tab state나 tab session 쓰기가 실패하면 그것은 그 tab의 그 store의 오류이고, 같은 tab의 같은 store에 대한 다음 쓰기가 성공하면 그 오류를 거둔다. 그 오류가 말하는 실패가 끝났기 때문이다. 계속 유지되는 각 오류 발생에는 안정적인 출처가 있다. 같은 view의 두 출처에 같은 글이 있으면 출처 기록을 각각 유지하며 toast 하나를 공유한다. 글로 닫으면 그 toast가 닫히고 닫힌 오류를 다시 그려도 닫힌 채로 유지된다. 상태가 변하거나 복구된 출처에서 다음 오류가 발생하면 toast를 다시 열 수 있으며 그 오류의 애플리케이션 log 기록을 쓴다.
+활성 view는 전면 focus 범위 안에 toast component를 배치한다. 프로젝트 홈과 workbench는 창 경계 안에 toast를 배치한다. Modal은 modal focus 순서 안에 닫기 control을 둔다.
+
+표시는 각 오류의 출처를 기록한다. 처음 성공한 배치는 모든 surface가 present 된 뒤 직전 배치의 실패를 거두고, 다른 출처의 오류는 남는다. 그 present 기다림이 실패하면 아무것도 거두지 않고, 다음에 성공한 배치가 다시 묻는다. 타이머로 다시 묻지 않는다.
+
+진행 중이거나 복구된 애플리케이션 상태는 자신이 소유한 오류만 제거한다. Tab을 닫으면 그 tab을 가리키는 오류, 곧 tab의 작업 오류, 복원된 session의 오류, 멈춘 surface의 오류, program과 activity 오류를 철회한다. 각 오류가 설명하는 상태가 tab과 함께 끝났기 때문이다. 다른 tab과 workbench의 오류는 유지한다. 한 tab의 tab state나 tab session 쓰기가 실패하면 그것은 그 tab의 그 store의 오류이고, 같은 tab의 같은 store에 대한 다음 쓰기가 성공하면 그 오류를 거둔다. 그 오류가 말하는 실패가 끝났기 때문이다. 계속 유지되는 각 오류 발생에는 안정적인 출처가 있다. 같은 kind와 title의 발생은 notice 하나로 합치고, 합쳐진 notice는 가장 최근 발생의 출처를 가진다([알림 기록](notifications.ko.md#알림-기록)). Toast의 닫기 조작은 그 notice를 `core.notices.close`로 닫고, 닫힌 발생을 다시 그려도 닫힌 채로 유지된다. 상태가 변하거나 복구된 출처에서 다음 오류가 발생하면 toast를 다시 열고 알림 센터에 새 항목을 추가하며 그 애플리케이션 log 기록을 쓴다.
 
 ## 등록
 
@@ -258,7 +264,7 @@ view는 그 표면의 네이티브 승인이 완료된 뒤에 코어·플러그�
 | status | `host.log` | `{path, size, notices, coalesced}`: event log의 변경에 대한 가장 최근 알림([따라가기](debug.ko.md#파일)). `path`는 설정 폴더 아래의 event 파일(`logs/<name>`), `size`는 바이트 크기이고, `notices`는 시작 이후 발행한 알림 수로 250 ms에 하나까지이며, `coalesced`는 뒤의 알림에 합쳐진 알림 수다. 첫 알림 전의 값은 `{path: "", size: 0, notices: 0, coalesced: 0}`다. host는 알림마다 `host.log` 감시자에게 알린다. log만 읽는 호출의 기록을 뺀 모든 줄이 변경을 알리므로 알림 뒤 `log.query`를 요청하는 client가 다음 알림을 일으키지 않는다 |
 | status | `host.buttons` | `{mask}`: AppKit이 눌렸다고 보고하는 mouse 버튼(`+[NSEvent pressedMouseButtons]`: bit 0 왼쪽, bit 1 오른쪽, 그 위 bit는 다른 버튼). 호스트는 AppKit이 mouse 버튼의 누름이나 뗌을 애플리케이션에 전달할 때(local event monitor)와 다른 애플리케이션에 전달할 때(global event monitor) 마스크를 읽고, 마스크가 바뀌면 `host.buttons` 감시자에게 알린다. 그래서 다른 애플리케이션이 최전면인 동안의 사람의 버튼도 값을 바꾼다. 합성 `input.pointer` 누름과 뗌은 AppKit의 event 전달을 거치지 않고 뷰로 가므로 값을 바꾸지 않는다 |
 | status | `host.dialog` | `{pending: [{id, kind, suggestedName, directory, multiple, directories, url}]}`: client 가 이 status 를 watch 하는 동안 창이 요청한 [dialog](#dialog) |
-| status | `host.sidecars` | `{closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions}]}`: 호스트가 `closed`를 보냈고 사이드카가 아직 답하지 않은 표면([사이드카](sidecars.ko.md#메시지))과, 서비스가 설치된 것과 다른 version으로 도는 persistent 사이드카([persistent services](persistent-services.ko.md#updates)) |
+| status | `host.sidecars` | `{closing: [{sidecar, surface}], outdated: [{sidecar, running, installed, sessions, surfaces}]}`: 호스트가 `closed`를 보냈고 사이드카가 아직 답하지 않은 표면([사이드카](sidecars.ko.md#메시지))과, 서비스가 설치된 것과 다른 version으로 도는 persistent 사이드카([persistent services](persistent-services.ko.md#updates)) |
 | command | `host.menu.select` | 애플리케이션 메뉴 항목 `{menu, title}`을 실행한다. 제목이 `menu`인 하위 메뉴에서 제목이 `title`인 항목이다 |
 | status | `host.menu` | 애플리케이션 메뉴. 구분선을 뺀 하위 메뉴마다 `[{title, items: [{title, key}]}]`이며, `key`는 수정 키 `ctrl`, `opt`, `shift`, `cmd`를 이 순서로 `+`로 이은 뒤 키를 붙인 단축키이거나 빈 문자열이다 |
 | command | `host.window.close` | 창의 일반 닫기 동작으로 창을 닫는다 |

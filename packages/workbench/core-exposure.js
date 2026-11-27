@@ -3,7 +3,7 @@
 // Values are read from the state that modules hold and from the elements of the document. No entry runs arbitrary code.
 //
 // A change of a status is announced by calling coreChanged(). The document calls it after the render of the
-// plane, after changes of projects and settings, and after the drawing of modals and the library; the
+// plane, after changes of projects and settings, and after the drawing of modals and the project home; the
 // registry sends only the watched values that changed to the host.
 import { createActivity } from "./activity.js";
 import { contributionsState, onContributionsChange } from "./contributions.js";
@@ -18,7 +18,7 @@ import { onFocusSourceChange, setResponder } from "./view-focus.js";
 import { trackPointer } from "./pointer-state.js";
 import { losses, onPluginProcessChange, openCalls, views } from "./plugin-processes.js";
 import { tabMenuItems } from "./tab-menu.js";
-import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
+import { checkNotice, checkNoticeDone, checkNoticeProgress, EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import * as projects from "./projects.js";
 import {
   activeTab, addTabTo, assignSidebar, openFile, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
@@ -51,8 +51,9 @@ import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
 import { foldSection, onSectionsChange, sectionDrawn, selectSection, sidebarsState, sizeSections } from "./sidebar-sections.js";
-import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
+import { notificationStore, onTabReports, reportPageNotice, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
+import { followOutdatedSidecars } from "./sidecar-outdated.js";
 import { pageIdentity } from "./page-identity.js";
 import { PLACEMENT_LAST, placementLast } from "./page-layout.js";
 import { errorToasts } from "./shown-errors.js";
@@ -88,7 +89,7 @@ export function coreChanged() {
  * its drawn layout.
  */
 function activityProjects() {
-  const shown = projects.inLibrary() ? null : projects.active();
+  const shown = projects.inHome() ? null : projects.active();
   const drawn = activityLayout();
   return projects.local().map((project) => (project.id !== shown?.id || drawn === null ? project : {
     ...project, spaces: project.spaces.map((space) => (space.id === project.activeSpaceId ? { ...space, layout: drawn } : space)),
@@ -331,10 +332,12 @@ function gridState() {
       fixed: Boolean(card.fixed), width: card.width ?? null, focused: card.id === focused(),
       pane: drawn ? pane++ : null,
       // The members of a tab are those of the layout tabs (docs/spec/groups.md#status-and-queries), beside its presentation members.
-      tabs: tabs.map(({ id }) => ({ ...tabDescription(card, id, tabLabel(id)), label: tabLabel(id), notice: tabNotice(id),
+      tabs: tabs.map(({ id }) => ({ ...tabDescription(card, id, tabLabel(id)), label: tabLabel(id),
         footer: tabFooter(id), modified: tabModified(id), error: tabError(id), program: programOf(id) })),
-      // Text that the content footer shows (docs/spec/example-model.md). default: a card that is not drawn yet has no footer text element, so the text is empty.
-      status: el.querySelector(":scope > .status .status__text")?.textContent ?? "",
+      // The newest shown notice of the card, and the text of its content footer, which is null while a notice shows (docs/spec/notifications.md#card-status-line).
+      // default: a card that is not drawn yet has no footer text element, so the text is empty.
+      notice: cardNotice(card.id),
+      status: cardNotice(card.id) === null ? el.querySelector(":scope > .status .status__text")?.textContent ?? "" : null,
       active: tabs.length ? activeTab(card).id : null,
       acts: drawn ? cardActs(card.id) : null,
       sidebars: cardSidebars(card, presentedCardRect(card.id)),
@@ -398,16 +401,36 @@ function surfacesState() {
   })), ...placeholders, ...retained(new Set(record.surfaces.map((s) => s.id)))];
 }
 
-// The settings modal and the debug view load at their first use, so the first window reads neither
+// The settings tab and the debug view load at their first use, so the first window reads no code of them
 // (docs/spec/native-host.md#page-start). A screen that never loaded is closed.
 let settingsScreen = null;
 let debugScreen = null;
 
+/** The listeners of the front of the settings tab, and of its status. */
+const tabFrontListeners = new Set();
+const tabStatusListeners = new Set();
+
+/** Loads the settings tab at its first use and registers its commands once. */
 const settingsUi = async () => {
-  settingsScreen ??= await import("./settings-ui.js"); // default: a loaded screen is kept.
-  settingsScreen.onSettingsDrawn(coreChanged);
+  if (settingsScreen === null) {
+    const screen = await import("./settings-ui.js");
+    screen.installSettingsTab((value) => { for (const fn of tabStatusListeners) fn(value); });
+    screen.onSettingsTabFront((front) => {
+      if (front) closeDebug();
+      for (const fn of tabFrontListeners) fn(front);
+      coreChanged();
+    });
+    settingsScreen = screen;
+  }
   return settingsScreen;
 };
+
+/** Whether the settings tab is in front; false while the tab has not loaded. */
+export const settingsTabFront = () => settingsScreen?.settingsTabFront() ?? false;
+/** Subscribes to the front of the settings tab, which the window uses for its surfaces. */
+export const onSettingsTabFront = (fn) => { tabFrontListeners.add(fn); return () => tabFrontListeners.delete(fn); };
+/** Mounts the content of the settings tab into container; the tab is in front only after it has loaded. */
+export const mountSettingsTab = (container) => { settingsScreen.mountSettingsTab(container); };
 
 const debugUi = async () => {
   debugScreen ??= await import("./debug-ui.js"); // default: a loaded screen is kept.
@@ -415,22 +438,17 @@ const debugUi = async () => {
   return debugScreen;
 };
 
-/** A command of the settings modal, which runs at once when the modal is loaded, so its order with other commands holds. */
-const onSettings = (run) => async (params) => run(settingsScreen ?? await settingsUi(), params); // default: a loaded screen is kept.
 /** A command of the debug view. */
 const onDebug = (run) => async (params) => run(debugScreen ?? await debugUi(), params); // default: a loaded screen is kept.
 
 // default: a screen that is not loaded is closed.
-const settingsModalState = () => settingsScreen?.settingsModalState() ?? { open: false, controls: [] };
-// default: a screen that is not loaded is closed.
 const debugState = () => debugScreen?.debugState() ?? {
   open: false, recorded: null, captures: [], entries: [], viewing: null, timeline: null, state: null, scroll: 0, operation: null, error: null,
 };
-const closeSettings = () => { settingsScreen?.closeSettings(); };
 const closeDebug = () => { debugScreen?.closeDebug(); };
 
-/** Draws the settings modal again when it is open. */
-export const redrawSettings = () => { settingsScreen?.drawSettings(); };
+/** Draws the settings tab again when it is mounted; the rows and pages of the tab read the current settings. */
+export const redrawSettings = () => { settingsScreen?.redrawSettingsTab(); };
 
 const withOpen = (project) => ({ ...project, open: projects.isOpen(project.id) });
 
@@ -457,7 +475,7 @@ function need(project, id) {
 /**
  * Registers the core entries and connects the registry to the host.
  *
- *   library  return value of createLibrary
+ *   home     return value of createHome
  */
 /**
  * drawn returns a promise that is fulfilled when the plane has finished all scheduled drawing. A core command waits for that drawing after it ran and then replies. When a command changes the layout, the receiver of the reply reads the layout that is already drawn.
@@ -490,16 +508,76 @@ function watchLayout(name, params) {
   };
 }
 
-/** Registers the error display before the first screen or a failure that stops the start. */
+// The newest shown notice of a card for core.grid: its id, kind and title, or null (docs/spec/notifications.md#card-status-line).
+const cardNotice = (card) => {
+  const notice = notificationStore().lineOf(card);
+  return notice === null ? null : { id: notice.id, kind: notice.kind, title: notice.base };
+};
+
+/**
+ * Registers the notices: the statuses core.notices and core.toasts and the commands of the notice center and the toasts (docs/spec/notifications.md#commands-and-statuses).
+ * It runs before the first screen or a failure that stops the start, so the error display is registered before either.
+ */
 export function installErrorExposure() {
   const errors = errorToasts(document);
-  if (registry.list().status.some(({ name, registered }) => name === "core.workbench.error" && registered)) return errors;
-  status("core.workbench.error", errors.newest);
-  registry.command("core.error.dismiss", ({ text }) => {
-    if (!text) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "core.error.dismiss requires a text");
-    if (!errors.dismiss(text)) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "core.error.dismiss names no open toast");
-  });
-  registry.element("core.error.dismiss");
+  const store = notificationStore();
+  if (registry.list().status.some(({ name, registered }) => name === "core.notices" && registered)) return errors;
+  // A notice command with an invalid value or an unknown id fails with -32602 (docs/spec/exposure.md#errors).
+  const invalid = (action) => {
+    try {
+      return action();
+    } catch (error) {
+      if (error instanceof RangeError) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `${error.message}`);
+      throw error;
+    }
+  };
+  status("core.notices", () => store.status());
+  status("core.toasts", () => store.toasts());
+  registry.command("core.notices.toggle", () => store.toggle());
+  registry.command("core.notices.filter", ({ filter }) => invalid(() => store.setFilter(filter)));
+  registry.command("core.notices.read-all", () => store.readAll());
+  registry.command("core.notices.clear", ({ group }) => invalid(() => store.clear(group)));
+  registry.command("core.notices.clear-all", () => store.clearAll());
+  registry.command("core.notices.close", ({ id }) => invalid(() => store.close(id)));
+  registry.command("core.notices.read", ({ id }) => invalid(() => store.read(id)));
+  // The notice commands run the one path of tab.notify, tab.progress and tab.done: a refused field is -32602 with the text of the check.
+  const refusedNotice = (action) => {
+    try {
+      return action();
+    } catch (error) {
+      if (error instanceof RangeError || error instanceof TypeError) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, error.message);
+      throw error;
+    }
+  };
+  // Gives a card or a plugin a notice; exactly one of card and plugin is given (docs/spec/notifications.md#commands-and-statuses).
+  registry.command("core.notices.add", ({ card, plugin: pluginId, ...fields }) => refusedNotice(() => {
+    if ((card === undefined) === (pluginId === undefined)) throw new RangeError("core.notices.add takes exactly one of card and plugin");
+    if (pluginId !== undefined) {
+      if (!hasPlugin(pluginId)) throw new RangeError(`plugin ${pluginId} does not exist`);
+      return reportPageNotice(fields, pluginId);
+    }
+    const target = currentGrid()?.card(card);
+    if (!target) throw new RangeError(`card ${card} does not exist`);
+    const tab = activeTab(target);
+    if (!tab) throw new RangeError(`card ${card} has no tab`);
+    return notificationStore().showTab(checkNotice(fields), { card, tab: tab.id, plugin: tab.plugin });
+  }));
+  // The store refuses an id that is not a progress notice with a plain Error, so the command checks it first and refuses it as -32602.
+  const progressNotice = (id) => {
+    const notice = notificationStore().notice(id);
+    if (notice === null) throw new RangeError(`notice ${id} is not an entry`);
+    if (notice.kind !== "progress") throw new RangeError(`notice ${id} is not a progress notice`);
+  };
+  registry.command("core.notices.progress", ({ id, progress }) => refusedNotice(() => {
+    const checked = checkNoticeProgress({ id, progress });
+    progressNotice(checked.id);
+    notificationStore().progress(checked.id, checked.progress);
+  }));
+  registry.command("core.notices.done", ({ id, kind, title }) => refusedNotice(() => {
+    const checked = checkNoticeDone({ id, kind, title });
+    progressNotice(checked.id);
+    notificationStore().done(checked.id, checked.kind, checked.title);
+  }));
   errors.watch(coreChanged);
   return errors;
 }
@@ -521,7 +599,7 @@ export function applySessionShow(tab, entry) {
   if (session !== undefined) bindShown(session, tab, cardSizeOf(tab));
 }
 
-export async function installCoreExposure({ library, renames, chrome, drawn, memorySaver }) {
+export async function installCoreExposure({ home, renames, chrome, drawn, memorySaver }) {
   // The core entries read the memory saver (core.tab.memory, core.surfaces, the tab commands), so a page without it is refused
   // before any entry is registered.
   if (typeof memorySaver !== "object" || memorySaver === null) {
@@ -548,7 +626,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   }));
   status("core.screen", () => ({
     screen: document.body.dataset.screen,
-    modal: settingsModalState().open ? "settings" : debugState().open ? "debug" : pickerState().open ? "picker" : null,
+    modal: debugState().open ? "debug" : pickerState().open ? "picker" : null,
   }));
   status("core.workbench.audit", () => ({ unbound: audit(document.body) }));
   // WebKit stops animation frames when it hides the document, so a change of the visibility state is announced.
@@ -563,7 +641,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   status("core.projects", () => projects.all().map(withOpen));
   status("core.project", () => {
     const project = projects.active();
-    return project && !projects.inLibrary() ? withOpen(project) : null;
+    return project && !projects.inHome() ? withOpen(project) : null;
   });
   // The stored form of the layout with the level of each group node (docs/spec/groups.md#status-and-queries).
   status("core.layout", () => (currentGrid() ? capture() : null));
@@ -572,6 +650,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onSectionsChange(coreChanged);
   onPluginOperations(coreChanged);
   followSidecarChanges();
+  followOutdatedSidecars({ store: notificationStore() });
   followActivation();
   onTabReports(coreChanged);
   status("core.surfaces", surfacesState);
@@ -593,7 +672,6 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     saving: saving(),
   }));
   status("core.themes", () => THEMES);
-  status("core.settings-modal", settingsModalState);
   status("core.debug", debugState);
   status("core.contributions", contributionsState);
   onContributionsChange(coreChanged);
@@ -602,7 +680,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   status("core.plugin-categories", () => pluginCategories());
   status("core.app", () => appUpdate.status());
   status("core.picker", pickerState);
-  status("core.library", () => library.state());
+  status("core.home", () => home.state());
   status("core.verify", () => verified);
   status("core.modal", modalState);
   status("core.drag", dragState);
@@ -682,10 +760,12 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     const sets = createSet(scopedValue("sets", scope));
     const { id } = sets.at(-1);
     await set({ sets }, scope, "core.settings.sets.create");
-    if (settingsModalState().open) settingsScreen.editSet(id);
+    if (settingsTabFront()) await registry.run("core.settings-tab.edit", { set: id });
     return { id };
   });
   registry.command("core.settings.sets.update", invalid(async ({ id, title, layout, scope = "common" }) => {
+    // A set name of spaces only is refused with the text that the settings tab shows (docs/spec/settings.md#stored-sets-and-links).
+    if (title !== undefined && typeof title === "string" && title.trim() === "") throw new Error("이름이 필요하다.");
     const change = Object.fromEntries(Object.entries({ title, layout }).filter(([, v]) => v !== undefined));
     await set({ sets: updateSet(scopedValue("sets", scope), id, change) }, scope, "core.settings.sets.update");
   }));
@@ -696,10 +776,15 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.settings.sets.delete", async ({ id, scope = "common" }) => {
     await set(deleteSet(scopedValue("sets", scope), scopedValue("links", scope), id), scope, "core.settings.sets.delete");
   });
-  registry.command("core.settings.open", onSettings((screen) => { closeDebug(); screen.openSettings(); }));
-  registry.command("core.settings.close", () => { closeSettings(); });
+  // The status and the two commands of the settings tab: the tab loads at its first command (settingsUi).
+  registry.status("core.settings-tab", () => settingsScreen?.settingsTabStatus() ?? null, (fn) => {
+    tabStatusListeners.add(fn);
+    return () => tabStatusListeners.delete(fn);
+  });
+  registry.command("core.settings.open", async () => { (await settingsUi()).openSettingsTab(); });
+  registry.command("core.settings.close", () => { settingsScreen?.closeSettingsTab(); });
   // The debug view and the settings modal are both dialogs, and the host shows one native modal at a time.
-  registry.command("core.debug.open", onDebug(async (screen) => { closeSettings(); await screen.openDebug(); }));
+  registry.command("core.debug.open", onDebug(async (screen) => { settingsScreen?.closeSettingsTab(); await screen.openDebug(); }));
   registry.command("core.debug.close", () => { closeDebug(); });
   registry.command("core.debug.save", onDebug((screen, { path }) => screen.saveDebugFile(path)));
   registry.command("core.debug.save-all", onDebug((screen) => screen.saveDebugFiles()));
@@ -714,11 +799,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.debug.timeline.select", onDebug((screen, { row, selected }) => { screen.selectDebugRow(row, selected); }));
   registry.command("core.debug.timeline.context", onDebug((screen, { row }) => screen.contextDebugRow(row)));
   registry.command("core.debug.timeline.save", onDebug((screen) => screen.saveDebugRows()));
-  // The project list shows the projects page of the library.
-  registry.command("core.projects.browse", async () => {
-    await projects.browse();
-    library.actions.page("projects");
-  });
+  // Shows the project home in this window while keeping the current work.
+  registry.command("core.projects.browse", async () => { await projects.showHome(); });
   registry.command("core.projects.flush", async () => { await projects.flush(); });
   registry.command("core.project.open", ({ root, color = "#ffb36b" }) => {
     // The resize marker registered below covers the window size, and this command covers opening a project (V5-104).
@@ -755,14 +837,6 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     if (!grid?.setSize(card, axis, size)) throw new Error(`cannot size ${card} on ${axis}`);
     settle();
   });
-  registry.command("core.settings-modal.nav", onSettings((screen, { section }) => { screen.showSection(section); }));
-  registry.command("core.settings-modal.scope", onSettings((screen, { scope }) => { screen.showScope(scope); }));
-  registry.command("core.settings-modal.plugin", onSettings((screen, { plugin: id = null }) => { screen.showPlugin(id); }));
-  registry.command("core.settings-modal.search", onSettings((screen, { query }) => { screen.searchPlugins(query); }));
-  registry.command("core.settings-modal.account-name", onSettings((screen, { name }) => { screen.setAccountName(name); }));
-  registry.command("core.settings-modal.account-kind", onSettings((screen, { kind }) => { screen.setAccountKind(kind); }));
-  registry.command("core.settings-modal.account-edit", onSettings((screen, { id }) => { screen.editAccount(id); }));
-  registry.command("core.settings-modal.account-edit-name", onSettings((screen, { name }) => { screen.setAccountEditName(name); }));
   registry.command("core.plugins.install", pluginCommand("install"));
   registry.command("core.plugins.update", pluginCommand("update"));
   registry.command("core.plugins.remove", pluginCommand("remove"));
@@ -785,19 +859,15 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     await pluginOperations.useRegistry(index);
     await appUpdate.refresh();
   });
-  // Plugin management closes the settings window and shows the plugins page of the library.
+  // Plugin management opens the installed-plugin page of the settings tab (docs/spec/settings.md#plugins).
   registry.command("core.plugins.browse", async () => {
-    closeSettings();
-    if (!projects.inLibrary()) await projects.browse();
-    library.actions.page("plugins");
+    await registry.run("core.settings.open", {});
+    await registry.run("core.settings-tab.nav", { page: "installed" });
   });
   registry.command("core.plugins.show-updates", async () => {
-    closeSettings();
-    if (!projects.inLibrary()) await projects.browse();
-    library.actions.showUpdates();
+    await registry.run("core.settings.open", {});
+    await registry.run("core.settings-tab.nav", { page: "installed" });
   });
-  registry.command("core.settings-modal.edit", onSettings((screen, { set: id = null }) => { screen.editSet(id); }));
-  registry.command("core.settings-modal.move", onSettings((screen, { dx, dy }) => { screen.moveSettings(dx, dy); }));
 
   registry.command("core.card.focus", ({ card }) => { trace("action", { kind: "card.focus", card }); focusCard(card); });
   registry.command("core.card.sidebar.set", ({ card, side, set }) => { assignSidebar(card, side, set); });
@@ -912,32 +982,25 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   // Escape in the native menu answers with this command (card.js). The menu is the picker, the only native menu.
   registry.command("core.modal.dismiss", () => { closePicker("dismiss"); });
 
-  registry.command("core.library.page", ({ page }) => { library.actions.page(page); });
-  registry.command("core.library.plugins.search", ({ query }) => { library.actions.searchPlugins(query); });
-  registry.command("core.library.search", ({ query }) => { library.actions.search(query); });
-  registry.command("core.library.search.focus", () => {
-    if (!projects.inLibrary()) throw new Error("the library is not shown");
-    const page = library.state().page;
-    const name = page === "projects" ? "core.library.search"
-      : page === "plugins" ? "core.library.plugins.search"
-        : null;
-    if (!name) throw new Error(`unknown library page ${JSON.stringify(page)}`);
-    focusElement(name);
+  registry.command("core.home.show", async () => { await projects.showHome(); });
+  registry.command("core.home.search", ({ query }) => { home.actions.search(query); });
+  registry.command("core.home.search.focus", () => {
+    if (!projects.inHome()) throw new Error("the project home is not shown");
+    focusElement("core.home.search");
   });
-  registry.command("core.library.sort", ({ order }) => { library.actions.sort(order); });
-  registry.command("core.library.open", async ({ id }) => { await library.actions.open(id); });
-  registry.command("core.library.pin", async ({ id, pinned }) => { await library.actions.pin(id, pinned); });
-  registry.command("core.library.remove", async ({ id }) => {
-    need(projects.all().find((p) => p.id === id), id);
-    await library.actions.remove(id);
+  registry.command("core.home.select", ({ step }) => { home.actions.select(step); });
+  registry.command("core.home.open", async ({ project }) => { await home.actions.open(project); });
+  registry.command("core.home.form.open", ({ mode, parent }) => { home.actions.openForm(mode, parent); });
+  registry.command("core.home.form.set", ({ field, value: input }) => { home.actions.setField(field, input); });
+  registry.command("core.home.form.submit", async () => { await home.actions.submitForm(); });
+  registry.command("core.home.form.cancel", () => { home.actions.cancelForm(); });
+  registry.command("core.home.choose-folder", async () => { await home.actions.chooseFolder(); });
+  registry.command("core.home.pin", async ({ project }) => { await home.actions.pin(project); });
+  registry.command("core.home.confirm", async ({ project, answer }) => { await home.actions.confirm(project, answer); });
+  registry.command("core.home.remove", async ({ project }) => {
+    need(projects.all().find((p) => p.id === project), project);
+    await home.actions.remove(project);
   });
-  registry.command("core.library.window", async () => { await library.actions.newWindow(); });
-  registry.command("core.library.return", async () => { await library.actions.back(); });
-  registry.command("core.library.form.open", ({ mode }) => { library.actions.openForm(mode); });
-  registry.command("core.library.form.cancel", () => { library.actions.cancelForm(); });
-  registry.command("core.library.form.set", ({ field, value: input }) => { library.actions.setField(field, input); });
-  registry.command("core.library.form.submit", async () => { await library.actions.submitForm(); });
-  registry.command("core.library.choose-folder", async () => { await library.actions.chooseFolder(); });
 
   registry.command("core.rename.begin", ({ kind, id }) => { renames.begin({ kind, id }); });
   registry.command("core.rename.set", ({ value: input }) => { renames.set(input); });
@@ -976,7 +1039,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   });
 
   for (const { name } of registry.list().element) {
-    if (name.startsWith("core.") && name !== "core.error.dismiss") registry.element(name);
+    if (name.startsWith("core.")) registry.element(name);
   }
 
   onPicker(coreChanged);

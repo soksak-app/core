@@ -50,6 +50,9 @@ export class HostWorkspaceStore {
   }
   tabState() { return this.host.call("workspace", { kind: "tabState" }); }
   tabStatePut(tab, entry) { return this.host.call("workspace", { kind: "tabStatePut", tab, entry }); }
+  /** The notice center store, notices.json, through the notices kinds of the host (docs/spec/notifications.md#notice-center). */
+  notices() { return this.host.call("workspace", { kind: "notices" }); }
+  noticesPut(notices) { return this.host.call("workspace", { kind: "noticesPut", notices }); }
   tabSession(tab) { return this.host.call("workspace", { kind: "tabSession", tab }); }
   tabSessionPut(tab, regions) { return this.host.call("workspace", { kind: "tabSessionPut", tab, regions }); }
   tabSessions() { return this.host.call("workspace", { kind: "tabSessions" }); }

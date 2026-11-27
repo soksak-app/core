@@ -261,7 +261,7 @@ async function application(t, name) {
   t.after(() => client.close());
   const steps = counts.operationSteps({ window: "w1", plugins: ["probe"], sok: SOK, configDir: server.configDir, client,
     statuses: counts.statusChanges(), projectRoot: "/p" });
-  return { server, steps };
+  return { server, steps, client };
 }
 
 /** The requests that the player received, as `<method> <name>` of each in their order. */
@@ -283,7 +283,7 @@ test("the divider drag splits a card, drags the boundary of the split through di
   assert.deepEqual(close.params, { window: "w1", name: "core.card.close", params: { card: "split" } });
 });
 
-test("the menu and the settings window open and close through their declared commands and wait for their statuses", async (t) => {
+test("the menu and the settings tab open and close through their declared commands and wait for their statuses", async (t) => {
   const { server, steps } = await application(t, "menu-settings");
   await steps["card.menu"]();
   await steps["settings.window"]();
@@ -296,12 +296,20 @@ test("the menu and the settings window open and close through their declared com
     "run core.picker.close",
     "until core.picker",
     "run core.settings.open",
-    "until core.settings-modal",
+    "until core.settings-tab",
     "run core.settings.close",
-    "until core.settings-modal",
+    "until core.settings-tab",
   ]);
   assert.deepEqual(server.requests.find(({ method, params }) => method === "command.run" && params.name === "core.card.menu").params,
     { window: "w1", name: "core.card.menu", params: { card: "main", menu: "add" } });
+});
+
+test("a picker reply without open fails the card menu step with the predicate error, and the client unwatches and closes", async (t) => {
+  const { server, steps, client } = await application(t, "menu-picker-without-open");
+  await assert.rejects(steps["card.menu"](), /the predicate of core\.picker returned undefined, not a boolean/);
+  // The measurement closes its client in the finally of its run; the case ends when that close arrives.
+  client.close();
+  await server.played;
 });
 
 test("the plugins apply waits for a new start of core.window.workbench, which comes in the same page process", async (t) => {

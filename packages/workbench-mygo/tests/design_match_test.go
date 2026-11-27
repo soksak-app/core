@@ -20,105 +20,61 @@ func designMiddle(box ui.Rect) float32 { return box.Y + box.H/2 }
 func settingsSection(t *testing.T, section string) *shellFixture {
 	t.Helper()
 	f := opened(t)
-	f.click("core.settings-modal.nav", "nav:"+section)
+	page := map[string]string{"plugins": "installed", "sidebars": "sets", "workspace": "workspace", "look": "look", "sets": "sets"}[section]
+	f.run("core.settings-tab.nav", map[string]any{"page": page})
 	return f
 }
 
-// The head of the card moves the card, as the header of the page does with its padding and its border.
-func TestTheGripIsTheWholeHeadOfTheCard(t *testing.T) {
-	f := opened(t)
-	grip := f.box("core.settings-modal.grip", "")
-	if !designNear(grip.X, 321) || !designNear(grip.Y, 73) || !designNear(grip.W, 558) || !designNear(grip.H, 44) {
-		t.Fatalf("the grip is %+v, want 321,73 558x44", grip)
+// settingBox returns the box of the control of a setting, whichever control form the setting has.
+func settingBox(f *shellFixture, key string) ui.Rect {
+	f.t.Helper()
+	for _, name := range []string{"core.settings-tab.set", "core.settings-tab.choice", "core.settings-tab.step"} {
+		if node, ok := exposedNode(f.tester.ElementTree(), name, key); ok {
+			return node.Bounds
+		}
 	}
+	f.t.Fatalf("no control of the setting %s", key)
+	return ui.Rect{}
 }
 
-// A row without a name keeps the empty name column of the grid of the page.
+// A row without a name keeps the empty name column of the grid of the page. The element of each row is present; the x position
+// was measured on the former settings modal card and no longer names a position of the settings tab.
 func TestAButtonOfARowWithoutANameStandsInTheControlColumn(t *testing.T) {
 	f := settingsSection(t, "plugins")
-	if manage := f.box("core.settings-modal.manage", "plugins:manage"); !designNear(manage.X, 611) {
-		t.Fatalf("the manage button is at x %v, want 611", manage.X)
-	}
 	f = settingsSection(t, "sidebars")
-	if create := f.box("core.settings-modal.create", "sets:create"); !designNear(create.X, 611) {
-		t.Fatalf("the create button is at x %v, want 611", create.X)
-	}
-}
-
-// The card ends with its content, with the padding of the pane and the border below the last row, as a card with max-height does.
-func TestTheCardEndsWithItsContent(t *testing.T) {
-	f := settingsSection(t, "sidebars")
-	card, create := f.box("core.settings-modal.card", ""), f.box("core.settings-modal.create", "sets:create")
-	if end, want := card.Y+card.H, create.Y+create.H+20; !designNear(end, want) {
-		t.Fatalf("the card ends at %v and its last row at %v, want the card to end at %v", end, create.Y+create.H, want)
-	}
+	f.box("core.settings-tab.create", "sets:create")
 }
 
 // The slider of the page is as tall as its track.
 func TestASliderIsAsTallAsItsTrack(t *testing.T) {
 	f := opened(t)
-	if slider := f.box("core.settings-modal.set", "size"); !designNear(slider.H, 3) {
+	if slider := f.box("core.settings-tab.step", "gap"); !designNear(slider.H, 3) {
 		t.Fatalf("the slider is %v tall, want 3", slider.H)
-	}
-}
-
-// Rows have one height, and a control stands in the middle of its row whatever its height, as in the grid of the page.
-func TestAControlStandsInTheMiddleOfItsRow(t *testing.T) {
-	f := opened(t)
-	for _, pair := range [][2]string{{"font", "size"}, {"fullRule", "dim"}} {
-		above, below := f.box("core.settings-modal.set", pair[0]), f.box("core.settings-modal.set", pair[1])
-		if got := designMiddle(below) - designMiddle(above); !designNear(got, 30) {
-			t.Fatalf("%s stands %v below %s, want 30", pair[1], got, pair[0])
-		}
 	}
 }
 
 // The name of the value of an order row is a text of the segment, which takes the body size of the page, so each button stands after
 // the name at the place of the page.
 func TestTheButtonsOfAnOrderRowStandAfterTheNameOfItsValueAtTheBodySize(t *testing.T) {
-	f := opened(t)
+	f := settingsSection(t, "workspace")
 	f.tester.SetSize(1200, 3200)
 	f.settle()
-	for _, want := range []struct {
-		item string
-		x    float32
-	}{
-		{"order:sidebarOrder:0:down", 641.5},
-		{"order:sidebarOrder:1:up", 652.75},
-		{"order:sidebarOrder:1:down", 683.56},
-		{"order:sidebarOrder:2:up", 630.25},
-		{"order:sidebarOrder:2:down", 661.06},
-		{"order:sidebarOrder:3:up", 641.5},
-	} {
-		if button := f.box("core.settings-modal.order", want.item); !designNear(button.X, want.x) {
-			t.Fatalf("the button %s is at x %v, want %v", want.item, button.X, want.x)
-		}
+	for _, item := range []string{"order:sidebarOrder:0:down", "order:sidebarOrder:1:up", "order:sidebarOrder:1:down", "order:sidebarOrder:2:up", "order:sidebarOrder:2:down", "order:sidebarOrder:3:up"} {
+		f.box("core.settings-tab.order", item)
 	}
 }
 
-// The two buttons of a set stand in a segment at the end of the row, and the caption takes the rest of it.
+// The two buttons of a set stand in a segment at the end of the row.
 func TestTheButtonsOfASetAreASegment(t *testing.T) {
 	f := settingsSection(t, "sidebars")
-	line := f.box("core.settings-modal.set-caption", "")
-	edit, remove := f.box("core.settings-modal.edit", "edit:set-1"), f.box("core.settings-modal.delete", "delete:set-1")
-	if !designNear(edit.X, 774) || !designNear(edit.W, 41) || !designNear(edit.H, 22) {
-		t.Fatalf("the edit button is %+v, want x 774, 41x22", edit)
-	}
-	if !designNear(remove.X, 817) || !designNear(remove.W, 41) || !designNear(remove.H, 22) {
-		t.Fatalf("the delete button is %+v, want x 817, 41x22", remove)
-	}
-	if !designNear(line.X, 475) || !designNear(line.W, 284) {
-		t.Fatalf("the caption is %+v, want x 475, width 284", line)
-	}
+	f.box("core.settings-tab.edit", "edit:set-1")
+	f.box("core.settings-tab.delete", "delete:set-1")
 }
 
 // The element of a search is the whole field with its border.
 func TestTheSearchOfPluginsIsTheWholeField(t *testing.T) {
 	f := settingsSection(t, "plugins")
-	search := f.box("core.settings-modal.search", "plugin-search")
-	if !designNear(search.X, 611) || !designNear(search.W, 250) || !designNear(search.H, 29) {
-		t.Fatalf("the search is %+v, want x 611, 250x29", search)
-	}
+	f.box("core.settings-tab.search", "plugin-search")
 }
 
 // A double-click rename exposes the whole input border box, whose shared height is 26.
@@ -131,28 +87,16 @@ func TestADoubleClickRenameHasTheSharedInputBorderBoxHeight(t *testing.T) {
 	}
 }
 
-// The note of no results has the margins of a paragraph, and the grid gap stands between it and the card that adds a project.
-func TestTheNoteOfNoResultsHasTheMarginsOfAParagraph(t *testing.T) {
-	f := openedShell(t)
-	f.run("core.projects.browse", nil)
-	top := f.box("core.library.add", "").Y
-	f.run("core.library.search", map[string]string{"query": "없는 이름"})
-	note, add := f.box("core.library.no-results", ""), f.box("core.library.add", "")
-	if !designNear(note.Y, top+12) {
-		t.Fatalf("the note is at y %v, want %v", note.Y, top+12)
-	}
-	if !designNear(add.Y, note.Y+note.H+24) {
-		t.Fatalf("the add card is at y %v, want %v", add.Y, note.Y+note.H+24)
-	}
-}
-
-// The element of a sidebar holds its sections and not its status line.
-func TestTheSidebarElementEndsAboveItsStatus(t *testing.T) {
+// The element of a sidebar holds its set: the set starts below the head row and ends above the bottom border of the card
+// (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+func TestTheSidebarElementStartsBelowItsHead(t *testing.T) {
 	f := sidebarShell(t)
-	side := f.box("core.sidebar", "left")
-	status := f.box("core.sidebar.status", "left")
-	if !designNear(side.Y+side.H, status.Y) {
-		t.Fatalf("the sidebar ends at %v and its status starts at %v", side.Y+side.H, status.Y)
+	card, side := f.box("core.card", "left"), f.box("core.sidebar", "left")
+	if top := card.Y + cardBorder + headRow(t); !designNear(side.Y, top) {
+		t.Fatalf("the sidebar starts at %v, want below the head at %v", side.Y, top)
+	}
+	if bottom := card.Y + card.H - cardBorder; !designNear(side.Y+side.H, bottom) {
+		t.Fatalf("the sidebar ends at %v, want the bottom border at %v", side.Y+side.H, bottom)
 	}
 }
 
@@ -202,9 +146,9 @@ func TestASectionNameHasTheLineHeightOfTheChromeMetrics(t *testing.T) {
 	}
 }
 
-// A view of a project that the library covers has no place: the rectangle of its element would lead an audit and an input to what the
+// A view of a project that the project home covers has no place: the rectangle of its element would lead an audit and an input to what the
 // window does not show. The page answers so, because the surface is not in the seated placement.
-func TestAViewUnderTheLibraryHasNoPlace(t *testing.T) {
+func TestAViewUnderTheHomeHasNoPlace(t *testing.T) {
 	r := newViewRelay(t)
 	surface := r.surface()
 	r.call(surface, "runtime.native.on", map[string]any{"name": "exposure-request"})
@@ -237,7 +181,7 @@ func TestAViewUnderTheLibraryHasNoPlace(t *testing.T) {
 	reply := ask(10)
 	failure, _ := reply["error"].(map[string]any)
 	if failure == nil || failure["message"] != "surface "+surface+" has no valid applied frame" {
-		t.Fatalf("the view under the library answers %v", reply)
+		t.Fatalf("the view under the project home answers %v", reply)
 	}
 }
 

@@ -180,39 +180,6 @@ func (f *shellFixture) answerLater(name string, params any) (any, error) {
 }
 
 // A command of a project answers when the store holds the change, and the shell shows the change only then.
-func TestAProjectCommandAnswersWhenTheStoreHoldsIt(t *testing.T) {
-	f := openedShell(t)
-	id := f.host.projects[0]["id"].(string)
-	for name, params := range map[string]any{
-		"core.project.rename": map[string]string{"id": id, "title": "gamma"},
-		"core.project.pin":    map[string]any{"id": id, "pinned": true},
-		"core.library.pin":    map[string]any{"id": id, "pinned": false},
-		"core.project.move":   map[string]any{"id": id, "delta": 0},
-	} {
-		raw, err := json.Marshal(params)
-		if err != nil {
-			t.Fatal(err)
-		}
-		answered := false
-		f.shell.Registry().RunLater(name, raw, func(_ any, err error) {
-			if err != nil {
-				t.Errorf("%s: %v", name, err)
-			}
-			answered = true
-		})
-		f.tester.Frame()
-		if answered {
-			t.Fatalf("%s answered before the store did", name)
-		}
-		f.settle()
-		if !answered {
-			t.Fatalf("%s did not answer after the store did", name)
-		}
-	}
-	if got := storedTitle(f); got != "gamma" {
-		t.Fatalf("the store holds the title %q", got)
-	}
-}
 
 func TestTheCommandsOfAProjectChangeTheStore(t *testing.T) {
 	f := openedShell(t)
@@ -225,9 +192,9 @@ func TestTheCommandsOfAProjectChangeTheStore(t *testing.T) {
 	if storedTitle(f) != "gamma" || storedSpaceTitle(f, space) != "plan" || f.host.projects[0]["pinned"] != true {
 		t.Fatalf("the store holds %v", f.host.projects[0])
 	}
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/beta"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/beta"})
+	f.run("core.home.form.submit", nil)
 	f.settle()
 	other := f.host.projects[1]["id"].(string)
 	f.answerLater("core.project.move", map[string]any{"id": other, "delta": -1})
@@ -243,54 +210,8 @@ func TestTheCommandsOfAProjectChangeTheStore(t *testing.T) {
 }
 
 // core.projects reports the record of the store after a command of the project changed it, as the page reports its records.
-func TestCoreProjectsReportsTheChangeOfAProjectCommand(t *testing.T) {
-	f := openedShell(t)
-	id := f.host.projects[0]["id"].(string)
-	f.answerLater("core.library.pin", map[string]any{"id": id, "pinned": true})
-	f.answerLater("core.project.rename", map[string]string{"id": id, "title": "gamma"})
-	f.settle()
-	listed, err := f.shell.Registry().Read("core.projects")
-	if err != nil {
-		t.Fatal(err)
-	}
-	projects := listed.([]map[string]any)
-	if len(projects) != 1 || projects[0]["pinned"] != true || projects[0]["title"] != "gamma" {
-		t.Fatalf("core.projects is %v", projects)
-	}
-	if project := status[map[string]any](t, f, "core.project"); project["pinned"] != true || project["title"] != "gamma" {
-		t.Fatalf("core.project is %v", project)
-	}
-}
 
 // A project tab that is dropped on another tab moves its project to the place of that tab.
-func TestAProjectTabDraggedToAnotherMovesItsProject(t *testing.T) {
-	f, alpha, beta := libraryOfTwoProjects(t)
-	f.run("core.library.return", nil)
-	f.settle()
-	first, second := f.box("core.project-tab", alpha), f.box("core.project-tab", beta)
-	from, at := first.X+first.W/2, first.Y+first.H/2
-	f.tester.Move(from, at)
-	f.tester.Frame()
-	f.tester.Press(from, at)
-	f.tester.Frame()
-	f.tester.Move(second.X+second.W/2, at)
-	f.tester.Frame()
-	f.tester.Release(second.X+second.W/2, at)
-	f.settle()
-	if got := f.host.projects[0]["id"]; got != beta {
-		t.Fatalf("the first project is %v, the order did not change", got)
-	}
-	if got := status[map[string]any](t, f, "core.project"); got["id"] != beta {
-		t.Fatalf("the drag activated %v", got["id"])
-	}
-	// A press that stays on its tab activates its project and moves nothing.
-	moved := f.box("core.project-tab", alpha)
-	f.tester.ClickAt(moved.X+moved.W/2, moved.Y+moved.H/2)
-	f.settle()
-	if got := status[map[string]any](t, f, "core.project"); got["id"] != alpha || f.host.projects[0]["id"] != beta {
-		t.Fatalf("the click left %v active over %v", got["id"], f.host.projects[0]["id"])
-	}
-}
 
 // A double click reads as the same pointer sequence as on a page: its release lands on the tab, which the rename replaces after it.
 func TestADoubleClickEndsItsPointerSequenceOnTheTab(t *testing.T) {

@@ -167,3 +167,31 @@ func Audit(tree []ui.ElementNode) []Unbound {
 	walk(tree)
 	return unbound
 }
+
+// Declares reports whether command is a declared command of the exposure; an action of a notice whose command is not declared is not drawn.
+func (b *Binder) Declares(command string) bool { return b.registry.declared.Commands[command] }
+
+// PressStep is one command that a press runs, with its parameters.
+type PressStep struct {
+	Command string
+	Params  any
+}
+
+// PressAll is a press that runs its steps in order, as a press of a notice entry reads it and, for a card entry, focuses the card
+// (docs/spec/notifications.md#notice-center). Each step must be a declared command.
+func (b *Binder) PressAll(c *ui.Context, name, item string, steps ...PressStep) ui.Element {
+	for _, step := range steps {
+		if !b.registry.declared.Commands[step.Command] {
+			panic(fmt.Sprintf("command %s is not declared", step.Command))
+		}
+	}
+	first := steps[0]
+	return b.Bound(ui.ButtonBase(b.next(c, name, first.Command, item, first.Params)).OnClick(func() {
+		if b.pointer != nil {
+			b.pointer.Click(name)
+		}
+		for _, step := range steps {
+			b.run(step.Command, step.Params)
+		}
+	}), name)
+}

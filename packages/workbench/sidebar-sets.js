@@ -38,13 +38,11 @@ export function updateSet(sets, id, change) {
 /**
  * Changes one section row of a set (sidebar section in docs/spec/settings.md).
  *
- *   choose  changes the row index to section
- *   up      swaps the row index with the row above
- *   down    swaps the row index with the row below
  *   remove  removes the row index
- *   add     appends at the end the first registered section, in registered order, that the set does not have
+ *   add     appends section at the end
  *
- * registered holds the registered section ids in the order of plugins and declarations. A change that would put the same section in twice is rejected.
+ * registered holds the registered section ids in the order of plugins and declarations. A section that is not registered, or that the
+ * set already has, is rejected.
  */
 export function changeRow(sets, id, { action, index, section }, registered) {
   const at = sets.findIndex((s) => s.id === id);
@@ -53,26 +51,13 @@ export function changeRow(sets, id, { action, index, section }, registered) {
   const row = () => {
     if (!Number.isInteger(index) || index < 0 || index >= rows.length) throw new Error(`set ${id} has no row ${index}`);
   };
-  if (action === "choose") {
-    row();
-    if (!registered.includes(section)) throw new Error(`unknown section ${section}`);
-    if (rows.some((other, i) => i !== index && other === section)) throw new Error(`section ${section} is already in set ${id}`);
-    rows[index] = section;
-  } else if (action === "up") {
-    row();
-    if (index === 0) throw new Error(`row ${index} cannot move up`);
-    [rows[index - 1], rows[index]] = [rows[index], rows[index - 1]];
-  } else if (action === "down") {
-    row();
-    if (index === rows.length - 1) throw new Error(`row ${index} cannot move down`);
-    [rows[index], rows[index + 1]] = [rows[index + 1], rows[index]];
-  } else if (action === "remove") {
+  if (action === "remove") {
     row();
     rows.splice(index, 1);
   } else if (action === "add") {
-    const next = registered.find((candidate) => !rows.includes(candidate));
-    if (!next) throw new Error(`set ${id} already contains every registered section`);
-    rows.push(next);
+    if (!registered.includes(section)) throw new Error(`unknown section ${section}`);
+    if (rows.includes(section)) throw new Error(`section ${section} is already in set ${id}`);
+    rows.push(section);
   } else {
     throw new Error(`unknown row action ${action}`);
   }

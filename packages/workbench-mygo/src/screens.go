@@ -21,3 +21,17 @@ func (b *Binder) Name(c *ui.Context, name, item string) *ui.Context {
 	}
 	return c.Key(Exposed{Name: name, Item: item})
 }
+
+// drawSettingsTabHost draws the settings tab in the content rectangle under the title bar, the place that the work screen takes, while the
+// tab is in front (docs/spec/settings.md#opening-and-closing). The host box is the element core.settings-tab, and the tab draws its
+// content inside it at the origin of the box.
+func (s *Shell) drawSettingsTabHost(c *ui.Context, width, height float32) {
+	if !s.settingsTabInFront() {
+		return
+	}
+	top := s.chromeHeight()
+	body := max(0, height-top)
+	s.exposedBox(c, "core.settings-tab", "", "").Absolute().Left(0).Top(top).Size(width, body).Role(ui.RoleGroup).Label("설정").Children(func() {
+		s.drawSettingsTab(c, ui.Rect{W: width, H: body})
+	})
+}

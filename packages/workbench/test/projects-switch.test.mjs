@@ -1,10 +1,11 @@
-// Checks that opening the library and switching a project finish in the order they were received.
+// Checks that opening the project home and switching a project finish in the order they were received.
 // The host calls and the notices of the page are answered by the page-wire case of each test (docs/spec/cases/page-wire/README.md). The
 // modules of the page are the real ones: the project list reads and writes the registry through the workspace calls of the host store,
 // the settings, the window operations, the sidecar retention and the page log send their calls to the host. Each test starts the page
 // over its own case. The page starts once before the tests, as a window starts: the first start reads the settings, opens the tab state
 // files and anchors the clock of the page, so each test starts from the state that this start leaves and passes alone.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { host, selectPageWire } from "@soksak/runtime";
@@ -42,7 +43,11 @@ const { registerSection } = await import("../registry.js");
 const { installEnvironment } = await import("../environment.js");
 const { HostWorkspaceStore } = await import("../host-store.js");
 const { connectSettings, settingProject } = await import("../settings.js");
+const { endNoticesWriter } = await import("../notices-file.js");
 const { declareProjectData, viewDataOf } = await import("../plugin-data.js");
+// The core declarations, so the notice controls of the page bind their declared commands (exposure.json).
+const { registry } = await import("../exposure.js");
+registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 
 // The installed plugin whose tabs are views: a stored tab of a view plugin keeps its origin.
 installEnvironment({ runtime: "runtime", workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "retained-probe", title: "probe" }] } } },
@@ -111,6 +116,8 @@ const forgetRetained = () => { retainedFrom = wire.calls.length; };
  * address of the start document without a project.
  */
 async function prepare(name) {
+  // The notice writer of the earlier page ends first, so its changes do not reach the wire of this test.
+  endNoticesWriter();
   wire = selectPageWire(name);
   modulesRetained.length = 0;
   retainedFrom = 0;
@@ -142,7 +149,7 @@ const workspaceCalls = (kind) => wire.calls.filter(({ name, payload }) => name =
 /** The names of the host calls of the page from the call at index from on. */
 const namesFrom = (from) => wire.calls.slice(from).map(({ name }) => name);
 
-test("opening a project while the library is still clearing the plane loads it after the clearing", { timeout: 5000 }, async () => {
+test("opening a project while the project home is still clearing the plane loads it after the clearing", { timeout: 5000 }, async () => {
   await start("projects-switch-clearing");
   await projects.activate(PROJECT.id);
   assert.deepEqual(plane.layout, PROJECT.spaces[0].layout);
@@ -150,7 +157,7 @@ test("opening a project while the library is still clearing the plane loads it a
   plane.events.length = 0;
   plane.hold();
   const emptying = emptyStarts();
-  const browsing = projects.browse();
+  const browsing = projects.showHome();
   const opening = projects.activate(PROJECT.id);
   // The clear holds the plane until the release. The mark of the release is in the order, so the load must follow it.
   await emptying;
@@ -166,9 +173,9 @@ test("opening a project while the library is still clearing the plane loads it a
 test("plugin states follow the shown project and project data is patched under plugins", async () => {
   await start("projects-switch-project-data");
   declareProjectData("probe", { marks: { schema: { type: "array" }, default: [] } });
-  await projects.browse();
+  await projects.showHome();
   await projects.activate(PROJECT.id);
-  await projects.browse();
+  await projects.showHome();
   await projects.activate(PROJECT.id);
   const data = viewDataOf({ id: PROJECT.id }, "probe");
   assert.deepEqual(data.get("marks"), []);
@@ -182,7 +189,7 @@ test("plugin states follow the shown project and project data is patched under p
 
 test("a flush writes the window geometry only when it changed", async () => {
   await start("projects-switch-geometry");
-  await projects.browse();
+  await projects.showHome();
   await projects.activate(PROJECT.id);
   const geometryPatches = () => workspaceCalls("patch").filter(({ payload }) => payload.patch.geometry).map(({ payload }) => payload.patch.geometry);
   await projects.flush();
@@ -306,7 +313,7 @@ test("the start document draws the window's project before the store connects an
   plane.events.length = 0;
   projects.begin(structuredClone(snapshot));
   assert.equal(projects.active().id, project.id);
-  assert.equal(projects.inLibrary(), false);
+  assert.equal(projects.inHome(), false);
   assert.deepEqual(plane.events, ["load"], "the first screen did not draw the project's space");
   assert.equal(settingProject(), project.id, "the first screen did not apply the project's settings");
   const from = wire.calls.length;
@@ -336,7 +343,7 @@ test("the start document draws the project synchronously while the host theme re
   wire.finish();
 });
 
-test("a project whose settings file the host refused is not opened, and the start shows the library with the error", async () => {
+test("a project whose settings file the host refused is not opened, and the start shows the project home with the error", async () => {
   await prepare("projects-switch-settings-refused");
   const error = "/work/refused/.soksak/settings.json: settings.json: format must be 1";
   const refused = { ...structuredClone(PROJECT), id: "prj-refused", root: "/work/refused", settingsError: error };
@@ -353,7 +360,7 @@ test("a project whose settings file the host refused is not opened, and the star
   await connectSettings(store);
   await projects.initialise(store);
   assert.equal(projects.active(), null);
-  assert.equal(projects.inLibrary(), true);
+  assert.equal(projects.inHome(), true);
   assert.deepEqual(openedFrom(from), [], "the refused project asked the host for a window");
   assert.deepEqual(reported, [error], "the start did not report the refused settings file once");
   await assert.rejects(projects.activate(refused.id), { message: error });
@@ -365,7 +372,7 @@ test("a project whose settings file the host refused is not opened, and the star
   wire.finish();
 });
 
-test("a project that the start document drew falls back to the library when its activation fails", async () => {
+test("a project that the start document drew falls back to the project home when its activation fails", async () => {
   await prepare("projects-switch-start-fallback");
   const missing = { ...structuredClone(PROJECT), id: "prj-gone", root: "/work/missing" };
   const snapshot = { common: {}, projects: [structuredClone(missing)], open: [] };
@@ -378,7 +385,7 @@ test("a project that the start document drew falls back to the library when its 
   await connectSettings(store);
   await projects.initialise(store);
   assert.equal(projects.active(), null);
-  assert.equal(projects.inLibrary(), true);
+  assert.equal(projects.inHome(), true);
   assert.deepEqual(plane.events, ["empty started", "emptied"]);
   assert.equal(globalThis.location.search, "");
   assert.deepEqual(reported, ["project directory does not exist: /work/missing"], "the failed start activation was not reported once");
@@ -410,7 +417,7 @@ test("a project removed from the registry by another window ends in the window t
   assert.equal(workspaceCalls("patch").slice(patchesBefore).some(({ payload }) => payload.id === "prj-shown"), false, "the window saved the removed project");
   await removeElsewhere();
   assert.equal(projects.active(), null);
-  assert.equal(projects.inLibrary(), true, "the window without a project did not show the library");
+  assert.equal(projects.inHome(), true, "the window without a project did not show the project home");
   assert.deepEqual(projects.local(), []);
   assert.deepEqual(retained(), [{ modules: ["tab-other"] }, [{ surface: "tab-other", plugin: "fixture", root: "/work/prj-other" }]],
     "the window kept the surface modules and sidecar sessions of its last removed project");
@@ -458,26 +465,26 @@ test("an activation received while a removed project is clearing waits for the c
   assert.deepEqual(plane.events, ["empty started", "turn waits for the clear", "released", "emptied", "load"],
     "the removed-project clear ran after the replacement project was loaded");
   assert.equal(projects.active()?.id, "prj-clearing-next");
-  assert.equal(projects.inLibrary(), false);
+  assert.equal(projects.inHome(), false);
   await projects.flush();
   wire.finish();
 });
 
 // WebKit runs the reaction of a promise that the host reply fulfilled at the next microtask checkpoint, and that checkpoint can come after the ResizeObserver callback of the next
-// rendering update. If the switch to the library happens in that reaction, elements of the work area that the observation round
+// rendering update. If the switch to the project home happens in that reaction, elements of the work area that the observation round
 // already delivered (the file tree, the terminal screen) become 0x0 and a loop error occurs (F43). The switch must happen in the drawing that clears the plane,
 // that is, in the next task, which runs outside the observation round.
-test("a start at the library address draws no project and returns to the project that it names (F1149-1)", async () => {
-  await prepare("projects-switch-library-address");
+test("a start at the project home address draws no project and returns to the project that it names (F1149-1)", async () => {
+  await prepare("projects-switch-home-address");
   const project = { ...structuredClone(PROJECT), id: "prj-back", root: "/work/back" };
   const snapshot = { common: {}, projects: [structuredClone(project)], open: [project.id] };
   addressWith(`?library=${project.id}`);
   plane.events.length = 0;
   projects.begin(structuredClone(snapshot));
-  assert.equal(projects.inLibrary(), true, "the start did not show the library");
+  assert.equal(projects.inHome(), true, "the start did not show the project home");
   assert.deepEqual(plane.events, [], "the start drew the project");
   assert.equal(projects.active(), null);
-  assert.equal(projects.returnable().id, project.id, "the library has no way back to the project of the address");
+  assert.equal(projects.returnable().id, project.id, "the project home has no way back to the project of the address");
   const from = wire.calls.length;
   const store = new HostWorkspaceStore(host);
   await connectSettings(store);
@@ -485,19 +492,19 @@ test("a start at the library address draws no project and returns to the project
   assert.deepEqual(openedFrom(from), [], "the start opened the project before the person returned to it");
   await projects.activate(projects.returnable().id);
   assert.equal(projects.active().id, project.id);
-  assert.equal(projects.inLibrary(), false);
+  assert.equal(projects.inHome(), false);
   assert.deepEqual(plane.events, ["load"], "the return did not draw the project");
   assert.equal(globalThis.location.search, `?project=${project.id}`);
   await projects.flush();
   wire.finish();
 });
 
-test("a start at a library address of a project that no window holds open has no way back", async () => {
-  await prepare("projects-switch-library-closed");
+test("a start at a project home address of a project that no window holds open has no way back", async () => {
+  await prepare("projects-switch-home-closed");
   const project = { ...structuredClone(PROJECT), id: "prj-gone", root: "/work/gone" };
   addressWith(`?library=${project.id}`);
   projects.begin({ common: {}, projects: [structuredClone(project)], open: [] });
-  assert.equal(projects.inLibrary(), true);
+  assert.equal(projects.inHome(), true);
   assert.equal(projects.returnable(), null);
   const store = new HostWorkspaceStore(host);
   await connectSettings(store);
@@ -506,28 +513,28 @@ test("a start at a library address of a project that no window holds open has no
   wire.finish();
 });
 
-test("browsing shows the library in the draw that empties the plane, not where a later host reply resolves", { timeout: 5000 }, async () => {
+test("browsing shows the project home in the draw that empties the plane, not where a later host reply resolves", { timeout: 5000 }, async () => {
   await start("projects-switch-browse-draw");
   await projects.activate(PROJECT.id);
   let screen = "workspace";
   let inRound = false;
   const switches = [];
   projects.onChange(() => {
-    const next = projects.inLibrary() ? "library" : "workspace";
+    const next = projects.inHome() ? "home" : "workspace";
     if (next !== screen) switches.push(`${next} in ${plane.drawing ? "the empty draw" : inRound ? "the observation round" : "a task"}`);
     screen = next;
   });
   try {
     // The host reply of the settings project selection is held and fulfilled at the checkpoint after the callback of the file tree observer.
-    const browsing = projects.browse();
+    const browsing = projects.showHome();
     await drained();
     // Observation round: the tree callback runs, and the held reply is fulfilled at that checkpoint.
     inRound = true;
     wire.release();
     await browsing;
     inRound = false;
-    assert.deepEqual(switches, ["library in the empty draw"], "the library screen was not drawn by the draw that empties the plane");
-    // A reload of the page, such as the apply of a plugin change, starts at the screen of the address, so the library names the project
+    assert.deepEqual(switches, ["home in the empty draw"], "the project home screen was not drawn by the draw that empties the plane");
+    // A reload of the page, such as the apply of a plugin change, starts at the screen of the address, so the address names the project
     // of the window as the one to return to, not as the one to show (F1149, F1149-1).
     assert.equal(globalThis.location.search, `?library=${PROJECT.id}`, "the address does not name the project to return to");
     assert.equal(projects.returnable().id, PROJECT.id);

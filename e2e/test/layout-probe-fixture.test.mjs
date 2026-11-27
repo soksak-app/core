@@ -169,20 +169,20 @@ test("the tab report commands run their view calls and the view status follows t
   assert.equal(await view.run("layoutprobe.title", { text: "Probe title" }), null);
   await view.run("layoutprobe.footer", { text: "Other footer" });
   await view.run("layoutprobe.directory", { path: "/work/project/deep" });
-  await view.run("layoutprobe.notify", { text: "Done" });
-  await view.run("layoutprobe.notify", { text: "Posted", policy: "system" });
+  await view.run("layoutprobe.notify", { kind: "info", title: "Done" });
+  await view.run("layoutprobe.notify", { kind: "warning", title: "Posted", system: true });
   await view.run("layoutprobe.title", { text: null });
   view.deliverNotice("settings", { shade: "strong", rows: 9, caption: "x" });
   await turn();
   assert.deepEqual(reports(view).slice(1), [
     ["tab.title", "Probe title"], ["tab.footer", "Other footer"], ["tab.directory", "/work/project/deep"],
-    ["tab.notify", { text: "Done", policy: "tab" }], ["tab.notify", { text: "Posted", policy: "system" }], ["tab.title", null],
+    ["tab.notify", { kind: "info", title: "Done" }], ["tab.notify", { kind: "warning", title: "Posted", system: true }], ["tab.title", null],
   ]);
   const last = await view.status("layoutprobe.view");
   assert.equal(last.title, null);
   assert.equal(last.footer, "Other footer");
   assert.equal(last.reported, "/work/project/deep");
-  assert.deepEqual(last.notice, { text: "Posted", policy: "system" });
+  assert.deepEqual(last.notice, { kind: "warning", title: "Posted", system: true });
   assert.deepEqual(last.settings, { shade: "strong", rows: 9, caption: "x" });
   // The first value of the watch and one value for each change.
   assert.equal(view.changes("layoutprobe.view").length, 8);

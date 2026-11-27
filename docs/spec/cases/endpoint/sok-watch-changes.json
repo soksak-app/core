@@ -4,7 +4,7 @@
   "replay": false,
   "reason": "The status.changed notifications follow changes that the page makes, and a status of another name changes only when the test changes it.",
   "variables": {
-    "screen": { "type": "object", "keys": ["screen"], "example": { "screen": "library" } },
+    "screen": { "type": "object", "keys": ["screen"], "example": { "screen": "home" } },
     "changed": { "type": "object", "keys": ["screen"], "example": { "screen": "workspace" } },
     "other": { "type": "any", "example": 1 }
   },

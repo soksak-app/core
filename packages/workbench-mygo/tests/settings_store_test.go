@@ -21,7 +21,7 @@ type saved struct {
 
 func settingsStore(t *testing.T, writes *[]saved, definitions ...workbench.SettingDefinition) *workbench.SettingsStore {
 	t.Helper()
-	store, err := workbench.NewSettingsStore(definitions, func(project string, patch map[string]any, remove []string) {
+	store, err := workbench.NewSettingsStore(definitions, func(project string, patch map[string]any, remove []string, restore func()) {
 		*writes = append(*writes, saved{project, patch, remove})
 	})
 	if err != nil {
@@ -256,43 +256,48 @@ func TestASetChangesItsTitleAndItsLayoutWithinTheirForms(t *testing.T) {
 	}
 }
 
-func TestTheRowsOfASetChooseMoveRemoveAndAdd(t *testing.T) {
+func TestTheRowsOfASetAddAndRemove(t *testing.T) {
 	registered := []string{"p", "q", "r"}
 	sets := []workbench.StoredSet{set("a", "p", "q")}
 	row := func(sets []workbench.StoredSet, action string, index int, section string) ([]workbench.StoredSet, error) {
 		return workbench.ChangeRow(sets, "a", action, index, section, registered)
 	}
-	got, err := row(sets, "choose", 1, "r")
-	if err != nil || !reflect.DeepEqual(got[0].Sections, []string{"p", "r"}) {
-		t.Fatalf("choose %+v %v", got, err)
+	got, err := row(sets, "add", 0, "r")
+	if err != nil || !reflect.DeepEqual(got[0].Sections, []string{"p", "q", "r"}) {
+		t.Fatalf("add %+v %v", got, err)
 	}
-	if _, err := row(sets, "choose", 1, "p"); err == nil || err.Error() != "section p is already in set a" {
+	if _, err := row(sets, "add", 0, "p"); err == nil || err.Error() != "section p is already in set a" {
 		t.Fatalf("a repeated section: %v", err)
 	}
-	if _, err := row(sets, "choose", 0, "x"); err == nil || err.Error() != "unknown section x" {
+	if _, err := row(sets, "add", 0, "x"); err == nil || err.Error() != "unknown section x" {
 		t.Fatalf("unknown section: %v", err)
 	}
-	got, err = row(sets, "down", 0, "")
-	if err != nil || !reflect.DeepEqual(got[0].Sections, []string{"q", "p"}) {
-		t.Fatalf("down %+v %v", got, err)
-	}
-	got, err = row(sets, "up", 1, "")
-	if err != nil || !reflect.DeepEqual(got[0].Sections, []string{"q", "p"}) {
-		t.Fatalf("up %+v %v", got, err)
-	}
-	if _, err := row(sets, "up", 0, ""); err == nil || err.Error() != "row 0 cannot move up" {
-		t.Fatalf("up at the start: %v", err)
+	if _, err := row(sets, "add", 0, ""); err == nil || err.Error() != "unknown section " {
+		t.Fatalf("an add without a section: %v", err)
 	}
 	got, err = row(sets, "remove", 0, "")
 	if err != nil || !reflect.DeepEqual(got[0].Sections, []string{"q"}) {
 		t.Fatalf("remove %+v %v", got, err)
 	}
-	got, err = row(sets, "add", 0, "")
-	if err != nil || !reflect.DeepEqual(got[0].Sections, []string{"p", "q", "r"}) {
-		t.Fatalf("add %+v %v", got, err)
+	got, err = row(sets, "remove", 1, "")
+	if err != nil || !reflect.DeepEqual(got[0].Sections, []string{"p"}) {
+		t.Fatalf("remove the last row %+v %v", got, err)
 	}
-	if _, err := row(got, "add", 0, ""); err == nil || err.Error() != "set a already contains every registered section" {
-		t.Fatalf("add with none left: %v", err)
+	if _, err := row(sets, "remove", 2, ""); err == nil || err.Error() != "set a has no row 2" {
+		t.Fatalf("remove a missing row: %v", err)
+	}
+	// The spec has no reorder and no choose row action (docs/spec/settings.md#사이드바-세트): a section moves by removing and adding it.
+	for _, action := range []string{"choose", "up", "down"} {
+		if _, err := row(sets, action, 0, "r"); err == nil || err.Error() != "unknown row action "+action {
+			t.Fatalf("%s: %v", action, err)
+		}
+	}
+	if _, err := row(got, "add", 0, "p"); err == nil || err.Error() != "section p is already in set a" {
+		t.Fatalf("add after a removal of the same section: %v", err)
+	}
+	full := []workbench.StoredSet{set("a", "p", "q", "r")}
+	if _, err := workbench.ChangeRow(full, "a", "add", 0, "p", registered); err == nil || err.Error() != "section p is already in set a" {
+		t.Fatalf("add to a full set: %v", err)
 	}
 	if !reflect.DeepEqual(sets[0].Sections, []string{"p", "q"}) {
 		t.Fatalf("the input changed: %+v", sets)
@@ -480,9 +485,9 @@ func TestAWindowTakesALinkThatTheSettingsKeep(t *testing.T) {
 	}
 }
 
-// The library shows the common settings: leaving a project for the library selects no project, and a return to the project selects
-// it again with its overrides, as browse and back of packages/workbench/projects.js select the project of the settings.
-func TestTheLibraryShowsTheCommonSettings(t *testing.T) {
+// The project home shows the common settings: leaving a project for the home selects no project, and selecting the project in the home
+// selects it again with its overrides, as browse and open of packages/workbench/projects.js select the project of the settings.
+func TestTheHomeShowsTheCommonSettings(t *testing.T) {
 	f := viewShell(t)
 	type settings struct {
 		Values     map[string]any `json:"values"`
@@ -499,17 +504,18 @@ func TestTheLibraryShowsTheCommonSettings(t *testing.T) {
 	}
 	f.run("core.projects.browse", nil)
 	if shown := status[settings](t, f, "core.settings"); shown.Values["mode"] != "dark" || shown.Project != nil || len(shown.Overridden) != 0 {
-		t.Fatalf("the library shows %+v, not the common settings", shown)
+		t.Fatalf("the home shows %+v, not the common settings", shown)
 	}
-	f.run("core.library.return", nil)
+	// The home selects the first row, which is the one project of the window.
+	f.run("core.home.open", map[string]string{})
 	if shown := status[settings](t, f, "core.settings"); shown.Values["mode"] != "light" || shown.Project == nil || !slices.Equal(shown.Overridden, []string{"mode"}) {
-		t.Fatalf("the project shows %+v after the return", shown)
+		t.Fatalf("the project shows %+v after the selection", shown)
 	}
 }
 
-// A project that the window opens again from the library shows the overrides that the store holds, also before the change event of
+// A project that the window opens again from the home shows the overrides that the store holds, also before the change event of
 // the write of its overrides arrived, as selectProject of packages/workbench/settings.js reads the store.
-func TestAProjectOpenedFromTheLibraryShowsItsOverrides(t *testing.T) {
+func TestAProjectOpenedFromTheHomeShowsItsOverrides(t *testing.T) {
 	f := viewShell(t)
 	type settings struct {
 		Values  map[string]any `json:"values"`
@@ -531,7 +537,7 @@ func TestAProjectOpenedFromTheLibraryShowsItsOverrides(t *testing.T) {
 	f.run("core.project.activate", map[string]string{"id": project})
 	f.settle()
 	if shown := status[settings](t, f, "core.settings"); shown.Values["mode"] != "light" || shown.Project == nil {
-		t.Fatalf("the project opened from the library shows %+v, not its override", shown)
+		t.Fatalf("the project opened from the home shows %+v, not its override", shown)
 	}
 }
 
@@ -603,7 +609,7 @@ func TestErrorToastDismissalSecondsRequireAWholeCommonValue(t *testing.T) {
 	if err := store.Begin(nil, nil, "prj-a"); err != nil {
 		t.Fatal(err)
 	}
-	const key = "errorToastDismissSeconds"
+	const key = "problemToastDismissSeconds"
 	for _, value := range []any{0.0, -1.0, 1.25, 2147484.0, "5"} {
 		if err := store.Set(map[string]any{key: value}, "common"); err == nil {
 			t.Errorf("the store accepted %v (%T)", value, value)
@@ -620,5 +626,65 @@ func TestErrorToastDismissalSecondsRequireAWholeCommonValue(t *testing.T) {
 	}
 	if len(writes) != 1 || writes[0].project != "" || writes[0].patch[key] != 7.0 {
 		t.Fatalf("the numeric field wrote %+v", writes)
+	}
+}
+
+// A refused change puts back the values that the change replaced, and removes the override that the change added.
+func TestARefusedChangeRestoresTheValuesItReplaced(t *testing.T) {
+	var restores []func()
+	store, err := workbench.NewSettingsStore(nil, func(_ string, _ map[string]any, _ []string, restore func()) {
+		restores = append(restores, restore)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Begin(map[string]any{"mode": "light"}, nil, "prj-a"); err != nil {
+		t.Fatal(err)
+	}
+	mode, gap := store.Value("mode"), store.Value("gap")
+	if err := store.Set(map[string]any{"mode": "dark"}, "common"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(map[string]any{"gap": 20.0}, "project"); err != nil {
+		t.Fatal(err)
+	}
+	if store.Value("mode") != "dark" || store.Value("gap") != 20.0 || !store.Overridden("gap") {
+		t.Fatalf("the changes did not apply: mode %v, gap %v", store.Value("mode"), store.Value("gap"))
+	}
+	restores[1]()
+	if store.Overridden("gap") || store.Value("gap") != gap {
+		t.Fatalf("the refused project change left gap %v, overridden %v, not %v", store.Value("gap"), store.Overridden("gap"), gap)
+	}
+	restores[0]()
+	if store.Value("mode") != mode {
+		t.Fatalf("the refused common change left mode %v, not %v", store.Value("mode"), mode)
+	}
+}
+
+// A refused change leaves a key that a later pending change has set to that later value.
+func TestARefusedChangeKeepsTheValueOfALaterPendingChange(t *testing.T) {
+	var restores []func()
+	store, err := workbench.NewSettingsStore(nil, func(_ string, _ map[string]any, _ []string, restore func()) {
+		restores = append(restores, restore)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Begin(map[string]any{"gap": 8.0}, nil, "prj-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(map[string]any{"gap": 10.0}, "common"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(map[string]any{"gap": 14.0}, "common"); err != nil {
+		t.Fatal(err)
+	}
+	restores[0]()
+	if store.Value("gap") != 14.0 {
+		t.Fatalf("the refused earlier change replaced the later pending value: gap %v, not 14", store.Value("gap"))
+	}
+	restores[1]()
+	if store.Value("gap") != 10.0 {
+		t.Fatalf("the refused later change left gap %v, not 10", store.Value("gap"))
 	}
 }

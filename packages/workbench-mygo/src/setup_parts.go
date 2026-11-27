@@ -51,7 +51,18 @@ type SetupOperations struct {
 	// lastRead is the number of the last started read or operation: a read that ends after a later one started does not replace its
 	// parts.
 	lastRead int
+	// generation advances with each change that touch reports, so a reader of the parts rebuilds its view once per change.
+	generation uint64
 }
+
+// touch records a change of the parts or the operation and tells the window.
+func (p *SetupOperations) touch() {
+	p.generation++
+	p.changed()
+}
+
+// Generation returns the number of changes of the parts and the operation.
+func (p *SetupOperations) Generation() uint64 { return p.generation }
 
 // NewSetupOperations returns the setup parts of a window over its host calls.
 func NewSetupOperations(calls *Calls, changed func(), fail func(error)) *SetupOperations {
@@ -82,7 +93,7 @@ func (p *SetupOperations) Read(answer func(*SetupParts, error)) {
 		}
 		if order == p.lastRead {
 			p.parts = parts.Parts
-			p.changed()
+			p.touch()
 		}
 		answer(&parts, nil)
 	})
@@ -112,7 +123,7 @@ func (p *SetupOperations) apply(method string, params any, kinds []string, answe
 		return
 	}
 	p.running = kinds
-	p.changed()
+	p.touch()
 	p.lastRead++
 	order := p.lastRead
 	p.calls.Call(method, params, func(value any, err error) {
@@ -122,7 +133,7 @@ func (p *SetupOperations) apply(method string, params any, kinds []string, answe
 			parts, err = decodeSetupParts(value)
 		}
 		if err != nil {
-			p.changed()
+			p.touch()
 			p.fail(fmt.Errorf("setup: %w", err))
 			answer(nil, err)
 			return
@@ -130,7 +141,7 @@ func (p *SetupOperations) apply(method string, params any, kinds []string, answe
 		if order == p.lastRead {
 			p.parts = parts.Parts
 		}
-		p.changed()
+		p.touch()
 		answer(&parts, nil)
 	})
 }
@@ -248,7 +259,7 @@ func (s *Shell) buildSetup(b *settingsBuilder) {
 			s.errors.Show(key, part.Error, "")
 		}
 		// The label is the text of the row in document order, as the page reports the textContent of its row.
-		control := b.add(SettingsControl{Name: "core.settings-modal.setup", Key: text(key), Label: setupNames[part.Part] + state + part.File,
+		control := b.add(SettingsControl{Name: "core.settings-tab.setup", Key: text(key), Label: setupNames[part.Part] + state + part.File,
 			kind: controlSetup, setup: &setupRow{name: setupNames[part.Part], state: state, file: part.File, failed: part.State == "error"}})
 		if part.Part == "path" && part.Enabled != nil {
 			label := "켜기"
@@ -256,7 +267,7 @@ func (s *Shell) buildSetup(b *settingsBuilder) {
 				label = "끄기"
 			}
 			control.Label += label
-			control.setup.action = b.button("setup-change:path", "core.settings-modal.setup-change", label, "core.setup.change",
+			control.setup.action = b.button("setup-change:path", "core.settings-tab.setup-change", label, "core.setup.change",
 				map[string]any{"part": "path", "enabled": !*part.Enabled})
 		}
 		rows = append(rows, settingsRow{controls: []*SettingsControl{control}, list: true})
@@ -266,9 +277,9 @@ func (s *Shell) buildSetup(b *settingsBuilder) {
 	}
 	actions := []*SettingsControl{}
 	if kinds := missingSetupKinds(parts); len(kinds) > 0 {
-		actions = append(actions, b.button("setup-install", "core.settings-modal.setup-install", "설치", "core.setup.install", map[string]any{"parts": kinds}))
+		actions = append(actions, b.small("setup-install", "core.settings-tab.setup-install", "설치", "core.setup.install", map[string]any{"parts": kinds}))
 	}
-	actions = append(actions, b.button("setup-check", "core.settings-modal.setup-check", "다시 확인", "core.setup.check", nil))
+	actions = append(actions, b.small("setup-check", "core.settings-tab.setup-check", "다시 확인", "core.setup.check", nil))
 	rows = append(rows, settingsRow{controls: actions, list: true})
 	b.group("에이전트", "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.", rows...)
 }

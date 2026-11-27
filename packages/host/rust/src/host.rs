@@ -147,6 +147,19 @@ fn arguments() -> &'static command_line::Arguments {
         .expect("run reads the application arguments before any window opens")
 }
 
+/// Sets the application arguments of a main-thread test of the feature host-test, which runs the host without the process
+/// arguments of the application: its configuration directory is config_dir. The arguments are set once per process.
+#[cfg(feature = "host-test")]
+pub fn set_arguments_for_tests(config_dir: &std::path::Path) {
+    let arguments = command_line::Arguments {
+        config_dir: Some(config_dir.to_string_lossy().into_owned()),
+        ..command_line::Arguments::default()
+    };
+    if ARGUMENTS.set(arguments).is_err() {
+        panic!("the application arguments of the test process are set once");
+    }
+}
+
 /// The configuration directory. Without `--config-dir`, it is the identifier directory of this build under the user
 /// configuration directory (docs/spec/projects.md#persistence). It creates the directory and returns the canonical
 /// path.

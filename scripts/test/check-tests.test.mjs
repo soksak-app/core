@@ -342,6 +342,26 @@ test("completed audit aggregates and fixture corrections are exempt while unlink
   );
 });
 
+test("a completed capability removed by a later checklist item needs no feature link when its follow-up names the remover and a spec section", { timeout: 1000 }, () => {
+  const removed = "- [o] X1 — old capability\n  - [-] X1-1 — Closed: removed by R1: the settings tab replaces it, as docs/spec/settings.md#settings-tab specifies.\n- [ ] R1 — later replacement\n";
+  assert.deepEqual(auditCompletedFeatureLinks([], removed), []);
+});
+
+test("a removal follow-up is rejected when its remover is not a checklist item, names no spec section, or is not under its own parent", { timeout: 1000 }, () => {
+  assert.deepEqual(
+    auditCompletedFeatureLinks([], "- [o] X1 — old capability\n  - [-] X1-1 — Closed: removed by R9: the settings tab replaces it, as docs/spec/settings.md#settings-tab specifies.\n"),
+    ["X1-1: removal names no checklist item: R9", "X1: completed capability has no feature link"],
+  );
+  assert.deepEqual(
+    auditCompletedFeatureLinks([], "- [o] X1 — old capability\n  - [-] X1-1 — Closed: removed by R1: the settings tab replaces it.\n- [ ] R1 — later replacement\n"),
+    ["X1-1: removal names no spec section", "X1: completed capability has no feature link"],
+  );
+  assert.deepEqual(
+    auditCompletedFeatureLinks([], "- [o] X1 — old capability\n  - [-] X2-1 — Closed: removed by R1: the settings tab replaces it, as docs/spec/settings.md#settings-tab specifies.\n- [ ] R1 — later replacement\n"),
+    ["X2-1: removal follow-up is not under its parent X2", "X1: completed capability has no feature link"],
+  );
+});
+
 test("inventory totals follow declared test additions without copied documentation", { timeout: 1000 }, () => {
   const matrix = [{ capability: "unit", language: "js-ts", implementation: ["unit.js"], tests: ["*.test.mjs"], testLanguage: "js-ts" }];
   const original = auditInventory(["unit.js", "first.test.mjs"], matrix, () => "");

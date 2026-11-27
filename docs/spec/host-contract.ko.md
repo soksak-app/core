@@ -538,6 +538,7 @@ fn invalid_json_closes_connection() {
 | `images.copy-path.frame-request-malformed` | `generation`이 없거나 형이 틀리거나 `null`인 프레임 요청은 `error`를 `malformed`로, `member`와 함께 답하고, 올바른 `name`이 없는 요청은 응답 없이 소비하며 응답을 보내지 않는다고 적는 오류 기록 하나를 남긴다. | all |
 | `images.copy-path.frame-request-read` | `purpose`가 `read`인 프레임 요청은 그리지 않는 region에 대해서도, 창이 가려진 동안에도 native region에 display frame 하나를 요청하고, 그 display frame은 틱을 보낸다. 함께 기다리는 read 요청과 draw 요청은 display frame 하나를 요청하고 틱 하나를 받는다. 재생률이 없는 read 요청의 display frame은 `error`를 `noScreen`으로, `purpose` `read`와 endpoint의 창 식별자 `window`와 함께 답한다. `draw`도 `read`도 아닌 `purpose`는 `malformed`로, `member` `purpose`와 함께 답한다. | all |
 | `images.copy-path.input-draw` | 응답되지 않은 요청이 없는 드로잉 region에 사용자 입력이 전달되면 입력의 correlation 식별자를 담은 screen 요청을 tick을 기다리지 않고 바로 보낸다. | all |
+| `images.drawing.shown-surface` | page가 surface가 숨겨진 동안 붙인 region은 layout이 surface를 보이게 할 때 창 변경 없이 surface의 드로잉 상태를 받는다. surface의 가시성 변경은 한 번 보고되고, 반복된 값은 아무것도 바꾸지 않는다. | all |
 | `images.copy-path.screen-answer-accepted` | 공급자의 screen 메시지가 region의 응답되지 않은 요청에 답하면 wire에서 `accepted`로 답하고 요청을 끝내며, 그 rows를 다음 요청의 기준으로 삼는다. | all |
 | `images.copy-path.screen-answer-refused` | generation, raster 또는 요청 식별자가 오래되었거나 region을 소유하지 않은 보낸 쪽의 screen 메시지는 `stale` 또는 `notAttached`로 답하며, 응답되지 않은 요청을 그대로 둔다. | all |
 | `images.copy-path.screen-malformed-names-its-member` | 멤버가 없거나 타입이 틀린 screen 메시지, 또는 올바른 `row`나 `cells`가 없는 행은 `malformed` 오류와 첫 번째 그런 멤버의 점 경로로 답하며, 응답되지 않은 요청은 그대로 둔다. | all |
@@ -926,7 +927,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.endpoint.concurrent-hosts-share-authenticated-service` | 두 호스트가 토큰으로 한 서비스 엔드포인트에 인증하고 각자의 이벤트를 받는다. | all |
 | `sidecars-transport.hello.declares-protocol-one` | hello 요청은 프로토콜 1을 선언한다. | all |
 | `sidecars-transport.reconnect.after-connection-loss-preserves-owner` | 서비스가 연결을 끊으면 다음 보내기가 다시 연결하고 이벤트는 계속 소유자와 표면에 도착한다. | all |
-| `sidecars-transport.hello.reports-a-service-of-another-version` | hello 응답의 `version`이 `installed.json`의 기록과 다르거나 없는 persistent 서비스는 `host.sidecars` `outdated`에 실행 중인 version이나 `null`, 설치된 version, 열린 표면 수와 함께 나열된다. 설치된 version의 서비스는 나열되지 않는다. | all |
+| `sidecars-transport.hello.reports-a-service-of-another-version` | hello 응답의 `version`이 `installed.json`의 기록과 다르거나 없는 persistent 서비스는 `host.sidecars` `outdated`에 실행 중인 version이나 `null`, 설치된 version, 열린 표면 수(`sessions`)와 그 표면 식별자 목록(`surfaces`)과 함께 나열된다. 설치된 version의 서비스는 나열되지 않는다. | all |
 | `sidecars-transport.hello.records-an-outdated-connection` | `installed.json`의 기록과 다른 version을 `hello` 응답이 말하는 연결은 level `warn`의 event `host.sidecar.outdated`를 `name`, `running`, `installed`와 함께 한 번 쓴다. 설치된 version의 서비스는 그런 event를 쓰지 않는다. | all |
 | `sidecars-transport.hello.client-is-the-configuration-directory` | host가 상주 service에 보내는 `hello` 메시지는 애플리케이션의 설정 폴더를 `client`로 싣는다. | all |
 | `sidecars-transport.hello.rejects-auth-failure` | 실패한 hello 응답은 보내기를 "authentication handshake failed"로 실패시킨다. | all |
@@ -1076,6 +1077,8 @@ fn invalid_json_closes_connection() {
 | `workspace.settings.persist-across-reopen` | 같은 설정 디렉터리로 다시 연 작업 공간은 저장된 공통 설정과 프로젝트 설정을 보여 준다. | all |
 | `workspace.settings.reset-removes-override` | 프로젝트 재정의를 제거하면 빈 프로젝트 설정 객체가 남는다. | all |
 | `workspace.settings.rejects-project-opening-override` | projectOpening의 프로젝트 재정의를 거부한다. | all |
+| `workspace.notices.put-replaces-list` | `notices.json`이 없으면 `notices`는 `null`을 읽는다. `noticesPut`은 `{format: 1, notices}`를 쓰고, 설정 디렉터리의 다른 저장소에서 `notices`가 같은 목록을 읽는다. | all |
+| `workspace.notices.rejects-other-format` | format 2인 `notices.json`에 대한 `noticesPut`은 `<path>: notices.json: format must be 1`로 실패하고 파일을 바꾸지 않는다. 목록이 아닌 값의 `noticesPut`은 `notices put requires a list of notices`로 실패한다. | all |
 | `workspace.tab-state.put-keeps-other-entries` | `tab-state.json`이 없으면 `tabState`는 `null`을 읽는다. 한 설정 디렉터리의 두 저장소에서 다른 탭의 `tabStatePut` 두 번은 `{format: 1, tabs}`에 두 entry를 모두 지키고, `null` entry는 자기 탭만 지우며, put마다 쓴 file의 크기를 돌려준다. | all |
 | `workspace.tab-state.rejects-other-format` | 형식 2의 `tab-state.json`에 대한 `tabStatePut`은 `<path>: tab-state.json: format must be 1`로 실패하고 file을 바꾸지 않는다. | all |
 | `workspace.tab-state.rejects-invalid-entry` | `tabStatePut`은 탭이 없으면 `tab state put requires a tab`로, 빈 entry, `kept: false`, 빈 label, 양의 정수 format이나 value가 없는 state, 다른 필드는 `invalid tab state entry of <tab>: <field>`로 거부한다. | all |
@@ -1338,10 +1341,10 @@ fn invalid_json_closes_connection() {
 | `app-update.replace.refuses-before-it-changes-anything` | 응용 프로그램 번들이 아닌 target이나 bundle, 둘이 같은 폴더인 경우는 target이 바뀌기 전에 실패한다. 운영체제가 프로세스의 종료를 알리므로 update는 그 종료 이벤트를 기다리며 한도가 없다. | all |
 | `app-update.apply.starts-sok-from-a-copy-and-checks-the-bundle` | 업데이트를 적용하면 실행 중인 번들의 `sok`을 `<config-dir>/updates/sok`에 복사하고 `sok app update --wait <pid> --bundle <bundle> --target <실행 중인 번들> [-- <인자>]`를 새 세션으로 준비한다. `updates/` 밖의 번들, `Info.plist`가 없는 폴더, 응용 프로그램 번들 밖의 애플리케이션은 거부한다. | all |
 | `app-update.apply.records-the-detached-command` | 분리 실행한 명령은 host의 표준 오류를 그대로 쓰므로 그 메시지는 실행의 표준 오류 파일에 있고, host는 명령을 시작할 때 명령의 `pid`와 `command` 줄을 가진 event `host.update.start`를 저장한다. 시작할 수 없는 명령은 그 명령을 이름으로 가리키는 오류다. | all |
+| `app-update.refuses-translocated-bundle` | Host는 경로에 `/AppTranslocation/`이 있는 executable의 stage와 apply를 오류 `application update: <executable path> runs from a translocated location of macOS, so the application bundle must be moved out of quarantine and started again`으로 거절하며, 거절은 `<config-dir>/updates/` 아래 파일을 만들지 않고 종료를 요청하지 않는다. | all |
 | `app-relaunch.starts-the-same-bundle-in-the-background-after-the-process-ended` | `sok app relaunch`는 kernel 알림으로 프로세스의 끝을 기다린 뒤, 바꾸지 않은 대상 번들을 `--` 뒤의 인자로 활성화하지 않고 시작하고 `{target}`을 출력한다. | all |
 | `app-relaunch.refuses-a-folder-that-is-not-a-bundle-and-waits-for-the-exit` | 애플리케이션 번들이 아닌 대상은 아무것도 시작하기 전에 `application relaunch: the target <path> is not an application bundle`로 실패한다. relaunch는 프로세스의 종료 이벤트를 기다리며 한도가 없다. | all |
 | `app-relaunch.host.starts-sok-of-the-running-bundle` | `diagnostics.host.relaunch`는 실행 중인 번들의 `Contents/MacOS/sok`으로 `sok app relaunch --wait <pid> --target <실행 중인 번들> [-- <인자>]`를 host의 표준 오류와 함께 새 세션에서 준비한다. 애플리케이션 번들 밖의 애플리케이션은 `application relaunch: <executable> does not run from an application bundle`로 실패한다. | all |
-| `app-update.refuses-translocated-bundle` | Host는 경로에 `/AppTranslocation/`이 있는 executable의 stage와 apply를 오류 `application update: <executable path> runs from a translocated location of macOS, so the application bundle must be moved out of quarantine and started again`으로 거절하며, 거절은 `<config-dir>/updates/` 아래 파일을 만들지 않고 종료를 요청하지 않는다. | all |
 | `app-relaunch.host.records-the-detached-command` | host는 relaunch 명령을 시작할 때 명령의 `pid`와 `command` 줄을 가진 event `host.relaunch.start`를 저장한다. 시작할 수 없는 명령은 `application relaunch: start <program>: <reason>`으로 실패한다. | all |
 | `cli.plugin.install-extracts-and-records` | `sok registry use`는 검사한 index를 `file:` URL로 기록한다. `sok plugin install`은 plugin과 그 sidecar version을 mode와 함께 풀고, 푼 폴더마다 절대 `path`를 담아 `installed.json`을 쓰고, plugin 항목과 sidecar version을 출력하며, 되풀이하면 아무것도 바꾸지 않는다. | all |
 | `cli.plugin.install-modes-ignore-the-umask` | umask 077에서도 `sok plugin install`은 실행 파일을 mode 0755로, 다른 파일을 mode 0644로 쓴다. | all |

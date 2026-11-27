@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -15,7 +16,7 @@ import (
 // and projects.js.
 
 // drawChrome draws the chrome bar of the window, a band of the card color with its edge under it: the logo, the tabs of the projects and the
-// switches. The library screen has no layout, so its bar leaves out the project list and the balance.
+// switches. The project home has no layout, so its bar leaves out the project list and the balance.
 func (s *Shell) drawChrome(c *ui.Context, width float32) {
 	browsing := s.browsing || s.opened() == nil
 	ui.Row(s.binder.Name(c, "core.chrome.bar", "")).Size(width, s.chromeHeight()).Padding(0, s.metrics.spacePad, 0, s.metrics.spacePad+s.controlsWidth).AlignItems(ui.Center).Gap(s.metrics.chromeGap).
@@ -23,13 +24,14 @@ func (s *Shell) drawChrome(c *ui.Context, width float32) {
 		ObserveInput(s.placeInput(FrameScope())).Role(ui.RoleGroup).Label("core.chrome.bar").Children(func() {
 		s.drawBrand(c)
 		ui.Row(c).Grow(1).MinWidth(0).Clip().AlignItems(ui.Center).Gap(s.frameLength(s.metrics.tabsGap)).Children(func() {
-			if !browsing && s.projectTabsPlace() != "left" {
+			if !browsing && s.projectTabsPlace() == "top" {
 				for _, project := range s.projects {
 					s.drawBarTab(c, s.projectTab(c, project))
 				}
 				s.drawBarAdd(c, s.binder.Press(c, "core.project-tab.add", "core.projects.browse", "", nil))
 			}
 		})
+		s.drawSettingsChip(c)
 		ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(s.frameLength(s.metrics.chromeActsGap)).Children(func() { s.drawChromeActs(c, browsing) })
 	})
 }
@@ -45,7 +47,8 @@ func (s *Shell) keepControls(at layout.Rect) {
 	}
 }
 
-// drawBrand draws the logo of the workbench. It does not receive presses, so a press on it drags the window.
+// drawBrand draws the logo of the workbench, the element core.chrome.projects, the first element of the title bar. A press on it runs
+// core.projects.browse (docs/spec/external-sidebars.md#window-tools).
 func (s *Shell) drawBrand(c *ui.Context) {
 	box := s.options.Declared.ChromeValue("brand-logo-box")
 	var left, top, wide, high float32
@@ -59,42 +62,68 @@ func (s *Shell) drawBrand(c *ui.Context) {
 	}
 	text := s.options.Declared.ChromeValue(mode)
 	height := s.frameLength(float32(s.settings.Value("size").(float64)) * s.metrics.brandLogoAtBase / s.metrics.textBase)
-	ui.Box(s.binder.Name(c, "core.brand", "")).Shrink(0).MarginEnd(s.frameLength(s.metrics.brandGap)).Role(ui.RoleImage).Label("soksak").Children(func() {
+	s.binder.Press(c, "core.chrome.projects", "core.projects.browse", "", nil).Shrink(0).MarginEnd(s.frameLength(s.metrics.brandGap)).Role(ui.RoleButton).Label("soksak").Children(func() {
 		// An icon takes one color, and the tile of the logo keeps its own, so the logo is an image with its letters in the color of the mode.
 		ui.Image(c, s.declaredIcon(box, "", strings.ReplaceAll(s.options.Declared.Icons["brand-logo"], "currentColor", text))).Size(height*wide/high, height)
 	})
 }
 
-// drawChromeActs draws the switches of the chrome bar in the order of the page.
+// settingChange is the parameter of core.settings.change that writes a value of a side switch to its scope
+// (docs/spec/settings.md#scope-of-a-control).
+type settingChange struct {
+	Key   string `json:"key"`
+	Value bool   `json:"value"`
+	Scope string `json:"scope"`
+}
+
+// drawChromeActs draws the window tools of the title bar for the screen in front (docs/spec/external-sidebars.md#window-tools): on the
+// work screen the four side switches, a separator and the settings button; on the project home only the settings button. The settings
+// tab shows none.
 func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
-	// The count holds the plugin updates and the application update, as the update button of packages/workbench/index.html counts.
-	updates := len(s.pluginOperations.Status().Updates)
-	if s.appUpdates.Status().Available != nil {
-		updates++
-	}
-	if updates > 0 {
-		s.chromeTextAct(c, "core.chrome.updates", "core.plugins.show-updates", fmt.Sprintf("업데이트 %d", updates))
+	// The settings tab in front shows no tool, and its settings entry is the chip beside the project tabs.
+	if s.settingsTabInFront() {
+		return
 	}
 	if !browsing {
-		s.chromeAct(c, "core.chrome.projects", "core.projects.browse", "프로젝트 목록", "projects", false, nil)
-		arrange, _ := s.settings.Value("cardArrange").(string) // silent: the settings store checks the type of the value.
-		s.chromeAct(c, "core.chrome.balance", "core.layout.balance", "카드 자동 정렬", BalanceIcon(arrange), false, nil)
-	}
-	if !browsing {
-		// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom
-		// (docs/spec/external-sidebars.md#window-tools).
+		// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom. It shows the applied value of
+		// its side and writes the negated value to the scope that the applied value comes from.
 		for _, side := range layout.WindowSides {
 			on, _ := s.settings.Value(side).(bool) // silent: the settings store checks the type of the value.
-			// The switch writes the scope that the applied value comes from (docs/spec/settings.md#scope-of-a-control).
-			s.chromeAct(c, "core.chrome."+side, "core.settings.set", sideNames[side]+" 사이드바 보이기", "panel-"+side, on, s.appliedPatch(side, !on))
+			s.chromeAct(c, "core.chrome."+side, "core.settings.change", sideNames[side]+" 사이드바 보이기", "panel-"+side, on,
+				settingChange{Key: side, Value: !on, Scope: s.settings.Source(side)})
 		}
+		ui.Box(c).Size(s.frameLength(1), s.frameLength(s.metrics.actH)).Shrink(0).Background(s.palette.Edge)
 	}
-	next, icon := "light", "sun"
-	if s.settings.Value("mode") != "dark" {
-		next, icon = "dark", "moon"
-	}
-	s.chromeAct(c, "core.chrome.mode", "core.settings.set", "밝게 / 어둡게", icon, false, s.appliedPatch("mode", next))
 	s.chromeAct(c, "core.chrome.settings", "core.settings.open", "설정", "settings", false, nil)
+	// The bell is the last element of the title bar, after the tools of the screen (docs/spec/notifications.md#bell).
+	s.drawBell(c)
+}
+
+// drawSettingsChip draws the chip of the settings tab beside the project tabs while the window has a settings tab
+// (docs/spec/settings.md#opening-and-closing). The chip runs core.settings.open, which brings the tab to the front, and its close
+// control runs core.settings.close. The chip has the rail border while the tab is in front.
+func (s *Shell) drawSettingsChip(c *ui.Context) {
+	if !s.settingsWindow.open {
+		return
+	}
+	m := s.metrics
+	border := s.palette.Edge
+	if s.settingsTabInFront() {
+		border = s.palette.Rail
+	}
+	size := s.frameFont(s.textControl())
+	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(s.frameLength(m.chromeGap)).Margin(0, 0, 0, s.frameLength(m.chromeGap)).Children(func() {
+		open := s.binder.Press(c, "core.settings-tab.chip", "core.settings.open", "", nil)
+		open.Height(s.frameLength(m.spaceTabH)).PaddingX(s.frameLength(m.chromeGap)).AlignItems(ui.Center).Radius(s.radiusSmall()).
+			Border(s.palette.BorderWidth, border).Label("⚙ 설정").Children(func() {
+			ui.Text(c, "⚙ 설정").SingleLine().FontSize(size).TextColor(s.palette.Fg)
+		})
+		closing := s.binder.Press(c, "core.settings-tab.close", "core.settings.close", "", nil)
+		closing.Height(s.frameLength(m.spaceTabH)).PaddingX(s.frameLength(m.barXPad)).AlignItems(ui.Center).Label("설정 탭 닫기").Tooltip("설정 탭 닫기")
+		closing.Children(func() {
+			ui.Text(c, "×").SingleLine().FontSize(size).TextColor(s.palette.Muted)
+		})
+	})
 }
 
 // appliedPatch is the parameter of core.settings.set that writes value of key to the scope that the applied value of key comes
@@ -109,7 +138,7 @@ func (s *Shell) chromeAct(c *ui.Context, name, command, title, icon string, on b
 }
 
 // drawAct draws an icon switch, the .act of packages/workbench/app.css, with its lengths at scale.
-func (s *Shell) drawAct(c *ui.Context, button ui.Element, title, icon string, on bool, scale float32) {
+func (s *Shell) drawAct(c *ui.Context, button ui.Element, title, icon string, on bool, scale float32, badges ...func()) {
 	m := s.metrics
 	button.Size(scale*m.actW, scale*m.actH).Shrink(0).Center().Radius(s.radiusSmall()).Label(title).Tooltip(title)
 	color := s.palette.Muted
@@ -124,6 +153,9 @@ func (s *Shell) drawAct(c *ui.Context, button ui.Element, title, icon string, on
 	button.Children(func() {
 		size := scale * m.actIcon
 		ui.Icon(c, s.declaredIcon("0 0 24 24", paint, s.options.Declared.Icons[icon])).Size(size, size).TextColor(color)
+		for _, badge := range badges {
+			badge()
+		}
 	})
 }
 
@@ -304,33 +336,108 @@ func (s *Shell) projectTabsPlace() string {
 	return place
 }
 
-// projectColumnWidth is the width of the column of the project tabs, and 0 while the window has none.
+// projectColumnWidth is the width of the column of the project tabs at the left of the work area, and 0 while the window has none there.
 func (s *Shell) projectColumnWidth() float32 {
-	if s.inLibrary() || s.projectTabsPlace() != "left" {
+	return s.sideColumnWidth("left")
+}
+
+// rightColumnWidth is the width of the column of the project tabs at the right of the work area, and 0 while the window has none there.
+func (s *Shell) rightColumnWidth() float32 {
+	return s.sideColumnWidth("right")
+}
+
+// sideColumnWidth is the width of the column of the project tabs at place left or right, and 0 while the window shows another place or
+// the project home.
+func (s *Shell) sideColumnWidth(place string) float32 {
+	if s.inHome() || s.projectTabsPlace() != place {
 		return 0
 	}
 	return float32(math.Round(float64(s.frameLength(s.metrics.projectColumnW))))
 }
 
-// drawWorkArea draws the spaces and the plane of the shown project, beside the column of the project tabs in the left mode. The column
-// runs from under the first row to the bottom of the window.
-func (s *Shell) drawWorkArea(c *ui.Context, width, height float32) {
-	column := s.projectColumnWidth()
-	if column == 0 {
-		s.drawWork(c, width, height)
-		return
+// bottomRowHeight is the height of the row of the project tabs under the work area, and 0 while the window has none there: a project tab,
+// the padding above and below it, and the border of the top edge (docs/spec/settings.md#values, projectTabs = bottom).
+func (s *Shell) bottomRowHeight() float32 {
+	if s.inHome() || s.projectTabsPlace() != "bottom" {
+		return 0
 	}
-	ui.Row(c).Size(width, height).Children(func() {
-		s.drawProjectColumn(c, column, height)
-		ui.Column(c).Size(width-column, height).Children(func() { s.drawWork(c, width-column, height) })
-	})
+	return s.frameLength(s.metrics.projectTabH) + 2*s.frameLength(s.metrics.projectColumnPad) + s.palette.BorderWidth
 }
 
-func (s *Shell) drawProjectColumn(c *ui.Context, width, height float32) {
+// drawWorkArea draws the spaces and the plane of the shown project beside the column of the project tabs at the left or the right, and above
+// the row of the project tabs at the bottom. The column runs from under the first row to the status bar; the row runs across the window.
+func (s *Shell) drawWorkArea(c *ui.Context, width, height float32) {
+	left, right, bottom := s.projectColumnWidth(), s.rightColumnWidth(), s.bottomRowHeight()
+	workHeight := height - bottom
+	if left == 0 && right == 0 && bottom == 0 {
+		s.drawWork(c, width, height)
+	} else {
+		ui.Column(c).Size(width, height).Children(func() {
+			ui.Row(c).Size(width, workHeight).Children(func() {
+				if left > 0 {
+					s.drawProjectColumn(c, left, workHeight, "left")
+				}
+				ui.Column(c).Size(width-left-right, workHeight).Children(func() { s.drawWork(c, width-left-right, workHeight) })
+				if right > 0 {
+					s.drawProjectColumn(c, right, workHeight, "right")
+				}
+			})
+			if bottom > 0 {
+				s.drawProjectRow(c, width, bottom)
+			}
+		})
+	}
+	// The stage stands below the title bar and the space row, beside the project column. Its edges are drawn over it.
+	stageTop := s.chromeHeight() + s.spaceRowHeight()
+	s.drawSidebarEdges(c, layout.Rect{X: float64(left), Y: float64(stageTop), W: float64(width - left - right), H: float64(workHeight - s.spaceRowHeight())})
+}
+
+// drawSidebarEdges draws the + <side> button at the edge of each hidden side that has a choice, while the pointer is over that edge
+// (docs/spec/external-sidebars.md#sidebar-head-and-edge). The edges stand over the stage rectangle stage, in window coordinates.
+func (s *Shell) drawSidebarEdges(c *ui.Context, stage layout.Rect) {
+	thick := float64(s.frameLength(s.metrics.space4))
+	choices := s.sidebars.Sides()
+	for _, side := range layout.WindowSides {
+		// silent: the settings store checks the type of the value of a side.
+		if on, _ := s.settings.Value(side).(bool); on || !slices.Contains(choices, side) {
+			continue
+		}
+		var edge layout.Rect
+		switch side {
+		case "left":
+			edge = layout.Rect{X: stage.X, Y: stage.Y, W: thick, H: stage.H}
+		case "right":
+			edge = layout.Rect{X: stage.X + stage.W - thick, Y: stage.Y, W: thick, H: stage.H}
+		case "top":
+			edge = layout.Rect{X: stage.X, Y: stage.Y, W: stage.W, H: thick}
+		default:
+			edge = layout.Rect{X: stage.X, Y: stage.Y + stage.H - thick, W: stage.W, H: thick}
+		}
+		box := ui.Column(c).Absolute().Left(float32(edge.X)).Top(float32(edge.Y)).Size(float32(edge.W), float32(edge.H)).Center()
+		box.Children(func() {
+			if !box.Hovered() {
+				s.binder.Absent(c, "core.sidebar.edge", "core.settings.change", side, settingChange{Key: side, Value: true, Scope: s.settings.Source(side)})
+				return
+			}
+			button := s.binder.Press(c, "core.sidebar.edge", "core.settings.change", side, settingChange{Key: side, Value: true, Scope: s.settings.Source(side)})
+			button.Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Card).PaddingX(s.frameLength(s.metrics.chromeGap))
+			button.Children(func() {
+				ui.Text(c, "+ "+sideNames[side]).SingleLine().FontSize(s.frameFont(s.textCaption())).TextColor(s.palette.Fg)
+			})
+		})
+	}
+}
+
+func (s *Shell) drawProjectColumn(c *ui.Context, width, height float32, place string) {
 	m := s.metrics
 	pad := s.frameLength(m.projectColumnPad)
+	// The border stands on the inner edge of the column: the right edge of the left column and the left edge of the right column.
+	inner, outer := s.palette.BorderWidth, float32(0)
+	if place == "right" {
+		inner, outer = 0, s.palette.BorderWidth
+	}
 	ui.Column(s.binder.Name(c, "core.projects.column", "")).Role(ui.RoleGroup).Label("프로젝트 탭").Size(width, height).Shrink(0).Clip().Padding(pad).Gap(s.frameLength(m.projectColumnGap)).
-		Background(s.palette.Card).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).ObserveInput(s.placeInput(FrameScope())).Children(func() {
+		Background(s.palette.Card).BorderWidth(0, inner, 0, outer).BorderColor(s.palette.Edge).ObserveInput(s.placeInput(FrameScope())).Children(func() {
 		for _, project := range s.projects {
 			s.drawColumnTab(c, s.projectTab(c, project), width-2*pad-s.palette.BorderWidth)
 		}
@@ -341,6 +448,19 @@ func (s *Shell) drawProjectColumn(c *ui.Context, width, height float32) {
 		if add.Hovered() {
 			add.Background(faded(s.palette.Fg, m.chipHoverMix))
 		}
+	})
+}
+
+// drawProjectRow draws the row of the project tabs under the work area: the tabs in one line, then the add button, with the border of its top
+// edge (docs/spec/settings.md#values, projectTabs = bottom).
+func (s *Shell) drawProjectRow(c *ui.Context, width, height float32) {
+	pad := s.frameLength(s.metrics.projectColumnPad)
+	ui.Row(c).Size(width, height).Padding(pad).Gap(s.frameLength(s.metrics.tabsGap)).AlignItems(ui.Center).Clip().Background(s.palette.Card).
+		BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("프로젝트 탭").Children(func() {
+		for _, project := range s.projects {
+			s.drawBarTab(c, s.projectTab(c, project))
+		}
+		s.drawBarAdd(c, s.binder.Press(c, "core.project-tab.add", "core.projects.browse", "", nil))
 	})
 }
 
@@ -423,4 +543,26 @@ func BalanceIcon(arrange string) string {
 		return "layout-grid"
 	}
 	return "columns-3"
+}
+
+// drawBell draws the bell of the title bar: its unread count in the error token while an unread warning or error exists, else in the accent
+// (docs/spec/notifications.md#bell).
+func (s *Shell) drawBell(c *ui.Context) {
+	scale := float32(s.text.Frame())
+	unread, problems := s.errors.UnreadNotices()
+	badge := func() {
+		if unread == 0 {
+			return
+		}
+		m := s.metrics
+		tone := s.palette.Focus
+		if problems {
+			tone = s.palette.No
+		}
+		h := scale * m.noticeGlyph
+		ui.Box(c).Absolute().Top(0).Right(0).MinWidth(h).Height(h).PaddingX(scale * m.toastMorePadX).Radius(h / 2).Background(tone).Center().Children(func() {
+			ui.Text(c, strconv.Itoa(unread)).SingleLine().TextColor(s.palette.Card)
+		})
+	}
+	s.drawAct(c, s.binder.Press(c, "core.chrome.notices", "core.notices.toggle", "", nil), s.bellTitle(), "bell", s.errors.noticeOpen, scale, badge)
 }

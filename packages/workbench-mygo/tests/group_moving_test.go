@@ -1,11 +1,10 @@
 // The lines, the tab drops and the header drags of group cards in the mygo workbench (docs/spec/groups.md#model,
-// docs/spec/groups.md#moving-and-dropping, docs/spec/groups.md#minimum-size), and the library preview of a group card.
+// docs/spec/groups.md#moving-and-dropping, docs/spec/groups.md#minimum-size), and the project home preview of a group card.
 package workbench_test
 
 import (
 	"fmt"
 	"math"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -122,23 +121,6 @@ func TestATabDropResolvesIntoTheGroup(t *testing.T) {
 	}
 	if card := cards["card-4"]; card == nil || card["parent"] != "card-2" || card["x"].(float64) < right-1e-6 || !f.holdsTab("card-4", "t3") {
 		t.Fatalf("the new card is %v, not at the right edge of the group", card)
-	}
-}
-
-// The library preview of a space with a group card draws the cards of the grid and shows no refusal.
-func TestTheLibraryPreviewDrawsAGroupCard(t *testing.T) {
-	f := groupedShell(t)
-	f.shellFixture.run("core.projects.browse", nil)
-	library := status[libraryRead](t, f.shellFixture, "core.library")
-	if len(library.PreviewErrors) > 0 {
-		t.Fatalf("the library shows the preview errors %v", library.PreviewErrors)
-	}
-	panes := []string{}
-	for _, pane := range library.Previews["prj-a"] {
-		panes = append(panes, pane.Card)
-	}
-	if slices.Contains(panes, "card-2") || !slices.Contains(panes, "main") || !slices.Contains(panes, "card-3") {
-		t.Fatalf("the preview holds the panes %v; the panes are the cards of the grid", panes)
 	}
 }
 

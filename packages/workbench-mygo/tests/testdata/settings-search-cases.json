@@ -1,0 +1,53 @@
+{
+  "cases": [
+    {
+      "query": "테마",
+      "settings": [
+        "theme",
+        "mode"
+      ],
+      "plugins": [],
+      "catalog": 0
+    },
+    {
+      "query": "사이드바",
+      "settings": [
+        "sidebarOrder",
+        "sidebarMinWidth",
+        "sidebarMaxWidth",
+        "sidebarWidth"
+      ],
+      "plugins": [],
+      "catalog": 0
+    },
+    {
+      "query": "MEMORY",
+      "settings": [
+        "memorySaver",
+        "memorySaverDelay"
+      ],
+      "plugins": [],
+      "catalog": 0
+    },
+    {
+      "query": "파일 열기",
+      "settings": [
+        "acme.mode"
+      ],
+      "plugins": [],
+      "catalog": 0
+    },
+    {
+      "query": "Gamma",
+      "settings": [],
+      "plugins": [],
+      "catalog": 1
+    },
+    {
+      "query": "zzz-none",
+      "settings": [],
+      "plugins": [],
+      "catalog": 0
+    }
+  ]
+}

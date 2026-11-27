@@ -1,4 +1,4 @@
-// The plugin page of the library: checks the description, the version, the sidecars, the search and the plugin actions (Plugin screen in docs/spec/installation.md).
+// The plugin page 설치됨 of the settings tab: checks the description, the version, the sidecars, the search and the plugin actions (Plugin screen in docs/spec/installation.md).
 // The page lists the fixture plugins of the check application (scripts/fixture-registry.mjs): the raster probe uses the fixture sidecar
 // rasterprobe, the plain-view probe is the plugin that the checks disable and enable, and the save-close probe gives the modified tab.
 import assert from "node:assert/strict";
@@ -15,37 +15,35 @@ const PLUGIN = "probeplain";
 /** The fixture plugin whose tab reports itself modified and declares a save command. */
 const MODIFIED_PLUGIN = "probeclose";
 
-/** Shows the plugin page and, when the check ends, returns to the project page and the work screen. */
+/** Shows the page 설치됨 of the settings tab and, when the check ends, clears the plugin search and closes the settings tab. */
 async function showPlugins(s) {
   s.cleanupSteps(
     async () => {
-      if ((await s.get("core.screen")).screen !== "library") return;
-      await s.run("core.library.plugins.search", { query: "" });
+      if ((await s.get("core.settings-tab")) === null) return;
+      await s.run("core.settings-tab.search", { query: "" });
     },
     async () => {
-      if ((await s.get("core.screen")).screen !== "library") return;
-      await s.run("core.library.page", { page: "projects" });
-      await s.run("core.library.return");
+      if ((await s.get("core.settings-tab")) === null) return;
+      await s.run("core.settings.close");
     },
   );
   await s.run("core.plugins.browse");
-  await s.until("core.screen", (screen) => screen.screen === "library", "core.plugins.browse did not show the library");
-  return s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.length > 0,
-    "the plugin page did not list plugins");
+  return s.until("core.settings-tab", (tab) => tab?.page === "installed" && tab.listed.length > 0,
+    "the settings tab did not list the plugins on 설치됨");
 }
 
 /** Returns the action names of the visible plugin cards in document order. */
-const actionsOf = (library, plugin) => library.plugins.actions.filter((item) => item.plugin === plugin).map((item) => item.action);
+const actionsOf = (tab, plugin) => tab.actions.filter((item) => item.plugin === plugin).map((item) => item.action);
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the library plugin page lists plugins with descriptions, versions and sidecars`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the settings page 설치됨 lists plugins with descriptions, versions and sidecars`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     await keepCommonSettings(s);
-    const library = await showPlugins(s);
+    const tab = await showPlugins(s);
     const plugins = await s.get("core.plugins");
-    assert.deepEqual(library.plugins.shown, plugins.plugins.map((row) => row.id));
-    assert.deepEqual(library.plugins.shown, fixturePluginIds().toSorted());
+    assert.deepEqual(tab.listed, plugins.plugins.map((row) => row.id));
+    assert.deepEqual(tab.listed, fixturePluginIds().toSorted());
     for (const row of plugins.plugins) {
       assert.ok(row.description.length > 0, `${row.id} shows no description`);
       assert.ok(row.installed?.version, `${row.id} shows no installed version: ${JSON.stringify(row)}`);
@@ -56,23 +54,22 @@ for (const app of Object.values(APPS)) {
       `a ${SIDECAR_PLUGIN} sidecar has no installed version: ${JSON.stringify(user.sidecars)}`);
     // The card offers the update action only when the registry lists a version newer than the installed one.
     const update = plugins.updates.some((item) => item.id === PLUGIN) ? ["update"] : [];
-    assert.deepEqual(actionsOf(library, PLUGIN), [...update, "disable", "remove"]);
+    assert.deepEqual(actionsOf(tab, PLUGIN), [...update, "disable", "remove"]);
 
-    await s.run("core.library.plugins.search", { query: "RASTER" });
-    await s.until("core.library", (value) => value.plugins.query === "RASTER" && value.plugins.shown.join() === SIDECAR_PLUGIN,
+    await s.run("core.settings-tab.search", { query: "RASTER" });
+    await s.until("core.settings-tab", (value) => value.query === "RASTER" && value.listed.join() === SIDECAR_PLUGIN,
       `the plugin search did not keep only ${SIDECAR_PLUGIN}`);
-    await s.run("core.library.plugins.search", { query: "없는플러그인" });
-    await s.until("core.library", (value) => value.plugins.shown.length === 0, "a query without a match still lists plugins");
-    await s.run("core.library.plugins.search", { query: "" });
-    await s.until("core.library", (value) => value.plugins.shown.join() === library.plugins.shown.join(),
+    await s.run("core.settings-tab.search", { query: "없는플러그인" });
+    await s.until("core.settings-tab", (value) => value.listed.length === 0, "a query without a match still lists plugins");
+    await s.run("core.settings-tab.search", { query: "" });
+    await s.until("core.settings-tab", (value) => value.listed.join() === tab.listed.join(),
       "an empty query did not list every plugin");
 
-    // The project list command shows the project page.
-    await s.run("core.library.return");
-    await s.until("core.screen", (screen) => screen.screen === "workspace", "the library did not return to the workspace");
+    // Closing the settings tab returns to the work screen, and the project home lists the projects.
+    await s.run("core.settings.close");
+    await s.until("core.settings-tab", (value) => value === null, "the settings tab did not close");
     await s.run("core.projects.browse");
-    await s.until("core.library", (value) => value.page === "projects" && value.plugins.shown.length === 0 && value.shown.length > 0,
-      "core.projects.browse did not show the project page");
+    await s.until("core.home", (home) => home.rows.length > 0, "core.projects.browse did not show the project home");
   });
 
   test(`${app.name}: a plugin card disables and enables an installed plugin and the window applies each change`, { timeout: 60000 }, async (t) => {
@@ -92,7 +89,7 @@ for (const app of Object.values(APPS)) {
 
     // A plugin operation starts the workbench of the window again, which then reports the change without an application restart
     // (docs/spec/installation.md#applying-a-change). Each reload is a new start of the workbench.
-    assert.ok(actionsOf(await s.get("core.library"), PLUGIN).includes("disable"), `the ${PLUGIN} card has no 사용 안 함`);
+    assert.ok(actionsOf(await s.get("core.settings-tab"), PLUGIN).includes("disable"), `the ${PLUGIN} card has no 사용 안 함`);
     await pluginChangeStarted(s, () => s.run("core.plugins.disable", { plugin: PLUGIN }), `disabling ${PLUGIN}`);
     const disabled = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === PLUGIN)?.state === "disabled",
       `the reloaded window did not report ${PLUGIN} disabled`);
@@ -100,7 +97,7 @@ for (const app of Object.values(APPS)) {
     assert.equal(disabled.plugins.find((row) => row.id === PLUGIN).installed.enabled, false);
 
     await showPlugins(s);
-    await s.until("core.library", (value) => actionsOf(value, PLUGIN).includes("enable"), `the ${PLUGIN} card did not offer 사용`);
+    await s.until("core.settings-tab", (value) => actionsOf(value, PLUGIN).includes("enable"), `the ${PLUGIN} card did not offer 사용`);
     await pluginChangeStarted(s, () => s.run("core.plugins.enable", { plugin: PLUGIN }), `enabling ${PLUGIN}`);
     const enabled = await s.until("core.plugins", (value) => value.plugins.find((row) => row.id === PLUGIN)?.state === "loaded",
       `the reloaded window did not load ${PLUGIN}`);

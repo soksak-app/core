@@ -44,7 +44,8 @@ type gridCardStatus struct {
 	Focused    bool                                    `json:"focused"`
 	Pane       *int                                    `json:"pane"`
 	Tabs       []gridTabStatus                         `json:"tabs"`
-	Status     string                                  `json:"status"`
+	Status     *string                                 `json:"status"`
+	Notice     *gridCardNotice                         `json:"notice"`
 	Active     *string                                 `json:"active"`
 	Acts       map[string]any                          `json:"acts"`
 	Sidebars   map[layout.Side]layout.PresentedSidebar `json:"sidebars"`
@@ -267,9 +268,10 @@ func (s *Shell) gridState() (any, error) {
 		if err != nil {
 			return nil, fmt.Errorf("card %s: %w", card.ID, err)
 		}
+		notice := s.errors.cardNotice(card.ID)
 		entry := gridCardStatus{Fullscreen: card.ID == s.fullscreen, ID: card.ID, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H,
 			C0: card.C0, C1: card.C1, R0: card.R0, R1: card.R1, Fixed: card.Fixed, Width: card.Width, Focused: card.ID == s.focused,
-			Tabs: []gridTabStatus{}, Status: s.cardStatusText(data), Acts: s.cardActs(card.ID), Sidebars: map[layout.Side]layout.PresentedSidebar{},
+			Tabs: []gridTabStatus{}, Status: gridCardStatusText(s.cardStatusText(data), notice), Notice: gridNoticeOf(notice), Acts: s.cardActs(card.ID), Sidebars: map[layout.Side]layout.PresentedSidebar{},
 			Parent: parent, Leader: leader == card.ID}
 		if data != nil {
 			if entry.Sidebars, err = s.presentCard(card.ID, data, rect); err != nil {
@@ -278,7 +280,8 @@ func (s *Shell) gridState() (any, error) {
 		}
 		// A fixed sidebar of the window has no card data, and its status line describes the slot.
 		if s.sidebars.Holds(card.ID) {
-			entry.Status = s.sidebars.Status(card.ID, s.focusedSurface())
+			status := s.sidebars.Status(card.ID, s.focusedSurface())
+			entry.Status = &status
 		}
 		if entry.Acts != nil {
 			index := pane
@@ -669,4 +672,27 @@ func (s *Shell) closeStatus() map[string]any {
 		step = s.closeStep
 	}
 	return map[string]any{"step": step, "commands": commands}
+}
+
+// gridCardNotice is the notice of a card that core.grid reports: the id, kind and title of the shown notice (docs/spec/notifications.md#notices).
+type gridCardNotice struct {
+	ID    string `json:"id"`
+	Kind  string `json:"kind"`
+	Title string `json:"title"`
+}
+
+// gridCardStatusText is the status of a card in core.grid: null while its notice shows, else its footer text.
+func gridCardStatusText(text string, notice *errorToast) *string {
+	if notice != nil {
+		return nil
+	}
+	return &text
+}
+
+// gridNoticeOf is the notice of a card in core.grid, or null when the card has none.
+func gridNoticeOf(toast *errorToast) *gridCardNotice {
+	if toast == nil {
+		return nil
+	}
+	return &gridCardNotice{ID: toast.id, Kind: toast.kind, Title: toast.title}
 }

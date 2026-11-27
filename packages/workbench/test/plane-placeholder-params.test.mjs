@@ -11,6 +11,8 @@ import { recordsOf, shownRecord } from "./support/records.mjs";
 const pluginId = "fixture-placeholder-params";
 const version = "0.0.1";
 
+// The error text is shown in a toast of the notification path, where its title holds the line (docs/spec/exposure.md#error-presentation).
+const toastsWith = (text) => [...document.querySelectorAll(".toast")].filter((node) => node.querySelector(".toast__title")?.textContent === text);
 test("a stored tab whose params do not match its plugin is an error shown once, and withdrawn when its surface leaves", { timeout: 5000 }, async () => {
   // The host calls of the page are answered by the page-wire case (docs/spec/cases/page-wire/README.md). The case is selected before the modules of the page
   // are imported, because host.js reads the host when it is imported.
@@ -85,8 +87,7 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
     assert.equal(plane.currentGrid().card("main").data.activeId, badTab.id, "the placeholder tab is not the active tab");
     const where = `surface ${badTab.id} placeholder`;
     const text = `${pluginId} ${version} 탭의 인자가 선언과 맞지 않습니다: params do not match ${pluginId} surface.params`;
-    assert.equal(document.querySelectorAll(`[data-error="${where}"]`).length, 1, "the mismatched params did not show exactly one error for their surface");
-    assert.equal(document.querySelector(`[data-error="${where}"]`).textContent, text, "the mismatched params did not show their text");
+    assert.equal(toastsWith(text).length, 1, "the mismatched params did not show exactly one error toast");
     await flushEvents();
     assert.deepEqual(reports(), [`error workbench ${where}: ${text}`], "the mismatched params did not write their error to the application log");
 
@@ -94,7 +95,7 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
     await plane.closeTabById(badTab.id);
     assert.notEqual(held, null, "closing the tab did not hold a layout draw");
     drawHeld();
-    assert.equal(document.querySelector(`[data-error="${where}"]`), null, "closing the surface did not withdraw its error");
+    assert.equal(toastsWith(text).length, 0, "closing the surface did not withdraw its error");
     await flushEvents();
     assert.equal(reports().length, 1, "withdrawing the error wrote it again");
 

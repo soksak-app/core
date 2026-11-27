@@ -136,7 +136,7 @@ func (f *shellFixture) accounts() *accountsStatus {
 	return status
 }
 
-// accountControl is a control of the settings card as core.settings-modal reports it.
+// accountControl is a control of the settings card as core.settings-tab reports it.
 type accountControl struct {
 	Label   string
 	Value   *string
@@ -170,8 +170,8 @@ func TestThePluginPageReadsTheAccountsAndDrawsTheirRows(t *testing.T) {
 		t.Fatalf("core.accounts before a page shows: %s", f.status("core.accounts"))
 	}
 	f.click("core.chrome.settings", "")
-	f.run("core.settings-modal.nav", map[string]any{"section": "plugins"})
-	f.shell.Registry().RunLater("core.settings-modal.plugin", json.RawMessage(`{"plugin":"agents"}`), func(any, error) {})
+	f.run("core.settings-tab.nav", map[string]any{"page": "installed"})
+	f.shell.Registry().RunLater("core.settings-tab.plugin", json.RawMessage(`{"plugin":"agents"}`), func(any, error) {})
 	if records := f.shownRecords(); len(records) != 1 || records[0] != (shownRecord{"settings agents", "account 개인: account-status exited with 1: codex: command not found"}) {
 		t.Fatalf("the failed status run shows %+v", records)
 	}
@@ -185,38 +185,38 @@ func TestThePluginPageReadsTheAccountsAndDrawsTheirRows(t *testing.T) {
 		status.Accounts[1].Name != "업무" || status.Accounts[1].Login == nil || !*status.Accounts[1].Login {
 		t.Fatalf("core.accounts %+v", status)
 	}
-	rows := f.control("core.settings-modal.account")
+	rows := f.control("core.settings-tab.account")
 	if len(rows) != 2 || rows[1].Label != "업무 · Claude Code · 로그인됨 · 2026-12-01T09:00:00+09:00까지5시간 42% · 2026-11-26T15:00:00+09:00 초기화로그아웃이름 변경삭제" ||
 		rows[0].Label != "개인 · Codex · -이름 변경삭제" {
 		t.Fatalf("rows %q", []string{rows[0].Label, rows[1].Label})
 	}
-	if logout := f.control("core.settings-modal.account-logout"); len(logout) != 1 ||
+	if logout := f.control("core.settings-tab.account-logout"); len(logout) != 1 ||
 		!reflect.DeepEqual(logout[0].Command.Params, map[string]any{"plugin": "agents", "id": "account-1"}) {
 		t.Fatalf("logout %+v", logout)
 	}
-	if add := f.control("core.settings-modal.account-add"); len(add) != 1 ||
+	if add := f.control("core.settings-tab.account-add"); len(add) != 1 ||
 		!reflect.DeepEqual(add[0].Command.Params, map[string]any{"plugin": "agents", "name": "", "kind": "claude"}) {
 		t.Fatalf("add %+v", add)
 	}
-	f.run("core.settings-modal.account-name", map[string]any{"name": "새 업무"})
-	f.run("core.settings-modal.account-kind", map[string]any{"kind": "codex"})
-	if add := f.control("core.settings-modal.account-add"); !reflect.DeepEqual(add[0].Command.Params, map[string]any{"plugin": "agents", "name": "새 업무", "kind": "codex"}) {
+	f.run("core.settings-tab.account-name", map[string]any{"name": "새 업무"})
+	f.run("core.settings-tab.account-kind", map[string]any{"kind": "codex"})
+	if add := f.control("core.settings-tab.account-add"); !reflect.DeepEqual(add[0].Command.Params, map[string]any{"plugin": "agents", "name": "새 업무", "kind": "codex"}) {
 		t.Fatalf("add after the fields %+v", add[0].Command.Params)
 	}
-	if err := f.finish("core.settings-modal.account-kind", map[string]any{"kind": "gemini"}); err == nil || !strings.Contains(err.Error(), "account kind gemini is not declared by agents") {
+	if err := f.finish("core.settings-tab.account-kind", map[string]any{"kind": "gemini"}); err == nil || !strings.Contains(err.Error(), "account kind gemini is not declared by agents") {
 		t.Fatalf("an undeclared kind answered %v", err)
 	}
-	f.run("core.settings-modal.account-edit", map[string]any{"id": "account-1"})
-	if field := f.control("core.settings-modal.account-edit-name"); len(field) != 1 || *field[0].Value != "업무" {
+	f.run("core.settings-tab.account-edit", map[string]any{"id": "account-1"})
+	if field := f.control("core.settings-tab.account-edit-name"); len(field) != 1 || *field[0].Value != "업무" {
 		t.Fatalf("the edit field %+v", field)
 	}
-	f.run("core.settings-modal.account-edit-name", map[string]any{"name": "회사"})
-	if save := f.control("core.settings-modal.account-save"); len(save) != 1 ||
+	f.run("core.settings-tab.account-edit-name", map[string]any{"name": "회사"})
+	if save := f.control("core.settings-tab.account-save"); len(save) != 1 ||
 		!reflect.DeepEqual(save[0].Command.Params, map[string]any{"plugin": "agents", "id": "account-1", "name": "회사"}) {
 		t.Fatalf("save %+v", save)
 	}
-	f.run("core.settings-modal.account-edit", map[string]any{"id": nil})
-	if len(f.control("core.settings-modal.account-save")) != 0 {
+	f.run("core.settings-tab.account-edit", map[string]any{"id": nil})
+	if len(f.control("core.settings-tab.account-save")) != 0 {
 		t.Fatal("the edit did not end")
 	}
 	f.audit()
@@ -229,11 +229,11 @@ func TestThePluginPageReadsTheAccountsAndDrawsTheirRows(t *testing.T) {
 	if status := f.accounts(); status.Accounts[0].Login == nil || *status.Accounts[0].Login || !*status.Accounts[1].Login {
 		t.Fatalf("core.accounts after window-active %+v", status)
 	}
-	f.run("core.settings-modal.plugin", map[string]any{"plugin": nil})
+	f.run("core.settings-tab.plugin", map[string]any{"plugin": nil})
 	if f.status("core.accounts") != "null" {
 		t.Fatal("core.accounts of the plugin list")
 	}
-	if err := f.finish("core.settings-modal.account-name", map[string]any{"name": "a"}); err == nil || !strings.Contains(err.Error(), "no page of a plugin with accounts shows") {
+	if err := f.finish("core.settings-tab.account-name", map[string]any{"name": "a"}); err == nil || !strings.Contains(err.Error(), "no page of a plugin with accounts shows") {
 		t.Fatalf("a field command of the list answered %v", err)
 	}
 }
@@ -264,8 +264,8 @@ func TestAnAccountIsAddedLoggedInCancelledLoggedOutAndRemoved(t *testing.T) {
 
 	// The page shows the status of the account, which its showing reads again.
 	f.run("core.settings.open", nil)
-	f.run("core.settings-modal.nav", map[string]any{"section": "plugins"})
-	f.run("core.settings-modal.plugin", map[string]any{"plugin": "agents"})
+	f.run("core.settings-tab.nav", map[string]any{"page": "installed"})
+	f.run("core.settings-tab.plugin", map[string]any{"plugin": "agents"})
 	// The login holds its run until its cancel, so the steps below run without settling the pending calls.
 	var login error
 	answered := false
@@ -282,10 +282,10 @@ func TestAnAccountIsAddedLoggedInCancelledLoggedOutAndRemoved(t *testing.T) {
 	}
 	// A frame drawn while the login runs shows its 취소 button; the frame does not wait for the pending calls.
 	f.tester.Frame()
-	if _, ok := exposedNode(f.tester.ElementTree(), "core.settings-modal.account-login-cancel", ""); !ok {
+	if _, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.account-login-cancel", ""); !ok {
 		t.Fatal("the running login has no 취소 button")
 	}
-	if cancel := f.control("core.settings-modal.account-login-cancel"); len(cancel) != 1 ||
+	if cancel := f.control("core.settings-tab.account-login-cancel"); len(cancel) != 1 ||
 		!reflect.DeepEqual(cancel[0].Command.Params, map[string]any{"plugin": "agents", "id": "account-2"}) {
 		t.Fatalf("cancel %+v", cancel)
 	}

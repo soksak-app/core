@@ -51,7 +51,7 @@ const { begin } = await import("../../projects.js");
 export const reports = await import("../../tab-reports.js");
 export const plane = await import("../../plane.js");
 const { installCoreExposure } = await import("../../core-exposure.js");
-await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+await installCoreExposure({ home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   memorySaver: await pageMemorySaver() });
 // The window of the page has the name that its start document carries (docs/spec/native-host.md#page-start).
 plane.nameWindow(WINDOW);

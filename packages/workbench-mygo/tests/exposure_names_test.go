@@ -64,10 +64,10 @@ func TestAPlaceWithoutADeclaredNameStaysEmpty(t *testing.T) {
 	}
 	f.run("core.projects.browse", nil)
 	if got := pressedAt(t, f, 600, 790); *got.Down != "unknown" || got.PressedConnected != nil {
-		t.Errorf("the foot of the library is %s", *got.Down)
+		t.Errorf("the foot of the project home is %s", *got.Down)
 	}
 	if got := pressedAt(t, f, 1100, 500); *got.Down != "region" || *got.Click != "region" {
-		t.Errorf("the body of the library is %s, %s", *got.Down, *got.Click)
+		t.Errorf("the body of the project home is %s, %s", *got.Down, *got.Click)
 	}
 }
 

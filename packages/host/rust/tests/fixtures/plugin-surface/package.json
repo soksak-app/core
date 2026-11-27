@@ -1,0 +1,6 @@
+{
+  "name": "plugin-surface",
+  "version": "0.0.61",
+  "engines": { "soksak": ">=0.0.1 <1.0.0" },
+  "files": ["plugin.json", "ui/page.html"]
+}

@@ -1,6 +1,6 @@
 // Checks the verification state that core.verify holds after a layout failure. A failed layout is the failure of the page
 // layout until a later render is presented; verificationRows composes the rows of the current state, so a state that
-// nothing verifies (no plane or the library shown) holds no stale failed row (docs/spec/hosts.md#application-log).
+// nothing verifies (no plane or the project home shown) holds no stale failed row (docs/spec/hosts.md#application-log).
 // The compositor is the real one: its commit listener (onCommit) answers with the failed presentation, and the waits for the presentation of
 // the window are calls that the page-wire cases of this test answer (docs/spec/cases/page-wire/README.md).
 import assert from "node:assert/strict";
@@ -25,8 +25,8 @@ const { registry } = await import("../exposure.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 const { createPageLayout, verificationRows } = await import("../page-layout.js");
 const { errorToasts } = await import("../shown-errors.js");
-const latestToast = () => document.getElementById("errorToasts")?.lastElementChild;
-const toastText = () => latestToast()?.dataset.text ?? null;
+// The newest shown toast holds the message of the newest error (docs/spec/notifications.md#toasts).
+const toastText = () => errorToasts(document).newest();
 
 /**
  * Creates the page layout whose preparation fails while state.fail is true: the commit listener of the compositor answers with the failure
@@ -205,7 +205,7 @@ test("with no plane shown, a cleared failure leaves no failed row in the verific
   await page.presented();
   page.clearFailure();
   await drained();
-  // The library is shown: nothing is verified, so the rows are empty and the earlier failed row is not kept.
+  // The project home is shown: nothing is verified, so the rows are empty and the earlier failed row is not kept.
   const rows = verificationRows({ drawn: false, rows: () => { throw new Error("rows must not be read without a plane"); }, failure: page.failure() });
   assert.deepEqual(rows, [], "a state without a plane must report no rows after the failure is cleared");
   await flushEvents();

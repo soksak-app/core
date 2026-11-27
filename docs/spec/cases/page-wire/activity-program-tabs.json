@@ -1,0 +1,48 @@
+{
+  "name": "activity-program-tabs",
+  "description": "The page watches the program status on the surface of each tab of one card that declares it, so each tab reports its own program state (docs/spec/program-state.md#status).",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {
+      "call": {
+        "name": "exposureForward",
+        "payload": {
+          "id": 1,
+          "surface": "tab-a",
+          "method": "status.watch",
+          "params": {
+            "name": "probe.program"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "result": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "exposureForward",
+        "payload": {
+          "id": 2,
+          "surface": "tab-b",
+          "method": "status.watch",
+          "params": {
+            "name": "probe.program"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "result": null
+        }
+      }
+    }
+  ]
+}

@@ -40,7 +40,7 @@ import { beginOperation } from "./operations.js";
 import declaration from "./workbench.json" with { type: "json" };
 
 /* The theme catalog, the fonts, the menu languages and the setting definitions are the declaration file workbench.json, which every host
-   library embeds as it is (docs/spec/settings.md#values). This module reads them from it and holds no copy. */
+   embeds as it is (docs/spec/settings.md#values). This module reads them from it and holds no copy. */
 
 /* The selectable fonts. A theme designates one of them as its default, and the settings change it.
    A name that is not installed falls through to the next name of the list. */
@@ -72,7 +72,7 @@ if (!defaultTheme) throw new Error(`the default theme ${declaration.settings.def
  *   diagnostics.log  the policy of the event log (docs/spec/logging.md#classes-and-policy): the least severe level that is stored for the
  *                    classes that the object names, one of off, error, warn, info, debug and trace; a class it does not name stores the level
  *                    error. The default stores only the errors of every class, and the debug switch sets every class to trace
- *   projectTabs      the position of the project tabs. top = the chrome row, left = the vertical list on the left
+ *   projectTabs      the position of the project tabs. top = the chrome row, bottom = a row under the work area, left and right = a column at that side
  *   left, right      whether the left and right regions are shown. links decides what they show
  *   dim              whether a surface that lost focus is dimmed
  *   focusInd         how the focused card is shown. border = a border, corner = marks at the four corners
@@ -104,8 +104,8 @@ export const defaults = {
   size: parseFloat(defaultTheme.shape.size),
 };
 
-/* The range of memorySaverDelay in minutes and of errorToastDismissSeconds in seconds (docs/spec/settings.md#values). */
-export const ERROR_TOAST_DISMISS_SECONDS = declaration.settings.errorToastDismissSeconds;
+/* The range of memorySaverDelay in minutes and of problemToastDismissSeconds in seconds (docs/spec/settings.md#values). */
+export const PROBLEM_TOAST_DISMISS_SECONDS = declaration.settings.problemToastDismissSeconds;
 export const MEMORY_SAVER_DELAY = declaration.settings.memorySaverDelay;
 
 
@@ -122,7 +122,7 @@ export const SHAPE_RANGES = declaration.settings.shapeRanges;
 
 /* The core settings that take one choice. The select control of the settings window shows the choices in this order (docs/spec/settings.md#values).
    workbench.json states the fixed lists; the theme, mode, font, text size and language choices are the catalogs above. */
-const { projectOpening, viewProcess, projectTabs, focusInd, fullRule, cardArrange } = declaration.settings.choices;
+const { projectOpening, viewProcess, projectTabs, focusInd, fullRule, cardArrange, toastStyle, noticeCenterStyle } = declaration.settings.choices;
 export const CHOICES = {
   projectOpening,
   viewProcess,
@@ -134,6 +134,8 @@ export const CHOICES = {
   focusInd,
   fullRule,
   cardArrange,
+  toastStyle,
+  noticeCenterStyle,
   language: ["auto", ...MENU_LANGUAGES.map((language) => language.id)],
 };
 
@@ -155,6 +157,16 @@ function isOrder(value, values) {
   return Array.isArray(value) && value.length === values.length && values.every((item) => value.includes(item));
 }
 
+/** The side order of a plugin's window sidebars and of its card sidebars: <plugin>.win.order and <plugin>.card.order (docs/spec/settings.md#values). */
+const PLUGIN_ORDER = /^([^.]+)\.(win|card)\.order$/;
+
+/** The listed values of an order setting, or null when the key is not an order setting. */
+function orderValues(key) {
+  if (Object.hasOwn(ORDERS, key)) return ORDERS[key];
+  const match = PLUGIN_ORDER.exec(key);
+  return match === null ? null : ORDERS.sidebarOrder;
+}
+
 /** Validates the effective settings: the sidebar sets and links, and whether the initial width of a sidebar inside a card is between the minimum and the maximum. */
 function checkValues(values) {
   checkSidebars(values);
@@ -167,6 +179,8 @@ let settings = structuredClone(defaults);
 const pluginDefinitions = new Map();
 /* The manifest of the environment. The sections of the stored sets and the plugins of the links are validated against this list. */
 let manifestList = [];
+/* The stored plugin settings that name no loaded plugin of their category, {key: plugin id}. Their keys have no value. */
+let missing = new Map();
 /* The loaded and enabled plugins of each plugin category, {category: [{id, name}]}. The values of the type plugin name one of them. */
 let categories = {};
 
@@ -180,7 +194,7 @@ function checkSidebars(values) {
 let common = {};
 let overrides = {};
 let projectId = null;
-// The folder of the project whose settings the window shows, from the snapshot that applied them; null for the library.
+// The folder of the project whose settings the window shows, from the snapshot that applied them; null for the project home.
 let projectRoot = null;
 /* Whether a refresh reported the stored switch at the start of the page; only a later change takes the change path. */
 let reported = false;
@@ -198,8 +212,9 @@ function validateValue(key, value) {
   if (SWITCHES.includes(key) && typeof value !== "boolean") {
     throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not a boolean`);
   }
-  if (Object.hasOwn(ORDERS, key) && !isOrder(value, ORDERS[key])) {
-    throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not an order of ${ORDERS[key].map((item) => JSON.stringify(item)).join(", ")}`);
+  const order = orderValues(key);
+  if (order !== null && !isOrder(value, order)) {
+    throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not an order of ${order.map((item) => JSON.stringify(item)).join(", ")}`);
   }
   if (key === "diagnostics.log") {
     try {
@@ -216,9 +231,9 @@ function validateValue(key, value) {
   if (key === "memorySaverDelay" && (!Number.isInteger(value) || value < MEMORY_SAVER_DELAY[0] || value > MEMORY_SAVER_DELAY[1])) {
     throw new Error(`Invalid setting memorySaverDelay: ${JSON.stringify(value)}`);
   }
-  if (key === "errorToastDismissSeconds"
-    && (!Number.isInteger(value) || value < ERROR_TOAST_DISMISS_SECONDS[0] || value > ERROR_TOAST_DISMISS_SECONDS[1])) {
-    throw new Error(`Invalid setting errorToastDismissSeconds: ${JSON.stringify(value)} is not an integer from ${ERROR_TOAST_DISMISS_SECONDS[0]} to ${ERROR_TOAST_DISMISS_SECONDS[1]}`);
+  if (key === "problemToastDismissSeconds"
+    && (!Number.isInteger(value) || value < PROBLEM_TOAST_DISMISS_SECONDS[0] || value > PROBLEM_TOAST_DISMISS_SECONDS[1])) {
+    throw new Error(`Invalid setting problemToastDismissSeconds: ${JSON.stringify(value)} is not an integer from ${PROBLEM_TOAST_DISMISS_SECONDS[0]} to ${PROBLEM_TOAST_DISMISS_SECONDS[1]}`);
   }
   const range = RANGES[key];
   if (range && (!Number.isInteger(value) || value < range[0] || value > range[1])) {
@@ -243,8 +258,15 @@ function validateValue(key, value) {
   if (definition.type === "plugin" && !(typeof value === "string" && /^[a-z][a-z0-9-]*$/.test(value))) {
     throw new Error(`Invalid setting ${key}: plugin value must be a plugin id`);
   }
-  // A plugin setting names a loaded and enabled plugin of its category, and a value of another plugin is an error (docs/spec/plugins.md#plugin-categories).
-  if (definition.type === "plugin" && !pluginsOfCategory(definition.category).some((plugin) => plugin.id === value)) {
+}
+
+/**
+ * Refuses a written plugin value that names no loaded and enabled plugin of its category (docs/spec/plugins.md#plugin-categories). A stored
+ * value is not refused at load: its key is missing (missingPluginKeys) and the other settings apply.
+ */
+function checkPluginChoice(key, value) {
+  const definition = pluginDefinitions.get(key);
+  if (definition?.type === "plugin" && !pluginsOfCategory(definition.category).some((plugin) => plugin.id === value)) {
     throw new Error(`${key}: plugin ${value} is not a ${definition.category} plugin`);
   }
 }
@@ -252,8 +274,8 @@ function validateValue(key, value) {
 /** The JavaScript type of the values of a setting, which its declaration decides. */
 export function settingType(key) {
   if (SWITCHES.includes(key)) return "boolean";
-  if (STRUCTURED.includes(key) || Object.hasOwn(ORDERS, key)) return "object";
-  if (Object.hasOwn(RANGES, key) || key === "memorySaverDelay" || key === "errorToastDismissSeconds") return "number";
+  if (STRUCTURED.includes(key) || orderValues(key) !== null) return "object";
+  if (Object.hasOwn(RANGES, key) || key === "memorySaverDelay" || key === "problemToastDismissSeconds") return "number";
   if (CHOICES[key]) return typeof CHOICES[key][0];
   const definition = pluginDefinitions.get(key);
   if (!definition) throw new Error(`Unknown setting: ${key}`);
@@ -322,8 +344,19 @@ export function pluginsOfCategory(category) {
  */
 export function pluginChoiceErrors() {
   return [...pluginDefinitions.entries()]
-    .filter(([key, definition]) => definition.type === "plugin" && settings[key] === undefined)
+    .filter(([key, definition]) => definition.type === "plugin" && settings[key] === undefined && !missing.has(key))
     .map(([key, definition]) => ({ key, text: `${key}: choose a ${definition.category} plugin` }));
+}
+
+/** The plugin settings whose stored value names no loaded plugin of their category, sorted by key (docs/spec/plugins.md#settings-declarations). */
+export const missingPluginKeys = () => [...missing.keys()].sort();
+
+/** The stored plugin id of a missing plugin setting, or undefined when key is not missing. */
+export const missingPluginValue = (key) => missing.get(key);
+
+/** The load error of each missing plugin setting: its key alone, with the stored value and the category (docs/spec/plugins.md#settings-declarations). */
+export function missingPluginErrors() {
+  return [...missing].map(([key, id]) => ({ key, text: `${key}: plugin ${id} is not a ${pluginDefinitions.get(key).category} plugin` }));
 }
 
 /**
@@ -335,6 +368,9 @@ export function setPluginSettings(manifests, applicationValues = {}, categoryPlu
   manifestList = manifests;
   categories = categoryPlugins;
   for (const manifest of manifests) {
+    // Each plugin has the side orders of its window sidebars, and of its card sidebars when it has a surface (docs/spec/settings.md#plugin-page).
+    defaults[`${manifest.id}.win.order`] = [...ORDERS.sidebarOrder];
+    if (manifest.surface !== undefined) defaults[`${manifest.id}.card.order`] = [...ORDERS.sidebarOrder];
     // default: settings is an optional field of plugin.json, and without it the plugin has no settings (docs/spec/plugins.md).
     for (const [local, definition] of Object.entries(manifest.settings ?? {})) {
       const key = `${manifest.id}.${local}`;
@@ -381,7 +417,7 @@ const projectSettingsFile = (project) => `${project.root}/.soksak/settings.json`
 
 /**
  * Applies the settings of the first screen from the snapshot of the start document (docs/spec/native-host.md#page-start). id is the project that the window opens, and
- * it is null for the library. Connecting the store and later changes are handled by connectSettings.
+ * it is null for the project home. Connecting the store and later changes are handled by connectSettings.
  */
 export function beginSettings(snapshot, id) {
   const nextCommon = snapshot.common;
@@ -442,6 +478,13 @@ async function refresh(read = () => store.snapshot()) {
 
 function apply() {
   settings = effectiveSettings(defaults, applied(common), applied(overrides));
+  missing = new Map();
+  for (const [key, definition] of pluginDefinitions) {
+    const id = settings[key];
+    if (definition.type !== "plugin" || id === undefined) continue;
+    if (!pluginsOfCategory(definition.category).some((plugin) => plugin.id === id)) missing.set(key, id);
+    if (missing.has(key)) delete settings[key];
+  }
   install();
   announce();
 }
@@ -453,7 +496,7 @@ export async function selectProject(id) {
 }
 
 export const settingProject = () => projectId;
-/** The folder of the project whose settings the window shows, or null for the library. */
+/** The folder of the project whose settings the window shows, or null for the project home. */
 export const settingProjectRoot = () => projectRoot;
 /** The sets and links of a project that is not necessarily the selected one: its own overrides over the common settings. */
 export function projectSidebars(project) {
@@ -548,7 +591,10 @@ export function set(patch, scope = projectId ? "project" : "common", actor) {
   for (const key of COMMON_ONLY) if (id && Object.hasOwn(patch, key)) throw new Error(`${key} is common-only`);
   for (const [key, val] of Object.entries(patch)) {
     if (!Object.hasOwn(defaults, key)) throw new Error(`Unknown setting: ${key}`);
-    if (val !== undefined) validateValue(key, val);
+    if (val !== undefined) {
+      validateValue(key, val);
+      checkPluginChoice(key, val);
+    }
   }
   const target = id ? overrides : common;
   const patched = { ...target };

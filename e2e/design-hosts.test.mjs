@@ -1,5 +1,5 @@
 // Compares the places of the workbench elements of every host in the same states of one window of 1200 by 760: the workspace, the
-// menus of the selection layer, the renames, the settings, the library with its forms and pages, the debug view and the card sidebar.
+// menus of the selection layer, the renames, the settings, the project home with its form and search, the debug view and the card sidebar.
 // The workbench of each host draws the chrome metrics of packages/workbench/workbench.json, so each element stands at one place on
 // every host (docs/spec/projects.md). A run with `--defaults AppleShowScrollBars=Always` or `=WhenScrolling` of scripts/test-app.mjs
 // starts the hosts under that scroller style alone, and the check also reads that every host drew it; a run without it compares the
@@ -11,7 +11,6 @@ import test from "node:test";
 
 import { APPS, holdCovered, open, requiresAll } from "@soksak/window-check/app.mjs";
 import { DESIGN_TOLERANCE, designDifferences } from "@soksak/window-check/design-rects.mjs";
-import workbench from "@soksak/workbench/workbench.json" with { type: "json" };
 import { cardSidebar, fresh, replacePlaceholders, startTab } from "./fixture.mjs";
 import { retainDesignStateCapture } from "./still-capture.mjs";
 
@@ -19,7 +18,6 @@ const DEBUG_ENTRIES = JSON.parse(readFileSync(new URL("./fixtures/design-debug-e
 
 const SIZE = { width: 1200, height: 760 };
 
-const CHROME = workbench.chrome;
 
 /** The scroller style that the run gave every host through SOKSAK_DEFAULTS, or null when the hosts have the style of the computer. */
 function requestedScrollerStyle(env) {
@@ -31,19 +29,19 @@ function requestedScrollerStyle(env) {
 }
 
 /**
- * The width that the vertical bar of the settings pane takes from its content in a reading of a general section, whose themes and
- * controls overflow the pane in the window of SIZE. The pane stands right of the navigation column of set-nav-w and has one padding
- * on both sides, and the theme grid repeats its columns to fill the content box (`repeat(auto-fill, minmax(…, 1fr))`), so the
+ * The width that the vertical bar of the settings pane takes from its content in a reading of the look page, whose themes and
+ * controls overflow the pane in the window of SIZE. The pane (element core.settings-tab.pane) stands right of the menu and has one
+ * padding on both sides, and the theme grid repeats its columns to fill the content box (`repeat(auto-fill, minmax(…, 1fr))`), so the
  * first swatch starts at the left of the content box and the last swatch of the first row ends at its right: the right gap to the
- * card less the left gap past the navigation column is the bar. The border of the card stands in both gaps and cancels.
+ * pane less the left gap past the pane's left edge is the bar.
  */
 function settingsPaneBar(reading) {
-  const [card] = reading["core.settings-modal.card"] ?? [];
-  const swatches = reading["core.settings-modal.theme"] ?? [];
-  if (!card || !swatches.length) throw new Error("the general section shows no settings card or no theme");
+  const [pane] = reading["core.settings-tab.pane"] ?? [];
+  const swatches = reading["core.settings-tab.theme"] ?? [];
+  if (!pane || !swatches.length) throw new Error("the look page shows no settings pane or no theme");
   const row = swatches.filter((swatch) => Math.abs(swatch.y - swatches[0].y) <= DESIGN_TOLERANCE);
-  const left = swatches[0].x - card.x - parseFloat(CHROME["set-nav-w"]);
-  const right = card.x + card.width - Math.max(...row.map((swatch) => swatch.x + swatch.width));
+  const left = swatches[0].x - pane.x;
+  const right = pane.x + pane.width - Math.max(...row.map((swatch) => swatch.x + swatch.width));
   return right - left;
 }
 
@@ -159,40 +157,37 @@ async function walk(t, s, states) {
   }
 
   await s.run("core.settings.open");
-  await s.until("core.settings-modal", (modal) => modal.open, "the settings did not open");
+  await s.until("core.settings-tab", (tab) => tab !== null, "the settings did not open");
   for (const scope of ["common", "project"]) {
-    await s.run("core.settings-modal.scope", { scope });
-    for (const section of ["general", "plugins", "sidebars"]) {
-      await s.run("core.settings-modal.nav", { section });
-      await s.until("core.settings-modal", (modal) => modal.section === section && modal.scope === scope,
-        `the settings did not show ${scope} ${section}`);
-      await read(`settings ${scope} ${section}`);
+    await s.run("core.settings-tab.scope", { scope });
+    for (const page of ["look", "installed", "workspace", "sets"]) {
+      await s.run("core.settings-tab.nav", { page });
+      await s.until("core.settings-tab", (tab) => tab?.page === page && tab.scope === scope,
+        `the settings did not show ${scope} ${page}`);
+      await read(`settings ${scope} ${page}`);
     }
   }
   await s.run("core.settings.close");
-  await s.until("core.settings-modal", (modal) => !modal.open, "the settings did not close");
+  await s.until("core.settings-tab", (tab) => tab === null, "the settings did not close");
 
+  const returnTo = (await s.get("core.project")).id;
   await s.run("core.projects.browse");
-  await s.until("core.library", (library) => library.shown.length > 0, "the library did not list projects");
-  await read("library");
+  await s.until("core.home", (home) => home.rows.length > 0, "the project home did not list projects");
+  await read("project home");
   for (const mode of ["create", "open"]) {
-    await s.run("core.library.form.open", { mode });
-    await s.until("core.library", (library) => library.formState?.mode === mode, `the ${mode} form did not open`);
-    await read(`library ${mode} form`);
-    await s.run("core.library.form.cancel");
-    await s.until("core.library", (library) => !library.form, `the ${mode} form did not close`);
+    await s.run("core.home.form.open", { mode });
+    await s.rect("core.home.form.name");
+    await read(`project home ${mode} form`);
+    await s.run("core.home.form.cancel");
+    await assert.rejects(s.rect("core.home.form.name"), /core\.home\.form\.name/, `the ${mode} form did not close`);
   }
-  await s.run("core.library.search", { query: "no such project" });
-  await s.until("core.library", (library) => library.noResults, "the search did not empty the library");
-  await read("library without results");
-  await s.run("core.library.search", { query: "" });
-  await s.run("core.library.page", { page: "plugins" });
-  await s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.length > 0,
-    "the plugin page did not list plugins");
-  await read("library plugin page");
-  await s.run("core.library.page", { page: "projects" });
-  await s.run("core.library.return");
-  await s.until("core.screen", (screen) => screen.screen === "workspace", "the library did not return to the workspace");
+  await s.run("core.home.search", { query: "no such project" });
+  await s.until("core.home", (home) => home.rows.length === 0, "the search did not empty the project home");
+  await s.rect("core.home.no-results");
+  await read("project home without results");
+  await s.run("core.home.search", { query: "" });
+  await s.run("core.home.open", { project: returnTo });
+  await s.until("core.screen", (screen) => screen.screen === "workspace", "the project home did not return to the workspace");
 
   await s.run("core.debug.open");
   const debug = await s.until("core.debug", (value) => value.open && value.entries.length === DEBUG_ENTRIES.length,
@@ -228,7 +223,7 @@ if (requiresAll(process.env)) test("every host places each workbench element of 
   const styles = [];
   if (style !== null) {
     for (const [name, states] of Object.entries(readings)) {
-      for (const state of ["settings common general", "settings project general"]) {
+      for (const state of ["settings common look", "settings project look"]) {
         if (!states[state]) continue;
         const bar = settingsPaneBar(states[state]);
         t.diagnostic(`${name} ${state}: the pane bar takes ${bar}`);

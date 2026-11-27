@@ -839,6 +839,14 @@ func faded(color ui.Color, share float32) ui.Color {
 	return color
 }
 
+// mixed is a color with share of color and the rest of base, as color-mix in srgb.
+func mixed(color, base ui.Color, share float32) ui.Color {
+	blend := func(a, b uint8) uint8 {
+		return uint8(math.Round(float64(a)*float64(share) + float64(b)*float64(1-share)))
+	}
+	return ui.Color{R: blend(color.R, base.R), G: blend(color.G, base.G), B: blend(color.B, base.B), A: blend(color.A, base.A)}
+}
+
 // drawSurfaceStatus draws the state of the surface of the active tab at the start of the status row of the card, as setSurfaceStatus of
 // packages/workbench/surface-status.js: a turning ring and the loading text of setSurfaceStatus while its view loads, a dot and the
 // error through the error display once its view stopped, which records `surface status <card> <tab>: ` with the error text of
@@ -918,12 +926,16 @@ func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold
 		if active := data.ActiveTab(); active != nil {
 			s.drawSurfaceStatus(c, id, active.ID)
 		}
-		text := s.cardStatusText(data)
-		if fold != "" {
-			text = fold
-		}
-		if text != "" {
-			ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(s.palette.Muted)
+		if notice := s.errors.cardNotice(id); notice != nil {
+			s.drawCardNotice(c, id, data, notice)
+		} else {
+			text := s.cardStatusText(data)
+			if fold != "" {
+				text = fold
+			}
+			if text != "" {
+				ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(s.palette.Muted)
+			}
 		}
 		// The operation error of the active tab is shown through the error display, which records it when it appears
 		// (docs/spec/plugins.md#tab-reports), as showTabError of packages/workbench/plane.js does.

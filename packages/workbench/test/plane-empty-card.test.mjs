@@ -50,7 +50,7 @@ test("closing the only tab of the only card leaves the card empty", { timeout: 5
     held();
     await installCoreExposure({
       memorySaver: await pageMemorySaver(),
-      library: { state: () => null }, renames: { state: () => null }, chrome: () => null,
+      home: { state: () => null }, renames: { state: () => null }, chrome: () => null,
       drawn: async () => {},
     });
     const [only] = plane.currentGrid().card("main").data.tabs;

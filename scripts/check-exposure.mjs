@@ -28,6 +28,8 @@ export const DECLARATION_COPIES = Object.freeze([
   { source: "packages/workbench/shortcuts.json", copy: "packages/workbench-mygo/src/shortcuts.json" },
   { source: "packages/workbench/workbench.json", copy: "packages/workbench-mygo/src/workbench.json" },
   { source: "packages/plugin-api/contract/contributions.json", copy: "packages/workbench-mygo/tests/testdata/contributions.json" },
+  { source: "packages/workbench/test/settings-search-cases.json", copy: "packages/workbench-mygo/tests/testdata/settings-search-cases.json" },
+  { source: "packages/workbench/test/fixtures/plugin-host-answer.json", copy: "packages/workbench-mygo/tests/testdata/plugin-host-answer.json" },
 ]);
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));

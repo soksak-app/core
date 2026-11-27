@@ -147,3 +147,32 @@ func TestTheContributionsHaveAStatus(t *testing.T) {
 		t.Fatal("no status")
 	}
 }
+
+// An item that does not match the schema of its extension point is invalid in the status of the installed plugins, with the reason of
+// the reader, and the valid item of the same plugin stays connected (docs/spec/plugins.md#extension-points).
+func TestAnItemThatMismatchesItsSchemaIsInvalidInTheStatus(t *testing.T) {
+	var installed []workbench.InstalledPlugin
+	err := json.Unmarshal([]byte(`[
+		{"id": "probe", "package": "@scope/plugin-probe", "version": "0.1.0", "folder": "/installed/probe", "manifest": {
+			"extends": {"list": {"version": "1.0.0", "schema": {"type": "object", "properties": {"label": {"type": "string"}}}}}}},
+		{"id": "tidy", "package": "@scope/plugin-tidy", "version": "0.0.1", "folder": "/installed/tidy", "manifest": {
+			"contributes": {"probe.list": [
+				{"range": "^1.0.0", "module": "ui/a.js", "label": 5},
+				{"range": "^1.0.0", "module": "ui/b.js", "label": "second"}]}}}]`), &installed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contributions := workbench.NewContributions()
+	if err := contributions.Install(installed); err != nil {
+		t.Fatal(err)
+	}
+	status, err := json.Marshal(contributions.Status())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `[{"plugin":"tidy","point":"probe.list","index":0,"state":"invalid","reason":"item does not match the schema of probe.list"},` +
+		`{"plugin":"tidy","point":"probe.list","index":1,"state":"connected","reason":null}]`
+	if string(status) != want {
+		t.Fatalf("the status is %s, want %s", status, want)
+	}
+}

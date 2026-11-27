@@ -65,8 +65,9 @@ const schedule = () => { page.onLayout(new Map(), () => {}, new Map(), 40, () =>
 test("a layout failure of a project switch started from the interface writes one workbench error line", async () => {
   reportRejectionsAsPage();
   const declared = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes;
-  const dismiss = declared.commands.find(({ name }) => name === "core.error.dismiss");
-  registry.declare("core", { status: [], element: [], commands: [dismiss, {
+  // The notice commands of the declaration, which the toasts and the center bind.
+  const notices = declared.commands.filter(({ name }) => name.startsWith("core.notices."));
+  registry.declare("core", { status: [], element: [], commands: [...notices, {
     name: "core.fixture.activate", description: "Activates.", params: { type: "object", properties: {} }, result: { type: "null" },
   }] });
   // A project switch schedules the loaded layout on the plane, waits for its presentation, and then replies (showProject of projects.js).

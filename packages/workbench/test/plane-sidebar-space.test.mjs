@@ -1,5 +1,5 @@
 // The section surface ids of the sidebars that the plane draws take the space of the layout that the plane holds
-// (docs/spec/plugins.md#sections). A project close turns the project state to the library before it clears the plane, and a
+// (docs/spec/plugins.md#sections). A project close turns the project state to the project home before it clears the plane, and a
 // draw in that time still draws the sidebars of the layout of the closed space.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -11,7 +11,7 @@ import { recordsOf, shownRecord } from "./support/records.mjs";
 const pluginId = "fixture-space";
 const setId = "fixture-space-set";
 
-test("a sidebar draws the section surface ids of the space of the held layout while the project state shows the library", { timeout: 5000 }, async () => {
+test("a sidebar draws the section surface ids of the space of the held layout while the project state shows the project home", { timeout: 5000 }, async () => {
   // The host calls of the page are answered by the page-wire case (docs/spec/cases/page-wire/README.md). The case is selected before the modules of the page
   // are imported, because host.js reads the host when it is imported.
   const wire = selectPageWire("plane-sidebar-space");
@@ -33,7 +33,7 @@ test("a sidebar draws the section surface ids of the space of the held layout wh
   document.head.appendChild(style);
 
   // The environment of the page: the plugin with its section, and the sidebar set that names the section. The environment is
-  // installed before the page draws, and no project is open, so the project state shows the library.
+  // installed before the page draws, and no project is open, so the project state shows the project home.
   const { installEnvironment } = await import("../environment.js");
   assert.deepEqual(installEnvironment({
     runtime: "runtime",

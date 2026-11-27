@@ -1,10 +1,12 @@
 package workbench_test
 
 import (
+	"fmt"
 	"image/color"
 	"math"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -20,6 +22,8 @@ func listFrame() workbench.SidebarFrame {
 	return workbench.SidebarFrame{
 		Sidebar: "left", Space: "spc-1", Layout: "list", Set: "set-1", Orientation: "vertical", Side: "left",
 		Status: "왼쪽 창 사이드바",
+		// Order is the section ids of the set in set order, as fill of the sidebars sets it.
+		Order: []string{"fieldprobe.tree", "git.log"},
 		Sections: []workbench.SidebarSection{
 			{ID: "fieldprobe.tree", Name: "Files", Plugin: "fieldprobe", Height: 100},
 			{ID: "git.log", Name: "Log", Plugin: "git", Fill: true},
@@ -172,15 +176,15 @@ func TestATabsSidebarShowsTheSelectedSection(t *testing.T) {
 	}
 }
 
-// A section with an integer height leaves room in a tabs set, and the status line stays at the bottom of the sidebar.
-func TestTheStatusLineOfATabsSidebarEndsTheSidebar(t *testing.T) {
+// A section with an integer height leaves room in a tabs set, and the head stays in the top row of the sidebar.
+func TestTheHeadOfATabsSidebarStaysInTheTopRow(t *testing.T) {
 	var calls []call
 	frame := listFrame()
 	frame.Layout, frame.Tab = "tabs", "fieldprobe.tree"
 	tt := drawSidebar(&frame, recorder(t, &calls, sidebarCommands...))
-	status := element(t, tt, "core.sidebar.status", "left")
-	if bottom := status.Bounds.Y + status.Bounds.H; bottom != 400 {
-		t.Fatalf("the status line ends at %v of 400", bottom)
+	head := element(t, tt, "core.sidebar.head", "left")
+	if head.Bounds.Y < 0 || head.Bounds.Y+head.Bounds.H > headRow(t) {
+		t.Fatalf("the head is at %v to %v, want inside the top row of %v", head.Bounds.Y, head.Bounds.Y+head.Bounds.H, headRow(t))
 	}
 }
 
@@ -270,27 +274,31 @@ func TestAFillSectionBesideADividerTakesTheChangeWhenNoOtherSectionFills(t *test
 func TestAWindowSidebarEndsInItsStatusLineAndFoldControl(t *testing.T) {
 	var calls []call
 	frame := listFrame()
-	tt := drawSidebar(&frame, recorder(t, &calls, sidebarCommands...))
-	if status := element(t, tt, "core.sidebar.status", "left"); status.Label != "왼쪽 창 사이드바" {
+	// The shell writes the scope of the applied value of the side, which is common while no project overrides it.
+	frame.Scope = "common"
+	tt := drawSidebar(&frame, recorder(t, &calls, append([]string{"core.settings.change"}, sidebarCommands...)...))
+	if status := element(t, tt, "core.sidebar.head", "left"); status.Label != "왼쪽 창 사이드바" {
 		t.Fatalf("the status line says %q", status.Label)
 	}
+	// The fold shows while the pointer is over the sidebar, so the pointer stands on the status line before the press.
+	hoverStatus(t, tt, "left")
 	press(t, tt, "core.sidebar.fold", "left")
-	want := []call{{"core.settings.set", map[string]any{"patch": map[string]any{"left": false}}}}
+	want := []call{{"core.settings.change", map[string]any{"key": "left", "value": false, "scope": "common"}}}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("commands %+v, want %+v", calls, want)
 	}
 }
 
-// A section shorter than the set leaves the status line at the bottom of the sidebar.
-func TestTheStatusLineStandsAtTheBottomOfASidebarWithTabs(t *testing.T) {
+// A section shorter than the set leaves the head in the top row of the sidebar.
+func TestTheHeadStaysInTheTopRowOfASidebarWithShortTabs(t *testing.T) {
 	frame := listFrame()
 	frame.Layout, frame.Tab = "tabs", frame.Sections[0].ID
 	frame.Sections[0].Fill, frame.Sections[0].Height = false, 40
 	frame.Sections[0].Size = nil
 	tt := drawSidebar(&frame, recorder(t, new([]call), sidebarCommands...))
-	status := element(t, tt, "core.sidebar.status", "left")
-	if status.Bounds.Y+status.Bounds.H != 400 {
-		t.Fatalf("the status line is %+v in a sidebar of the height 400", status.Bounds)
+	head := element(t, tt, "core.sidebar.head", "left")
+	if head.Bounds.Y < 0 || head.Bounds.Y+head.Bounds.H > headRow(t) {
+		t.Fatalf("the head is %+v, want inside the top row of %v", head.Bounds, headRow(t))
 	}
 }
 
@@ -557,6 +565,7 @@ func TestTheFoldOfAStatusLineIsAMutedStrokeIcon(t *testing.T) {
 			workbench.DrawSidebar(c, binder, &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400, func(*ui.Context, workbench.SidebarSeat) {})
 		})
 	}, 240, 400)
+	hoverStatus(t, tt, "left")
 	box := element(t, tt, "core.sidebar.fold", "left").Bounds
 	scale := float32(tt.Image().Bounds().Dx()) / 240
 	distance := func(a color.RGBA, b ui.Color) int {
@@ -599,5 +608,32 @@ func TestTheFoldOfAStatusLineIsAMutedStrokeIcon(t *testing.T) {
 	}
 	if at.R >= theme.TextMuted.R {
 		t.Fatalf("the icon under the pointer is %v, no darker than the muted color %v", at, theme.TextMuted)
+	}
+}
+
+// hoverStatus moves the pointer over the status line of the sidebar of side and draws the frame, as a pointer over the sidebar does.
+func hoverStatus(t *testing.T, tt *ui.Tester, side string) {
+	t.Helper()
+	status := element(t, tt, "core.sidebar.head", side).Bounds
+	tt.Move(status.X+status.W/2, status.Y+status.H/2)
+	tt.Frame()
+}
+
+// A tabs frame whose Order omits a loaded section breaks the invariant of fill, which lists every section of the set in Order, so the
+// draw fails with the name of the section instead of drawing no tab for it.
+func TestATabsFrameWhoseOrderOmitsASectionFails(t *testing.T) {
+	frame := listFrame()
+	frame.Layout, frame.Tab = "tabs", "fieldprobe.tree"
+	frame.Order = []string{"fieldprobe.tree"}
+	var failure any
+	func() {
+		defer func() { failure = recover() }()
+		tt := ui.NewTester(func(c *ui.Context) {
+			workbench.DrawSidebar(c, recorder(t, new([]call), sidebarCommands...), &workbench.SectionDrag{}, frame, sidebarMetrics, 240, 400, func(*ui.Context, workbench.SidebarSeat) {})
+		}, 240, 400)
+		tt.Frame()
+	}()
+	if failure == nil || !strings.Contains(fmt.Sprint(failure), "git.log is not in Order") {
+		t.Fatalf("the draw failed with %v, want the section named as missing from Order", failure)
 	}
 }

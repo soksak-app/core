@@ -215,7 +215,7 @@ func (s *Shell) adoptAdded(id string, done func(err error)) {
 // projectOpenColor is the color of a project that core.project.open opens without one.
 const projectOpenColor = "#ffb36b"
 
-// registerProjectOpen registers core.project.open, which opens a folder for an endpoint client as the library form does for a person.
+// registerProjectOpen registers core.project.open, which opens a folder for an endpoint client as the project home form does for a person.
 func (s *Shell) registerProjectOpen() {
 	s.registry.CommandLater("core.project.open", func(raw json.RawMessage, answer func(any, error)) {
 		value, err := params[struct {
@@ -408,13 +408,13 @@ func (s *Shell) openStored(id string, project *projectRecord, done func(err erro
 				s.showThen(id, done)
 				return
 			}
-			// Another window holds the project, so this window leaves the library for the project that it shows.
+			// Another window holds the project, so this window leaves the project home for the project that it shows.
 			s.showThen(s.active, done)
 		})
 	})
 }
 
-// saveGeometry stores the size and position of the window for the project that it shows, as projects.saveGeometry does. The library
+// saveGeometry stores the size and position of the window for the project that it shows, as projects.saveGeometry does. The project home
 // and a window without an ordinary size store nothing, and so does a geometry that the window stored last.
 func (s *Shell) saveGeometry(done func(err error)) {
 	id := s.active
@@ -510,7 +510,7 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err != nil {
 		return err
 	}
-	// The space opens after the check of its stored layout that the library preview runs, as build of packages/workbench/plane.js
+	// The space opens after the check of its stored layout that the project home preview runs, as build of packages/workbench/plane.js
 	// does, with the prefix of docs/spec/groups.md#storage.
 	if err := layout.CheckStoredLayout(space.Layout, s.pluginUnits()); err != nil {
 		return fmt.Errorf("projects.json: project %s space %s: %w", project.Root, space.ID, err)
@@ -768,9 +768,9 @@ func (s *Shell) leavePlace() {
 	s.text.KeepPressedCard(func(string) bool { return false })
 }
 
-// browse shows the library, as the project button does. The library shows the common settings (beginSettings), and the address names
+// browse shows the project home, as the project button does. The project home shows the common settings (beginSettings), and the address names
 // no project to show but the project to return to, so a new start of the workbench, such as the apply of a plugin change, starts at
-// the library with the way back (docs/spec/installation.md#applying-a-change).
+// the project home with the way back (docs/spec/installation.md#applying-a-change).
 func (s *Shell) browse() error {
 	s.keep()
 	s.leavePlace()
@@ -841,7 +841,7 @@ func (s *Shell) removalAsked(data []any) {
 	s.settleModified(closeAnswers, answer)
 }
 
-// dropProject takes the removed project out of the window. The window shows the next project, or the library without one.
+// dropProject takes the removed project out of the window. The window shows the next project, or the project home without one.
 func (s *Shell) dropProject(id string) {
 	var tabs []string
 	for tab, held := range s.surfaces.held {
@@ -865,7 +865,7 @@ func (s *Shell) dropProject(id string) {
 		s.showPlane(nil)
 		s.options.Library = ""
 		s.options.Located("", "")
-		// The library shows the common settings until another project shows (beginSettings).
+		// The project home shows the common settings until another project shows (beginSettings).
 		s.failed(s.beginSettings(s.settings.Common()))
 		for _, project := range s.projects {
 			if s.windowProjects[project.ID] {

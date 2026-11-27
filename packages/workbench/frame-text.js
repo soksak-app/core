@@ -63,8 +63,8 @@ export function measureAt(factor, read) {
 /**
  * The step of the prepared layout that draws the first row of a window without a plane (drawPrepared of layout-queue.js). The preparation holds the first row height of factor without surfaces,
  * the drawing clears the plane (clearPlane), writes factor, and draws the screen (show), and the presentation is the commit of the drawn row.
- * The switch to the library cancels the drawing of the plane prepared before it, so this layout is drawn with the current scale to avoid losing the scale of the canceled drawing,
- * and the library screen is shown in the same drawing.
+ * The switch to the project home cancels the drawing of the plane prepared before it, so this layout is drawn with the current scale to avoid losing the scale of the canceled drawing,
+ * and the project home screen is shown in the same drawing.
  *
  *   publishAhead(rects, seated, titlebar, grabs), publish(), cancelPrepared(options), frame(work)  functions of compositor.js and layout-queue.js
  */

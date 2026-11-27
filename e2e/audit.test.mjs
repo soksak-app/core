@@ -62,48 +62,39 @@ for (const app of Object.values(APPS)) {
       await s.until("core.rename", (rename) => rename === null, `${kind} rename did not stop`);
     }
 
-    // Settings modal: every section of both scopes.
+    // Settings tab: every page of both scopes.
     await s.run("core.settings.open");
-    await s.until("core.settings-modal", (modal) => modal.open, "settings did not open");
+    await s.until("core.settings-tab", (tab) => tab !== null, "settings did not open");
     for (const scope of ["common", "project"]) {
-      await s.run("core.settings-modal.scope", { scope });
-      for (const section of ["general", "plugins", "sidebars"]) {
-        await s.run("core.settings-modal.nav", { section });
-        await s.until("core.settings-modal", (modal) => modal.section === section && modal.scope === scope,
-          `settings did not show ${scope} ${section}`);
-        await clean(s, `settings ${scope} ${section}`);
+      await s.run("core.settings-tab.scope", { scope });
+      for (const page of ["look", "workspace", "sets", "behavior", "agents", "diag", "installed", "browse"]) {
+        await s.run("core.settings-tab.nav", { page });
+        await s.until("core.settings-tab", (tab) => tab?.page === page && tab.scope === scope,
+          `settings did not show ${scope} ${page}`);
+        await clean(s, `settings ${scope} ${page}`);
       }
     }
     await s.run("core.settings.close");
-    await s.until("core.settings-modal", (modal) => !modal.open, "settings did not close");
+    await s.until("core.settings-tab", (tab) => tab === null, "settings did not close");
 
-    // The library and its form, and the state without search results.
+    // The project home, its form, and the state without search results.
     await s.run("core.projects.browse");
-    await s.until("core.library", (library) => library.shown.length > 0, "the library did not list projects");
-    await clean(s, "library");
+    await s.until("core.home", (home) => home.rows.length > 0, "the project home did not list projects");
+    await clean(s, "project home");
     for (const mode of ["create", "open"]) {
-      await s.run("core.library.form.open", { mode });
-      await s.until("core.library", (library) => library.formState?.mode === mode, `the ${mode} form did not open`);
-      await clean(s, `library ${mode} form`);
-      await s.run("core.library.form.cancel");
-      await s.until("core.library", (library) => !library.form, `the ${mode} form did not close`);
+      await s.run("core.home.form.open", { mode });
+      await s.rect("core.home.form.name");
+      await clean(s, `project home ${mode} form`);
+      await s.run("core.home.form.cancel");
+      await assert.rejects(s.rect("core.home.form.name"), /core\.home\.form\.name/, `the ${mode} form did not close`);
     }
-    await s.run("core.library.search", { query: "no such project" });
-    await s.until("core.library", (library) => library.noResults, "search did not empty the library");
-    await clean(s, "library without results");
-    await s.run("core.library.search", { query: "" });
-    // The plugin page of the library and the state without search results.
-    await s.run("core.library.page", { page: "plugins" });
-    await s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.length > 0,
-      "the plugin page did not list plugins");
-    await clean(s, "library plugin page");
-    await s.run("core.library.plugins.search", { query: "no such plugin" });
-    await s.until("core.library", (library) => library.plugins.shown.length === 0, "search did not empty the plugin page");
-    await clean(s, "library plugin page without results");
-    await s.run("core.library.plugins.search", { query: "" });
-    await s.run("core.library.page", { page: "projects" });
-    await s.run("core.library.return");
-    await s.until("core.screen", (screen) => screen.screen === "workspace", "the library did not return to the workspace");
-    await clean(s, "workspace after the library");
+    await s.run("core.home.search", { query: "no such project" });
+    await s.until("core.home", (home) => home.rows.length === 0, "search did not empty the project home");
+    await s.rect("core.home.no-results");
+    await clean(s, "project home without results");
+    await s.run("core.home.search", { query: "" });
+    await s.run("core.home.open", { project: project.id });
+    await s.until("core.screen", (screen) => screen.screen === "workspace", "the project home did not return to the workspace");
+    await clean(s, "workspace after the project home");
   });
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
@@ -64,15 +65,16 @@ type SettingsCatalog struct {
 	Fonts         []CatalogFont     `json:"fonts"`
 	MenuLanguages []CatalogLanguage `json:"menuLanguages"`
 	Default       string            `json:"defaultLanguage"`
+	Rows          declaredRows      `json:"rows"`
 	Settings      struct {
-		Defaults                 map[string]any        `json:"defaults"`
-		LayoutRanges             map[string][2]float64 `json:"layoutRanges"`
-		ShapeRanges              map[string][2]float64 `json:"shapeRanges"`
-		MemorySaverDelay         [2]float64            `json:"memorySaverDelay"`
-		ErrorToastDismissSeconds [2]float64            `json:"errorToastDismissSeconds"`
-		Choices                  map[string][]string   `json:"choices"`
-		TextSteps                []float64             `json:"textSteps"`
-		Switches                 []string              `json:"switches"`
+		Defaults                   map[string]any        `json:"defaults"`
+		LayoutRanges               map[string][2]float64 `json:"layoutRanges"`
+		ShapeRanges                map[string][2]float64 `json:"shapeRanges"`
+		MemorySaverDelay           [2]float64            `json:"memorySaverDelay"`
+		ProblemToastDismissSeconds [2]float64            `json:"problemToastDismissSeconds"`
+		Choices                    map[string][]string   `json:"choices"`
+		TextSteps                  []float64             `json:"textSteps"`
+		Switches                   []string              `json:"switches"`
 		// Orders are the settings whose value is an order of their listed values, each once (docs/spec/settings.md#values).
 		Orders     map[string][]string `json:"orders"`
 		CommonOnly []string            `json:"commonOnly"`
@@ -139,6 +141,12 @@ func (c *SettingsCatalog) choices(key string) []string {
 			ids[i] = font.ID
 		}
 		return ids
+	case "textSize":
+		steps := make([]string, len(c.Settings.TextSteps))
+		for i, step := range c.Settings.TextSteps {
+			steps[i] = strconv.FormatFloat(step, 'f', -1, 64)
+		}
+		return steps
 	case "language":
 		ids := []string{"auto"}
 		for _, language := range c.MenuLanguages {
@@ -154,8 +162,8 @@ func (c *SettingsCatalog) bounds(key string) ([2]float64, bool) {
 	if value, ok := c.Settings.LayoutRanges[key]; ok {
 		return value, true
 	}
-	if key == "errorToastDismissSeconds" {
-		return c.Settings.ErrorToastDismissSeconds, true
+	if key == "problemToastDismissSeconds" {
+		return c.Settings.ProblemToastDismissSeconds, true
 	}
 	value, ok := c.Settings.ShapeRanges[key]
 	return value, ok
@@ -181,7 +189,9 @@ func shapeOf(theme *CatalogTheme) (map[string]any, error) {
 
 // SaveSettings writes a change to the host: the patch and the removed keys of the common values, or of the overrides of
 // project when it is not empty.
-type SaveSettings func(project string, patch map[string]any, remove []string)
+// SaveSettings writes a change of the settings. restore puts back the values of the change's keys as they were before the change,
+// which the caller runs when the host refuses the write.
+type SaveSettings func(project string, patch map[string]any, remove []string, restore func())
 
 // SettingsStatus is the value of the status core.settings.
 type SettingsStatus struct {
@@ -204,7 +214,10 @@ type SettingsStore struct {
 	save                        SaveSettings
 	begun                       bool
 	loaded                      map[string]bool
-	plugins                     []LoadedPlugin
+	// missing maps each plugin setting whose stored value names no loaded plugin of its category to that value. Such a key has no value
+	// and keeps its stored value (docs/spec/plugins.md#settings-declarations).
+	missing map[string]string
+	plugins []LoadedPlugin
 }
 
 // NewSettingsStore returns the store of the catalog and the plugin settings definitions.
@@ -278,8 +291,38 @@ func (s *SettingsStore) Begin(common, overrides map[string]any, project string) 
 		return err
 	}
 	s.common, s.overrides, s.project = orEmpty(common), orEmpty(overrides), project
+	s.missing = s.missingPlugins(s.effective(s.common, s.overrides))
 	s.begun = true
 	return nil
+}
+
+// missingPlugins returns the plugin settings of values whose value names no loaded plugin of their category.
+func (s *SettingsStore) missingPlugins(values map[string]any) map[string]string {
+	missing := map[string]string{}
+	for _, definition := range s.Definitions {
+		if definition.Type != "plugin" {
+			continue
+		}
+		// silent: validate checked the form of the stored value before this read.
+		if id, ok := values[definition.Key].(string); ok && !s.servesCategory(definition.Category, id) {
+			missing[definition.Key] = id
+		}
+	}
+	return missing
+}
+
+// Missing returns the plugin setting key whose stored value names no loaded plugin, with that value, and false when key has none.
+func (s *SettingsStore) Missing(key string) (string, bool) {
+	id, ok := s.missing[key]
+	return id, ok
+}
+
+// MissingKeys returns the plugin settings whose stored value names no loaded plugin, sorted by key.
+func (s *SettingsStore) MissingKeys() []string { return slices.Sorted(maps.Keys(s.missing)) }
+
+// MissingError is the load error of a plugin setting whose stored value names no loaded plugin of its category.
+func (s *SettingsStore) MissingError(key string) string {
+	return fmt.Sprintf("%s: plugin %s is not a %s plugin", key, s.missing[key], s.pluginSetting(key).Category)
 }
 
 // Check refuses the stored values of the common settings and of the overrides of a project that Begin would refuse, and takes
@@ -290,7 +333,7 @@ func (s *SettingsStore) Check(common, overrides map[string]any) error {
 			if s.kept(key) {
 				continue
 			}
-			if _, known := s.defaults[key]; !known {
+			if _, known := s.defaults[key]; !known && !s.isPluginOrder(key) {
 				return fmt.Errorf("%s: unknown setting %s", where, key)
 			}
 			if err := s.validate(key, value); err != nil {
@@ -357,11 +400,26 @@ func (s *SettingsStore) pluginSetting(key string) *SettingDefinition {
 	return nil
 }
 
+// isPluginOrder tells that key is the order of the sides of a loaded plugin's sidebar list: <plugin>.win.order for the window sidebars and
+// <plugin>.card.order for the card sidebars (docs/spec/settings.md#plugin-page).
+func (s *SettingsStore) isPluginOrder(key string) bool {
+	for _, suffix := range []string{".win.order", ".card.order"} {
+		if id, ok := strings.CutSuffix(key, suffix); ok && s.loaded[id] {
+			return true
+		}
+	}
+	return false
+}
+
 // defaultOf returns the default of key. A plugin setting without a declared default takes the one loaded plugin of its category when the
 // window loaded exactly one, and no value otherwise (docs/spec/plugins.md#plugin-categories).
 func (s *SettingsStore) defaultOf(key string) any {
 	if value := s.defaults[key]; value != nil {
 		return value
+	}
+	// The order of the sides of a plugin's sidebar list starts as the order of the window sidebars (docs/spec/settings.md#plugin-page).
+	if s.isPluginOrder(key) {
+		return s.defaults["sidebarOrder"]
 	}
 	definition := s.pluginSetting(key)
 	if definition == nil {
@@ -407,8 +465,13 @@ func (s *SettingsStore) Defaults() map[string]any { return maps.Clone(s.defaults
 // Common returns the common settings as they stand now.
 func (s *SettingsStore) Common() map[string]any { return s.common }
 
-// Value returns the effective value of key.
-func (s *SettingsStore) Value(key string) any { return s.effectiveValue(s.common, s.overrides, key) }
+// Value returns the effective value of key, which has none while its stored plugin is missing.
+func (s *SettingsStore) Value(key string) any {
+	if _, missing := s.missing[key]; missing {
+		return nil
+	}
+	return s.effectiveValue(s.common, s.overrides, key)
+}
 
 // ProjectValue is the value of key for a project with overrides, which need not be the selected project.
 func (s *SettingsStore) ProjectValue(overrides map[string]any, key string) any {
@@ -420,10 +483,31 @@ func (s *SettingsStore) Scoped(key, scope string) any {
 	if scope != "common" {
 		return s.Value(key)
 	}
+	if _, missing := s.missing[key]; missing {
+		return nil
+	}
 	if value, ok := s.common[key]; ok {
 		return value
 	}
 	return s.defaultOf(key)
+}
+
+// checkPluginPatch refuses a written plugin value that names no loaded plugin of its category (docs/spec/plugins.md#settings-declarations).
+func (s *SettingsStore) checkPluginPatch(patch map[string]any) error {
+	for _, key := range slices.Sorted(maps.Keys(patch)) {
+		definition := s.pluginSetting(key)
+		if definition == nil || patch[key] == nil {
+			continue
+		}
+		id, ok := patch[key].(string)
+		if !ok {
+			return fmt.Errorf("Invalid setting %s: %s is not a plugin id", key, jsonText(patch[key]))
+		}
+		if !s.servesCategory(definition.Category, id) {
+			return fmt.Errorf("%s: plugin %s is not a %s plugin", key, id, definition.Category)
+		}
+	}
+	return nil
 }
 
 // Overridden tells that the shown project overrides key.
@@ -491,7 +575,9 @@ func integer(value any) (float64, bool) {
 
 func (s *SettingsStore) validate(key string, value any) error {
 	catalog := s.Catalog
-	if choices := catalog.choices(key); choices != nil {
+	// textSize is a number whose choices are the text size steps; the choices of the select box are their text, which the numeric check
+	// below does not take (settingType gives number).
+	if choices := catalog.choices(key); choices != nil && key != "textSize" {
 		text, ok := value.(string)
 		if !ok || !slices.Contains(choices, text) {
 			named := make([]string, len(choices))
@@ -512,7 +598,11 @@ func (s *SettingsStore) validate(key string, value any) error {
 			return fmt.Errorf("Invalid setting %s: %s is not a boolean", key, jsonText(value))
 		}
 	}
-	if values, ordered := catalog.Settings.Orders[key]; ordered && !isOrder(value, values) {
+	values, ordered := catalog.Settings.Orders[key]
+	if s.isPluginOrder(key) {
+		values, ordered = catalog.Settings.Orders["sidebarOrder"], true
+	}
+	if ordered && !isOrder(value, values) {
 		named := make([]string, len(values))
 		for i, item := range values {
 			named[i] = jsonText(item)
@@ -591,18 +681,8 @@ func validateDeclared(definition SettingDefinition, value any) error {
 // check holds what no single value tells: the widths in order, and the sets and links with the functions of the page that also
 // check the sidebars of environment.json (docs/spec/settings.md#stored-sets-and-links).
 func (s *SettingsStore) check(values map[string]any) error {
-	// Each plugin value names a loaded and enabled plugin of its category; a value that names none is a load error and replaces nothing
-	// (docs/spec/plugins.md#plugin-categories). A value that is no plugin id was refused by validate before this check runs.
-	for _, definition := range s.Definitions {
-		if definition.Type != "plugin" || values[definition.Key] == nil {
-			continue
-		}
-		// silent: validate checked the form of the value before check runs.
-		id, _ := values[definition.Key].(string)
-		if !s.servesCategory(definition.Category, id) {
-			return fmt.Errorf("%s: plugin %s is not a %s plugin", definition.Key, id, definition.Category)
-		}
-	}
+	// A plugin value that names no loaded plugin is not refused here: a load keeps it as a missing setting (missingPlugins), and a
+	// write refuses it before this check (checkPluginPatch).
 	// A command passes the lists in their typed form, so the check reads each one in its stored form.
 	storedSets, err := decode[any](values["sets"])
 	if err != nil {
@@ -657,7 +737,7 @@ func (s *SettingsStore) Set(patch map[string]any, scope string) error {
 		}
 	}
 	for _, key := range slices.Sorted(maps.Keys(patch)) {
-		if _, known := s.defaults[key]; !known {
+		if _, known := s.defaults[key]; !known && !s.isPluginOrder(key) {
 			return fmt.Errorf("Unknown setting: %s", key)
 		}
 		if value := patch[key]; value != nil {
@@ -687,12 +767,50 @@ func (s *SettingsStore) Set(patch map[string]any, scope string) error {
 	} else {
 		common = changed
 	}
+	if err := s.checkPluginPatch(patch); err != nil {
+		return err
+	}
 	if err := s.check(s.effective(common, overrides)); err != nil {
 		return err
 	}
+	restore := s.restoreOf(project, patch)
 	s.common, s.overrides = common, overrides
-	s.save(project, values, remove)
+	s.missing = s.missingPlugins(s.effective(common, overrides))
+	s.save(project, values, remove, restore)
 	return nil
+}
+
+// restoreOf returns the function that puts back the values of the keys of patch in the scope of project, as they were before the
+// change. A key is put back only while its value is still the one that the change wrote: a later change of the same key, which is
+// still pending, keeps its value. A key without a value before the change is removed again.
+func (s *SettingsStore) restoreOf(project string, patch map[string]any) func() {
+	scope := func() map[string]any {
+		if project != "" {
+			return s.overrides
+		}
+		return s.common
+	}
+	keys := slices.Sorted(maps.Keys(patch))
+	previous, present := map[string]any{}, map[string]bool{}
+	for _, key := range keys {
+		value, ok := scope()[key]
+		previous[key], present[key] = value, ok
+	}
+	return func() {
+		for _, key := range keys {
+			current, ok := scope()[key]
+			written := patch[key]
+			if written == nil && ok || written != nil && (!ok || !reflect.DeepEqual(current, written)) {
+				continue
+			}
+			if present[key] {
+				scope()[key] = previous[key]
+			} else {
+				delete(scope(), key)
+			}
+		}
+		s.missing = s.missingPlugins(s.effective(s.common, s.overrides))
+	}
 }
 
 // settingType returns the type of the value of key: boolean, number, object or string.
@@ -702,7 +820,7 @@ func (s *SettingsStore) settingType(key string) (string, error) {
 	switch {
 	case slices.Contains(catalog.Settings.Switches, key):
 		return "boolean", nil
-	case key == "diagnostics.log" || key == "sets" || key == "links" || catalog.Settings.Orders[key] != nil:
+	case key == "diagnostics.log" || key == "sets" || key == "links" || catalog.Settings.Orders[key] != nil || s.isPluginOrder(key):
 		return "object", nil
 	case ranged || key == "memorySaverDelay" || key == "textSize":
 		return "number", nil

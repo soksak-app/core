@@ -91,7 +91,7 @@ func declaredCommonOnly() []string {
 func CommonOnlyKeys() []string { return slices.Clone(commonOnly) }
 
 // WorkspaceRequest is one storage operation. Kind is one of snapshot, add, patch, remove, move, settings, tabState,
-// tabStatePut, tabSession, tabSessionPut, tabSessions, roles, rolesPut, rolesStatus, roleDefine, roleDefinitionRemove, role, rolePut,
+// tabStatePut, notices, noticesPut, tabSession, tabSessionPut, tabSessions, roles, rolesPut, rolesStatus, roleDefine, roleDefinitionRemove, role, rolePut,
 // roleConfirm and roleRemove.
 type WorkspaceRequest struct {
 	Kind        string   `json:"kind"`
@@ -102,6 +102,7 @@ type WorkspaceRequest struct {
 	Delta       *int     `json:"delta"`
 	Tab         string   `json:"tab,omitempty"`
 	Entry       Record   `json:"entry,omitempty"`
+	Notices     any      `json:"notices,omitempty"`
 	Regions     Record   `json:"regions,omitempty"`
 	Roles       Record   `json:"roles,omitempty"`
 	Role        any      `json:"role,omitempty"`
@@ -475,6 +476,39 @@ func putTabState(path, tab string, entry Record) (any, error) {
 	return int(info.Size()), nil
 }
 
+// noticesFormat is the format of notices.json, the notice center store (docs/spec/notifications.md#notice-center).
+const noticesFormat = 1
+
+// readNotices returns the document of notices.json as stored, or nil when the file does not exist; a document of another
+// format is refused with the path of the file.
+func readNotices(path string) (any, error) {
+	document, err := readStored(path, "notices.json", noticesFormat)
+	if err != nil || document == nil {
+		return nil, err
+	}
+	return document, nil
+}
+
+// putNotices replaces the list of notices in notices.json and returns the size of the written file. A value that is not a list
+// is refused before the file is read, so a refused put leaves the file unchanged.
+func putNotices(path string, notices any) (any, error) {
+	list, ok := notices.([]any)
+	if !ok {
+		return nil, errors.New("notices put requires a list of notices")
+	}
+	if _, err := readStored(path, "notices.json", noticesFormat); err != nil {
+		return nil, err
+	}
+	if err := writeJSON(path, Record{"format": noticesFormat, "notices": list}); err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	return int(info.Size()), nil
+}
+
 // checkTabStateEntry refuses an entry that is empty or holds a field other than state {format, value}, kept true and
 // a label of 1 to 256 characters; the first invalid field in name order is named.
 func checkTabStateEntry(tab string, entry Record) error {
@@ -655,6 +689,10 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 		return readTabState(filepath.Join(w.directory, "tab-state.json"))
 	case "tabStatePut":
 		return putTabState(filepath.Join(w.directory, "tab-state.json"), req.Tab, req.Entry)
+	case "notices":
+		return readNotices(filepath.Join(w.directory, "notices.json"))
+	case "noticesPut":
+		return putNotices(filepath.Join(w.directory, "notices.json"), req.Notices)
 	case "tabSession":
 		return readTabSession(w.directory, req.Tab)
 	case "tabSessionPut":
@@ -823,9 +861,9 @@ func (h *Host) runWorkspace(req WorkspaceRequest) (any, error) {
 			if result == true {
 				h.notifyWorkspace()
 			}
-		case "tabState", "tabStatePut", "tabSession", "tabSessionPut", "tabSessions", "roles", "rolesPut", "rolesStatus", "role":
-			// The tab state store, the tab sessions, the role definitions and the role read change no project or setting, so
-			// no window is notified. The role writes change projects.json, so every window reads its spaces again.
+		case "tabState", "tabStatePut", "notices", "noticesPut", "tabSession", "tabSessionPut", "tabSessions", "roles", "rolesPut", "rolesStatus", "role":
+			// The tab state store, the notice store, the tab sessions, the role definitions and the role read change no project or
+			// setting, so no window is notified. The role writes change projects.json, so every window reads its spaces again.
 		case "snapshot":
 			h.mu.Lock()
 			ids := make([]string, 0, len(h.owners))

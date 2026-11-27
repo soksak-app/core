@@ -1,4 +1,4 @@
-// Checks the display order, the background, the input, the move, the resize and the removal of a modal.
+// Checks the menus that open as native modals (transparent, without a backdrop) and the Help > Debug views (docs/spec/native-modals.md).
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,8 +7,6 @@ import test from "node:test";
 
 import { APPS, holdCovered, MAIN_PAGE_APPS, open } from "@soksak/window-check/app.mjs";
 import { fresh as prepare, holdDialogs } from "./fixture.mjs";
-import { addRasterTab, RASTER, rasterReady } from "./raster-probe.mjs";
-import { readStillCapture } from "./still-capture.mjs";
 import { channelOtherSeqs, expectedTimeline, PAGE_ROWS } from "./debug-timeline-files.mjs";
 
 // Functional paint checks explicitly render covered windows without activation.
@@ -20,100 +18,10 @@ async function fresh(s, options) {
   return tab;
 }
 
-/** The second layout probe: a plugin whose tab view exposes elements. */
-const SECOND = "layoutprobe2";
-/** The card of the grid that holds the tab surface. */
-const cardOf = (grid, surface) => grid.cards.find((item) => item.tabs?.some((tab) => tab.tab === surface)).id;
-
-/** Waits until a visible raster probe tab of the window is ready (rasterReady) and returns its surface id. */
-async function readyRaster(s, message) {
-  const ready = (item) => item.plugin === RASTER && item.visible && item.status?.phase === "ready";
-  const { surface } = (await s.until("core.surfaces", (list) => list.some(ready), message)).find(ready);
-  await rasterReady(s, surface);
-  return surface;
-}
-
-// A workbench owns its dialog claim only until that workbench ends.
-// Reload directly under settings: preparing another fixture here would erase
-// the lifecycle boundary that this regression must exercise.
-for (const app of Object.values(APPS)) {
-  test(`${app.name}: reloading under settings leaves successor raster images and documents unblurred`, { timeout: 90000 }, async (t) => {
-    const s = await open(t, app);
-    const { surface: start } = await fresh(s);
-    s.cleanupSteps(
-      async () => {
-        // Capture a failed native state before cleanup can close its dialog.
-        if (!t.passed) await readStillCapture(s, t);
-      },
-      async () => {
-        await s.run("core.settings.close");
-      },
-    );
-    // A raster probe tab on the start card gives the window a native image region. The saved layout keeps it through the reload.
-    s.cleanup(async () => {
-      for (const card of (await s.get("core.grid")).cards) {
-        for (const tab of card.tabs ?? []) if (tab.plugin === RASTER) await s.run("core.tab.close", { tab: tab.tab });
-      }
-    });
-    // The image regions of the window draw while it is covered (addRasterTab and rasterReady).
-    const { surface: raster } = await addRasterTab(s, cardOf(await s.get("core.grid"), start));
-    await s.run("core.projects.flush");
-    const before = await s.until("host.window", (host) => host.regions.some((region) =>
-      region.surface === raster && region.name === "raster" && region.visible && region.presented && region.blurred === false),
-    "the initial raster image did not present without blur");
-    const original = before.regions.find((region) => region.surface === raster && region.name === "raster");
-    t.diagnostic(`before reload raster: ${JSON.stringify(original)}`);
-    await s.presented();
-    await readStillCapture(s, t);
-    const predecessor = (await s.get("core.window.workbench")).start;
-    await s.run("core.settings.open");
-    await s.until("core.window.workbench", (workbench) => workbench.background === true,
-      "settings did not acquire the workbench dialog background");
-    await s.until("host.window", (host) => host.regions.some((region) =>
-      region.surface === raster && region.name === "raster" && region.visible && region.blurred === true),
-    "settings did not blur the actual raster image");
-    await s.presented();
-    await readStillCapture(s, t);
-    await s.run("host.window.reload");
-    await s.until("core.window.workbench", (workbench) => workbench.start !== predecessor &&
-      workbench.readyState === "complete" && workbench.background === false,
-    "the successor workbench did not start without a dialog");
-    await s.until("core.modal", (modal) => modal === null, "the successor retained a modal");
-    await s.until("core.picker", (picker) => picker.open === false, "the successor retained a picker");
-    const successor = await readyRaster(s, "the successor did not restore a ready raster probe tab");
-    const after = await s.until("host.window", (host) => {
-      const image = host.regions.find((region) => region.surface === successor && region.name === "raster");
-      return image?.visible === true && image.presented !== null && image.presented.generation !== original.presented.generation &&
-        host.regions.filter((region) => region.visible).every((region) => region.blurred === false) &&
-        host.documents.every((document) => document.blurred === false);
-    }, "the successor's newly attached raster image or documents inherited the ended dialog blur");
-    t.diagnostic(`after reload native backgrounds: ${JSON.stringify({ regions: after.regions, documents: after.documents, modal: after.modal })}`);
-    await s.presented();
-    await readStillCapture(s, t);
-  });
-}
-
 /** Checks that the modal web view does not paint its own background. */
 function transparent(modal) {
   assert.equal(modal.background.draws, false, "the native webview must not paint a background before its DOM");
   assert.equal(modal.background.alpha, 0, "the under-page background must also be transparent");
-}
-
-/** Checks that the settings modal covers the whole window above all native surfaces. */
-function settingsAboveSurfaces(state) {
-  const { modal } = state;
-  assert.ok(modal && modal.id === "settings" && modal.shown, `settings must be shown: ${JSON.stringify(modal)}`);
-  for (const surface of state.surfaces) {
-    assert.ok(modal.order > surface.order, `native surface ${surface.id} covers settings: ${JSON.stringify(state.surfaces)}`);
-  }
-  for (const region of state.documents) {
-    assert.ok(modal.order > region.order,
-      `document region ${region.surface}/${region.document} covers settings: modal order ${modal.order}, region order ${region.order}`);
-  }
-  assert.equal(state.children, 0, "settings must not create a child OS window");
-  transparent(modal);
-  assert.deepEqual(modal.frame, { x: 0, y: 0, width: state.content.width, height: state.content.height },
-    "the settings webview must cover background native content");
 }
 
 /** Checks that the background blur is applied to the main document and the documents of the visible plugin surfaces as enabled says. */
@@ -138,182 +46,9 @@ async function background(s, enabled) {
   }
 }
 
-/** Opens the settings modal and waits until the document reports its render. */
-async function openSettings(s) {
-  await s.run("core.settings.open");
-  return s.until("core.modal", (modal) => modal?.id === "settings" && modal.document !== null,
-    "settings did not render");
-}
-
-/** Finds a settings modal control by name and key. */
-async function control(s, name, key) {
-  const { controls } = await s.until("core.settings-modal",
-    (modal) => modal.controls.some((c) => c.name === name && c.key === key), `settings control ${key} did not appear`);
-  return controls.find((c) => c.name === name && c.key === key);
-}
-
-async function openSidebars(s) {
-  await openSettings(s);
-  await control(s, "core.settings-modal.nav", "nav:sidebars");
-  await s.run("core.settings-modal.nav", { section: "sidebars" });
-  await control(s, "core.settings-modal.create", "sets:create");
-}
-
-/** Waits until the rectangle of the modal document equals the card rectangle of the main document. */
-async function modalAt(s, card) {
-  return s.until("core.modal", (modal) => ["x", "y", "width", "height"].every((k) => modal?.document?.rect[k] === card[k]),
-    `the modal document did not move to ${JSON.stringify(card)}`);
-}
-
-const rectOf = ({ x, y, width, height }) => ({ x, y, width, height });
-
 // These cases read the modal document (core.modal document), hold its first answer (diagnostics.modal.hold) or dispatch events
 // to its elements, so they run on the applications that create modal web views (MAIN_PAGE_APPS).
 for (const app of MAIN_PAGE_APPS) {
-  test(`${app.name}: an open modal's document receives the content the page updates`, { timeout: 30000 }, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    await openSidebars(s);
-    const { document } = await s.get("core.modal");
-    assert.equal(document.filter, "none", "settings navigation must not copy the background blur into the dialog");
-    assert.equal(document.bodyBackground, "rgba(0, 0, 0, 0)", "the modal body must remain transparent");
-    assert.equal(document.scrimBackground, "rgba(0, 0, 0, 0.5)", "settings must draw one 50% scrim");
-  });
-
-  test(`${app.name}: a first modal answer that arrives after later changes keeps the moved position`, { timeout: 30000 }, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    await s.request("diagnostics.modal.hold", { on: true });
-    s.cleanup(() => s.request("diagnostics.modal.hold", { on: false }));
-    await s.run("core.settings.open");
-    await s.request("diagnostics.modal.held");
-    // While the first reply is held, the content event draws the modal and the position event moves the modal.
-    await s.run("core.settings-modal.nav", { section: "sidebars" });
-    const shown = await s.until("core.modal", (modal) => modal?.document?.loaded === false,
-      "the content event did not render the modal before its first answer");
-    await s.run("core.settings-modal.move", { dx: 40, dy: 20 });
-    const moved = await s.until("core.settings-modal",
-      (modal) => modal.card.x === shown.document.rect.x + 40 && modal.card.y === shown.document.rect.y + 20,
-      "core.settings-modal.move did not move the card by 40,20");
-    await s.until("core.modal", (modal) => modal.document.rect.x === moved.card.x && modal.document.rect.y === moved.card.y,
-      "the position event did not move the modal document");
-    await s.request("diagnostics.modal.hold", { on: false });
-    const loaded = await s.until("core.modal", (modal) => modal.document.loaded, "the modal document did not handle its first answer");
-    assert.deepEqual([loaded.document.rect.x, loaded.document.rect.y], [moved.card.x, moved.card.y],
-      "the first answer moved the modal document back");
-    await s.run("core.settings.close");
-  });
-
-  test(`${app.name}: a card split while settings are open keeps settings above new surfaces`, { timeout: 30000 }, async (t) => {
-    const s = await open(t, app);
-    const { surface } = await fresh(s);
-    const card = cardOf(await s.get("core.grid"), surface);
-    await openSidebars(s);
-    await s.presented();
-    const before = await s.get("host.window");
-    settingsAboveSurfaces(before);
-    const old = new Set(before.surfaces.map((x) => x.id));
-    await s.run("core.card.split", { card, side: "right", plugin: SECOND });
-    const after = await s.until("host.window",
-      (state) => state.surfaces.some((x) => x.visible && !old.has(x.id)) && state.modal?.shown === true,
-      "the split did not display a new native surface");
-    assert.ok(after.surfaces.some((x) => !old.has(x.id)), "the split must create a new native surface");
-    await s.presented();
-    settingsAboveSurfaces(await s.get("host.window"));
-  });
-
-  test(`${app.name}: reloading the main document removes its settings webview`, { timeout: 30000 }, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    await openSettings(s);
-    await s.presented();
-    settingsAboveSurfaces(await s.get("host.window"));
-    const origin = (await s.get("core.window.workbench")).start;
-    await s.run("host.window.reload");
-    await s.until("core.window.workbench", (workbench) => workbench.start !== origin && workbench.readyState === "complete",
-      "the workbench did not start again");
-    await s.until("host.window", (state) => state.modal === null,
-      "the old document's overlay survives after its owning DOM is gone");
-    await background(s, false);
-  });
-
-  test(`${app.name}: settings blocks background input and closes only through its close button`, { timeout: 30000 }, async (t) => {
-    const s = await open(t, app);
-    const { surface, plugin } = await fresh(s);
-    // The start tab is a layout probe, whose document region page covers its view but an 8 pt margin.
-    const probe = (await s.surfaces(plugin)).find((item) => item.surface === surface);
-    assert.ok(probe, "the start probe surface must be visible");
-    await s.until("layoutprobe.document", (value) => value?.reported === true, "the probe document region did not report", { surface });
-    await s.until("host.window", (w) => w.documents.some((d) => d.surface === surface && d.document === "page" && d.visible),
-      "the probe document region is not visible");
-    // The other card shows a tab of the second probe, whose element stands behind the dialog.
-    const grid = await s.get("core.grid");
-    const other = grid.cards.find((card) => card.id !== cardOf(grid, surface) && card.tabs?.length > 0)?.id;
-    assert.ok(other, "the start layout has no second card with tabs");
-    const { tab: second } = await s.run("core.card.add-tab", { card: other, plugin: SECOND });
-    s.cleanup(() => s.run("core.tab.close", { tab: second }));
-    await s.until("core.surfaces", (all) => all.some((item) => item.surface === second && item.visible && item.status?.phase === "ready"),
-      `the ${SECOND} tab did not become ready`);
-    await openSettings(s);
-    await s.presented();
-    settingsAboveSurfaces(await s.get("host.window"));
-    await background(s, true);
-    // A point 16 pt inside the right edge at the vertical center of the probe surface is in the document region of that surface.
-    const frame = probe.applied;
-    const point = { x: frame.x + frame.w - 16, y: frame.y + frame.h / 2 };
-    const modalHit = await s.run("host.hit", point);
-    assert.equal(modalHit.kind, "native", "native input must reach the settings webview");
-    assert.equal(modalHit.identifier, "modal:settings", "native input must identify the settings webview");
-    assert.ok(modalHit.view?.class, `the settings hit view must report its class: ${JSON.stringify(modalHit)}`);
-    assert.ok(modalHit.view.frame.x <= point.x && point.x < modalHit.view.frame.x + modalHit.view.frame.width &&
-      modalHit.view.frame.y <= point.y && point.y < modalHit.view.frame.y + modalHit.view.frame.height,
-    `the settings hit view frame must contain ${JSON.stringify(point)}: ${JSON.stringify(modalHit.view)}`);
-
-    // A wheel over the view of the probe goes to the settings webview and not to the view behind it. The point is in the margin of
-    // 8 pt that the layout probe keeps around its document region, so the view document itself records the wheels that reach it
-    // (core.surface.input). After settings closes, a wheel at a second point of that margin reaches the view; it follows the first
-    // wheel in the input of the window, so once it arrived, the first wheel was handled too.
-    const margin = (offset) => ({ x: frame.x + 4, y: frame.y + frame.h / 2 + offset });
-    const blocked = margin(-40);
-    const reached = margin(40);
-    const wheelsBefore = (await s.get("core.surface.input", surface)).at(-1)?.sequence ?? 0;
-    await s.pointer(blocked.x, blocked.y, "scroll", { deltaY: 120 });
-
-    // Presses inside the modal to put the keyboard focus on the modal document, then sends Escape.
-    const card = await s.rect("core.settings-modal.card");
-    await s.click(card.x + card.width / 2, card.y + card.height - 8);
-    await s.press("Escape");
-    await s.click(point.x, point.y); // A real native click on the scrim must not dismiss the dialog.
-    await assert.rejects(s.act("core.settings-modal.scrim", "dispatch", { event: { type: "pointerdown" } }), /behind the open dialog and takes no action/);
-    await assert.rejects(s.act("core.settings-modal.scrim", "dispatch", { event: { type: "keydown", key: "Escape" } }), /behind the open dialog and takes no action/);
-    await s.presented();
-    assert.equal((await s.get("core.settings-modal")).open, true, "background clicks and Escape must not dismiss settings");
-    settingsAboveSurfaces(await s.get("host.window"));
-    const { document } = await s.get("core.modal");
-    assert.deepEqual([document.mode, document.htmlBackground, document.bodyBackground, document.scrimBackground],
-      ["dialog", "rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.5)"]);
-
-    // The element behind the dialog keeps its layout and takes no action (docs/spec/exposure.md).
-    const behind = await s.rect("core.chrome.settings");
-    assert.ok(behind.width > 0 && behind.height > 0, `the element behind the dialog has no place: ${JSON.stringify(behind)}`);
-    for (const refused of [() => s.act("core.chrome.settings", "click"), () => s.act(`${SECOND}.text`, "click", { surface: second })]) {
-      await assert.rejects(refused, (error) => error.code === 1010 && /is behind the open dialog and takes no action/.test(error.message));
-    }
-
-    await s.act("core.settings-modal.close", "click");
-    await s.until("host.window", (state) => state.modal === null, "settings did not close");
-    await background(s, false);
-    await s.presented();
-    assert.deepEqual(await s.run("host.hit", point), { kind: "document", surface, document: "page" },
-      "closing settings must restore native input to the probe document");
-    await s.pointer(reached.x, reached.y, "scroll", { deltaY: 120 });
-    const wheels = (await s.until("core.surface.input",
-      (events) => events.some((event) => event.sequence > wheelsBefore && event.type === "wheel" && Math.abs(event.y - (reached.y - frame.y)) < 2),
-      "a wheel over the probe view did not reach it after settings closed", { surface }))
-      .filter((event) => event.sequence > wheelsBefore && event.type === "wheel");
-    assert.deepEqual(wheels.filter((event) => Math.abs(event.y - (blocked.y - frame.y)) < 2), [],
-      `a wheel over the probe view reached it while settings was open: ${JSON.stringify(wheels)}`);
-  });
 
   test(`${app.name}: add and split menus are transparent and have no backdrop`, { timeout: 30000 }, async (t) => {
     const s = await open(t, app);
@@ -333,40 +68,6 @@ for (const app of MAIN_PAGE_APPS) {
       await s.press("Escape");
       await s.until("host.window", (w) => w.modal === null, `${name} must retain Escape cancellation`);
     }
-  });
-
-  test(`${app.name}: moving settings and resizing the parent preserves its native coverage`, { timeout: 30000 }, async (t) => {
-    const s = await open(t, app);
-    await fresh(s);
-    await openSettings(s);
-    await s.presented();
-    const before = await s.rect("core.settings-modal.card");
-    await modalAt(s, rectOf(before));
-    const grip = await s.rect("core.settings-modal.grip");
-    const from = { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 };
-    await s.pointer(from.x, from.y, "down");
-    await s.pointer(from.x + 35, from.y + 15, "drag");
-    await s.pointer(from.x + 70, from.y + 30, "drag");
-    await s.pointer(from.x + 70, from.y + 30, "up");
-    const moved = await s.until("core.modal",
-      (modal) => modal.document.rect.x === before.x + 70 && modal.document.rect.y === before.y + 30,
-      "dragging the settings header by 70,30 did not move the card by the same distance");
-    assert.deepEqual(rectOf(await s.rect("core.settings-modal.card")), moved.document.rect);
-    await s.presented();
-    settingsAboveSurfaces(await s.get("host.window"));
-
-    await s.run("host.window.resize", { width: 1000, height: 620 });
-    const state = await s.until("host.window", (w) => w.content.width === 1000 && w.content.height === 620
-      && w.modal?.frame?.width === 1000 && w.modal.frame.height === 620, "the window and settings did not resize");
-    settingsAboveSurfaces(state);
-    await s.until("core.window.workbench", (workbench) => workbench.width === 1000 && workbench.height === 620,
-      "the workbench did not take the new size");
-    await s.presented();
-    const resized = rectOf(await s.rect("core.settings-modal.card"));
-    assert.ok(resized.x >= 0 && resized.y >= 0 && resized.x + resized.width <= 1000 && resized.y + resized.height <= 620,
-      `settings must stay inside the window: ${JSON.stringify(resized)}`);
-    await modalAt(s, resized);
-    await background(s, true);
   });
 }
 

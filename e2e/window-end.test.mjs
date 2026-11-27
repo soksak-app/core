@@ -86,24 +86,18 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     await s.run("core.projects.browse");
-    s.cleanupSteps(
-      async () => {
-        await s.run("core.library.search", { query: "" });
-      },
-      async () => {
-        await s.run("core.library.return");
-        await s.until("core.screen", (screen) => screen.screen === "workspace", "Edit menu cleanup did not restore the workspace");
-      },
-    );
-    await s.until("core.screen", (screen) => screen.screen === "library", "the Edit menu fixture did not open the library");
+    s.cleanup(async () => {
+      await s.run("core.home.search", { query: "" });
+    });
+    await s.until("core.home", (home) => home.rows.length > 0, "the Edit menu fixture did not open the project home");
     const [selectAll, cut, paste] = [await menuItem(s, "cmd+a"), await menuItem(s, "cmd+x"), await menuItem(s, "cmd+v")];
-    await s.run("core.library.search", { query: "window-end" });
-    await s.run("core.library.search.focus");
-    await s.until("core.library", (library) => library?.query === "window-end", "the search field did not take its text");
+    await s.run("core.home.search", { query: "window-end" });
+    await s.run("core.home.search.focus");
+    await s.until("core.home", (home) => home?.query === "window-end", "the search field did not take its text");
     await s.run("host.menu.select", selectAll);
     await s.run("host.menu.select", cut);
-    await s.until("core.library", (library) => library?.query === "", `${cut.title} did not remove the selected text of the field`);
+    await s.until("core.home", (home) => home?.query === "", `${cut.title} did not remove the selected text of the field`);
     await s.run("host.menu.select", paste);
-    await s.until("core.library", (library) => library?.query === "window-end", `${paste.title} did not put the text back`);
+    await s.until("core.home", (home) => home?.query === "window-end", `${paste.title} did not put the text back`);
   });
 }

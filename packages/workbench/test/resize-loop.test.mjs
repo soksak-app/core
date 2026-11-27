@@ -160,7 +160,7 @@ test("a body dataset write inside a callback slot is reported with the stack of 
   // A write outside the round is not recorded.
   body.dataset.screen = "workspace";
   const plane = window.document.getElementById("plane");
-  new window.ResizeObserver(() => queueMicrotask(() => { body.dataset.screen = "library"; delete body.dataset.dragging; }));
+  new window.ResizeObserver(() => queueMicrotask(() => { body.dataset.screen = "home"; delete body.dataset.dragging; }));
   // The writes run in a microtask of the callback; the delivery of their records to the test observer follows them.
   const written = delivered(window, body);
   observers[0].callback([{ target: plane, contentRect: { width: 188, height: 498 } }], observers[0]);
@@ -169,10 +169,10 @@ test("a body dataset write inside a callback slot is reported with the stack of 
   frame();
   frame();
 
-  assert.equal(body.getAttribute("data-screen"), "library", "the traced dataset did not write the attribute");
+  assert.equal(body.getAttribute("data-screen"), "home", "the traced dataset did not write the attribute");
   assert.deepEqual(reported.slice(1, 4), [
     "resize observer loop: in the round callback 1 ran probe@wails://localhost/probe.js:1:1 created at 1234.6ms at 1234.6ms on div#plane.plane.stage[data-expose=core.plane] 188x498, then changed attributes data-screen of body",
-    "resize observer loop: in the round callback 1 set data-screen of body to library at drawBars@wails://localhost/index.html:419:30 < @wails://localhost/projects.js:64:5",
+    "resize observer loop: in the round callback 1 set data-screen of body to home at drawBars@wails://localhost/index.html:419:30 < @wails://localhost/projects.js:64:5",
     "resize observer loop: in the round callback 1 removed data-dragging of body at drawBars@wails://localhost/index.html:419:30 < @wails://localhost/projects.js:64:5",
   ]);
 });

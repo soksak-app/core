@@ -433,9 +433,9 @@ func TestThePlaneHasTheGapOfThePage(t *testing.T) {
 func viewShell(t *testing.T) *shellFixture {
 	t.Helper()
 	f := newShell(t, &storedHost{installed: installedDocument})
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	return f
 }
 
@@ -943,7 +943,7 @@ func TestTheChromeBarHoldsTheLogoAndTheSwitchesOfThePage(t *testing.T) {
 			Values map[string]any `json:"values"`
 		}](t, f, "core.settings").Values
 	}
-	order := []string{"core.chrome.projects", "core.chrome.balance", "core.chrome.left", "core.chrome.right", "core.chrome.top", "core.chrome.bottom", "core.chrome.mode", "core.chrome.settings"}
+	order := []string{"core.chrome.left", "core.chrome.right", "core.chrome.top", "core.chrome.bottom", "core.chrome.settings"}
 	last := float32(0)
 	for _, name := range order {
 		box := f.box(name, "")
@@ -952,7 +952,7 @@ func TestTheChromeBarHoldsTheLogoAndTheSwitchesOfThePage(t *testing.T) {
 		}
 		last = box.X
 	}
-	logo := f.box("core.brand", "")
+	logo := f.box("core.chrome.projects", "")
 	image := f.tester.Image()
 	scale := float32(image.Bounds().Dx()) / 1200
 	// The centre of the square mark lies on its green face, between the prompt and the mouth (packages/workbench/workbench.json brand-logo).
@@ -965,18 +965,16 @@ func TestTheChromeBarHoldsTheLogoAndTheSwitchesOfThePage(t *testing.T) {
 	if got, _ := settings()["left"].(bool); got == left {
 		t.Fatalf("the switch left the setting left at %v", got)
 	}
-	f.click("core.chrome.mode", "")
-	if settings()["mode"] != "light" {
-		t.Fatalf("the mode is %v after the switch", settings()["mode"])
+	if !f.has("core.chrome.projects", "") || !f.has("core.chrome.settings", "") {
+		t.Fatal("the work screen title bar has no logo or no settings button")
 	}
-	f.click("core.chrome.projects", "")
-	if f.has("core.chrome.projects", "") || f.has("core.chrome.balance", "") || !f.has("core.chrome.settings", "") || !f.has("core.brand", "") {
-		t.Fatal("the bar of the library holds other switches than those of the page")
+	if first := firstExposedInBar(f); first != "core.chrome.projects" {
+		t.Fatalf("the first element of the title bar is %s, want core.chrome.projects", first)
 	}
 }
 
 // The chrome bar keeps the window button area that windowControls answers, as applyControls of packages/workbench/index.html: the logo
-// starts at the end of the buttons (x + w) after the padding space-3, and not at the title bar inset of the library. The fixture
+// starts at the end of the buttons (x + w) after the padding space-3, and not at the title bar inset of the project home. The fixture
 // answers the buttons at x 7 with width 52.
 func TestTheChromeBarKeepsTheWindowButtonAreaOfTheAnswer(t *testing.T) {
 	declared, err := workbench.Declared()
@@ -985,7 +983,7 @@ func TestTheChromeBarKeepsTheWindowButtonAreaOfTheAnswer(t *testing.T) {
 	}
 	pad, _ := declared.Metric("space-3")
 	f := projectWithPlugins(t)
-	if got, want := f.box("core.brand", "").X, float32(pad)+7+52; got != want {
+	if got, want := f.box("core.chrome.projects", "").X, float32(pad)+7+52; got != want {
 		t.Fatalf("the logo starts at x %v, want %v", got, want)
 	}
 	if got := status[struct {
@@ -1019,7 +1017,7 @@ func TestTheChromeBarKeepsTheButtonAreaOfTheLastAnswerWithButtons(t *testing.T) 
 	if got := inset(); got != 12+52 {
 		t.Fatalf("core.chrome reports controlsWidth %v after the answer without buttons, want %v", got, 12+52)
 	}
-	if got, want := f.box("core.brand", "").X, float32(pad)+12+52; got != want {
+	if got, want := f.box("core.chrome.projects", "").X, float32(pad)+12+52; got != want {
 		t.Fatalf("the logo starts at x %v after the answer without buttons, want %v", got, want)
 	}
 }

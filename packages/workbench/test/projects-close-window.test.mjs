@@ -51,7 +51,7 @@ projects.onSwitch({
   settleTabs: async () => { order.push("ask"); asks.push(wire.calls.length); if (held) await held; return !kept; },
 });
 
-// The start of the page: the first screen is the library, and the start of the document is the first event that leaves the log.
+// The start of the page: the first screen is the project home, and the start of the document is the first event that leaves the log.
 projects.begin({ common: structuredClone(COMMON), projects: [], open: [] });
 await orderedCallsAnswered();
 logGate.set(POLICY);
@@ -148,7 +148,7 @@ test("removing the project shown in the window asks about modified tabs before i
 
 test("removing a project that another window shows asks that window and keeps the project when it refuses", async () => {
   await start("projects-close-window-remove-elsewhere");
-  await projects.browse();
+  await projects.showHome();
   const from = wire.calls.length;
   // The host answers the first question of the owner window with a refusal and the second with the permission.
   assert.equal(await projects.close(PROJECT.id), false);
@@ -186,8 +186,8 @@ test("a removal request for the project shown here asks about modified tabs and 
   assert.deepEqual(order, ["ask"]);
   assert.equal(asks[0], from);
   assert.deepEqual(answered(from), [{ id: PROJECT.id, allowed: true }]);
-  // A project that the library shows has no tab in the plane, so the answer needs no question.
-  await projects.browse();
+  // A project that the project home shows has no tab in the plane, so the answer needs no question.
+  await projects.showHome();
   order.length = 0;
   from = wire.calls.length;
   wire.deliverNotice();

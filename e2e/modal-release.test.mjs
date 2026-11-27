@@ -1,11 +1,12 @@
 // Checks that a closed modal leaves behind no web view and no object that the shared library attached to the modal's webview, and that
 // the native object counts return to their values before the first modal opened.
 //
-// The settings modal is opened and closed through core.settings.open and core.settings.close. Its open state is the status core.modal,
-// which is null when no modal is open. The status host.window reports the modal webview as {id, mode, shown, frame, order, background}
-// without its WebContent process, so this check cannot read the process of the modal webview. A modal webview whose process is shared with the
-// page is not waited for, and a modal webview that has its own process is not waited for either, because the status does not identify it.
-// The release is measured through diagnostics.native.objects, as the window release check does.
+// The modal is the add menu of a card, a picker (docs/spec/native-modals.md). It is opened through core.card.menu and closed through
+// core.picker.close. Its open state is the status core.modal, which is null when no modal is open. The status host.window reports the modal
+// webview as {id, mode, shown, frame, order, background} without its WebContent process, so this check cannot read the process of the modal
+// webview. A modal webview whose process is shared with the page is not waited for, and a modal webview that has its own process is not
+// waited for either, because the status does not identify it. The release is measured through diagnostics.native.objects, as the window
+// release check does. The settings tab is not a modal, so it has no webview to release.
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -26,28 +27,29 @@ for (const app of MAIN_PAGE_APPS) {
       const modal = await s.get("core.modal");
       // A status that answers neither null nor a modal fails, and does not pass as a closed modal.
       assert.ok(modal === null || typeof modal?.id === "string", `core.modal is ${JSON.stringify(modal)}`);
-      if (modal !== null) await s.run("core.settings.close");
+      if (modal !== null) await s.run("core.picker.close");
     });
+    const card = (await s.get("core.grid")).cards.find((item) => item.pane === 0).id;
+    const openMenu = () => s.run("core.card.menu", { card, menu: "add" });
+    const isMenu = (state) => state?.id === "picker" && state.document !== null;
 
     // The first child web view of a window registers the input of the main web view too (nativeWebviewCreate of the Wails host,
     // watch_presses of the Tauri host), a registration that lasts as long as the window. One modal is opened and closed before the
     // baseline, so the baseline holds that registration and the cycles measure only what each modal leaves.
-    await s.run("core.settings.open");
-    await s.until("core.modal", (state) => state?.id === "settings" && state.document !== null && state.document.loaded,
-      "the first settings modal did not render");
-    await s.run("core.settings.close");
-    await s.until("core.modal", (state) => state === null, "the first settings modal did not report closed");
+    await openMenu();
+    await s.until("core.modal", isMenu, "the first add menu did not render");
+    await s.run("core.picker.close");
+    await s.until("core.modal", (state) => state === null, "the first add menu did not report closed");
     const before = await counts(s);
     const measured = [];
     for (let cycle = 1; cycle <= CYCLES; cycle++) {
       const label = `cycle ${cycle}`;
-      await s.run("core.settings.open");
-      const modal = await s.until("core.modal", (state) => state?.id === "settings" && state.document !== null && state.document.loaded,
-        `${label}: the settings modal did not render`);
-      assert.equal(modal.id, "settings", `${label}: the open modal is not settings`);
+      await openMenu();
+      const modal = await s.until("core.modal", isMenu, `${label}: the add menu did not render`);
+      assert.equal(modal.id, "picker", `${label}: the open modal is not the add menu`);
       measured.push(await counts(s));
-      await s.run("core.settings.close");
-      await s.until("core.modal", (state) => state === null, `${label}: the settings modal did not report closed`);
+      await s.run("core.picker.close");
+      await s.until("core.modal", (state) => state === null, `${label}: the add menu did not report closed`);
     }
     // If the count does not return to before within 10 seconds, the request fails with an error that holds the count at that time.
     const after = await counts(s, before).catch((error) => {

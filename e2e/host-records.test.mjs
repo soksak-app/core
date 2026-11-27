@@ -25,12 +25,12 @@ for (const app of Object.values(APPS)) {
     s.cleanup(() => s.run("core.projects.browse"));
     // When the focus moves, the page writes the transition to the host log as a report.
     await s.run("core.projects.browse");
-    await s.until("core.library", (library) => library.shown.length > 0, "the library did not open");
+    await s.until("core.home", (home) => home.rows.length > 0, "the project home did not open");
     const transcript = await s.transcript(recordCatalog(s.app));
     s.cleanup(() => transcript.stop());
-    const line = "focus in core.library.search";
+    const line = "focus in core.home.search";
     const offsets = currentEventOffsets(s.app.configDir);
-    await s.run("core.focus.set", { name: "core.library.search" });
+    await s.run("core.focus.set", { name: "core.home.search" });
     // The transcript holds the record in the text form of the application log.
     await transcript.until((lines) => lines.includes(`info workbench workbench: ${line}`), `the page did not report "${line}"`);
     const logs = readdirSync(join(s.app.configDir, "logs"));

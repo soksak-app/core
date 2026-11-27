@@ -48,7 +48,7 @@
               "start": "$page-identity",
               "level": "error",
               "event": "workbench.record.error",
-              "fields": { "where": "library", "text": "folder is missing" }
+              "fields": { "where": "home", "text": "folder is missing" }
             },
             {
               "ts_us": "$ts-us-2",
@@ -56,7 +56,7 @@
               "start": "$page-identity",
               "level": "error",
               "event": "workbench.record.error",
-              "fields": { "where": "library", "text": "registry failed" }
+              "fields": { "where": "home", "text": "registry failed" }
             },
             {
               "ts_us": "$ts-us-3",
@@ -64,7 +64,7 @@
               "start": "$page-identity",
               "level": "error",
               "event": "workbench.record.error",
-              "fields": { "where": "library", "text": "registry failed" }
+              "fields": { "where": "home", "text": "registry failed" }
             }
           ]
         }

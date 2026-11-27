@@ -15,7 +15,7 @@ import { pageIdentity } from "./page-identity.js";
 import { pluginDiagnostics } from "./environment.js";
 import { onSettingsChange, pluginSettings, value as settingValue } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
-import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, reportModified, reportNotice, reportTitle, originHistory, tabOrigin,
+import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, reportDone, reportModified, reportNotice, reportPageNotice, reportProgress, reportTitle, originHistory, tabOrigin,
   unloadTab, viewRefusal } from "./tab-reports.js";
 import { icon } from "./icons.js";
 import { active, tabStateStore, tabStatesReady, waitForInitialProjectContext } from "./projects.js";
@@ -565,6 +565,8 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     pending,
     // The focus of the view is recorded for its surface (view-focus.js), which validates the value of the call tab.focus.
     tab: { ...tab, focus: (value) => setViewFocus(surface.surfaceId, value) },
+    // Page notices belong to no card, so their source is the plugin (docs/spec/notifications.md#plugin-notices).
+    page: { notify: (fields) => reportPageNotice(fields, surface.pluginId), progress: reportProgress, done: reportDone },
     contributions: context.contributions,
     shortcuts: shortcutTable.shortcuts,
     emitEvent,
@@ -941,13 +943,16 @@ async function mountSurfaceNow(slot, surface, { onState = () => {}, retainedText
       },
         footer: (text) => reportFooter(surface.surfaceId, text),
         directory: (path) => reportDirectory(surface.surfaceId, path),
-        notify: (text, policy) => reportNotice(surface.surfaceId, text, policy),
+        notify: (fields) => reportNotice(surface.surfaceId, fields, surface.pluginId),
+        progress: (id, progress) => reportProgress(id, progress),
+        done: (id, kind, title) => reportDone(id, kind, title),
         modified: (value) => reportModified(surface.surfaceId, value), error: (text) => reportError(surface.surfaceId, text),
         keep: (reason, on) => reportKeep(surface.surfaceId, reason, on),
         ...(surface.unload ? { state: tabState(surface, () => entry.disposed) } : {}),
         params: surface.params },
+      page: { notify: (fields) => reportPageNotice(fields, surface.pluginId), progress: reportProgress, done: reportDone },
       origin: surfaceOrigin(surface),
-      // Canonical root of the project that the surface window shows (docs/spec/plugins.md#tab-reports). A library window has none.
+      // Canonical root of the project that the surface window shows (docs/spec/plugins.md#tab-reports). A project home window has none.
       project: active() ? { root: active().root } : null,
       icon,
       runtime: { sidecar: page.sidecar, native: pluginNativeGate(scoped.native), exposure: scoped.exposure, emit, on,

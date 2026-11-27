@@ -163,9 +163,9 @@ func TestTheTraceSwitchFollowsTheSetting(t *testing.T) {
 func TestTheTraceRecordsAFocusedCardWhileItIsOn(t *testing.T) {
 	stored := &storedHost{classes: traceClasses(), common: map[string]any{"diagnostics.log": traceClasses()}}
 	f := newShell(t, stored)
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	card := f.tabbedCards()[0]
 	traced := func() (rows []string) {
 		for _, name := range []string{"workbench.trace.action", "workbench.trace.command"} {

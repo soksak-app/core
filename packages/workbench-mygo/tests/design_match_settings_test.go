@@ -31,18 +31,18 @@ func groupLabeled(nodes []ui.ElementNode, label string) (ui.ElementNode, bool) {
 // The caption is laid out again with the font, the size and the line height it is drawn with, at the width of the pane, so the lines
 // it is drawn in are the lines read here.
 func TestTheFolderCaptionBreaksAfterItsSeparatorsInsideThePane(t *testing.T) {
-	root := "/Users/someone/work-tree/a b/name\\with/" + strings.Repeat("abcdefgh", 14) + "/end"
+	root := "/Users/someone/work-tree/a b/name\\with/" + strings.Repeat("abcdefgh", 40) + "/end"
 	project := storedProject(tab("tab-aaaaaa", "other"))
 	// A stored project is the folder whose identity the host answers for its root, as a project opened at that root.
 	project["root"], project["identity"] = root, "identity of "+root
 	f := newTabShell(t, &storedHost{projects: []map[string]any{project}})
 	f.open(t)
 	f.click("core.chrome.settings", "")
-	f.shellFixture.run("core.settings-modal.scope", map[string]any{"scope": "project"})
+	f.shellFixture.run("core.settings-tab.scope", map[string]any{"scope": "project"})
 	nodes := f.tester.ElementTree()
-	folder, ok := exposedNode(nodes, "core.settings-modal.folder", "")
+	folder, ok := exposedNode(nodes, "core.settings-tab.folder", "")
 	if !ok {
-		t.Fatalf("the project scope has no element core.settings-modal.folder; the texts are %q", f.tester.Texts())
+		t.Fatalf("the project scope has no element core.settings-tab.folder; the texts are %q", f.tester.Texts())
 	}
 	if folder.Label != root {
 		t.Fatalf("the caption shows %q, not the whole path %q", folder.Label, root)

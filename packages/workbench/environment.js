@@ -237,7 +237,7 @@ export function pluginAccounts(id) {
 export const pluginDiagnostics = (id) => diagnosticModules.then((modules) => modules.get(id) ?? null);
 
 /**
- * Returns the installed plugins in id order. The settings window and the plugin list of the library use it.
+ * Returns the installed plugins in id order. The settings tab uses it.
  * It includes plugins without a surface. An item is {id, name, description, version, surface, composition, sections, dependencies}.
  */
 export const pluginUnits = () => units;

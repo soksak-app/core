@@ -30,21 +30,25 @@ Workbench는 사이드바를 순서의 역순으로 배치한다. 각 사이드�
 
 | 앞에 있는 화면 | 도구, 왼쪽부터 |
 | --- | --- |
-| 작업 화면 | 네 변의 스위치, 구분선, 설정 버튼 |
-| 설정 탭 | 없음 |
-| 프로젝트 홈 | 설정 버튼 |
+| 작업 화면 | 네 변의 스위치, 구분선, 설정 버튼, 종 |
+| 설정 탭 | 종 |
+| 프로젝트 홈 | 설정 버튼, 종 |
 
-SOKSAK 로고는 모든 화면에서 제목줄의 첫 element다. 로고는 `core.projects.browse`를 실행한다. 이 명령은 창에 프로젝트 홈을 보여 주며 현재 작업을 유지한다. 이 줄에는 다른 element가 없다. 카드 자동 정렬 버튼, 라이트·다크 모드 스위치, 플러그인 업데이트 컨트롤은 이 줄에 없다.
+SOKSAK 로고는 모든 화면에서 제목줄의 첫 element `core.chrome.projects`다. 로고는 `core.projects.browse`를 실행한다. 이 명령은 창에 프로젝트 홈을 보여 주며 현재 작업을 유지한다. 종을 뺀 이 줄에는 다른 element가 없다. 카드 자동 정렬 버튼, 라이트·다크 모드 스위치, 플러그인 업데이트 컨트롤은 이 줄에 없다.
 
 설정 버튼은 element `core.chrome.settings`다. 이 버튼은 `core.settings.open`을 실행하며, 툴팁은 설정 열기다. 화면마다 설정 입구가 하나이므로, 설정 탭이 앞에 있으면 설정 버튼이 없다.
 
 작업 화면의 제목줄에는 변마다 스위치 하나가 있으며, 고정된 순서 `left`, `right`, `top`, `bottom`으로 놓인다. Element는 `core.chrome.left`, `core.chrome.right`, `core.chrome.top`, `core.chrome.bottom`이고, 아이콘은 `panel-left`, `panel-right`, `panel-top`, `panel-bottom`이며, 툴팁은 왼쪽 사이드바 보이기, 오른쪽 사이드바 보이기, 위 사이드바 보이기, 아래 사이드바 보이기다. 스위치는 변의 적용 값을 보여 주며, 그 적용 값이 나온 범위로 `core.settings.change {key: <side>, value: <적용 값의 반대>, scope}`를 실행한다. 범위는 선택한 프로젝트가 그 변을 덮어쓰면 `project`, 아니면 `common`이다. 그러므로 누르면 스위치가 보여 주는 값만 바뀌고 프로젝트 값은 추가되지 않는다([컨트롤의 범위](settings.ko.md#컨트롤의-범위)). 적용 값이 참이면 스위치는 눌린 상태로 보인다. 누르면 그 차례에 값을 적용한다. 누른 뒤 첫 프레임은 바뀐 사이드바로 plane을 그리고 섹션 surface를 배치한다. 이 프레임과 배치는 뒤따르는 설정 쓰기를 기다리지 않는다. 명령은 host가 설정을 쓴 뒤에 응답한다.
 
-창 도구가 선언하는 element와 명령은 다음과 같다. Element는 `core.chrome.settings`, `core.chrome.left`, `core.chrome.right`, `core.chrome.top`, `core.chrome.bottom`, `core.sidebar.fold`, `core.sidebar.edge`이고, 명령은 `core.settings.open`, `core.settings.change`, `core.projects.browse`다.
+종은 element `core.chrome.notices`이며 모든 화면에서 제목줄의 마지막 element다. `core.notices.toggle`을 실행한다([종](notifications.ko.md#종)). 창 도구가 선언하는 element와 명령은 다음과 같다. Element는 `core.chrome.projects`, `core.chrome.settings`, `core.chrome.notices`, `core.chrome.left`, `core.chrome.right`, `core.chrome.top`, `core.chrome.bottom`, `core.sidebar.fold`, `core.sidebar.edge`이고, 명령은 `core.settings.open`, `core.settings.change`, `core.projects.browse`, `core.notices.toggle`이다.
+
+## 상태줄
+
+메인 창은 작업 화면이나 설정 탭이 앞에 있는 동안 아래 가장자리에 상태줄이 있다. 프로젝트 홈에는 없다. 상태줄은 왼쪽부터 창의 프로젝트 이름(element `core.statusbar.project`, 상태 `core.project`에서), `카드 n` 형식의 그리드 카드 수(element `core.statusbar.cards`, 상태 `core.grid`에서. 네 변 이름은 카드가 아니므로 뺀다), `·`로 나눈 창의 테마와 모드(element `core.statusbar.theme`, 설정 `theme`과 `mode`에서), 오른쪽의 단축키 안내 `⌘, 설정`을 보인다. 단축키 안내는 요소가 아니라 글자이며, 화면마다 설정 입구가 하나이기 때문이다([설정](settings.ko.md#열기와-닫기)). 상태줄은 그릴 때 값을 읽고, 높이는 토큰 `statusbar-h`다.
 
 ## 사이드바 머리와 가장자리
 
-그려진 각 창 사이드바의 머리는 자기 변이 배치 순서에서 차지하는 위치를 보여 준다. 위치는 `sidebarOrder`에서 1부터 센 변의 번호다. 포인터가 사이드바 위에 있거나 사이드바에 포커스가 있으면 머리에 × 버튼도 보인다. 이 버튼은 element `core.sidebar.fold`이며, 변의 적용 값이 나온 범위로 `core.settings.change {key: <side>, value: false, scope}`를 실행한다.
+그려진 각 창 사이드바의 머리는 사이드바의 맨 위 줄이며, 세트 아래에 상태줄이 없다. 머리는 왼쪽부터 자기 변이 배치 순서에서 차지하는 위치(`sidebarOrder`에서 1부터 센 변의 번호, element `core.sidebar.head`가 텍스트로 가진다), 보이는 세트의 이름, 그 세트의 배치 배지 `탭` 또는 `목록`, 오른쪽의 × 버튼을 보인다. 세트가 없으면 변 이름(왼쪽, 오른쪽, 위, 아래)을 보이고 배지는 없다. 포인터가 사이드바 위에 있거나 사이드바에 포커스가 있으면 × 버튼이 보인다. 이 버튼은 element `core.sidebar.fold`이며, 변의 적용 값이 나온 범위로 `core.settings.change {key: <side>, value: false, scope}`를 실행한다.
 
 설정된 선택이 있는 변이 꺼져 있으면, 포인터가 사이드바가 놓일 가장자리 위에 있을 때 `+ <side>` 버튼을 보인다. 변의 이름은 왼쪽, 오른쪽, 위, 아래다. 버튼은 `core.settings.change {key: <side>, value: true, scope}`를 실행한다. 이는 변 스위치의 명령이며, 범위는 그 변의 범위다. Element는 `core.sidebar.edge`이며, 구현이 이 버튼과 함께 선언한다.
 

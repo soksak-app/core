@@ -107,26 +107,19 @@ test("an update changes the title or the layout only", () => {
   assert.throws(() => updateSet(sets, "set-1", { sections: ["alpha.two"] }), /unknown field sections/);
 });
 
-test("section rows choose, move, remove, and add sections without repeating one", () => {
+test("section rows add the named section and remove one, without repeating a section", () => {
   const registered = ["alpha.one", "alpha.two", "beta.one"];
   const start = [{ id: "set-1", title: "묶음", sections: ["alpha.one", "beta.one"], layout: "list" }];
   const rows = (list) => list[0].sections;
-  assert.deepEqual(rows(changeRow(start, "set-1", { action: "choose", index: 0, section: "alpha.two" }, registered)),
-    ["alpha.two", "beta.one"]);
-  assert.deepEqual(rows(changeRow(start, "set-1", { action: "up", index: 1 }, registered)), ["beta.one", "alpha.one"]);
-  assert.deepEqual(rows(changeRow(start, "set-1", { action: "down", index: 0 }, registered)), ["beta.one", "alpha.one"]);
   assert.deepEqual(rows(changeRow(start, "set-1", { action: "remove", index: 0 }, registered)), ["beta.one"]);
-  assert.deepEqual(rows(changeRow(start, "set-1", { action: "add" }, registered)), ["alpha.one", "beta.one", "alpha.two"]);
+  assert.deepEqual(rows(changeRow(start, "set-1", { action: "add", section: "alpha.two" }, registered)), ["alpha.one", "beta.one", "alpha.two"]);
   assert.deepEqual(rows(start), ["alpha.one", "beta.one"], "a row change must not change the given list");
-  assert.throws(() => changeRow(start, "set-1", { action: "choose", index: 0, section: "beta.one" }, registered),
-    /section beta.one is already in set set-1/);
-  assert.throws(() => changeRow(start, "set-1", { action: "up", index: 0 }, registered), /row 0 cannot move up/);
-  assert.throws(() => changeRow(start, "set-1", { action: "down", index: 1 }, registered), /row 1 cannot move down/);
-  assert.throws(() => changeRow(start, "set-1", { action: "remove", index: 5 }, registered), /no row 5/);
-  assert.throws(() => changeRow(start, "set-1", { action: "choose", index: 0, section: "gamma.one" }, registered), /unknown section gamma.one/);
-  const full = [{ ...start[0], sections: [...registered] }];
-  assert.throws(() => changeRow(full, "set-1", { action: "add" }, registered), /set set-1 already contains every registered section/);
-  assert.throws(() => changeRow(start, "set-1", { action: "jump" }, registered), /unknown row action jump/);
+  assert.throws(() => changeRow(start, "set-1", { action: "add", section: "beta.one" }, registered), /section beta.one is already in set set-1/);
+  assert.throws(() => changeRow(start, "set-1", { action: "add", section: "gamma.one" }, registered), /unknown section gamma.one/);
+  assert.throws(() => changeRow(start, "set-1", { action: "remove", index: 5 }, registered), /set set-1 has no row 5/);
+  for (const action of ["choose", "up", "down", "jump"]) {
+    assert.throws(() => changeRow(start, "set-1", { action, index: 0, section: "alpha.two" }, registered), new RegExp(`unknown row action ${action}`));
+  }
 });
 
 test("the plugin search matches id, name, or description without letter case", () => {

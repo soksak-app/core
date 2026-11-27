@@ -102,9 +102,9 @@ func projectWithPlugins(t *testing.T) *shellFixture {
 func projectOn(t *testing.T, host *storedHost) *shellFixture {
 	t.Helper()
 	f := newShell(t, host)
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	return f
 }
 
@@ -218,7 +218,9 @@ func TestANarrowHeadHasTheToolMenuAndTheTabList(t *testing.T) {
 	f.run("core.card.add-tab", map[string]string{"card": card, "plugin": "acme"})
 	// The window holds a head too narrow for its tools and wide enough for tab-min-w beside the kept tools
 	// (docs/spec/example-model.md#card-tabs).
-	f.tester.SetSize(220, 500)
+	// The window is 500 points of plane and the status bar below it (docs/spec/external-sidebars.md#status-bar), so the plane keeps the
+	// height that leaves the card its split below.
+	f.tester.SetSize(220, 500+int(statusBarHeight(t)))
 	f.settle()
 	if f.has("core.card.add", card) || !f.has("core.card.tools", card) || !f.has("core.card.tab-list", card) {
 		t.Fatalf("the head has the tools %v, the menu %v and the list %v", f.has("core.card.add", card), f.has("core.card.tools", card), f.has("core.card.tab-list", card))
@@ -340,9 +342,10 @@ func TestScreenStatusNamesTheOpenModal(t *testing.T) {
 	if got := read(); got != `{"screen":"workspace","modal":"picker"}` {
 		t.Fatalf("the status is %s", got)
 	}
+	f.run("core.picker.close", nil)
 	f.run("core.settings.open", nil)
-	if got := read(); got != `{"screen":"workspace","modal":"settings"}` {
-		t.Fatalf("the status is %s", got)
+	if got := read(); got != `{"screen":"workspace","modal":null}` {
+		t.Fatalf("the settings tab is a tab, not a modal, and the status is %s", got)
 	}
 }
 
@@ -434,9 +437,9 @@ func TestAddTabStoresTheDeclaredParamsAndFocusesTheCard(t *testing.T) {
 func TestAPluginWithoutDeclaredParamsRefusesThem(t *testing.T) {
 	f := newShell(t, &storedHost{installed: `{"plugins":[{"id":"plain","package":"plain","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"plain","name":"Plain","description":"plain","mark":"Pl","icon":"<path d=\"M1 1h14\"/>",
 		"surface":{"composition":{"kind":"view","page":"a.html"}}}}]}`})
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/alpha"})
+	f.run("core.home.form.submit", nil)
 	if _, err := f.answer("core.card.add-tab", map[string]any{"card": f.tabbedCards()[0], "plugin": "plain", "params": map[string]any{"path": "a"}}); err == nil || err.Error() != "plugin plain declares no tab params" {
 		t.Fatalf("the refusal is %v", err)
 	}

@@ -111,7 +111,7 @@ func layoutShell(t *testing.T, spaces ...map[string]any) *tabShell {
 	return f
 }
 
-// Opening a space runs the check of the stored layout that the library preview runs, so a layout that stores a member that
+// Opening a space runs the check of the stored layout that the project home preview runs, so a layout that stores a member that
 // docs/spec/groups.md#storage does not define, such as the format member of the earlier layout of lines, is refused with the
 // prefix of the space instead of opening without it (docs/spec/cases/layout/stored.json).
 func TestOpeningASpaceRefusesALayoutMemberThatTheStorageDoesNotDefine(t *testing.T) {
@@ -1237,7 +1237,7 @@ func TestTheRoleStatusIsReadWithTheSurfaceOfItsRequest(t *testing.T) {
 }
 
 // The errors of the workbench show as toasts at the bottom of the window, one per distinct text, and each closes on its
-// own (docs/spec/exposure.md, core.workbench.error).
+// own (docs/spec/exposure.md, core.toasts).
 func TestTheWorkbenchErrorsShowAsToastsAndEachClosesOnItsOwn(t *testing.T) {
 	var lines []string
 	errors := workbench.NewShownErrors(func(line string) { lines = append(lines, line) })
@@ -1250,13 +1250,13 @@ func TestTheWorkbenchErrorsShowAsToastsAndEachClosesOnItsOwn(t *testing.T) {
 	if got := errors.Toasts(); len(got) != 2 {
 		t.Fatalf("a repeated text added a toast: %v", got)
 	}
-	if !errors.DismissToast("first failure") {
+	if !dismissNotice(t, errors, "first failure") {
 		t.Fatal("the first toast did not close")
 	}
 	if got := errors.Toasts(); !slices.Equal(got, []string{"second failure"}) {
 		t.Fatalf("the open toasts are %v", got)
 	}
-	if errors.DismissToast("first failure") {
+	if dismissNotice(t, errors, "first failure") {
 		t.Fatal("a closed toast closed again")
 	}
 	// The record rule is the change of the place: the repeated first failure is a change from the second, so it records.

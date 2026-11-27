@@ -722,49 +722,6 @@ func TestAViewSidecarSendCarriesTheIdentifiersOfItsArguments(t *testing.T) {
 	}
 }
 
-func TestACommandRequestIsRecorded(t *testing.T) {
-	cases := []struct {
-		name, params, level, failure string
-		run                          func(json.RawMessage) (any, error)
-	}{
-		{name: "a command that answers", params: `{"name":"core.library.window","params":{}}`, level: "debug", run: func(json.RawMessage) (any, error) { return 1, nil }},
-		{name: "a command that fails", params: `{"name":"core.library.window","params":{}}`, level: "warn", failure: "-32000: stored failure", run: func(json.RawMessage) (any, error) { return nil, errors.New("stored failure") }},
-		{name: "a refusal keeps its code", params: `{"name":"core.library.window","params":{}}`, level: "warn", failure: "1002: command core.library.window is not registered"},
-		{name: "a command without a declaration", params: `{"name":"core.unknown","params":{}}`, level: "warn", failure: "1001: unknown command core.unknown"},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			f := newWriter(t, nil)
-			f.follow("debug")
-			declared, err := workbench.Declared()
-			if err != nil {
-				t.Fatal(err)
-			}
-			registry := workbench.NewRegistry(declared)
-			registry.Record(f.events.Command)
-			if c.run != nil {
-				registry.Command("core.library.window", c.run)
-			}
-			if _, err := registry.Answer("command.run", json.RawMessage(c.params), nil); (err != nil) != (c.failure != "") {
-				t.Fatalf("the answer failed with %v", err)
-			}
-			f.sent()
-			event := f.host.event(t, "workbench.command")
-			fields := event["fields"].(map[string]any)
-			var name struct{ Name string }
-			if err := json.Unmarshal([]byte(c.params), &name); err != nil {
-				t.Fatal(err)
-			}
-			if event["level"] != c.level || fields["name"] != name.Name || fields["ok"] != (c.failure == "") {
-				t.Fatalf("the command is %v", event)
-			}
-			if got, _ := fields["error"].(string); got != c.failure {
-				t.Fatalf("the command states %q, not %q", got, c.failure)
-			}
-		})
-	}
-}
-
 func TestARequestThatNamesNoCommandIsNotRecorded(t *testing.T) {
 	f := newWriter(t, nil)
 	f.follow("debug")
@@ -869,7 +826,10 @@ func TestTheShellWritesItsEventsThroughTheHostCallLog(t *testing.T) {
 	for _, event := range stored.written("workbench.call") {
 		called = append(called, event["fields"].(map[string]any)["name"].(string))
 	}
-	if strings.Join(startCalls(called), " ") != "windowControls workspace windowReady notificationState pluginsState sidecarsOutdated sidecarsRetain" {
+	// The start reads the window chrome and the snapshot; the notice entries are read beside the tab states and do not block the first draw
+	// (docs/spec/notifications.md#notice-center). The plugin state, the outdated services (sidecarsOutdated,
+	// docs/spec/persistent-services.md#updates) and the retained sessions follow.
+	if strings.Join(startCalls(called), " ") != "windowControls workspace workspace windowReady setTheme notificationState pluginsState sidecarsOutdated sidecarsRetain" {
 		t.Fatalf("the shell recorded the calls %v", called)
 	}
 	if _, err := f.shell.Registry().Answer("command.run", json.RawMessage(`{"name":"core.unknown","params":{}}`), nil); err == nil {
@@ -916,6 +876,50 @@ func TestTheCloseOfTheWindowWaitsForTheQueuedEvents(t *testing.T) {
 
 // A command that the menu, a control, a view or a shortcut runs is recorded as a request command.run is, once: the page answers
 // every run of a command through command.run (docs/spec/logging.md#entrances).
+
+func TestACommandRequestIsRecorded(t *testing.T) {
+	cases := []struct {
+		name, params, level, failure string
+		run                          func(json.RawMessage) (any, error)
+	}{
+		{name: "a command that answers", params: `{"name":"core.home.show","params":{}}`, level: "debug", run: func(json.RawMessage) (any, error) { return 1, nil }},
+		{name: "a command that fails", params: `{"name":"core.home.show","params":{}}`, level: "warn", failure: "-32000: stored failure", run: func(json.RawMessage) (any, error) { return nil, errors.New("stored failure") }},
+		{name: "a refusal keeps its code", params: `{"name":"core.home.show","params":{}}`, level: "warn", failure: "1002: command core.home.show is not registered"},
+		{name: "a command without a declaration", params: `{"name":"core.unknown","params":{}}`, level: "warn", failure: "1001: unknown command core.unknown"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newWriter(t, nil)
+			f.follow("debug")
+			declared, err := workbench.Declared()
+			if err != nil {
+				t.Fatal(err)
+			}
+			registry := workbench.NewRegistry(declared)
+			registry.Record(f.events.Command)
+			if c.run != nil {
+				registry.Command("core.home.show", c.run)
+			}
+			if _, err := registry.Answer("command.run", json.RawMessage(c.params), nil); (err != nil) != (c.failure != "") {
+				t.Fatalf("the answer failed with %v", err)
+			}
+			f.sent()
+			event := f.host.event(t, "workbench.command")
+			fields := event["fields"].(map[string]any)
+			var name struct{ Name string }
+			if err := json.Unmarshal([]byte(c.params), &name); err != nil {
+				t.Fatal(err)
+			}
+			if event["level"] != c.level || fields["name"] != name.Name || fields["ok"] != (c.failure == "") {
+				t.Fatalf("the command is %v", event)
+			}
+			if got, _ := fields["error"].(string); got != c.failure {
+				t.Fatalf("the command states %q, not %q", got, c.failure)
+			}
+		})
+	}
+}
+
 func TestEveryRunOfACommandIsRecordedOnce(t *testing.T) {
 	declared, err := workbench.Declared()
 	if err != nil {
@@ -926,20 +930,20 @@ func TestEveryRunOfACommandIsRecordedOnce(t *testing.T) {
 	registry.Record(func(name string, _ time.Duration, failure error) {
 		recorded = append(recorded, fmt.Sprintf("%s %v", name, failure))
 	})
-	registry.Command("core.library.window", func(json.RawMessage) (any, error) { return 1, nil })
+	registry.Command("core.home.show", func(json.RawMessage) (any, error) { return 1, nil })
 	registry.CommandLater("core.projects.browse", func(_ json.RawMessage, answer func(any, error)) {
 		answer(nil, errors.New("stored failure"))
 	})
 	answered := 0
-	registry.RunLater("core.library.window", nil, func(any, error) { answered++ })
+	registry.RunLater("core.home.show", nil, func(any, error) { answered++ })
 	registry.RunLater("core.projects.browse", nil, func(any, error) { answered++ })
-	if _, err := registry.Run("core.library.window", nil); err != nil {
+	if _, err := registry.Run("core.home.show", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := registry.Answer("command.run", json.RawMessage(`{"name":"core.library.window","params":{}}`), nil); err != nil {
+	if _, err := registry.Answer("command.run", json.RawMessage(`{"name":"core.home.show","params":{}}`), nil); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"core.library.window <nil>", "core.projects.browse stored failure", "core.library.window <nil>", "core.library.window <nil>"}
+	want := []string{"core.home.show <nil>", "core.projects.browse stored failure", "core.home.show <nil>", "core.home.show <nil>"}
 	if answered != 2 || !reflect.DeepEqual(recorded, want) {
 		t.Fatalf("the runs answered %d times and recorded %q, want 2 answers and %q", answered, recorded, want)
 	}

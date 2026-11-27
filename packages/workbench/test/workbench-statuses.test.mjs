@@ -1,6 +1,6 @@
 // The statuses of the workbench describe the workbench of the window, not a page (docs/spec/exposure.md#workbench-statuses):
-// core.window.workbench names one start of the workbench, core.workbench.error its shown error and core.workbench.audit its
-// operable elements without a command or an element name. The page names that they replace are not declared.
+// core.window.workbench names one start of the workbench, core.toasts its shown toasts and core.workbench.audit its operable elements
+// without a command or an element name. The page names that they replace are not declared (docs/spec/notifications.md#commands-and-statuses).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -9,7 +9,7 @@ import { EXPOSURE_ERRORS } from "@soksak/plugin-api";
 import { selectPageWire } from "@soksak/runtime";
 import { pageMemorySaver } from "./support/memory-saver.mjs";
 
-test("core.window.workbench, core.workbench.error and core.workbench.audit describe the workbench and the page names are refused", { timeout: 5000 }, async () => {
+test("core.window.workbench, core.toasts and core.workbench.audit describe the workbench and the page names are refused", { timeout: 5000 }, async () => {
   // The case selects the host of the page before the modules below are imported, because the page reads the host when it is imported.
   const wire = selectPageWire("workbench-statuses-notifications");
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
@@ -34,7 +34,7 @@ test("core.window.workbench, core.workbench.error and core.workbench.audit descr
   try {
     await installCoreExposure({
       memorySaver: await pageMemorySaver(),
-      library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+      home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
     });
 
     const { result: workbench } = await get("core.window.workbench");
@@ -51,10 +51,11 @@ test("core.window.workbench, core.workbench.error and core.workbench.audit descr
       skipped: [{ name: "V7c", note: "b" }],
     } }, "a skipped check is neither a row nor a failure");
 
-    assert.deepEqual(await get("core.workbench.error"), { result: null }, "a workbench that shows no error reports null");
+    assert.deepEqual(await get("core.toasts"), { result: [] }, "a workbench that shows no toast reports an empty list");
+    assert.equal((await get("core.workbench.error")).error?.code, 1001, "the replaced status core.workbench.error is not declared");
     for (const text of ["", "an unknown error"]) {
       const refusal = await registry.handle({ method: "command.run", params: {
-        name: "core.error.dismiss", params: { text },
+        name: "core.notices.close", params: { text },
       } });
       assert.equal(refusal.error?.code, EXPOSURE_ERRORS.invalidParams, JSON.stringify(refusal));
     }
@@ -66,7 +67,7 @@ test("core.window.workbench, core.workbench.error and core.workbench.audit descr
       [{ role: "button", expose: null, command: null, text: "Loose" }]);
 
     await assert.rejects(registry.run("core.focus.set", { name: "core.fixture.absent", index: 0 }), /^Error: unknown element core\.fixture\.absent$/);
-    await assert.rejects(registry.run("core.focus.set", { name: "core.brand", index: 9 }), /^Error: element core\.brand has no element at index 9$/);
+    await assert.rejects(registry.run("core.focus.set", { name: "core.chrome.projects", index: 9 }), /^Error: element core\.chrome\.projects has no element at index 9$/);
 
     // The host asks the last placement of the workbench before it waits for the presentation of the window; a workbench
     // that has not placed a layout answers at once.

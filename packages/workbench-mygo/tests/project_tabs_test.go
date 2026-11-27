@@ -15,9 +15,9 @@ func twoProjects(t *testing.T) (*shellFixture, string, string) {
 	t.Helper()
 	f := openedShell(t)
 	f.run("core.settings.set", map[string]any{"patch": map[string]any{"projectOpening": "tabs"}, "scope": "common"})
-	f.run("core.library.form.open", map[string]string{"mode": "open"})
-	f.run("core.library.form.set", map[string]string{"field": "parent", "value": "/work/beta"})
-	f.run("core.library.form.submit", nil)
+	f.run("core.home.form.open", map[string]string{"mode": "open"})
+	f.run("core.home.form.set", map[string]string{"field": "parent", "value": "/work/beta"})
+	f.run("core.home.form.submit", nil)
 	f.settle()
 	return f, f.host.projects[0]["id"].(string), f.host.projects[1]["id"].(string)
 }
@@ -63,15 +63,16 @@ func TestTheLeftColumnHoldsTheProjectTabs(t *testing.T) {
 	if f.has("core.projects.column", "") {
 		t.Fatal("a column in the top mode")
 	}
-	top := f.box("core.card", f.cardsOf()[0]["id"].(string))
+	top := f.box("core.card", f.cardsOf()[0]["card"].(string))
 	f.run("core.settings.set", map[string]any{"patch": map[string]any{"projectTabs": "left"}})
 	f.settle()
 	column := f.box("core.projects.column", "")
 	if column.X != 0 || column.W != 64 {
 		t.Fatalf("the column is at %+v", column)
 	}
-	if column.Y+column.H != fixtureHeight {
-		t.Fatalf("the column ends at %v, not at the bottom %v", column.Y+column.H, fixtureHeight)
+	// The column runs to the status bar, which stands under the work area (docs/spec/external-sidebars.md#status-bar).
+	if want := fixtureHeight - statusBarHeight(t); column.Y+column.H != want {
+		t.Fatalf("the column ends at %v, not at the status bar %v", column.Y+column.H, want)
 	}
 	for _, id := range []string{first, second} {
 		tab := f.box("core.project-tab", id)
@@ -83,7 +84,7 @@ func TestTheLeftColumnHoldsTheProjectTabs(t *testing.T) {
 	if add.H != 24 || add.X < column.X || add.X+add.W > column.X+column.W {
 		t.Fatalf("the add button is at %+v", add)
 	}
-	card := f.box("core.card", f.cardsOf()[0]["id"].(string))
+	card := f.box("core.card", f.cardsOf()[0]["card"].(string))
 	if card.X != top.X+column.W || card.Y != top.Y {
 		t.Fatalf("the card is at %+v, and at %+v before", card, top)
 	}
@@ -93,7 +94,7 @@ func TestTheLeftColumnHoldsTheProjectTabs(t *testing.T) {
 	}
 	f.run("core.projects.browse", nil)
 	if f.has("core.projects.column", "") {
-		t.Fatal("a column in the library")
+		t.Fatal("a column in the project home")
 	}
 }
 

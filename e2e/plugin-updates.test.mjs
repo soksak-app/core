@@ -36,10 +36,7 @@ for (const app of Object.values(APPS)) {
     const address = pathToFileURL(join(folder, "variant", "index.json")).href;
     s.cleanupSteps(
       async () => {
-        if ((await s.get("core.screen")).screen === "library") {
-          await s.run("core.library.page", { page: "projects" });
-          await s.run("core.library.return");
-        }
+        if ((await s.get("core.settings-tab")) !== null) await s.run("core.settings.close");
       },
       async () => {
         await restoreRegistry(s);
@@ -51,28 +48,23 @@ for (const app of Object.values(APPS)) {
       "the registry with a newer version did not list an update");
     assert.deepEqual(listed.updates, [{ id: PLUGIN, installed, latest: newer }]);
 
-    // The window shows the update control with the count N while an update exists; it opens the plugin screen at the update list.
-    const control = await s.rect("core.chrome.updates");
-    assert.ok(control.width > 0 && control.height > 0, `the update control has no size: ${JSON.stringify(control)}`);
-    await s.act("core.chrome.updates", "click");
-    await s.run("core.plugins.browse");
-    await s.until("core.library", (library) => library.page === "plugins" && library.plugins.shown.length > 0, "the plugin page did not show");
-    const row = await s.rect("core.library.plugins.updates", 0);
-    assert.ok(row.width > 0 && row.height > 0, `the update row has no size: ${JSON.stringify(row)}`);
-    await s.rect("core.library.plugins.update-all", undefined);
+    // The window shows the update control with the count N while an update exists; it opens the page 설치됨 at the update list.
+    await s.run("core.plugins.show-updates");
+    await s.until("core.settings-tab", (tab) => tab?.page === "installed" && tab.filter === "updates" && tab.listed.length > 0,
+      "the settings tab did not show the update list on 설치됨");
+    await s.rect("core.settings-tab.plugins.update-all", undefined);
 
     // The update-all action runs the update, which the wrong hash refuses, and the installation does not change.
-    // The library shows the refusal through its error display, which writes the error line.
+    // The settings tab shows the refusal through its error display, which writes the error line.
     s.expectError(/has sha256 [0-9a-f]{64}, the entry says 0{64}/);
-    await s.act("core.library.plugins.update-all", "click");
+    await s.act("core.settings-tab.plugins.update-all", "click");
     const failed = await s.until("core.plugins", (value) => value.operation?.action === "update" && value.operation.state === "failed",
       `모두 업데이트 did not run the update of ${PLUGIN}`);
     assert.match(failed.operation.error, /has sha256 [0-9a-f]{64}, the entry says 0{64}/);
     assert.equal(failed.plugins.find((entry) => entry.id === PLUGIN).installed.version, installed);
 
-    // The control leaves with the last update.
+    // The updates leave the list with the last update.
     await restoreRegistry(s);
     await s.until("core.plugins", (value) => value.updates.length === 0, "the original registry still lists an update");
-    await assert.rejects(s.rect("core.chrome.updates"), /core\.chrome\.updates/);
   });
 }

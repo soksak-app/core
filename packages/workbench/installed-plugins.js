@@ -2,6 +2,7 @@
 import { host } from "@soksak/runtime";
 import { pluginUnits, refusedPlugins, unmetPlugins } from "./environment.js";
 import { createAppUpdate } from "./app-update.js";
+import { setPluginRows } from "./missing-plugins.js";
 import { createPluginOperations } from "./plugin-operations.js";
 import { emitEvent } from "./page-log.js";
 import { showError } from "./shown-errors.js";
@@ -10,6 +11,8 @@ const listeners = new Set();
 const notify = () => { for (const fn of listeners) fn(); };
 
 export const pluginOperations = createPluginOperations({ host, loaded: pluginUnits, refused: refusedPlugins, unmet: unmetPlugins, changed: notify });
+// The states of the missing plugins of the sets and the sidebars come from these rows (docs/spec/plugins.md#missing-plugins).
+setPluginRows(() => pluginOperations.status().plugins);
 
 /** The application update of this window (app-update.js), which redraws the same listeners. */
 export const appUpdate = createAppUpdate({ host, plugins: () => pluginOperations.state(), changed: notify });

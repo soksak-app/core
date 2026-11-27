@@ -314,7 +314,7 @@ func (a *Accounts) change(plugin string, next func([]accountRecord) ([]accountRe
 				attempt(reads + 1)
 				return
 			}
-			a.shell.options.Invalidate()
+			a.shell.settingsInputsChanged()
 			done(nil)
 		})
 		if err != nil {
@@ -510,7 +510,7 @@ func (a *Accounts) readState(plugin, id string) {
 				a.states[plugin] = map[string]accountState{}
 			}
 			a.states[plugin][id] = state
-			a.shell.options.Invalidate()
+			a.shell.settingsInputsChanged()
 		})
 	})
 }
@@ -530,7 +530,7 @@ func (a *Accounts) readStates(plugin string) {
 // fail shows err through the error display with the place settings <plugin>.
 func (a *Accounts) fail(plugin string, err error) {
 	a.shell.errors.Show("settings "+plugin, err.Error(), "")
-	a.shell.options.Invalidate()
+	a.shell.settingsInputsChanged()
 }
 
 // freeAccountID is the least account-<n> that no record and no home has.
@@ -663,7 +663,7 @@ func (a *Accounts) Remove(plugin, id string, answer func(error)) {
 		}
 		delete(a.states[plugin], id)
 		a.shell.calls.Call("accountHomeRemove", map[string]any{"plugin": plugin, "id": id}, func(_ any, err error) {
-			a.shell.options.Invalidate()
+			a.shell.settingsInputsChanged()
 			answer(err)
 		})
 	})
@@ -684,10 +684,10 @@ func (a *Accounts) Login(plugin, id string, answer func(error)) {
 	}
 	a.run(plugin, "login", record, func(run int) {
 		a.logins[plugin][id] = run
-		a.shell.options.Invalidate()
+		a.shell.settingsInputsChanged()
 	}, func(reply *programReply, err error) {
 		delete(a.logins[plugin], id)
-		a.shell.options.Invalidate()
+		a.shell.settingsInputsChanged()
 		if err == nil && reply != nil {
 			a.readState(plugin, id)
 		}

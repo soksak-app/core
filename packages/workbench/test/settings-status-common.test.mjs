@@ -23,7 +23,7 @@ test("core.settings reports the common value of a setting that the project overr
   try {
     await installCoreExposure({
       memorySaver: await pageMemorySaver(),
-      library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+      home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
     });
     beginSettings({ common: { gap: 8 }, projects: [{ id: "prj-a", root: "/work/a", settings: { gap: 12 } }] }, "prj-a");
     const reply = await registry.handle({ method: "status.get", params: { name: "core.settings" } });

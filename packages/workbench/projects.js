@@ -10,6 +10,7 @@ import { windows } from "@soksak/runtime";
 import { log, retainSidecarSessions, windowSidecar } from "./host.js";
 import { comparePluginData, compareProjectData, configureData } from "./plugin-data.js";
 import { openTabStates } from "./tab-state.js";
+import { openNotices } from "./notices-file.js";
 import { errorToasts, hideError } from "./shown-errors.js";
 import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
@@ -20,8 +21,8 @@ import { stateCards } from "./layout-tree.js";
 let store;
 let projects = [];
 let activeProjectId = null;
-// The project that the library address of a start names: the project that the window held when it showed the library, which the
-// library returns to although the start does not draw it (docs/spec/installation.md#applying-a-change, F1149-1). A shown project
+// The project that the project home address of a start names: the project that the window held when it showed the project home, which the
+// project home returns to although the start does not draw it (docs/spec/installation.md#applying-a-change, F1149-1). A shown project
 // replaces it.
 let returnTo = null;
 let browsing = true;
@@ -69,7 +70,7 @@ export const tabSessionStore = () => tabSessions;
 export const tabStatesReady = () => tabStatesTried;
 /** Resolves with whether the tab state store opened; callers that place startup views must reject a failed open. */
 export const tabStatesOpened = () => tabStatesOpenResult;
-/** Waits until the first project layout has committed its context or has been cleared back to the library. */
+/** Waits until the first project layout has committed its context or has been cleared back to the project home. */
 export async function waitForInitialProjectContext() {
   const outcome = await initialContextPromise;
   if (!outcome.ok) throw outcome.reason;
@@ -199,18 +200,18 @@ export function layoutSurfaces() {
 function spaceCards() {
   return new Map(projects.flatMap((project) => project.spaces.map((space) => [space.id, new Set(stateCards(space.layout.state).map((card) => card.id))])));
 }
-// default: a window without an active project (the library) has null.
+// default: a window without an active project (the project home) has null.
 export const active = () => projects.find((p) => p.id === activeProjectId) ?? null;
-/** The project that the way back of the library opens: the shown project, else the project that the library address names. */
-// default: a library without a shown project and without a way back has null.
+/** The project that the way back of the project home opens: the shown project, else the project that the project home address names. */
+// default: a project home without a shown project and without a way back has null.
 export const returnable = () => active() ?? projects.find((p) => p.id === returnTo) ?? null;
 export const local = () => projects.filter((p) => owned.has(p.id));
-export const inLibrary = () => browsing;
+export const inHome = () => browsing;
 export const isOpen = (id) => openProjects.has(id) || owned.has(id);
 /**
- * Finishes the transitions that change the plane (opening the library, activating a project) in the order received.
+ * Finishes the transitions that change the plane (opening the project home, activating a project) in the order received.
  *
- * Opening the library waits while the plane is emptied. If an activation started meanwhile filled the plane first, the emptying that finished later would erase the plane of the active project.
+ * Opening the project home waits while the plane is emptied. If an activation started meanwhile filled the plane first, the emptying that finished later would erase the plane of the active project.
  */
 /*
  * Runs an awaited step of a project operation. While diagnostics.fixture runs, the fixture records each step as the event
@@ -226,34 +227,34 @@ let switching = Promise.resolve();
 function inTurn(run) {
   const turn = switching;
   const done = awaited("projects.turn", () => turn).then(run);
-  // The caller that received done reports a failure (command, library, window activation, start document). The next transition runs regardless of an earlier failure.
+  // The caller that received done reports a failure (command, project home, window activation, start document). The next transition runs regardless of an earlier failure.
   switching = done.then(undefined, () => undefined);
   return done;
 }
 
 /*
- * The library state and the screen change together in the drawing that empties the plane (showLibrary). That drawing is an animation frame, which runs before the observation round, so the emptied plane and the visible library appear in one frame, and the transition that hides the work area does not run inside the round. Measured fact: previously this transition ran inside a callback slot of the files tree observer (F43). A path that started a transition in that slot is reported by the diagnostic recorder (resize-loop.js) through the stack of the body dataset write.
+ * The project home state and the screen change together in the drawing that empties the plane (showHomeScreen). That drawing is an animation frame, which runs before the observation round, so the emptied plane and the visible project home appear in one frame, and the transition that hides the work area does not run inside the round. Measured fact: previously this transition ran inside a callback slot of the files tree observer (F43). A path that started a transition in that slot is reported by the diagnostic recorder (resize-loop.js) through the stack of the body dataset write.
  */
-function showLibrary() {
+function showHomeScreen() {
   browsing = true;
   changed();
 }
 
 /**
- * Empties the plane and shows the library in that drawing. Even if the drawing fails, the transition ends at the library. The layout queue
+ * Empties the plane and shows the project home in that drawing. Even if the drawing fails, the transition ends at the project home. The layout queue
  * reported the failure. The address names no project, so a reload of the page, such as the apply of a plugin change, starts at the
- * library (docs/spec/installation.md#applying-a-change).
+ * project home (docs/spec/installation.md#applying-a-change).
  */
-async function emptyToLibrary() {
-  await awaited("projects.read.empty", () => listener.empty(showLibrary));
+async function emptyToHome() {
+  await awaited("projects.read.empty", () => listener.empty(showHomeScreen));
   browsing = true;
-  // A new start of the page, such as the apply of a plugin change, starts at the library and keeps the way back to the project that
+  // A new start of the page, such as the apply of a plugin change, starts at the project home and keeps the way back to the project that
   // the window holds, without drawing it (F1149, F1149-1).
   const held = returnable();
   history.replaceState(null, "", held === null ? location.pathname : `${location.pathname}?library=${encodeURIComponent(held.id)}`);
 }
 
-export function browse() {
+export function showHome() {
   return inTurn(async () => {
     await flush();
     const previous = { id: activeProjectId, browsing };
@@ -264,7 +265,7 @@ export function browse() {
       try { await selectProject(previous.browsing ? null : previous.id); } catch (restoreError) { failed(restoreError); }
       throw error;
     }
-    await emptyToLibrary();
+    await emptyToHome();
     changed();
   });
 }
@@ -304,7 +305,7 @@ async function setPluginData(id, plugin, key, value) {
 
 /**
  * Draws the first screen from the snapshot of the start document (docs/spec/native-host.md#page-start): the layout of
- * the active space of the project in the address when the plane can open it, or else the library. The activation of
+ * the active space of the project in the address when the plane can open it, or else the project home. The activation of
  * initialise then checks the folder, owns the window and reports its failures.
  */
 export function begin(snapshot) {
@@ -313,9 +314,9 @@ export function begin(snapshot) {
   openProjects = new Set(snapshot.open ?? []);
   projects = snapshot.projects;
   const address = new URL(location.href).searchParams;
-  // default: a window that names no project, or a project that is not in the registry, starts at the library.
+  // default: a window that names no project, or a project that is not in the registry, starts at the project home.
   const requested = projects.find((p) => p.id === address.get("project")) ?? null;
-  // default: an address without a library project, or one that no window holds open, gives the library no way back.
+  // default: an address without a project home project, or one that no window holds open, gives the project home no way back.
   returnTo = projects.some((p) => p.id === address.get("library") && openProjects.has(p.id)) ? address.get("library") : null;
   const layout = requested?.spaces.find((s) => s.id === requested.activeSpaceId)?.layout;
   let opened = null;
@@ -324,14 +325,14 @@ export function begin(snapshot) {
       checkProject(requested);
       opened = requested;
     } catch {
-      // silent: for a project that the window cannot open, the activation of initialise reports the error and the window stays at the library.
+      // silent: for a project that the window cannot open, the activation of initialise reports the error and the window stays at the project home.
     }
   }
   prepareInitialProjectContext(Boolean(opened));
   // default: when no project was opened, the settings have no project either.
   beginSettings(snapshot, opened?.id ?? null);
   if (!opened) {
-    // The first screen is the library, so no project is shown or resumed.
+    // The first screen is the project home, so no project is shown or resumed.
     activeProjectId = null;
     browsing = true;
     begun = null;
@@ -412,6 +413,10 @@ async function initialiseWindow(storage, unloadOf) {
   } finally {
     triedTabStates();
   }
+  // The notice center is read in the background: the first draw does not wait for the file, and the restored entries join when the
+  // reply arrives. A failed read or write is shown through the error display (docs/spec/notifications.md#notice-center).
+  // openNotices ends the writer of an earlier start, so each change of the notices is written once.
+  openNotices({ host: store, failed: (error) => errorToasts(document).show(error.message, "", "notices file", "notices file") });
   // A stored layout that cannot be read leaves the tab ids unknown, so the store keeps every entry and the error is
   // shown; opening that project reports the same layout again.
   try {
@@ -432,7 +437,7 @@ async function initialiseWindow(storage, unloadOf) {
   if (first) {
     try { await activate(first.id); } catch (error) { failed(error); }
   }
-  // When the project drawn on the first screen could not be activated, the window returns to the library.
+  // When the project drawn on the first screen could not be activated, the window returns to the project home.
   if (begun !== null && !owned.has(begun)) await leaveBegun();
   begun = null;
   await windows.ready();
@@ -459,12 +464,12 @@ function failed(error) { dispatchEvent(new ErrorEvent("error", { message: error.
 function writeFailed(source, error) { errorToasts(document).show(error.message, "", source); }
 function writeStored(source) { hideError(document, source); }
 
-/** Closes the project that was drawn on the first screen but could not be opened, and shows the library. */
+/** Closes the project that was drawn on the first screen but could not be opened, and shows the project home. */
 async function leaveBegun() {
   activeProjectId = null;
   savedLayout = "";
   await selectProject(null);
-  await emptyToLibrary();
+  await emptyToHome();
   finishInitialProjectContext();
 }
 
@@ -479,7 +484,7 @@ function refresh(read) {
 }
 
 /**
- * Reads the registry again, and when the active project of this window disappeared, opens the first remaining project of this window, as closing a project tab does. When no project remains, the window stays at the library that readProjects showed (docs/spec/projects.md#settings). The activation waits for refresh, so it is not done inside readProjects.
+ * Reads the registry again, and when the active project of this window disappeared, opens the first remaining project of this window, as closing a project tab does. When no project remains, the window stays at the project home that readProjects showed (docs/spec/projects.md#settings). The activation waits for refresh, so it is not done inside readProjects.
  */
 async function reread(read) {
   if (!(await refresh(read))) return;
@@ -543,7 +548,7 @@ async function readProjects(readSnapshot = () => store.snapshot()) {
     activeProjectId = null;
     savedLayout = "";
     await awaited("projects.read.selectProject", () => selectProject(null));
-    await inTurn(emptyToLibrary);
+    await inTurn(emptyToHome);
   } else if (removed.length && !browsing) listener?.update();
   if (removedProjects) {
     // The tabs of a removed project are in no layout. Whether this window removed the project or only showed it, this window first cleans up the surface modules of those surfaces and ends the sidecar sessions. If a module remains, it reopens the ended session, and when the folder of the removed project does not exist, that opening fails (F44). The host keeps the surface sessions of the remaining modules in retain (docs/spec/persistent-services.md).
@@ -643,7 +648,7 @@ async function showProject(id, openedProject = null, stagedOwner = false) {
   await awaited("projects.show.presented", () => listener.presented());
 }
 
-/** Reports the project that the window shows to the host, or null for the library. */
+/** Reports the project that the window shows to the host, or null for the project home. */
 function announceProject(project) {
   return windows.projectShown(project ? { id: project.id, root: project.root, title: project.title } : null);
 }

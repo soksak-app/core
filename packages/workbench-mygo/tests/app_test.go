@@ -194,8 +194,8 @@ func TestAStartShowsItsFirstScreenOnceTheProjectIsShown(t *testing.T) {
 	}
 }
 
-// The first window of a launch that names no project shows the library as its first screen, before the window is ready.
-func TestAStartAtTheLibraryShowsItsFirstScreenBeforeTheWindowIsReady(t *testing.T) {
+// The first window of a launch that names no project shows the project home as its first screen, before the window is ready.
+func TestAStartAtTheHomeShowsItsFirstScreenBeforeTheWindowIsReady(t *testing.T) {
 	stored := &storedHost{}
 	app, window, queue, _ := fixtureApp(t, stored)
 	window.shown = func() { stored.note("firstScreen") }
@@ -265,7 +265,7 @@ func TestAStartWithRefusedStoredFilesShowsTheirErrorsAndStarts(t *testing.T) {
 	}
 }
 
-// A window that names a project that is gone starts at the library, without an address that names it.
+// A window that names a project that is gone starts at the project home, without an address that names it.
 func TestAStartLeavesAnAddressOfAnUnknownProject(t *testing.T) {
 	stored := &storedHost{}
 	app, window, queue, _ := fixtureApp(t, stored)
@@ -285,7 +285,7 @@ func TestExposureRequestRunsACommandInAStep(t *testing.T) {
 	app.Shown(window)
 	window.settle(t, queue, tester)
 	app.Emit(window, "exposure-request", map[string]any{"id": 7, "method": "command.run",
-		"params": map[string]any{"name": "core.library.form.open", "params": map[string]string{"mode": "open"}}})
+		"params": map[string]any{"name": "core.home.form.open", "params": map[string]string{"mode": "open"}}})
 	window.settle(t, queue, tester)
 	if len(*replies) != 1 || (*replies)[0]["id"] != float64(7) || (*replies)[0]["error"] != nil {
 		t.Fatalf("the replies are %v", *replies)

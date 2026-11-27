@@ -225,7 +225,7 @@ func TestTheListGivesEveryDeclarationWithItsRegistration(t *testing.T) {
 
 func TestAWatchSendsTheCurrentValueAndEachChange(t *testing.T) {
 	declared := registry(t)
-	screen := "library"
+	screen := "home"
 	declared.Status("core.screen", func() any { return map[string]any{"screen": screen} })
 	r := newRelay(t, declared)
 	reply := r.ask("status.watch", `{"name":"core.screen"}`)
@@ -238,7 +238,7 @@ func TestAWatchSendsTheCurrentValueAndEachChange(t *testing.T) {
 		r.queue.run()
 		return line
 	}
-	if line := change(); line != `{"name":"core.screen","value":{"screen":"library"}}` {
+	if line := change(); line != `{"name":"core.screen","value":{"screen":"home"}}` {
 		t.Fatalf("the first value is %s", line)
 	}
 	declared.Changed()
@@ -253,7 +253,7 @@ func TestAWatchSendsTheCurrentValueAndEachChange(t *testing.T) {
 	if reply := r.ask("status.unwatch", `{"name":"core.screen"}`); reply["result"] != nil {
 		t.Fatalf("the end of the watch answered %v", reply)
 	}
-	screen = "library"
+	screen = "home"
 	declared.Changed()
 	if len(r.changes) != 0 {
 		t.Fatal("a value was sent after the watch ended")
@@ -316,9 +316,9 @@ func elementScene(t *testing.T) (*relay, *ui.Tester, *[]string, *string) {
 				binder.Press(c, "core.card", "core.card.focus", card, map[string]string{"card": card}).Role(ui.RoleGroup).Label(card).Size(100, 40)
 			}
 			ui.Button(c.Key(workbench.Exposed{Name: "core.debug.close"}), "close")
-			ui.Button(c.Key(workbench.Exposed{Name: "core.library.add", Item: "one"}), "add one")
-			ui.Button(c.Key(workbench.Exposed{Name: "core.library.add", Item: "two"}), "add two")
-			c.Key(workbench.Exposed{Name: "core.library.form.name"})
+			ui.Button(c.Key(workbench.Exposed{Name: "core.home.add", Item: "one"}), "add one")
+			ui.Button(c.Key(workbench.Exposed{Name: "core.home.add", Item: "two"}), "add two")
+			c.Key(workbench.Exposed{Name: "core.home.form.name"})
 			ui.TextInput(c, &value).Label("name")
 		})
 	}, 400, 300)
@@ -347,32 +347,6 @@ func TestAnElementRequestAnswersFromTheElementTree(t *testing.T) {
 	}
 }
 
-func TestAnElementRequestIsRefusedAsThePageRefusesIt(t *testing.T) {
-	r, _, _, _ := elementScene(t)
-	for _, row := range []struct {
-		method, params string
-		code           int
-		message        string
-	}{
-		{"element.rect", `{"name":"core.library.return"}`, 1002, "element core.library.return has no element"},
-		{"element.rect", `{"name":"core.library.add"}`, 1002, "element core.library.add has 2 elements"},
-		{"element.rect", `{"name":"core.card","index":2}`, 1002, "element core.card has no element at index 2"},
-		{"element.rect", `{"name":"core.card","index":-1}`, -32602, "index must be a non-negative integer"},
-		{"element.rect", `{"name":"core.card","index":1.5}`, -32602, "index must be a non-negative integer"},
-		{"element.rect", `{"name":"core.card","index":null}`, -32602, "index must be a non-negative integer"},
-		{"element.act", `{"name":"core.library.form.name","action":"input"}`, -32602, "input requires a string value"},
-		{"element.act", `{"name":"core.card","action":"dispatch","event":{"type":"click"}}`, -32000, "the mygo workbench has no DOM events"},
-		{"element.act", `{"name":"core.card","action":"hover"}`, -32602, "unknown action hover"},
-		{"element.act", `{"name":"core.card"}`, -32602, "unknown action undefined"},
-		{"element.act", `{"name":"core.card","action":"input","value":"x"}`, -32000, "element core.card takes no input"},
-	} {
-		code, message := r.refused(r.ask(row.method, row.params))
-		if code != row.code || message != row.message {
-			t.Errorf("%s %s: refused with %d %q, want %d %q", row.method, row.params, code, message, row.code, row.message)
-		}
-	}
-}
-
 func TestAnElementActionReachesTheElement(t *testing.T) {
 	r, tester, ran, value := elementScene(t)
 	if reply := r.ask("element.act", `{"name":"core.card","index":1,"action":"click"}`); reply["error"] != nil || reply["result"] != nil {
@@ -382,7 +356,7 @@ func TestAnElementActionReachesTheElement(t *testing.T) {
 	if !reflect.DeepEqual(*ran, []string{`{"card":"c2"}`}) {
 		t.Fatalf("the commands that ran are %v", *ran)
 	}
-	if reply := r.ask("element.act", `{"name":"core.library.form.name","action":"input","value":"after"}`); reply["error"] != nil {
+	if reply := r.ask("element.act", `{"name":"core.home.form.name","action":"input","value":"after"}`); reply["error"] != nil {
 		t.Fatalf("the input answered %v", reply)
 	}
 	tester.Frame()
@@ -405,7 +379,7 @@ func TestAnElementBehindADialogAnswersItsPlaceAndRefusesAnAction(t *testing.T) {
 		if open {
 			ui.Overlay(c, func() {
 				ui.Box(c).Absolute().Left(0).Top(0).Right(0).Bottom(0).Modal().Children(func() {
-					if ui.Button(c.Key(workbench.Exposed{Name: "core.settings-modal.close"}), "inside").Size(100, 40).Clicked() {
+					if ui.Button(c.Key(workbench.Exposed{Name: "core.settings-tab.close"}), "inside").Size(100, 40).Clicked() {
 						inside++
 					}
 				})
@@ -429,24 +403,12 @@ func TestAnElementBehindADialogAnswersItsPlaceAndRefusesAnAction(t *testing.T) {
 	if behind != 0 {
 		t.Fatalf("the button behind the dialog ran %d times", behind)
 	}
-	if reply := r.ask("element.act", `{"name":"core.settings-modal.close","action":"click"}`); reply["error"] != nil {
+	if reply := r.ask("element.act", `{"name":"core.settings-tab.close","action":"click"}`); reply["error"] != nil {
 		t.Fatalf("the action in the dialog answered %v", reply)
 	}
 	tester.Frame()
 	if inside != 1 {
 		t.Fatalf("the button in the dialog ran %d times", inside)
-	}
-}
-
-func TestTheListReportsADrawnElementAsRegistered(t *testing.T) {
-	r, _, _, _ := elementScene(t)
-	list := r.ask("exposure.list", `{}`)["result"].(map[string]any)
-	registered := map[string]any{}
-	for _, entry := range list["element"].([]any) {
-		registered[entry.(map[string]any)["name"].(string)] = entry.(map[string]any)["registered"]
-	}
-	if registered["core.card"] != true || registered["core.library.return"] != false {
-		t.Fatalf("core.card is %v and core.library.return is %v", registered["core.card"], registered["core.library.return"])
 	}
 }
 
@@ -537,5 +499,43 @@ func TestElementRoleOfElementRect(t *testing.T) {
 		if got := workbench.ElementRole(role); got != want {
 			t.Fatalf("role %v answers %v, want %v", role, got, want)
 		}
+	}
+}
+
+func TestAnElementRequestIsRefusedAsThePageRefusesIt(t *testing.T) {
+	r, _, _, _ := elementScene(t)
+	for _, row := range []struct {
+		method, params string
+		code           int
+		message        string
+	}{
+		{"element.rect", `{"name":"core.home.remove-ask"}`, 1002, "element core.home.remove-ask has no element"},
+		{"element.rect", `{"name":"core.home.add"}`, 1002, "element core.home.add has 2 elements"},
+		{"element.rect", `{"name":"core.card","index":2}`, 1002, "element core.card has no element at index 2"},
+		{"element.rect", `{"name":"core.card","index":-1}`, -32602, "index must be a non-negative integer"},
+		{"element.rect", `{"name":"core.card","index":1.5}`, -32602, "index must be a non-negative integer"},
+		{"element.rect", `{"name":"core.card","index":null}`, -32602, "index must be a non-negative integer"},
+		{"element.act", `{"name":"core.home.form.name","action":"input"}`, -32602, "input requires a string value"},
+		{"element.act", `{"name":"core.card","action":"dispatch","event":{"type":"click"}}`, -32000, "the mygo workbench has no DOM events"},
+		{"element.act", `{"name":"core.card","action":"hover"}`, -32602, "unknown action hover"},
+		{"element.act", `{"name":"core.card"}`, -32602, "unknown action undefined"},
+		{"element.act", `{"name":"core.card","action":"input","value":"x"}`, -32000, "element core.card takes no input"},
+	} {
+		code, message := r.refused(r.ask(row.method, row.params))
+		if code != row.code || message != row.message {
+			t.Errorf("%s %s: refused with %d %q, want %d %q", row.method, row.params, code, message, row.code, row.message)
+		}
+	}
+}
+
+func TestTheListReportsADrawnElementAsRegistered(t *testing.T) {
+	r, _, _, _ := elementScene(t)
+	list := r.ask("exposure.list", `{}`)["result"].(map[string]any)
+	registered := map[string]any{}
+	for _, entry := range list["element"].([]any) {
+		registered[entry.(map[string]any)["name"].(string)] = entry.(map[string]any)["registered"]
+	}
+	if registered["core.card"] != true || registered["core.home.remove-ask"] != false {
+		t.Fatalf("core.card is %v and core.home.remove-ask is %v", registered["core.card"], registered["core.home.remove-ask"])
 	}
 }

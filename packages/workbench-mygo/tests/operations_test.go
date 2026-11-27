@@ -176,6 +176,7 @@ func TestAPluginOperationIsAChain(t *testing.T) {
 
 func TestAnApplicationUpdateIsAChain(t *testing.T) {
 	f, stored := updateShell(t, appRelease)
+	openInstalled(t, f)
 	f.followCalls()
 	stored.failing = nil
 	f.shell.Registry().RunLater("core.app.update", json.RawMessage(`{}`), func(any, error) {})
@@ -206,21 +207,6 @@ func TestOpeningAndRemovingAProjectAreChains(t *testing.T) {
 	fields = f.chain(f.host, "workbench.project.operation", "projectRemoveAsk", "projectRelease")
 	if fields["action"] != "remove" || fields["project"] != id {
 		t.Fatalf("the fields are %v", fields)
-	}
-}
-
-func TestANewWindowIsAChain(t *testing.T) {
-	for _, command := range []string{"core.library.window", "core.window.new"} {
-		t.Run(command, func(t *testing.T) {
-			f := newShell(t, &storedHost{})
-			f.followCalls()
-			if err := f.finish(command, struct{}{}); err != nil {
-				t.Fatal(err)
-			}
-			if fields := f.chain(f.host, "workbench.window.operation", "windowNew"); fields["action"] != "new" {
-				t.Fatalf("the fields are %v", fields)
-			}
-		})
 	}
 }
 

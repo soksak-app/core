@@ -135,39 +135,52 @@
       },
       {
         "name": "core.screen",
-        "description": "The shown screen and the open modal of the workbench.",
+        "description": "The shown screen of the workbench (the project home or the workspace) and its open modal; the settings tab is a tab, not a modal.",
         "schema": {
           "type": "object",
           "properties": {
             "screen": {
-              "enum": [
-                "library",
-                "workspace"
-              ]
+              "enum": ["home", "workspace"]
             },
             "modal": {
-              "type": [
-                "string",
-                "null"
-              ],
-              "enum": [
-                "settings",
-                "debug",
-                "picker",
-                null
-              ]
+              "type": ["string", "null"],
+              "enum": ["debug", "picker", null]
             }
           }
         }
       },
       {
-        "name": "core.workbench.error",
-        "description": "The error text shown in the workbench, or null.",
+        "name": "core.notices",
+        "description": "The notice center: whether it is open, its style and filter, the number of unread entries, whether an unread entry is a warning or an error, and the entries in center order, each with id, kind, title, text, source, actions, progress, at, count and read (docs/spec/notifications.md#notices).",
         "schema": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "object",
+          "properties": {
+            "open": { "type": "boolean" },
+            "style": { "enum": ["popover", "drawer"] },
+            "filter": { "enum": ["all", "problems", "progress"] },
+            "unread": { "type": "integer" },
+            "problems": { "type": "boolean" },
+            "entries": { "type": "array", "items": { "type": "object" } }
+          },
+          "required": ["open", "style", "filter", "unread", "problems", "entries"]
+        }
+      },
+      {
+        "name": "core.toasts",
+        "description": "The shown toasts in order, each with id, kind, title, count and its remaining time in milliseconds, or null while it waits for the person (docs/spec/notifications.md#commands-and-statuses).",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "kind": { "enum": ["success", "info", "warning", "error", "progress"] },
+              "title": { "type": "string" },
+              "count": { "type": "integer" },
+              "remaining": { "type": ["integer", "null"] }
+            },
+            "required": ["id", "kind", "title", "count", "remaining"]
+          }
         }
       },
       {
@@ -471,7 +484,29 @@
                     }
                   },
                   "status": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "notice": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": ["success", "info", "warning", "error", "progress"]
+                      },
+                      "title": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["id", "kind", "title"]
                   },
                   "active": {
                     "type": [
@@ -999,7 +1034,7 @@
       },
       {
         "name": "core.plugins",
-        "description": "The plugin cards of the library plugin page: the registry index URL or null, the registry index or plugin state error or null, one entry per loaded, installed or registry plugin sorted by id with its name, description, state (loaded, disabled, available, reload or refused), the loaded surface composition kind or null without a loaded surface declaration, installed version and enabled value or null, newest registry version or null, and sidecars with their range and installed version, the latest plugin operation with its state (running, done or failed) and error, or null, whether a plugin waits for a page reload, the installed plugins whose registry index lists a newer version, the outdated persistent services, and the latest held operation of each plugin with its planned version, its error and the planned version, running version and sessions count of each service that holds it.",
+        "description": "The plugin cards of the plugin pages of the settings tab: the registry index URL or null, the registry index or plugin state error or null, one entry per loaded, installed or registry plugin sorted by id with its name, description, state (loaded, disabled, available, reload or refused), the loaded surface composition kind or null without a loaded surface declaration, installed version and enabled value or null, newest registry version or null, and sidecars with their range and installed version, the latest plugin operation with its state (running, done or failed) and error, or null, whether a plugin waits for a page reload, the installed plugins whose registry index lists a newer version, the outdated persistent services, and the latest held operation of each plugin with its planned version, its error and the planned version, running version and sessions count of each service that holds it.",
         "schema": {
           "type": "object",
           "properties": {
@@ -1209,138 +1244,6 @@
         }
       },
       {
-        "name": "core.settings-modal",
-        "description": "The settings modal: whether it is open, its section, scope, the plugin search text, the loaded plugin ids listed, the plugin whose page is shown or null, the edited set or null, the rows of declared plugin settings with their label and description, the scroll position of the shown content in points, card rectangle in window coordinates, and its controls with the command each control runs and the option values of each select box.",
-        "schema": {
-          "type": "object",
-          "properties": {
-            "scroll": {
-              "type": "number"
-            },
-            "open": {
-              "type": "boolean"
-            },
-            "controls": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string"
-                  },
-                  "index": {
-                    "type": "integer"
-                  },
-                  "key": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "label": {
-                    "type": "string"
-                  },
-                  "on": {
-                    "type": [
-                      "boolean",
-                      "null"
-                    ]
-                  },
-                  "value": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "command": {
-                    "type": [
-                      "object",
-                      "null"
-                    ],
-                    "properties": {
-                      "name": {
-                        "type": "string"
-                      },
-                      "params": {
-                        "type": "object"
-                      }
-                    }
-                  },
-                  "options": {
-                    "type": ["array", "null"],
-                    "items": { "type": "string" }
-                  },
-                  "groups": {
-                    "type": ["array", "null"],
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "label": { "type": "string" },
-                        "values": { "type": "array", "items": { "type": "string" } }
-                      }
-                    }
-                  }
-                }
-              }
-            },
-            "section": {
-              "enum": [
-                "general",
-                "plugins",
-                "sidebars"
-              ]
-            },
-            "plugin": {
-              "type": ["string", "null"]
-            },
-            "query": {
-              "type": "string"
-            },
-            "listed": {
-              "type": "array",
-              "items": { "type": "string" }
-            },
-            "rows": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "key": { "type": "string" },
-                  "name": { "type": "string" },
-                  "description": { "type": ["string", "null"] }
-                }
-              }
-            },
-            "editing": {
-              "type": ["string", "null"]
-            },
-            "scope": {
-              "enum": [
-                "common",
-                "project"
-              ]
-            },
-            "card": {
-              "type": "object",
-              "properties": {
-                "x": {
-                  "type": "number"
-                },
-                "y": {
-                  "type": "number"
-                },
-                "w": {
-                  "type": "number"
-                },
-                "h": {
-                  "type": "number"
-                }
-              }
-            }
-          }
-        }
-      },
-      {
         "name": "core.setup",
         "description": "The setup parts that let an agent on the machine learn and reach the application, as the host call setupState returns them in the environment of the login shell of the person: parts of the last read or operation in the order of sok setup check, each with its kind, file, state, step, reason or error when present, changed after an install, and enabled for the desired state of the user PATH registration; [] before the first read; and running, the kinds of the setup operation that runs, or null.",
         "schema": {
@@ -1437,7 +1340,7 @@
       },
       {
         "name": "core.accounts",
-        "description": "The accounts of the plugin whose page the settings window shows, in the order of their names, with the login, the end of the login and the usage lines that the status program of each account printed last, null, null and [] before its first run, and running while its login runs; null while no page of a plugin with accounts shows (docs/spec/plugins.md#accounts).",
+        "description": "The accounts of the plugin whose page the settings tab shows, in the order of their names, with the login, the end of the login and the usage lines that the status program of each account printed last, null, null and [] before its first run, and running while its login runs; null while no page of a plugin with accounts shows (docs/spec/plugins.md#accounts).",
         "schema": {
           "type": ["object", "null"],
           "properties": {
@@ -1733,116 +1636,6 @@
                 "groups": { "type": "array", "items": { "type": "object", "properties": { "icon": { "type": "number" }, "name": { "type": "number" } } } },
                 "items": { "type": "array", "items": { "type": "object", "properties": { "icon": { "type": "number" }, "name": { "type": "number" } } } }
               }
-            }
-          }
-        }
-      },
-      {
-        "name": "core.library",
-        "description": "The library screen: the shown page (projects or plugins), the plugin search text, the plugin ids of the cards shown and their action buttons in order, shown and pinned projects, count, search, sort, form state and field values, return button visibility, pending work, empty and no-result notes, error, preview rectangles, and the validation error of each project whose saved layout cannot be opened.",
-        "schema": {
-          "type": "object",
-          "properties": {
-            "page": {
-              "enum": [
-                "projects",
-                "plugins"
-              ]
-            },
-            "plugins": {
-              "type": "object",
-              "properties": {
-                "query": { "type": "string" },
-                "shown": { "type": "array", "items": { "type": "string" } },
-                "actions": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "plugin": { "type": "string" },
-                      "action": { "enum": ["install", "update", "apply", "remove", "enable", "disable"] },
-                      "disabled": { "type": "boolean" }
-                    }
-                  }
-                }
-              }
-            },
-            "shown": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "count": {
-              "type": "string"
-            },
-            "query": {
-              "type": "string"
-            },
-            "sort": {
-              "type": "string"
-            },
-            "form": {
-              "type": "boolean"
-            },
-            "error": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "previews": {
-              "type": "object"
-            },
-            "folderErrors": {
-              "type": "object"
-            },
-            "previewErrors": {
-              "type": "object"
-            },
-            "pinned": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "formState": {
-              "type": [
-                "object",
-                "null"
-              ],
-              "properties": {
-                "mode": {
-                  "enum": [
-                    "create",
-                    "open"
-                  ]
-                },
-                "name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "parent": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
-              }
-            },
-            "returnVisible": {
-              "type": "boolean"
-            },
-            "pending": {
-              "type": "boolean"
-            },
-            "empty": {
-              "type": "boolean"
-            },
-            "noResults": {
-              "type": "boolean"
             }
           }
         }
@@ -2307,7 +2100,9 @@
             "projectTabs": {
               "enum": [
                 "top",
-                "left"
+                "bottom",
+                "left",
+                "right"
               ]
             }
           }
@@ -2348,6 +2143,221 @@
             }
           }
         }
+      },
+      {
+        "name": "core.home",
+        "description": "The project home: the search text, the selected project id or null, the project ids of the rows in the order shown, and the preview and folder errors of each project by id.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "selected": {
+              "type": ["string", "null"]
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "previewErrors": {
+              "type": "object"
+            },
+            "folderErrors": {
+              "type": "object"
+            }
+          },
+          "required": ["query", "selected", "rows", "previewErrors", "folderErrors"]
+        }
+      },
+      {
+        "name": "core.settings-tab",
+        "description": "The settings tab of the window, or null while the window has no settings tab: the shown page, the scope, the menu search, the installed-plugin search and filter, the state of 찾아보기, the listed plugins, the plugin action buttons, the shown plugin and the page that its back link returns to, the edited set, the plugin setting rows, the controls with their values, the scroll position, the undo toast, the open confirmation, the error lines, the search results and the plugin settings whose value names no loaded plugin.",
+        "schema": {
+          "type": ["object", "null"],
+          "properties": {
+            "page": {
+              "enum": ["look", "workspace", "sets", "behavior", "agents", "diag", "installed", "browse", "plugin"]
+            },
+            "scope": {
+              "enum": ["common", "project"]
+            },
+            "find": {
+              "type": "string"
+            },
+            "query": {
+              "type": "string"
+            },
+            "filter": {
+              "enum": ["all", "active", "disabled", "updates", "problems"]
+            },
+            "browse": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "hideInstalled": {
+                  "type": "boolean"
+                },
+                "shown": {
+                  "type": "integer"
+                }
+              },
+              "required": ["query", "hideInstalled", "shown"]
+            },
+            "listed": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "plugin": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "string"
+                  },
+                  "disabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["plugin", "action", "disabled"]
+              }
+            },
+            "plugin": {
+              "type": ["string", "null"]
+            },
+            "back": {
+              "enum": ["installed", "browse"]
+            },
+            "editing": {
+              "type": ["string", "null"]
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                },
+                "required": ["key", "name", "description"]
+              }
+            },
+            "controls": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "element": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "command": {
+                    "type": "string"
+                  },
+                  "value": {},
+                  "options": {
+                    "type": ["array", "null"]
+                  },
+                  "disabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["element", "key", "command", "value", "disabled", "options"]
+              }
+            },
+            "scroll": {
+              "type": "number"
+            },
+            "undo": {
+              "type": ["object", "null"],
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "old": {},
+                "new": {}
+              },
+              "required": ["key", "label", "old", "new"]
+            },
+            "confirm": {
+              "type": ["object", "null"],
+              "properties": {
+                "kind": {
+                  "enum": ["set", "plugin"]
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": ["kind", "id"]
+            },
+            "errors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": ["key", "text"]
+              }
+            },
+            "results": {
+              "type": ["object", "null"],
+              "properties": {
+                "settings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "plugins": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "catalog": {
+                  "type": "integer"
+                }
+              },
+              "required": ["settings", "plugins", "catalog"]
+            },
+            "missing": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["page", "scope", "find", "query", "filter", "browse", "listed", "actions", "plugin", "back", "editing", "rows", "controls", "scroll", "undo", "confirm", "errors", "results", "missing"]
+        }
       }
     ],
     "commands": [
@@ -2375,12 +2385,15 @@
       },
       {
         "name": "core.settings.reset",
-        "description": "Removes the project override of one setting.",
+        "description": "Removes the project override of one setting; scope names the project scope, the only scope that holds an override.",
         "params": {
           "type": "object",
           "properties": {
             "key": {
               "type": "string"
+            },
+            "scope": {
+              "enum": ["project"]
             }
           },
           "required": ["key"]
@@ -2753,7 +2766,7 @@
       },
       {
         "name": "core.settings.close",
-        "description": "Closes the settings modal.",
+        "description": "Closes the settings tab and brings the work screen of the window to the front.",
         "params": {
           "type": "object",
           "properties": {}
@@ -2764,7 +2777,7 @@
       },
       {
         "name": "core.debug.open",
-        "description": "Closes the settings modal, opens the debug view, records the state of every window into the logs folder and lists the files of the logs folder.",
+        "description": "Closes the settings tab, opens the debug view, records the state of every window into the logs folder and lists the files of the logs folder.",
         "params": {
           "type": "object",
           "properties": {}
@@ -3028,7 +3041,7 @@
       },
       {
         "name": "core.projects.browse",
-        "description": "Shows the project library in this window.",
+        "description": "Shows the project home in this window while keeping its current work.",
         "params": {
           "type": "object",
           "properties": {}
@@ -3504,7 +3517,7 @@
       },
       {
         "name": "core.settings.sets.row",
-        "description": "Changes one section row of a sidebar set in the scope: choose replaces row index with section, up and down swap it with a neighbour, remove deletes it, and add appends the first registered section the set lacks. A repeated section or an impossible move fails with invalid params.",
+        "description": "Changes one section row of a sidebar set in the scope: remove deletes row index, and add appends section. A section that is not registered or that the set already has fails with invalid params.",
         "params": {
           "type": "object",
           "properties": {
@@ -3512,13 +3525,7 @@
               "type": "string"
             },
             "action": {
-              "enum": [
-                "choose",
-                "up",
-                "down",
-                "remove",
-                "add"
-              ]
+              "enum": ["remove", "add"]
             },
             "index": {
               "type": "integer"
@@ -3527,10 +3534,7 @@
               "type": "string"
             },
             "scope": {
-              "enum": [
-                "common",
-                "project"
-              ]
+              "enum": ["common", "project"]
             }
           },
           "required": ["id", "action"]
@@ -3546,64 +3550,6 @@
           "type": "object",
           "properties": { "id": { "type": "string" }, "scope": { "enum": ["common", "project"] } },
           "required": ["id"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.settings-modal.nav",
-        "description": "Shows a section of the open settings modal.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "section": {
-              "enum": [
-                "general",
-                "plugins",
-                "sidebars"
-              ]
-            }
-          },
-          "required": ["section"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.settings-modal.scope",
-        "description": "Shows the common or project scope in the open settings modal.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "scope": {
-              "enum": [
-                "common",
-                "project"
-              ]
-            }
-          },
-          "required": ["scope"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.settings-modal.move",
-        "description": "Moves the open settings card by dx, dy points, kept inside the window.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "dx": {
-              "type": "number"
-            },
-            "dy": {
-              "type": "number"
-            }
-          },
-          "required": ["dx", "dy"]
         },
         "result": {
           "type": "null"
@@ -3716,7 +3662,7 @@
       },
       {
         "name": "core.plugins.show-updates",
-        "description": "Shows the library plugin page with the update list; the window control 업데이트 N runs it.",
+        "description": "Opens the settings tab on the page 설치됨 with the filter 업데이트.",
         "params": {
           "type": "object",
           "properties": {}
@@ -3792,119 +3738,10 @@
       },
       {
         "name": "core.plugins.browse",
-        "description": "Closes the settings modal when it is open, shows the library when the window shows a workspace, and selects its plugin page.",
+        "description": "Opens the settings tab on the page 설치됨.",
         "params": {
           "type": "object",
           "properties": {}
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.settings-modal.plugin",
-        "description": "Opens the settings page of a loaded plugin in the plugins section of the open settings modal; a null plugin returns to the list.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "plugin": {
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          }
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.settings-modal.search",
-        "description": "Sets the plugin search text of the open settings modal; the list shows loaded plugins whose id, name, or description contains it, ignoring letter case.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "query": {
-              "type": "string"
-            }
-          },
-          "required": ["query"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.settings-modal.account-name",
-        "description": "Sets the text of the name field of the row 새 계정 of the shown plugin page with accounts.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string"
-            }
-          },
-          "required": ["name"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.settings-modal.account-kind",
-        "description": "Sets the kind of the row 새 계정 of the shown plugin page with accounts to a declared kind.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "kind": {
-              "type": "string"
-            }
-          },
-          "required": ["kind"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.settings-modal.account-edit",
-        "description": "Shows the name field of an account of the shown plugin page with its name, or ends the edit with null.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": ["string", "null"]
-            }
-          },
-          "required": ["id"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.settings-modal.account-edit-name",
-        "description": "Sets the text of the name field of the account whose name the shown plugin page edits.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string"
-            }
-          },
-          "required": ["name"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.settings-modal.edit",
-        "description": "Opens the editor of a sidebar set in the open settings modal; a null set closes the editor.",
-        "params": {
-          "type": "object",
-          "properties": { "set": { "type": ["string", "null"] } }
         },
         "result": {
           "type": "null"
@@ -4918,20 +4755,123 @@
         }
       },
       {
-        "name": "core.error.dismiss",
-        "description": "Closes the error toast of the workbench with the text, so several errors are each closed on their own.",
+        "name": "core.notices.toggle",
+        "description": "Opens or closes the notice center (docs/spec/notifications.md#commands-and-statuses).",
+        "params": { "type": "object", "properties": {} },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "core.notices.filter",
+        "description": "Sets the filter of the notice center: all, problems (warning and error) or progress.",
         "params": {
           "type": "object",
           "properties": {
-            "text": {
+            "filter": {
+              "enum": [
+                "all",
+                "problems",
+                "progress"
+              ]
+            }
+          },
+          "required": ["filter"]
+        },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "core.notices.read-all",
+        "description": "Marks every entry of the notice center read.",
+        "params": { "type": "object", "properties": {} },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "core.notices.clear",
+        "description": "Removes the entries of one group of the notice center: today, yesterday or a day as YYYY-MM-DD.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "group": {
               "type": "string"
             }
           },
-          "required": ["text"]
+          "required": ["group"]
         },
-        "result": {
-          "type": "null"
-        }
+        "result": { "type": "null" }
+      },
+      {
+        "name": "core.notices.clear-all",
+        "description": "Removes every entry of the notice center.",
+        "params": { "type": "object", "properties": {} },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "core.notices.close",
+        "description": "Closes the toast and the status line notice of the notice id and keeps its entry; an id that no shown notice has fails with -32602.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": ["id"]
+        },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "core.notices.add",
+        "description": "Gives the card card, or the plugin plugin, a notice with the fields of tab.notify and returns its id; exactly one of card and plugin is given. A card or plugin that does not exist and a field that tab.notify refuses fail with -32602.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": { "type": "string" },
+            "plugin": { "type": "string" },
+            "kind": { "type": "string" },
+            "title": { "type": "string" },
+            "text": { "type": "string" },
+            "action": { "type": "object" },
+            "system": { "type": "boolean" }
+          },
+          "required": ["kind", "title"]
+        },
+        "result": { "type": "string" }
+      },
+      {
+        "name": "core.notices.progress",
+        "description": "Sets the progress of a progress notice, as tab.progress does; an id that is not a progress notice fails with -32602.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "progress": { "type": ["number", "null"] }
+          },
+          "required": ["id", "progress"]
+        },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "core.notices.done",
+        "description": "Ends a progress notice as success or error, as tab.done does; an id that is not a progress notice fails with -32602.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "kind": { "type": "string" },
+            "title": { "type": "string" }
+          },
+          "required": ["id", "kind", "title"]
+        },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "core.notices.read",
+        "description": "Marks one entry of the notice center read; an id that no entry has fails with -32602.",
+        "params": {
+          "type": "object",
+          "properties": { "id": { "type": "string" } },
+          "required": ["id"]
+        },
+        "result": { "type": "null" }
       },
       {
         "name": "core.tab.role",
@@ -5282,236 +5222,6 @@
         }
       },
       {
-        "name": "core.library.page",
-        "description": "Shows a page of the library: projects or plugins.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "page": {
-              "enum": [
-                "projects",
-                "plugins"
-              ]
-            }
-          },
-          "required": ["page"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.plugins.search",
-        "description": "Sets the plugin search text of the library plugin page; the page shows plugins whose id, name, or description contains it, ignoring letter case.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "query": {
-              "type": "string"
-            }
-          },
-          "required": ["query"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.search",
-        "description": "Sets the library search text.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "query": {
-              "type": "string"
-            }
-          },
-          "required": ["query"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.search.focus",
-        "description": "Focuses the search field of the currently shown library page.",
-        "params": {
-          "type": "object",
-          "properties": {}
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.sort",
-        "description": "Sets the library sort order.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "order": {
-              "enum": [
-                "saved",
-                "name",
-                "recent",
-                "open"
-              ]
-            }
-          },
-          "required": ["order"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.open",
-        "description": "Opens a project from the library in place and shows its workspace.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": ["id"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.pin",
-        "description": "Pins or unpins a project from the library.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string"
-            },
-            "pinned": {
-              "type": "boolean"
-            }
-          },
-          "required": ["id", "pinned"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.remove",
-        "description": "Removes a project and its spaces from the library. The project folder is not changed.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string"
-            }
-          },
-          "required": ["id"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.window",
-        "description": "Opens a new window from the library.",
-        "params": {
-          "type": "object",
-          "properties": {}
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.return",
-        "description": "Returns to the active project's workspace.",
-        "params": {
-          "type": "object",
-          "properties": {}
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.form.open",
-        "description": "Opens the library form to create a project folder or to open an existing folder.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "mode": {
-              "enum": [
-                "create",
-                "open"
-              ]
-            }
-          },
-          "required": ["mode"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.form.cancel",
-        "description": "Closes the library form.",
-        "params": {
-          "type": "object",
-          "properties": {}
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.form.set",
-        "description": "Sets a field of the library form.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "field": {
-              "enum": [
-                "name",
-                "parent"
-              ]
-            },
-            "value": {
-              "type": "string"
-            }
-          },
-          "required": ["field", "value"]
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.form.submit",
-        "description": "Submits the library form: creates the folder when asked, then opens it as a project.",
-        "params": {
-          "type": "object",
-          "properties": {}
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
-        "name": "core.library.choose-folder",
-        "description": "Asks for a folder with the system dialog and puts it in the form's parent field.",
-        "params": {
-          "type": "object",
-          "properties": {}
-        },
-        "result": {
-          "type": "null"
-        }
-      },
-      {
         "name": "core.rename.begin",
         "description": "Starts renaming a project or space tab, or a group name, in place.",
         "params": {
@@ -5631,6 +5341,436 @@
             }
           }
         }
+      },
+      {
+        "name": "core.home.show",
+        "description": "Shows the project home in this window while keeping its current work.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.home.search",
+        "description": "Sets the project home search text and filters the rows by name and path.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          },
+          "required": ["query"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.home.search.focus",
+        "description": "Focuses the search field of the project home.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.home.select",
+        "description": "Moves the selected row of the project home by one step, wrapping at the ends of the list.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "step": {
+              "enum": [-1, 1]
+            }
+          },
+          "required": ["step"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.home.open",
+        "description": "Opens a project in this window in place. Without a project, it opens the selected row.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.home.form.open",
+        "description": "Opens the project home form that creates a project folder (create) or adopts an existing folder (open).",
+        "params": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "enum": ["create", "open"]
+            },
+            "parent": {
+              "type": "string"
+            }
+          },
+          "required": ["mode"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.home.form.set",
+        "description": "Sets a field of the project home form.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "field": {
+              "enum": ["name", "parent"]
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": ["field", "value"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.home.form.submit",
+        "description": "Submits the project home form: creates the folder when asked, then opens it as a project.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.home.form.cancel",
+        "description": "Closes the project home form.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.home.choose-folder",
+        "description": "Asks for a folder with the system dialog and puts it in the form's parent field.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.home.pin",
+        "description": "Pins or unpins a project on the project home.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": ["project"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.home.confirm",
+        "description": "Puts a row of the project home into its removal confirm state (ask), cancels it (no) or confirms the removal from the list (yes).",
+        "params": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string"
+            },
+            "answer": {
+              "enum": ["ask", "no", "yes"]
+            }
+          },
+          "required": ["project", "answer"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.home.remove",
+        "description": "Removes a project from the registry and its spaces; the folder is not changed.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string"
+            }
+          },
+          "required": ["project"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.nav",
+        "description": "Shows a page of the settings tab.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "page": {
+              "enum": ["look", "workspace", "sets", "behavior", "agents", "diag", "installed", "browse", "plugin"]
+            }
+          },
+          "required": ["page"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.scope",
+        "description": "Shows the common or project scope in the settings tab.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "enum": ["common", "project"]
+            }
+          },
+          "required": ["scope"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.plugin",
+        "description": "Opens the page of a loaded plugin in the settings tab; a null plugin returns to the list.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "plugin": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.search",
+        "description": "Sets the plugin search text of the settings tab; the list shows loaded plugins whose id, name, or description contains it, ignoring letter case.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          },
+          "required": ["query"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.account-name",
+        "description": "Sets the text of the name field of the row 새 계정 of the shown plugin page with accounts.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": ["name"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.account-kind",
+        "description": "Sets the kind of the row 새 계정 of the shown plugin page with accounts to a declared kind.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": ["kind"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.account-edit",
+        "description": "Shows the name field of an account of the shown plugin page with its name, or ends the edit with null.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": ["string", "null"]
+            }
+          },
+          "required": ["id"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.account-edit-name",
+        "description": "Sets the text of the name field of the account whose name the shown plugin page edits.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": ["name"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.edit",
+        "description": "Opens the editor of a sidebar set in the settings tab; a null set closes the editor.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "set": {
+              "type": ["string", "null"]
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.find",
+        "description": "Sets the text of the menu search of the settings tab; an empty text ends the search.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          },
+          "required": ["query"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.filter",
+        "description": "Sets the filter of the page 설치됨.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "filter": {
+              "enum": ["all", "active", "disabled", "updates", "problems"]
+            }
+          },
+          "required": ["filter"]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.browse",
+        "description": "Sets the search text or the switch of the page 찾아보기, or shows the next rows with more.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "hideInstalled": {
+              "type": "boolean"
+            },
+            "more": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.undo",
+        "description": "Restores the value before the change that the undo toast shows.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.back",
+        "description": "Returns from the plugin page to the page that opened it.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
+        "name": "core.settings-tab.confirm",
+        "description": "Asks, accepts or declines the confirmation of a set or plugin removal.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": ["set", "plugin"]
+            },
+            "id": {
+              "type": "string"
+            },
+            "answer": {
+              "enum": ["ask", "yes", "no"]
+            }
+          },
+          "required": ["kind", "id", "answer"]
+        },
+        "result": {
+          "type": "null"
+        }
       }
     ],
     "element": [
@@ -5638,15 +5778,6 @@
         "name": "core.tab.reload",
         "description": "The 다시 불러오기 control of a failed view surface, which runs core.tab.reload of the tab of the surface, in card order.",
         "many": true
-      },
-      {
-      "name": "core.error.dismiss",
-      "description": "The close control of each error toast of the workbench, in toast order.",
-      "many": true
-    },
-      {
-        "name": "core.brand",
-        "description": "The soksak logo at the start of the title bar; its letters are light in dark mode and dark in light mode."
       },
       {
         "name": "core.chrome.bar",
@@ -5673,40 +5804,72 @@
         "many": true
       },
       {
-        "name": "core.chrome.balance",
-        "description": "The card auto-arrange button after the project library button."
-      },
-      {
         "name": "core.chrome.projects",
-        "description": "The project library button."
+        "description": "The SOKSAK logo, the first element of the window tool row; it runs core.projects.browse."
       },
       {
         "name": "core.chrome.left",
-        "description": "The switch of the left window sidebar, the first of the four side switches; it runs core.settings.set with the negated left setting and is pressed while that setting is true."
+        "description": "The switch of the left window sidebar, the first of the four side switches; it runs core.settings.change with the negated applied value of left and is pressed while that value is true."
       },
       {
         "name": "core.chrome.right",
-        "description": "The switch of the right window sidebar, after the left one; it runs core.settings.set with the negated right setting and is pressed while that setting is true."
+        "description": "The switch of the right window sidebar, after the left one; it runs core.settings.change with the negated applied value of right and is pressed while that value is true."
       },
       {
         "name": "core.chrome.top",
-        "description": "The switch of the top window sidebar, after the right one; it runs core.settings.set with the negated top setting and is pressed while that setting is true."
+        "description": "The switch of the top window sidebar, after the right one; it runs core.settings.change with the negated applied value of top and is pressed while that value is true."
       },
       {
         "name": "core.chrome.bottom",
-        "description": "The switch of the bottom window sidebar, after the top one; it runs core.settings.set with the negated bottom setting and is pressed while that setting is true."
-      },
-      {
-        "name": "core.chrome.mode",
-        "description": "The light and dark mode switch."
+        "description": "The switch of the bottom window sidebar, after the top one; it runs core.settings.change with the negated applied value of bottom and is pressed while that value is true."
       },
       {
         "name": "core.chrome.settings",
-        "description": "The settings button."
+        "description": "The settings button of the window tool row; it runs core.settings.open and is absent while the settings tab is in front."
       },
       {
-        "name": "core.chrome.updates",
-        "description": "The window control 업데이트 N, present only while the registry lists a plugin update; it shows the plugin page at the update list."
+        "name": "core.chrome.notices",
+        "description": "The bell of the title bar, the last element of the row on every screen; it runs core.notices.toggle and shows the number of unread entries."
+      },
+      {
+        "name": "core.card.notice",
+        "description": "The status line notice of a card, with the parameter card; its close control is core.notices.close with the id of the notice."
+      },
+      {
+        "name": "core.notices.panel",
+        "description": "The notice center, popover or drawer."
+      },
+      {
+        "name": "core.notices.filter",
+        "description": "A filter button of the notice center, with the parameter filter."
+      },
+      {
+        "name": "core.notices.read-all",
+        "description": "The button that marks every entry of the notice center read."
+      },
+      {
+        "name": "core.notices.settings",
+        "description": "The settings button of the notice center, which opens the group 알림 of the page 동작."
+      },
+      {
+        "name": "core.notices.clear",
+        "description": "The clear button of one group of the notice center, with the parameter group."
+      },
+      {
+        "name": "core.notices.clear-all",
+        "description": "The button that removes every entry of the notice center."
+      },
+      {
+        "name": "core.notices.close",
+        "description": "The close control of a toast or a status line notice, with the parameter id."
+      },
+      {
+        "name": "core.notices.entry",
+        "description": "An entry of the notice center, with the parameter id; a press runs core.card.focus for a card notice."
+      },
+      {
+        "name": "core.notices.action",
+        "description": "An action button of a toast, a status line or an entry; it runs the command of the action, with the parameter id."
       },
       {
         "name": "core.project-tab",
@@ -5757,13 +5920,29 @@
         "many": true
       },
       {
-        "name": "core.sidebar.status",
-        "description": "The status lines that end the fixed window sidebars of the sides left, right, top and bottom in workbench order.",
+        "name": "core.sidebar.head",
+        "description": "The head row of each fixed window sidebar of the sides left, right, top and bottom: the position of its side in sidebarOrder, the name and layout badge of its set, and the × that turns the side off.",
         "many": true
       },
       {
+        "name": "core.settings-tab.reopen",
+        "description": "The open button of the settings hint on the work screen; it runs core.settings.open."
+      },
+      {
+        "name": "core.statusbar.project",
+        "description": "The project name in the status bar of the main window."
+      },
+      {
+        "name": "core.statusbar.cards",
+        "description": "The card count in the status bar of the main window."
+      },
+      {
+        "name": "core.statusbar.theme",
+        "description": "The theme and mode in the status bar of the main window."
+      },
+      {
         "name": "core.sidebar.fold",
-        "description": "The fold controls at the end of the window sidebar status lines in workbench order; each turns its sidebar off with core.settings.set, and the window header control of its side turns it on again.",
+        "description": "The × button of the sidebar head; it runs core.settings.change with value false and the scope of the side.",
         "many": true
       },
       {
@@ -5924,138 +6103,6 @@
         "name": "core.picker.group-name",
         "description": "The names of the group headings of the open grouped menu in heading order.",
         "many": true
-      },
-      {
-        "name": "core.library.page",
-        "description": "The 프로젝트 and 플러그인 page tabs of the library heading in order.",
-        "many": true
-      },
-      {
-        "name": "core.library.plugins.search",
-        "description": "The plugin search field of the library plugin page."
-      },
-      {
-        "name": "core.library.plugins.action",
-        "description": "The action buttons of the plugin cards in workbench order: 설치, 업데이트, 사용 or 사용 안 함, and 제거, each bound to its core.plugins command.",
-        "many": true
-      },
-      {
-        "name": "core.library.plugins.about",
-        "description": "The description lines of the plugin cards in workbench order, one for each plugin that has a description.",
-        "many": true
-      },
-      {
-        "name": "core.library.plugins.contribution",
-        "description": "The extension point contribution lines of the plugin cards in workbench order: the point, the number and the state of each contribution of the plugin, or its error.",
-        "many": true
-      },
-      {
-        "name": "core.library.plugins.outdated",
-        "description": "The rows of the outdated persistent services above the plugin cards, in sidecar order.",
-        "many": true
-      },
-      {
-        "name": "core.library.app.row",
-        "description": "The row of the candidate application update, first in the update list of the plugin page: the versions, the release page and update controls and the step or error of the operation."
-      },
-      {
-        "name": "core.library.app.release",
-        "description": "The button that opens the release page of the candidate application update."
-      },
-      {
-        "name": "core.library.app.update",
-        "description": "The button that updates the application."
-      },
-      {
-        "name": "core.library.app.incompatible",
-        "description": "The lines of the installed plugins whose engines.soksak does not contain the candidate application update, each with the newest version of the plugin that does or the note that none does, below the row of the candidate.",
-        "many": true
-      },
-      {
-        "name": "core.library.app.operation",
-        "description": "The step or the error of the application update operation, below the row of the candidate."
-      },
-      {
-        "name": "core.library.plugins.updates",
-        "description": "The rows of the plugins that the registry lists in a newer version, above the plugin cards, in id order.",
-        "many": true
-      },
-      {
-        "name": "core.library.plugins.update-all",
-        "description": "The button that updates every plugin of the update list."
-      },
-      {
-        "name": "core.library.plugins.replace",
-        "description": "The buttons that end the sessions of an outdated service and replace it, in the order of the rows.",
-        "many": true
-      },
-      {
-        "name": "core.library.plugins.end",
-        "description": "The buttons of the plugin cards in workbench order that end the services that hold an operation of the plugin and run it, each bound to its core.plugins command with end true; a card whose held operation has a sessions count that is not known has none.",
-        "many": true
-      },
-      {
-        "name": "core.library.search",
-        "description": "The project search field."
-      },
-      {
-        "name": "core.library.sort",
-        "description": "The project sort selection."
-      },
-      {
-        "name": "core.library.open",
-        "description": "The open buttons of the shown projects in order.",
-        "many": true
-      },
-      {
-        "name": "core.library.pin",
-        "description": "The pin buttons of the shown projects in order.",
-        "many": true
-      },
-      {
-        "name": "core.library.remove",
-        "description": "The remove buttons of the shown projects in order.",
-        "many": true
-      },
-      {
-        "name": "core.library.add",
-        "description": "The new project button."
-      },
-      {
-        "name": "core.library.return",
-        "description": "The button that returns to the current project."
-      },
-      {
-        "name": "core.library.window",
-        "description": "The new window button."
-      },
-      {
-        "name": "core.library.form.name",
-        "description": "The project folder name field."
-      },
-      {
-        "name": "core.library.form.parent",
-        "description": "The parent or folder path field."
-      },
-      {
-        "name": "core.library.form.choose",
-        "description": "The folder selection button."
-      },
-      {
-        "name": "core.library.form.mode-new",
-        "description": "The toggle that switches the form to making a new folder."
-      },
-      {
-        "name": "core.library.form.mode-existing",
-        "description": "The toggle that switches the form to adopting an existing folder."
-      },
-      {
-        "name": "core.library.form.cancel",
-        "description": "The form cancel button."
-      },
-      {
-        "name": "core.library.form.submit",
-        "description": "The form submit button."
       },
       {
         "name": "core.debug.card",
@@ -6235,194 +6282,10 @@
         "many": true
       },
       {
-        "name": "core.settings-modal.card",
-        "description": "The settings card in the workbench; the native modal draws it at the same rectangle."
-      },
-      {
-        "name": "core.settings-modal.scrim",
-        "description": "The layer that blocks the workbench while settings are open."
-      },
-      {
-        "name": "core.settings-modal.grip",
-        "description": "The settings header that moves the card."
-      },
-      {
-        "name": "core.settings-modal.close",
-        "description": "The settings close button."
-      },
-      {
-        "name": "core.settings-modal.nav",
-        "description": "The settings section buttons in order.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.scope",
-        "description": "The settings scope buttons in order.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.folder",
-        "description": "The folder of the project below the scope buttons, shown in the project scope only."
-      },
-      {
-        "name": "core.settings-modal.theme",
-        "description": "The theme swatches in order.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.set",
-        "description": "The setting controls in workbench order (switches, select boxes, sliders and text fields, one control per setting form); core.settings-modal lists their keys.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.debug",
-        "description": "The 디버그 switch of the 진단 row: on when the performance trace is on and every class of the log policy is at trace."
-      },
-      {
-        "name": "core.settings-modal.setup",
-        "description": "The rows of the 에이전트 group in the order of the setup parts: the name of the part, its file, its state and the optional action for the user PATH registration; the key of a row is setup:<part>:<file>.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.setup-install",
-        "description": "The 설치 button of the 에이전트 group, shown while a skill or mcp part is not ok: runs core.setup.install with those kinds."
-      },
-      {
-        "name": "core.settings-modal.setup-change",
-        "description": "The user PATH registration action of the 에이전트 group: runs core.setup.change with the opposite of the saved preference."
-      },
-      {
-        "name": "core.settings-modal.setup-check",
-        "description": "The 다시 확인 button of the 에이전트 group: runs core.setup.check."
-      },
-      {
-        "name": "core.settings-modal.reset",
-        "description": "The buttons that remove project overrides in workbench order.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.applied",
-        "description": "The marks of the common tab, in workbench order, that the project value of a setting applies: each stands where the project tab has the button that removes that value, and its key is applied:<setting>.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.plugin",
-        "description": "The rows of the loaded plugin list in id order, filtered by the search text; each shows the plugin name.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.edit",
-        "description": "The set edit buttons in set order, then the button that closes the editor.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.set-caption",
-        "description": "The line of each sidebar set in set order: its title, layout and sections.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.delete",
-        "description": "The set delete buttons in set order.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.create",
-        "description": "The button that creates a sidebar set."
-      },
-      {
-        "name": "core.settings-modal.search",
-        "description": "The plugin search field."
-      },
-      {
-        "name": "core.settings-modal.account",
-        "description": "The rows of the accounts of the shown plugin page in the order of their names, each with the identifier of its account in data-account.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.account-login",
-        "description": "The 로그인 buttons of the accounts whose login is false, bound to core.accounts.login.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.account-login-cancel",
-        "description": "The 취소 buttons of the accounts whose login runs, bound to core.accounts.login-cancel.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.account-logout",
-        "description": "The 로그아웃 buttons of the accounts whose login is true, bound to core.accounts.logout.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.account-edit",
-        "description": "The 이름 변경 buttons of the accounts, bound to core.settings-modal.account-edit.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.account-remove",
-        "description": "The 삭제 buttons of the accounts, bound to core.accounts.remove.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.account-edit-name",
-        "description": "The name field of the account whose name is edited, bound to core.settings-modal.account-edit-name."
-      },
-      {
-        "name": "core.settings-modal.account-save",
-        "description": "The 저장 button of the account whose name is edited, bound to core.accounts.rename."
-      },
-      {
-        "name": "core.settings-modal.account-edit-cancel",
-        "description": "The 취소 button of the account whose name is edited, bound to core.settings-modal.account-edit with null."
-      },
-      {
-        "name": "core.settings-modal.account-name",
-        "description": "The name field of the row 새 계정, bound to core.settings-modal.account-name."
-      },
-      {
-        "name": "core.settings-modal.account-kind",
-        "description": "The kind select of the row 새 계정, bound to core.settings-modal.account-kind."
-      },
-      {
-        "name": "core.settings-modal.account-add",
-        "description": "The 추가 button of the row 새 계정, bound to core.accounts.add."
-      },
-      {
         "name": "core.card.placeholder-action",
         "description": "The 설치 or 사용 button of a placeholder card for a tab of a plugin that is not loaded, bound to core.plugins.install or core.plugins.enable."
       },
       {
-        "name": "core.settings-modal.back",
-        "description": "The 목록 button of a plugin page, which returns to the plugin list."
-      },
-      {
-        "name": "core.settings-modal.pane",
-        "description": "The pane of the settings window, the box below the head that scrolls and holds the controls of the shown page."
-      },
-      {
-        "name": "core.settings-modal.manage",
-        "description": "The 플러그인 관리 button of the plugins section, bound to core.plugins.browse."
-      },
-      {
-        "name": "core.settings-modal.row",
-        "description": "The section select boxes of the set editor, one per row in set order.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.row-act",
-        "description": "The ▲, ▼, and − buttons of the set editor rows in workbench order.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.order",
-        "description": "The ▲ and ▼ buttons of the order rows of a list setting (사이드바 순서) in workbench order; each runs core.settings.change with the whole new order.",
-        "many": true
-      },
-      {
-        "name": "core.settings-modal.add",
-        "description": "The + button of the set editor, which adds a section row."
-      },
-{
         "name": "core.project-tab.close",
         "description": "The close buttons of the project tabs, in tab order.",
         "many": true
@@ -6471,15 +6334,394 @@
       },
       {
         "name": "core.projects.column",
-        "description": "The left column that holds the project tabs when they stand on the left."
+        "description": "The column that holds the project tabs when they stand on the left or the right of the work area."
       },
       {
-        "name": "core.library.empty",
-        "description": "The note shown when there are no projects."
+        "name": "core.home.search",
+        "description": "The project home search field."
       },
       {
-        "name": "core.library.no-results",
-        "description": "The note shown when the search matches no project."
+        "name": "core.home.add",
+        "description": "The primary button of the project home that creates a project."
+      },
+      {
+        "name": "core.home.open-folder",
+        "description": "The button of the project home that opens an existing folder as a project."
+      },
+      {
+        "name": "core.home.open",
+        "description": "The name buttons of the project home rows; each opens its project.",
+        "many": true
+      },
+      {
+        "name": "core.home.pin",
+        "description": "The pin buttons of the project home rows.",
+        "many": true
+      },
+      {
+        "name": "core.home.remove-ask",
+        "description": "The × buttons of the project home rows that put the row into its confirm state.",
+        "many": true
+      },
+      {
+        "name": "core.home.confirm",
+        "description": "The cancel and remove buttons of a row in its confirm state.",
+        "many": true
+      },
+      {
+        "name": "core.home.path",
+        "description": "The row that opens a typed path as a project, with its open button."
+      },
+      {
+        "name": "core.home.no-results",
+        "description": "The note shown when the search text matches no project."
+      },
+      {
+        "name": "core.home.form.name",
+        "description": "The project folder name field of the project home form."
+      },
+      {
+        "name": "core.home.form.parent",
+        "description": "The parent or folder path field of the project home form."
+      },
+      {
+        "name": "core.home.form.choose",
+        "description": "The folder selection button of the project home form."
+      },
+      {
+        "name": "core.home.form.submit",
+        "description": "The submit button of the project home form."
+      },
+      {
+        "name": "core.home.form.cancel",
+        "description": "The cancel button of the project home form."
+      },
+      {
+        "name": "core.sidebar.edge",
+        "description": "The + <side> button shown at the edge of a hidden side that has a choice.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.close",
+        "description": "The close control of the settings tab chip."
+      },
+      {
+        "name": "core.settings-tab.plugins.action",
+        "description": "The action buttons of the plugin cards in workbench order: 설치, 업데이트, 사용 or 사용 안 함, and 제거, each bound to its core.plugins command.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.plugins.about",
+        "description": "The description lines of the plugin cards in workbench order, one for each plugin that has a description.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.plugins.contribution",
+        "description": "The extension point contribution lines of the plugin cards in workbench order: the point, the number and the state of each contribution of the plugin, or its error.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.plugins.outdated",
+        "description": "The rows of the outdated persistent services above the plugin cards, in sidecar order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.plugins.update-all",
+        "description": "The button 모두 업데이트 of 설치됨, shown while a plugin has an update; it updates every plugin with an update."
+      },
+      {
+        "name": "core.settings-tab.plugins.replace",
+        "description": "The buttons that end the sessions of an outdated service and replace it, in the order of the rows.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.plugins.end",
+        "description": "The buttons of the plugin cards in workbench order that end the services that hold an operation of the plugin and run it, each bound to its core.plugins command with end true; a card whose held operation has a sessions count that is not known has none.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.plugins.app",
+        "description": "The core update row of the 설치됨 page, `core: <running> → <available>`, and the line of a running or failed core update; absent while the registry index lists no newer core release."
+      },
+      {
+        "name": "core.settings-tab.plugins.incompatible",
+        "description": "The notices of the core update row in plugin id order, one for each installed plugin that the available core release does not fit.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.plugins.app-release",
+        "description": "The link of the core update row to the page of the available core release, bound to core.app.release."
+      },
+      {
+        "name": "core.settings-tab.plugins.app-update",
+        "description": "The button 업데이트 of the core update row, bound to core.app.update."
+      },
+      {
+        "name": "core.settings-tab.nav",
+        "description": "The settings section buttons in order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.scope",
+        "description": "The settings scope buttons in order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.folder",
+        "description": "The folder of the project below the scope buttons, shown in the project scope only."
+      },
+      {
+        "name": "core.settings-tab.theme",
+        "description": "The theme swatches in order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.set",
+        "description": "The setting controls in workbench order (switches, select boxes, sliders and text fields, one control per setting form); core.settings lists their keys.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.debug",
+        "description": "The 디버그 switch of the 진단 row: on when the performance trace is on and every class of the log policy is at trace."
+      },
+      {
+        "name": "core.settings-tab.setup",
+        "description": "The rows of the 에이전트 group in the order of the setup parts: the name of the part, its file, its state and the optional action for the user PATH registration; the key of a row is setup:<part>:<file>.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.setup-install",
+        "description": "The 설치 button of the 에이전트 group, shown while a skill or mcp part is not ok: runs core.setup.install with those kinds."
+      },
+      {
+        "name": "core.settings-tab.setup-change",
+        "description": "The user PATH registration action of the 에이전트 group: runs core.setup.change with the opposite of the saved preference."
+      },
+      {
+        "name": "core.settings-tab.setup-check",
+        "description": "The 다시 확인 button of the 에이전트 group: runs core.setup.check."
+      },
+      {
+        "name": "core.settings-tab.reset",
+        "description": "The buttons that remove project overrides in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.applied",
+        "description": "The marks of the common tab, in workbench order, that the project value of a setting applies: each stands where the project tab has the button that removes that value, and its key is applied:<setting>.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.plugin",
+        "description": "The rows of the loaded plugin list in id order, filtered by the search text; each shows the plugin name.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.edit",
+        "description": "The set edit buttons in set order, then the button that closes the editor.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.delete",
+        "description": "The set delete buttons in set order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.create",
+        "description": "The button that creates a sidebar set."
+      },
+      {
+        "name": "core.settings-tab.search",
+        "description": "The plugin search field."
+      },
+      {
+        "name": "core.settings-tab.account",
+        "description": "The rows of the accounts of the shown plugin page in the order of their names, each with the identifier of its account in data-account.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.account-login",
+        "description": "The 로그인 buttons of the accounts whose login is false, bound to core.accounts.login.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.account-login-cancel",
+        "description": "The 취소 buttons of the accounts whose login runs, bound to core.accounts.login-cancel.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.account-logout",
+        "description": "The 로그아웃 buttons of the accounts whose login is true, bound to core.accounts.logout.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.account-edit",
+        "description": "The 이름 변경 buttons of the accounts, bound to core.settings-tab.account-edit.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.account-remove",
+        "description": "The 삭제 buttons of the accounts, bound to core.accounts.remove.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.account-edit-name",
+        "description": "The name field of the account whose name is edited, bound to core.settings-tab.account-edit-name."
+      },
+      {
+        "name": "core.settings-tab.account-save",
+        "description": "The 저장 button of the account whose name is edited, bound to core.accounts.rename."
+      },
+      {
+        "name": "core.settings-tab.account-edit-cancel",
+        "description": "The 취소 button of the account whose name is edited, bound to core.settings-tab.account-edit with null."
+      },
+      {
+        "name": "core.settings-tab.account-name",
+        "description": "The name field of the row 새 계정, bound to core.settings-tab.account-name."
+      },
+      {
+        "name": "core.settings-tab.account-kind",
+        "description": "The kind select of the row 새 계정, bound to core.settings-tab.account-kind."
+      },
+      {
+        "name": "core.settings-tab.account-add",
+        "description": "The 추가 button of the row 새 계정, bound to core.accounts.add."
+      },
+      {
+        "name": "core.settings-tab.back",
+        "description": "The 목록 button of a plugin page, which returns to the plugin list."
+      },
+      {
+        "name": "core.settings-tab.pane",
+        "description": "The pane of the settings tab, the box below the head that scrolls and holds the controls of the shown page."
+      },
+      {
+        "name": "core.settings-tab.row-act",
+        "description": "The ▲, ▼, and − buttons of the set editor rows in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.order",
+        "description": "The ▲ and ▼ buttons of the order rows of a list setting (사이드바 순서) in workbench order; each runs core.settings.change with the whole new order.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.add",
+        "description": "The + button of the set editor, which adds a section row."
+      },
+      {
+        "name": "core.settings-tab.find",
+        "description": "The menu search field of the settings tab."
+      },
+      {
+        "name": "core.settings-tab.filter",
+        "description": "The filter segment of the page 설치됨."
+      },
+      {
+        "name": "core.settings-tab.undo",
+        "description": "The 되돌리기 button of the undo toast."
+      },
+      {
+        "name": "core.settings-tab.confirm",
+        "description": "The buttons of an open removal confirmation."
+      },
+      {
+        "name": "core.settings-tab.choice",
+        "description": "The segments and select boxes of the setting rows, bound to core.settings.change."
+      },
+      {
+        "name": "core.settings-tab.step",
+        "description": "The − and + buttons of the steppers of the setting rows, bound to core.settings.change."
+      },
+      {
+        "name": "core.settings-tab.text",
+        "description": "The text fields of the setting rows, bound to core.settings.change on Enter and on blur."
+      },
+      {
+        "name": "core.settings-tab.badge",
+        "description": "The badges of the menu items and the rows."
+      },
+      {
+        "name": "core.sidebar.missing",
+        "description": "The line of a plugin whose sections a set or a sidebar holds and cannot draw, with its text and the button of its state (install, enable, or open the installed plugins); the item is the plugin id.",
+        "many": true
+      },
+      {
+        "name": "core.settings-tab.fix",
+        "description": "The fix button under a group whose rule across fields is not met, bound to core.settings.change."
+      },
+      {
+        "name": "core.settings-tab.layout",
+        "description": "The layout select of the set editor, bound to core.settings.sets.update."
+      },
+      {
+        "name": "core.settings-tab.link",
+        "description": "The set selects of the plugin windows and cards, bound to core.settings.link."
+      },
+      {
+        "name": "core.settings-tab.override",
+        "description": "The chips of a common row with a project value, bound to core.settings-tab.scope."
+      },
+      {
+        "name": "core.settings-tab.side",
+        "description": "The four rows of the sidebar list, one per side in placement order."
+      },
+      {
+        "name": "core.settings-tab.set-title",
+        "description": "The name field of the set editor, bound to core.settings.sets.update."
+      },
+      {
+        "name": "core.settings-tab.toast",
+        "description": "The undo toast of the last change."
+      },
+      {
+        "name": "core.settings-tab.confirm-yes",
+        "description": "The accept button of an open removal confirmation, bound to core.settings-tab.confirm."
+      },
+      {
+        "name": "core.settings-tab.confirm-no",
+        "description": "The decline button of an open removal confirmation, bound to core.settings-tab.confirm."
+      },
+      {
+        "name": "core.settings-tab.browse-search",
+        "description": "The search field of the page 찾아보기, bound to core.settings-tab.browse."
+      },
+      {
+        "name": "core.settings-tab.browse-hide",
+        "description": "The switch 설치된 것 숨기기 of the page 찾아보기, bound to core.settings-tab.browse."
+      },
+      {
+        "name": "core.settings-tab.browse-more",
+        "description": "The button that shows the next rows of the page 찾아보기, bound to core.settings-tab.browse."
+      },
+      {
+        "name": "core.settings-tab.browse-row",
+        "description": "The rows of the page 찾아보기, bound to core.settings-tab.plugin."
+      },
+      {
+        "name": "core.settings-tab.browse-find",
+        "description": "The search card that opens 찾아보기 with the menu search text, bound to core.settings-tab.browse."
+      },
+      {
+        "name": "core.settings-tab.plugin-item",
+        "description": "The items of the menu group of plugins with settings, bound to core.settings-tab.plugin."
+      },
+      {
+        "name": "core.settings-tab.plugin-row",
+        "description": "The rows of the page 설치됨, bound to core.settings-tab.plugin."
+      },
+      {
+        "name": "core.settings-tab.plugins.switch",
+        "description": "The enable switches of the plugin rows and pages, bound to core.plugins.enable and core.plugins.disable."
+      },
+      {
+        "name": "core.settings-tab.setup-install-all",
+        "description": "The button that installs every setup part that is not ok, bound to core.setup.install."
+      },
+      {
+        "name": "core.settings-tab.chip",
+        "description": "The settings tab chip beside the project tabs; it runs core.settings.open."
       }
     ]
   }

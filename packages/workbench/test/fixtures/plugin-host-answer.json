@@ -1,0 +1,59 @@
+{
+  "installed": {
+    "plugins": [
+      {
+        "id": "acme",
+        "package": "acme",
+        "version": "1.0.0",
+        "folder": "/installed/plugin",
+        "manifest": {
+          "id": "acme",
+          "name": "Acme",
+          "description": "the files",
+          "contributes": {},
+          "settings": {
+            "mode": { "type": "enum", "label": "파일 열기", "description": "how the files open", "values": ["a", "b"], "default": "a" }
+          }
+        }
+      }
+    ]
+  },
+  "environment": { "settings": {} },
+  "pluginsState": {
+    "core": "1.0.0",
+    "registry": "file:///registry/index.json",
+    "index": {
+      "format": 2,
+      "plugins": [
+        {
+          "id": "gamma",
+          "package": "gamma",
+          "name": "Gamma tools",
+          "description": "the charts",
+          "license": "MIT",
+          "repository": "https://example.invalid/gamma",
+          "versions": [
+            {
+              "version": "1.0.0",
+              "engines": { "soksak": "^1.0.0" },
+              "release": { "url": "https://example.invalid/gamma-1.0.0.zip", "sha256": "0000000000000000000000000000000000000000000000000000000000000000" },
+              "sidecars": {},
+              "plugins": {}
+            }
+          ]
+        }
+      ],
+      "sidecars": [],
+      "packs": [],
+      "revoked": { "plugins": [], "sidecars": [] }
+    },
+    "installed": {
+      "format": 1,
+      "plugins": { "acme": { "version": "1.0.0", "path": "plugins/acme/1.0.0", "enabled": true, "sidecars": {} } },
+      "sidecars": {}
+    },
+    "firstRun": false,
+    "starter": null,
+    "held": []
+  }
+}

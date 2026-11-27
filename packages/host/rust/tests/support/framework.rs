@@ -144,8 +144,14 @@ impl Framework for Fixture {
             .clone()
     }
 
-    fn get_webview(&self, _label: &str) -> Option<(Arc<dyn Frontend>, String)> {
-        None
+    // The window of a label is the window that the test added with add_window, so the root webview of the window resolves.
+    fn get_webview(&self, label: &str) -> Option<(Arc<dyn Frontend>, String)> {
+        self.windows
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .find(|frontend| frontend.name() == label)
+            .map(|frontend| (frontend.clone(), label.to_string()))
     }
 }
 
@@ -164,6 +170,8 @@ pub struct FixtureFrontend {
     page: bool,
     /// The window identifier, which is the label of the window.
     name: String,
+    /// The native main webview of the window, which `with_webview` hands to the work of its label.
+    main: Option<usize>,
 }
 
 /// The error of a call that the window of the tests does not hold.
@@ -182,6 +190,27 @@ impl FixtureFrontend {
             native: Ok(WINDOW),
             page: false,
             name: "fixture".to_string(),
+            main: None,
+        }
+    }
+
+    /// A window whose native window is the real window native, which the platform of the test created on the main thread, and
+    /// whose settled presentation has the value presentation. Its name is the label of the window.
+    pub fn with_native(native: usize, presentation: std::result::Result<usize, String>) -> Self {
+        Self {
+            native: Ok(native),
+            ..Self::new(presentation)
+        }
+    }
+
+    /// A window whose native window is the real window native and whose main webview is the real webview main, which the
+    /// platform of the test created on the main thread. Its name is the label of the window.
+    pub fn with_main_webview(native: usize, main: usize, presentation: std::result::Result<usize, String>) -> Self {
+        Self {
+            main: Some(main),
+            // The main page of the window receives the events of the window, such as the page-ready event of its first commit.
+            page: true,
+            ..Self::with_native(native, presentation)
         }
     }
 
@@ -250,8 +279,10 @@ impl Frontend for FixtureFrontend {
         Err(absent())
     }
 
+    // A window with a main webview of the platform reports the scale of the standard display, which the layout of the test
+    // windows aligns to. The layout asserts nothing about the scale, so the value is the one a standard display reports.
     fn scale_factor(&self) -> Result<f64> {
-        Err(absent())
+        if self.main.is_some() { Ok(1.0) } else { Err(absent()) }
     }
 
     fn size(&self) -> Result<LogicalSize> {
@@ -345,10 +376,21 @@ impl Frontend for FixtureFrontend {
 
     fn with_webview(
         &self,
-        _webview: &str,
-        _work: Box<dyn FnOnce(PlatformWebview) + Send>,
+        webview: &str,
+        work: Box<dyn FnOnce(PlatformWebview) + Send>,
     ) -> Result<()> {
-        Err(absent())
+        // Only the main webview of a window with a real native window has a platform handle; the other labels have none.
+        match (self.main, self.native.as_ref(), webview == self.name) {
+            (Some(main), Ok(native), true) => {
+                work(PlatformWebview {
+                    webview: main as *mut c_void,
+                    controller: std::ptr::null_mut(),
+                    window: *native as *mut c_void,
+                });
+                Ok(())
+            }
+            _ => Err(absent()),
+        }
     }
 
     fn reload(&self, _webview: &str) -> Result<()> {

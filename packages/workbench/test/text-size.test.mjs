@@ -33,7 +33,7 @@ test("the text scope is a card or the frame and reports each change", () => {
 
 test("without a pressed place the scope is the focused card, and the frame when no card is focused", () => {
   assert.deepEqual(effectiveTextScope(null, "c1"), { kind: "card", card: "c1" });
-  assert.deepEqual(effectiveTextScope(null, null), { kind: "frame" }, "a window without a card, such as the library, has no card to enlarge");
+  assert.deepEqual(effectiveTextScope(null, null), { kind: "frame" }, "a window without a card, such as the project home, has no card to enlarge");
   assert.deepEqual(effectiveTextScope(null, undefined), { kind: "frame" });
   assert.deepEqual(effectiveTextScope({ kind: "frame" }, "c1"), { kind: "frame" });
 });

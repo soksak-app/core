@@ -66,7 +66,7 @@ const { flushEvents } = await import("../page-log.js");
 const { logGate, logPolicyOf } = await import("../log-gate.js");
 logGate.set(logPolicyOf({ lifecycle: "info" }));
 const { pageMemorySaver } = await import("./support/memory-saver.mjs");
-await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+await installCoreExposure({ home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   memorySaver: await pageMemorySaver() });
 plane.nameWindow("main");
 

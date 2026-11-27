@@ -1,0 +1,14 @@
+{
+  "id": "probe",
+  "name": "Probe",
+  "description": "Sample.",
+  "mark": "Probe",
+  "surface": {
+    "composition": {
+      "kind": "view",
+      "page": "ui/page.html",
+      "regions": [{ "name": "view", "kind": "image", "sidecar": "@fixture/sidecar-echo", "present": "copy", "input": "dom" }]
+    }
+  },
+  "dependencies": { "@fixture/sidecar-echo": "^0.0.1" }
+}

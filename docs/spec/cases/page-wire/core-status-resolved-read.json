@@ -79,6 +79,8 @@
         "result": null
       }
     },
+    {"call": {"name": "workspace", "payload": {"kind": "notices"}}},
+    {"reply": {"result": null}},
     {
       "call": {
         "name": "workspace",

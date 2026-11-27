@@ -14,16 +14,6 @@
       "example": 5000000789,
       "source": "host"
     },
-    "ts-us": {
-      "type": "integer",
-      "example": 1791000000000456,
-      "source": "page"
-    },
-    "mono-ns": {
-      "type": "integer",
-      "example": 5000000789,
-      "source": "page"
-    },
     "page-identity": {
       "type": "string",
       "example": "a31d459a-7ccd-48f8-89d7-79acb5166b94",
@@ -39,104 +29,194 @@
       "example": 1,
       "source": "page"
     },
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
     "ts-us-2": {
       "type": "integer",
-      "example": 1790999999970647,
+      "example": 1791000000000456,
       "source": "page"
     },
     "mono-ns-2": {
       "type": "integer",
-      "example": 4970191831,
+      "example": 5000000789,
       "source": "page"
     },
     "ts-us-3": {
       "type": "integer",
-      "example": 1791000000000637,
+      "example": 1791000000000456,
       "source": "page"
     },
     "mono-ns-3": {
       "type": "integer",
-      "example": 5000181247,
+      "example": 5000000789,
       "source": "page"
     },
     "ts-us-4": {
       "type": "integer",
-      "example": 1791000000000632,
+      "example": 1791000000000456,
       "source": "page"
     },
     "mono-ns-4": {
       "type": "integer",
-      "example": 5000177081,
+      "example": 5000000789,
       "source": "page"
     },
     "ts-us-5": {
       "type": "integer",
-      "example": 1791000000141295,
+      "example": 1791000000000456,
       "source": "page"
     },
     "mono-ns-5": {
       "type": "integer",
-      "example": 5140840039,
+      "example": 5000000789,
       "source": "page"
     },
     "ts-us-6": {
       "type": "integer",
-      "example": 1791000000204153,
+      "example": 1791000000000456,
       "source": "page"
     },
     "mono-ns-6": {
       "type": "integer",
-      "example": 5203697206,
+      "example": 5000000789,
       "source": "page"
     },
     "ts-us-7": {
       "type": "integer",
-      "example": 1791000000223920,
+      "example": 1791000000000456,
       "source": "page"
     },
     "mono-ns-7": {
       "type": "integer",
-      "example": 5223464456,
+      "example": 5000000789,
       "source": "page"
     },
     "ts-us-8": {
       "type": "integer",
-      "example": 1791000000223910,
+      "example": 1791000000000456,
       "source": "page"
     },
     "mono-ns-8": {
       "type": "integer",
-      "example": 5223454414,
+      "example": 5000000789,
       "source": "page"
     },
     "ts-us-9": {
       "type": "integer",
-      "example": 1791000000576797,
+      "example": 1791000000000456,
       "source": "page"
     },
     "mono-ns-9": {
       "type": "integer",
-      "example": 5576341872,
+      "example": 5000000789,
       "source": "page"
     },
     "ts-us-10": {
       "type": "integer",
-      "example": 1791000000675809,
+      "example": 1791000000000456,
       "source": "page"
     },
     "mono-ns-10": {
       "type": "integer",
-      "example": 5675353997,
+      "example": 5000000789,
       "source": "page"
     },
     "ts-us-11": {
       "type": "integer",
-      "example": 1791000000675794,
+      "example": 1791000000000456,
       "source": "page"
     },
     "mono-ns-11": {
       "type": "integer",
-      "example": 5675338247,
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-12": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-12": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-13": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-13": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-14": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-14": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-15": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-15": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-16": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-16": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-17": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-17": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-18": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-18": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-19": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-19": {
+      "type": "integer",
+      "example": 5000000789,
       "source": "page"
     }
   },
@@ -374,11 +454,12 @@
               "ts_us": "$ts-us-2",
               "mono_ns": "$mono-ns-2",
               "start": "$page-identity",
-              "level": "error",
-              "event": "workbench.record.error",
+              "level": "info",
+              "event": "workbench.log.gated",
               "fields": {
-                "where": "tab error tab-cccccc",
-                "text": "저장하지 못했습니다 · fixture-close-modified.save left the tab modified"
+                "class": "input",
+                "level": "debug",
+                "count": 6
               }
             }
           ]
@@ -403,21 +484,20 @@
               "level": "info",
               "event": "workbench.log.gated",
               "fields": {
-                "class": "input",
+                "class": "call",
                 "level": "debug",
-                "count": 6
+                "count": 1
               }
             },
             {
               "ts_us": "$ts-us-4",
               "mono_ns": "$mono-ns-4",
               "start": "$page-identity",
-              "level": "info",
-              "event": "workbench.log.gated",
+              "level": "error",
+              "event": "workbench.record.error",
               "fields": {
-                "class": "call",
-                "level": "debug",
-                "count": 1
+                "where": "tab error tab-cccccc",
+                "text": "저장하지 못했습니다 · fixture-close-modified.save left the tab modified"
               }
             }
           ]
@@ -513,11 +593,12 @@
               "ts_us": "$ts-us-5",
               "mono_ns": "$mono-ns-5",
               "start": "$page-identity",
-              "level": "error",
-              "event": "workbench.record.error",
+              "level": "info",
+              "event": "workbench.log.gated",
               "fields": {
-                "where": "tab error tab-eeeeee",
-                "text": "저장하지 못했습니다 · fixture-close-modified.save: write refused"
+                "class": "input",
+                "level": "debug",
+                "count": 3
               }
             }
           ]
@@ -568,6 +649,32 @@
     },
     {
       "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-6",
+              "mono_ns": "$mono-ns-6",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "tab error tab-eeeeee",
+                "text": "저장하지 못했습니다 · fixture-close-modified.save: write refused"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
         "name": "exposureForward",
         "payload": {
           "id": 3,
@@ -610,14 +717,27 @@
           "action": "batch",
           "events": [
             {
-              "ts_us": "$ts-us-6",
-              "mono_ns": "$mono-ns-6",
+              "ts_us": "$ts-us-7",
+              "mono_ns": "$mono-ns-7",
               "start": "$page-identity",
-              "level": "error",
-              "event": "workbench.record.error",
+              "level": "info",
+              "event": "workbench.log.gated",
               "fields": {
-                "where": "tab error tab-gggggg",
-                "text": "저장하지 못했습니다 · fixture-close-modified.save: first write refused"
+                "class": "call",
+                "level": "warn",
+                "count": 1
+              }
+            },
+            {
+              "ts_us": "$ts-us-8",
+              "mono_ns": "$mono-ns-8",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 3
               }
             }
           ]
@@ -636,27 +756,26 @@
           "action": "batch",
           "events": [
             {
-              "ts_us": "$ts-us-7",
-              "mono_ns": "$mono-ns-7",
-              "start": "$page-identity",
-              "level": "info",
-              "event": "workbench.log.gated",
-              "fields": {
-                "class": "input",
-                "level": "debug",
-                "count": 6
-              }
-            },
-            {
-              "ts_us": "$ts-us-8",
-              "mono_ns": "$mono-ns-8",
+              "ts_us": "$ts-us-9",
+              "mono_ns": "$mono-ns-9",
               "start": "$page-identity",
               "level": "info",
               "event": "workbench.log.gated",
               "fields": {
                 "class": "call",
                 "level": "warn",
-                "count": 2
+                "count": 1
+              }
+            },
+            {
+              "ts_us": "$ts-us-10",
+              "mono_ns": "$mono-ns-10",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "tab error tab-gggggg",
+                "text": "저장하지 못했습니다 · fixture-close-modified.save: first write refused"
               }
             }
           ]
@@ -741,6 +860,33 @@
     },
     {
       "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-11",
+              "mono_ns": "$mono-ns-11",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 2
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
         "name": "overlayShow",
         "payload": {
           "id": "picker",
@@ -803,6 +949,45 @@
       "call": {
         "name": "overlayHide",
         "payload": "picker"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-12",
+              "mono_ns": "$mono-ns-12",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "debug",
+                "count": 1
+              }
+            },
+            {
+              "ts_us": "$ts-us-13",
+              "mono_ns": "$mono-ns-13",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 3
+              }
+            }
+          ]
+        }
       }
     },
     {
@@ -888,8 +1073,47 @@
           "action": "batch",
           "events": [
             {
-              "ts_us": "$ts-us-9",
-              "mono_ns": "$mono-ns-9",
+              "ts_us": "$ts-us-14",
+              "mono_ns": "$mono-ns-14",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "debug",
+                "count": 1
+              }
+            },
+            {
+              "ts_us": "$ts-us-15",
+              "mono_ns": "$mono-ns-15",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-16",
+              "mono_ns": "$mono-ns-16",
               "start": "$page-identity",
               "level": "error",
               "event": "workbench.record.error",
@@ -985,27 +1209,54 @@
           "action": "batch",
           "events": [
             {
-              "ts_us": "$ts-us-10",
-              "mono_ns": "$mono-ns-10",
-              "start": "$page-identity",
-              "level": "info",
-              "event": "workbench.log.gated",
-              "fields": {
-                "class": "input",
-                "level": "debug",
-                "count": 12
-              }
-            },
-            {
-              "ts_us": "$ts-us-11",
-              "mono_ns": "$mono-ns-11",
+              "ts_us": "$ts-us-17",
+              "mono_ns": "$mono-ns-17",
               "start": "$page-identity",
               "level": "info",
               "event": "workbench.log.gated",
               "fields": {
                 "class": "call",
                 "level": "debug",
-                "count": 4
+                "count": 1
+              }
+            },
+            {
+              "ts_us": "$ts-us-18",
+              "mono_ns": "$mono-ns-18",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 3
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-19",
+              "mono_ns": "$mono-ns-19",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "debug",
+                "count": 1
               }
             }
           ]

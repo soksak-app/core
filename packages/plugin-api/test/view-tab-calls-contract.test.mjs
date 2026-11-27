@@ -14,9 +14,14 @@ const EXPECTED_IDS = [
   "view.tab.footer-request-reply-and-refusal",
   "view.tab.directory-request-reply-and-refusal",
   "view.tab.notify-request-reply-and-refusal",
+  "view.tab.progress-request-reply-and-refusal",
+  "view.tab.done-request-reply-and-refusal",
   "view.tab.modified-request-reply-and-refusal",
   "view.tab.error-request-reply-and-refusal",
   "view.tab.keep-request-reply-and-refusal",
+  "view.page.notify-request-reply-and-refusal",
+  "view.page.progress-request-reply-and-refusal",
+  "view.page.done-request-reply-and-refusal",
 ];
 
 // Lets every pending promise of the call layer settle before a step reports its output.

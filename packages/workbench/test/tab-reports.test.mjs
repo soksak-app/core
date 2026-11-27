@@ -43,40 +43,41 @@ test("a new tab's origin is the directory its source tab recorded at that moment
   }
 });
 
-test("a notice is kept for a tab out of view and removed when the tab comes into view", () => {
+test("a card notice never marks its tab, whether the tab is in view or not", () => {
   let visible = "tab-shown";
   setVisibleTab((id) => id === visible);
   let notified = 0;
   const off = onTabReports(() => notified++);
-  reportNotice("tab-shown", "build complete");
-  assert.equal(tabNotice("tab-shown"), null, "a notice for the tab in view must change nothing");
+  reportNotice("tab-shown", { kind: "info", title: "build complete", text: "" });
+  assert.equal(tabNotice("tab-shown"), null, "a card notice does not change the dot of its tab");
   assert.equal(notified, 0);
-  reportNotice("tab-hidden", "first");
-  reportNotice("tab-hidden", "build complete");
-  assert.equal(tabNotice("tab-hidden"), "build complete");
+  reportNotice("tab-hidden", { kind: "info", title: "first", text: "" });
+  reportNotice("tab-hidden", { kind: "info", title: "build complete", text: "" });
+  assert.equal(tabNotice("tab-hidden"), null);
   assert.equal(notified, 2);
   clearVisibleNotices();
-  assert.equal(tabNotice("tab-hidden"), "build complete");
+  assert.equal(tabNotice("tab-hidden"), null);
   visible = "tab-hidden";
   clearVisibleNotices();
   assert.equal(tabNotice("tab-hidden"), null);
   assert.equal(notified, 3);
   visible = null;
-  reportNotice("tab-closed", "x");
+  reportNotice("tab-closed", { kind: "info", title: "x", text: "" });
   forgetTab("tab-closed");
   assert.equal(tabNotice("tab-closed"), null);
-  for (const invalid of ["", "x".repeat(1025), "line\n", null, 1]) {
-    assert.throws(() => reportNotice("tab-hidden", invalid), /a tab notice must be 1 to 1024 characters/);
+  for (const invalid of ["", "x".repeat(121), "line\n", null, 1]) {
+    assert.throws(() => reportNotice("tab-hidden", { kind: "info", title: invalid, text: "" }),
+      { name: "TypeError", message: "a notice title must be 1 to 120 characters without control characters" });
   }
   off();
 });
 
 test("a system notification policy hides the tab dot but exposes the notice to the notification center", () => {
   setVisibleTab(() => false);
-  reportNotice("tab-system", "system body", "system");
+  reportNotice("tab-system", { kind: "info", title: "system body", text: "", system: true });
   assert.equal(tabNotice("tab-system"), null);
   assert.deepEqual(tabNotices(), [["tab-system", "system body"]]);
-  assert.throws(() => reportNotice("tab-invalid-policy", "body", "other"), /unknown tab notice policy/);
+  assert.throws(() => reportNotice("tab-invalid-policy", { kind: "info", title: "body", text: "", system: "other" }), { message: "a notice system must be true or false" });
   forgetTab("tab-system");
 });
 

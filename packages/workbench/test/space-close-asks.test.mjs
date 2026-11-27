@@ -97,7 +97,7 @@ test("core.space.close asks about modified tabs before it removes the active spa
     await projects.activate(PROJECT.id);
     await installCoreExposure({
       memorySaver: await pageMemorySaver(),
-      library: { state: () => null }, renames: { state: () => null }, chrome: () => null,
+      home: { state: () => null }, renames: { state: () => null }, chrome: () => null,
       drawn: async () => {},
     });
     const tabId = plane.currentGrid().card("main").data.tabs[0].id;

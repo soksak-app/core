@@ -355,7 +355,7 @@ test("a modal keeps the keyboard until it closes", { timeout: 5000 }, async () =
   assert.equal(b.calls().at(-1), b.ringSurface());
 });
 
-test("the library keeps the keyboard with the workbench", { timeout: 5000 }, async () => {
+test("the project home keeps the keyboard with the workbench", { timeout: 5000 }, async () => {
   await b.reset();
   b.plane.clear();
   await b.idle();

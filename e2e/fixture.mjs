@@ -82,26 +82,19 @@ export async function probeSidebarSets(s, path = LAYOUT_PROBE_MANIFEST) {
 }
 
 /**
- * Waits until the settings dialog that core.settings.open opened is shown. A host with a main page shows it in a native modal web
- * view, which host.window reports shown; the mygo workbench draws it itself, and core.modal names it while it is open
- * (docs/spec/exposure.md, docs/spec/native-modals.md).
+ * Waits until the settings tab that core.settings.open opened is in the window: the status core.settings-tab is not null while the
+ * window has the tab (docs/spec/settings.md#opening-and-closing).
  */
 export async function settingsShown(s, message) {
-  if ((await s.get("host.window")).pageProcess !== null) {
-    return s.until("host.window", (window) => window.modal?.id === "settings" && window.modal.shown, message);
-  }
-  return s.until("core.modal", (modal) => modal?.id === "settings", message);
+  return s.until("core.settings-tab", (tab) => tab !== null, message);
 }
 
 /**
- * Waits until the settings dialog that core.settings.close closed is gone: a host with a main page removes its native modal web
- * view from host.window, and the mygo workbench, which draws it itself, empties core.modal (docs/spec/exposure.md).
+ * Waits until the settings tab that core.settings.close closed is gone: the status core.settings-tab is null
+ * (docs/spec/settings.md#opening-and-closing).
  */
 export async function settingsClosed(s, message) {
-  if ((await s.get("host.window")).pageProcess !== null) {
-    return s.until("host.window", (window) => window.modal === null, message);
-  }
-  return s.until("core.modal", (modal) => modal === null, message);
+  return s.until("core.settings-tab", (tab) => tab === null, message);
 }
 
 /**

@@ -12,7 +12,7 @@ import (
 )
 
 // closeWithoutAFrame closes the shown project and draws no frame, so the elements of the last frame still take the input. The
-// close answers after the frame that shows the library (docs/spec/exposure.md#registration), so without a frame it has not
+// close answers after the frame that shows the project home (docs/spec/exposure.md#registration), so without a frame it has not
 // answered; the screen states the close.
 func closeWithoutAFrame(f *shellFixture) {
 	f.t.Helper()
@@ -31,7 +31,7 @@ func closeWithoutAFrame(f *shellFixture) {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	if text, err := json.Marshal(screen); err != nil || !strings.Contains(string(text), `"screen":"library"`) {
+	if text, err := json.Marshal(screen); err != nil || !strings.Contains(string(text), `"screen":"home"`) {
 		f.t.Fatalf("after the close the screen is %s (%v)", text, err)
 	}
 }

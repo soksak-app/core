@@ -278,6 +278,8 @@
     {"reply":{"result":{"common":{"diagnostics.log":{"lifecycle":"info"}},"pluginData": {}, "projects":[{"id":"prj-session","title":"session","root":"/work/session","identity":"id","color":"#fff","named":1,"activeSpaceId":"spc-aaaaaa","spaces":[{"id":"spc-aaaaaa","title":"SPACE1","layout":{"state":{"root":{"card":"main","data":{"tabs":[{"id":"tab-aaaaaa","plugin":"fixture-session","title":"shown","origin":{"directory":"/work/session"},"role":null},{"id":"tab-bbbbbb","plugin":"fixture-session","title":"hidden","origin":{"directory":"/work/session"},"role":null}],"activeId":"tab-aaaaaa"}}},"leader":"main","lastCard":1,"focusedId":"main","windowSidebars":{},"named":0,"sidebars":{}}}],"settings":{}}],"open":[]}}},
     {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
     {"reply":{"result":null}},
+    {"call": {"name": "workspace", "payload": {"kind": "notices"}}},
+    {"reply": {"result": null}},
     {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
     {"reply":{"result":[]}},
     {"call":{"name":"projectFolder","payload":"/work/session"}},

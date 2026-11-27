@@ -22,7 +22,7 @@ test("core.tab.reload restarts the view of its tab through the host and the fail
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const { installCoreExposure } = await import("../core-exposure.js");
-  const parts = { library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {} };
+  const parts = { home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {} };
   // The case has no log calls, so the classes of the page log are off while the command runs.
   const { logGate } = await import("../log-gate.js");
   logGate.set({ lifecycle: "off", input: "off", call: "off", io: "off", frame: "off" });

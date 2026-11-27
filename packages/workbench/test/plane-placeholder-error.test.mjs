@@ -11,6 +11,8 @@ import { recordsOf, shownRecord } from "./support/records.mjs";
 const pluginId = "fixture-placeholder-error";
 const missingId = "fixture-not-registered";
 
+// The error text is shown in a toast of the notification path, where its title holds the line (docs/spec/exposure.md#error-presentation).
+const toastsWith = (text) => [...document.querySelectorAll(".toast")].filter((node) => node.querySelector(".toast__title")?.textContent === text);
 test("a placeholder whose install state cannot be read is an error shown once, and withdrawn when its surface leaves", { timeout: 5000 }, async () => {
   // The host calls of the page are answered by the page-wire case (docs/spec/cases/page-wire/README.md). The case is selected before the modules of the page
   // are imported, because host.js reads the host when it is imported. The host answers the read of the install state with the error of an installed.json that is not valid JSON.
@@ -77,18 +79,17 @@ test("a placeholder whose install state cannot be read is an error shown once, a
     const text = `${missingId} 플러그인의 설치 상태를 읽지 못했습니다.`;
     assert.equal(plane.currentGrid().card("main").data.activeId, missingTab, "the placeholder tab is not the active tab");
     // The error of the placeholder is shown on its surface once, and the line is written to the application log once.
-    assert.equal(document.querySelectorAll(`[data-error="${where}"]`).length, 1, "the unread placeholder did not show exactly one error for its surface");
+    assert.equal(toastsWith(text).length, 1, "the unread placeholder did not show exactly one error toast");
     await flushEvents();
     assert.deepEqual(reports(), [`error workbench ${where}: ${text}`], "the unread placeholder did not write its error to the application log");
-    const shownLine = document.querySelector(`[data-error="${where}"]`);
-    assert.equal(shownLine?.textContent, text, "the unread placeholder is not shown on the screen");
+    assert.equal(toastsWith(text).length, 1, "the unread placeholder is not shown on the screen");
 
     // Closing the placeholder tab removes its surface, so the error of its place is withdrawn.
     await plane.closeTabById(missingTab);
     // The receiver holds the draw of the closing layout until the native preparation finishes, so the test runs it here.
     assert.notEqual(held, null, "closing the tab did not hold a layout draw");
     drawHeld();
-    assert.equal(document.querySelector(`[data-error="${where}"]`), null, "closing the surface did not withdraw its error");
+    assert.equal(toastsWith(text).length, 0, "closing the surface did not withdraw its error");
     await flushEvents();
     assert.deepEqual(reports(), [`error workbench ${where}: ${text}`], "withdrawing the error wrote it again");
     dom.window.close();

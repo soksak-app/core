@@ -64,8 +64,8 @@ test("a factor is written into the document only by a draw, and a measurement re
   assert.equal(root.dataset.frameText, undefined, "factor 1 declares no zoom");
 });
 
-// A scale change in a window without a plane and the switch to the library are drawn with the prepared layout. The switch cancels the drawing of
-// the layout prepared before it, so the drawing of the switch must use the current scale, or the scale of the canceled drawing is lost. The library
+// A scale change in a window without a plane and the switch to the project home are drawn with the prepared layout. The switch cancels the drawing of
+// the layout prepared before it, so the drawing of the switch must use the current scale, or the scale of the canceled drawing is lost. The project home
 // screen clears the plane in the same drawing and then draws (F43).
 test("a frame layout prepares the row of its factor and writes the factor and shows the screen after clearing the plane", async (t) => {
   const dom = new JSDOM("<!doctype html><html><body></body></html>");

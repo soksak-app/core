@@ -39,7 +39,7 @@ const { begin } = await import("../projects.js");
 const plane = await import("../plane.js");
 const { installCoreExposure } = await import("../core-exposure.js");
 const { pageMemorySaver } = await import("./support/memory-saver.mjs");
-await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+await installCoreExposure({ home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   memorySaver: await pageMemorySaver() });
 plane.nameWindow(WINDOW);
 begin({ common: {}, open: [], projects: [{ id: "prj-aaaaaa", root: "/work/project", spaces: [

@@ -50,7 +50,7 @@ const { endSourceOrigin, registerSourceOrigin } = await import("../source-origin
 const { logGate, logPolicyOf } = await import("../log-gate.js");
 logGate.set(logPolicyOf({ lifecycle: "info" }));
 const { pageMemorySaver } = await import("./support/memory-saver.mjs");
-await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+await installCoreExposure({ home: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   memorySaver: await pageMemorySaver() });
 plane.nameWindow("main");
 begin({ common: { "diagnostics.log": { lifecycle: "info" } }, open: [], projects: [{ id: "prj-aaaaaa", root: "/work/project", spaces: [
