@@ -112,6 +112,9 @@ func pluginShell(t *testing.T, plugins *pluginsHost, installed string) *shellFix
 	if plugins.plugins == nil {
 		plugins.plugins = map[string]map[string]any{}
 	}
+	if installed == "" {
+		installed = `{"plugins":[]}`
+	}
 	return newShell(t, &storedHost{installed: installed, plugins: plugins})
 }
 

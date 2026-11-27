@@ -707,7 +707,9 @@ type shellFixture struct {
 // installedDocument is the document of the installed plugins of the host.
 func (h *storedHost) installedDocument() string {
 	if h.installed == "" {
-		return `{"plugins":[]}`
+		return `{"plugins":[{"id": "fieldprobe", "package": "f", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "fieldprobe", "name": "파일", "description": "fieldprobe", "sections": [
+		{"id": "fieldprobe.tree", "name": "파일 트리", "composition": {"kind": "view", "page": "ui/tree.html"}, "height": "fill"},
+		{"id": "fieldprobe.bookmarks", "name": "북마크", "composition": {"kind": "view", "page": "ui/bookmarks.html"}, "height": 160}]}}]}`
 	}
 	return h.installed
 }

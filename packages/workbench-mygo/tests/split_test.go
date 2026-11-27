@@ -1122,39 +1122,10 @@ func (f *shellFixture) focusInk(box ui.Rect) int {
 	return count
 }
 
-// noSidebarSetsCard is narrowCard with an environment that declares no sidebar sets. The test environment links the sections of the
-// probe plugin fieldprobe, which this host does not install, so the window shows its missing-plugin notice over the top right of the
-// card, where the head tools of a fullscreen card stand. This test reads those tools, so it holds the environment without sets.
-func noSidebarSetsCard(t *testing.T, tabs int, title string) *shellFixture {
-	t.Helper()
-	list := []map[string]any{}
-	for i := range tabs {
-		list = append(list, map[string]any{"id": fmt.Sprintf("tab-%06d", i), "plugin": "notes", "title": fmt.Sprintf("%d %s", i, title), "role": nil})
-	}
-	project := storedProject(list...)
-	state := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)
-	state["root"] = cutNode("x", kidNode(0.5, state["root"].(map[string]any)),
-		kidNode(0.5, cardNode("other", map[string]any{"id": "tab-bbbbbb", "plugin": "notes", "title": "b", "role": nil})))
-	var document map[string]any
-	if err := json.Unmarshal(environment(t), &document); err != nil {
-		t.Fatal(err)
-	}
-	document["sidebars"] = map[string]any{"sets": []any{}, "links": []any{}}
-	text, err := json.Marshal(document)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The window shows no sidebars, so the width of the card is half of the plane and its head holds its tabs.
-	f := newShell(t, &storedHost{common: map[string]any{"left": false, "right": false}, projects: []map[string]any{project}, environment: text})
-	f.run("core.project.activate", map[string]string{"id": "prj-a"})
-	f.settle()
-	return f
-}
-
 // The fullscreen tool of a fullscreen card is a pressed switch, which the page draws in the focus color whether or not the pointer
 // is over it (.chrome__act[aria-pressed=true] of packages/workbench/app.css); the close tool beside it keeps the muted color.
 func TestThePressedFullscreenToolIsDrawnInTheFocusColor(t *testing.T) {
-	f := noSidebarSetsCard(t, 1, "a")
+	f := narrowCard(t, 1, "a")
 	f.settle()
 	if ink := f.focusInk(f.box("core.card.fullscreen", "main")); ink != 0 {
 		t.Fatalf("the fullscreen tool of a card that is not fullscreen has %d pixels of the focus color", ink)
