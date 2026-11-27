@@ -164,7 +164,9 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
   function occur({ kind, title, text = "", source = { kind: "core" }, actions = [], progress, origin = null, detail = "", where: place = null, logText = null }) {
     const fields = { kind, title, text, source, actions, progress };
     validate(fields);
+    // default: a log line without a place names the source of the notice (docs/spec/notifications.md, where names the source).
     const logPlace = place ?? where(source);
+    // default: an occurrence without log text is logged as its title and text, as the notice shows them.
     const message = logText ?? (text === "" ? title : `${title}\n${text}`);
     if (origin !== null) {
       const prior = origins.get(origin);
@@ -178,16 +180,19 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
     if (shown) {
       // The shown notice of the same origin is the same occurrence with new content: it adds no count (docs/spec/notifications.md#notices).
       const sameOccurrence = origin !== null && shown === origins.get(origin);
+      // default: an occurrence without log text keeps its title and text as the message, as the notice shows them.
       Object.assign(shown, { text, source, actions, at: now(), read: false, message: logText ?? (text === "" ? title : `${title}\n${text}`) });
       if (!sameOccurrence) shown.count += 1;
       if (origin !== null) own(origin, shown);
       if (shown.toast !== null) slotFor(shown, "toast", toastMs(kind));
       if (shown.line !== null) slotFor(shown, "line", lineMs(kind));
+      // default: an error without log text is logged with its text (docs/spec/notifications.md, error: where: text).
       logOccurrence(shown, detail, logPlace, logText ?? text);
       changed();
       return shown.id;
     }
     const notice = {
+      // default: an occurrence without log text keeps its title and text as the message, as the notice shows them.
       id: `notice-${++seq}`, seq, kind, base: title, text, message: logText ?? (text === "" ? title : `${title}\n${text}`), source, actions, progress: progress ?? null,
       at: now(), count: 1, read: false, origin, holds: 0, toast: null, line: null, owners: new Set(),
     };
@@ -195,6 +200,7 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
     notices.push(notice);
     if (wantsToast(kind, source)) slotFor(notice, "toast", toastMs(kind));
     if (source.kind === "card") slotFor(notice, "line", lineMs(kind));
+    // default: an error without log text is logged with its text (docs/spec/notifications.md, error: where: text).
     logOccurrence(notice, detail, logPlace, logText ?? text);
     changed();
     return notice.id;
@@ -262,12 +268,14 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
 
     /** The text of the notice of an origin, closed or not, until the origin is withdrawn; null when it has none. */
     textOf(origin) {
+      // default: an origin without a notice has no message.
       return origins.get(origin)?.message ?? null;
     },
 
     /** The message of the newest shown toast, or null. */
     newestMessage() {
       const toast = notices.filter((n) => n.toast !== null).sort((a, b) => b.seq - a.seq)[0];
+      // default: a toast without a message has no message.
       return toast?.message ?? null;
     },
 
@@ -443,6 +451,7 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
     /** Each notice record, for the views that draw the entries with their group. */
     records() { return notices.slice(); },
     /** The notice by id, or null. */
+    // default: a notice id that no notice holds has no notice.
     notice(id) { return notices.find((n) => n.id === id) ?? null; },
   };
   return store;
