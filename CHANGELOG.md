@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222: The progress ring reads the declared spinner turn duration instead of a literal.
 - F1217-11-3: The toast list reads the declared fill token instead of a literal flex basis.
 - F1217-7: The status bar names its project, card count and theme texts as elements, so they reach the element tree.
 - F999-7: The host Rust test files follow rustfmt, so the workspace format check of CI passes.

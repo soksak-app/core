@@ -692,7 +692,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .toast[data-kind="success"] .toast__mark { color: var(--ok); }
 .toast[data-kind="warning"] .toast__mark { color: var(--warn); }
 .toast[data-kind="error"] .toast__mark { color: var(--no); }
-.toast[data-kind="progress"] .toast__mark svg, .notice-center__entry[data-kind="progress"] .notice-center__mark svg { animation: surface-status-spin 1s linear infinite; }
+.toast[data-kind="progress"] .toast__mark svg, .notice-center__entry[data-kind="progress"] .notice-center__mark svg { animation: surface-status-spin var(--spinner-turn) linear infinite; }
 @media (prefers-reduced-motion: reduce) { .toast[data-kind="progress"] .toast__mark svg, .notice-center__entry[data-kind="progress"] .notice-center__mark svg { animation: none; } }
 .toast__title { font-weight: 600; font-size: var(--text-small); }
 .toast__text { color: var(--muted); font-size: var(--text-small); overflow-wrap: anywhere; }
