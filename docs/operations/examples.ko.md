@@ -451,6 +451,7 @@ Terminal view benchmark는 process 및 one-shot layout 증거에 전체 performa
 - 네이티브 기본 모음: `make -C native/darwin repeat-suite COUNT=<n>`.
 - Rust 패키지의 테스트: `make repeat-rust PACKAGE=<package> COUNT=<n> [TEST=<name>] [FEATURES=<features>]`.
 - Go 패키지의 테스트: `make repeat-go PACKAGE=<path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>] [PARALLEL=<copies>]`. `PARALLEL`은 반복의 사본을 그만큼 동시에 실행하며, 사본 하나가 실패하면 target이 실패한다.
+- Go 패키지를 한 프로세스로 반복: `make repeat-go-package PACKAGE=<path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]`은 패키지 전체 또는 `TEST`의 테스트를 실행마다 한 번씩 `go test`로 실행하며, 한도는 `TEST_TIMEOUT`이다. 테스트마다 프로세스를 따로 쓰는 `repeat-go`와 다르다. 실행마다 `PASS run i of n` 또는 `FAIL run i of n`을 출력하고, 실행 하나라도 실패하면 실패한다.
 - 창 검사 밖의 Node 테스트: `make repeat-node FILE=<file> NAME=<pattern> COUNT=<n>`.
 - 테스트 순서 의존: `make test-rust-alone PACKAGE=<package> [FEATURES=<features>]`가 각 테스트를 혼자 실행한다.
 

@@ -318,6 +318,21 @@ repeat-go:
 	failed=0; for pid in $$pids; do wait $$pid || failed=$$((failed + 1)); done; \
 	[ $$failed -eq 0 ] || { echo "FAIL: repeat-go: $$failed of $(PARALLEL) copies failed; load $$(uptime)" >&2; exit 1; }
 
+# Runs the whole package of a Go test pattern, or the tests of TEST, COUNT times in sequence, each run as one `go test` process
+# with the limit TEST_TIMEOUT. Unlike repeat-go, which runs each test in a process of its own, this target runs the package in one
+# process the way `go test` does. The target reports each run and fails when any run fails.
+repeat-go-package:
+	@case "$(PACKAGE)" in '') echo "repeat-go-package requires PACKAGE=<go package path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]" >&2; exit 2;; esac
+	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-go-package requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
+	@failed=0; run=1; while [ $$run -le $(COUNT) ]; do \
+	  if $(call go-env) go test -count=1 -timeout $(TEST_TIMEOUT)s $(if $(TAGS),-tags '$(TAGS)') $(if $(TEST),-run '$(TEST)') '$(PACKAGE)'; then \
+	    echo "PASS run $$run of $(COUNT)"; \
+	  else \
+	    echo "FAIL run $$run of $(COUNT)"; failed=$$((failed + 1)); \
+	  fi; run=$$((run + 1)); done; \
+	[ $$failed -eq 0 ] || { echo "FAIL: repeat-go-package: $$failed of $(COUNT) runs failed; load $$(uptime)" >&2; exit 1; }
+	@echo "$(PACKAGE): $(COUNT) of $(COUNT) runs pass"
+
 # Runs the tests whose name matches the pattern in a Node test file COUNT times in sequence from the repository root.
 # Each repeat is one process of node --test with the limit TEST_TIMEOUT: the runner kills it at the limit and names it when it starts
 # (scripts/repeat-node.mjs). Each test of a repeat gets the same limit through --test-timeout.

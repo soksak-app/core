@@ -453,6 +453,7 @@ Reproduce and accept an intermittent failure with these tracked targets:
 - The default native suite: `make -C native/darwin repeat-suite COUNT=<n>`.
 - Rust tests of a package: `make repeat-rust PACKAGE=<package> COUNT=<n> [TEST=<name>] [FEATURES=<features>]`.
 - Go tests of a package: `make repeat-go PACKAGE=<path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>] [PARALLEL=<copies>]`. `PARALLEL` runs that many copies of the repeat at once; the target fails when one copy fails.
+- Go package in one process: `make repeat-go-package PACKAGE=<path> COUNT=<n> [TEST=<regexp>] [TAGS=<tags>]` runs `go test` on the whole package, or on the tests of `TEST`, once per run with the limit `TEST_TIMEOUT`, unlike `repeat-go`, which starts each test in a process of its own. It prints `PASS run i of n` or `FAIL run i of n` for each run and fails when any run fails.
 - Node tests outside window checks: `make repeat-node FILE=<file> NAME=<pattern> COUNT=<n>`.
 - Test order dependence: `make test-rust-alone PACKAGE=<package> [FEATURES=<features>]` runs each test alone.
 
