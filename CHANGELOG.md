@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3, F1217-12: Escape closes the toast list through core.toasts.list {open: false}, before the notice center, in the web and the mygo workbench.
 - F1222-2: The mygo progress notice ring turns with its window frames and stops under reduced motion.
 - F1217-12: Error toasts offer 자세히 through core.notices.show, the toast count lists the other toasts through core.toasts.list, and core.toasts reports listOpen.
 - F1217-11-3: The plugin-api exposure list names the toast show and list commands.

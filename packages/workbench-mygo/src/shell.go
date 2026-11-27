@@ -448,7 +448,7 @@ type Shell struct {
 	tabs          *shellTabs
 	installed     []InstalledPlugin
 
-	settings       *SettingsStore
+	settings    *SettingsStore
 	settingsTab settingsTab
 	// dialog is the open dialog surface of the window, or nil (docs/spec/plugins.md#dialogs).
 	dialog    *dialogSurface
@@ -731,7 +731,7 @@ func (s *Shell) shortcutConditions() map[string]func() bool {
 		"The project home is shown, a row is selected and no form field has focus": func() bool { return noForm() && len(s.homeRows()) > 0 },
 		"A picker layer is open":                                                   never,
 		"The notice center is open":                                                func() bool { return s.errors.noticeOpen },
-		"The toast list is open":                                                   func() bool { return s.errors.toastListOpen },
+		"The toast list is open; the command gets open false":                      func() bool { return s.errors.toastListOpen },
 		"A native modal menu is open and has keyboard focus":                       never,
 	}
 }

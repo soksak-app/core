@@ -103,6 +103,7 @@ The view reads the rows that it may forward with the view call `runtime.shortcut
 | `Escape` | workbench | core.home.search | — | The project home search field holds a non-empty query; the command gets an empty query |
 | `Enter` | workbench | core.home.open | — | The project home is shown, a row is selected and no form field has focus |
 | `Escape` | workbench | core.picker.close | — | A picker layer is open |
+| `Escape` | workbench | core.toasts.list | — | The toast list is open; the command gets open false |
 | `Escape` | workbench | core.notices.toggle | — | The notice center is open |
 | `Escape` | workbench | core.modal.dismiss | — | A native modal menu is open and has keyboard focus |
 | `Escape` | view | none | — | A plugin view has keyboard focus; the view handles the key itself, and runs the Escape command of an open picker only when it forwards the key |
