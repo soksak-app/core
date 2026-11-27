@@ -41,8 +41,8 @@ Group `플러그인`:
 
 | Page | Item | Badge |
 | --- | --- | --- |
-| `installed` | 설치됨 | warn with title `문제 <n>` when a plugin has a problem; else acc with title `업데이트 <n>` when a plugin has an update; else the number of installed plugins as plain text |
-| `browse` | 찾아보기 | the catalog count as plain text |
+| `installed` | 설치됨 | warn with title `문제 <n>` when a plugin has a problem; else acc with title `업데이트 <n>` when a plugin has an update; else the `folders` count of `pluginsState()` as plain text, updated by `plugins-folders-changed` |
+| `browse` | 찾아보기 | the number of entries of the registry index as plain text |
 
 The catalog holds the plugins that the registry index lists with a version that is not revoked, and the plugins that are installed or loaded ([registry index](installation.md#registry-index)).
 

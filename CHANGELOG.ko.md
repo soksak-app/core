@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-9-1: 설치됨 수는 plugin folder 수이며 plugins-folders-changed로 실시간 갱신된다.
 - F1237-3: Go store 검사는 view 폴더에서 열린 data store가 있는 directory만 끝낸다.
 - F1245-2: 설정 type assertion의 ok 결과나 strings.Cut의 결과를 버리던 packages/workbench-mygo/src의 Go 위치 10곳이 key와 값을 적은 명시적 error를 돌려준다.
 - F1250-4: 보기 페이지의 검색칸과 선택 상자 크기 테스트가 stepper 테스트 옆에 복구된다.
