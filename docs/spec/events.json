@@ -3175,6 +3175,27 @@
       },
       "description": "A command request that the workbench answered; `error` names a failed command."
     },
+    "workbench.status.read": {
+      "layer": "workbench",
+      "class": "call",
+      "level": ["debug", "warn"],
+      "result": true,
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "requested": { "type": ["string", "null"] },
+          "resolved": { "type": "string" },
+          "session": { "type": ["string", "null"] },
+          "micros": { "type": "number" },
+          "ok": { "type": "boolean" },
+          "code": { "type": ["integer", "null"] }
+        },
+        "required": ["name", "requested", "resolved", "session", "micros", "ok", "code"]
+      },
+      "description": "A status read that names a surface, answered by the workbench: `requested` is the surface of the request (null when the request names none), `resolved` is the surface that answered it, and `session` is the owned session that the resolved surface shows (null when it shows none); `code` is the error code of a failed read."
+    },
     "workbench.layout.change": {
       "layer": "workbench",
       "class": "call",

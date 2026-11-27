@@ -156,6 +156,25 @@ export function createRegistry({ call = null, report = null } = {}) {
    * it. origin is the id of the exposure-request that this document handles when it forwards, so the host ends the forward with
    * that request; a forward that this document starts itself has none (exposureForward in docs/spec/exposure.md).
    */
+  /**
+   * Runs a status read that names a surface and stores its record, workbench.status.read: the surface that the request named, the
+   * surface that answers it and the owned session that the answering surface shows. A failed read is stored at the level warn with its
+   * error code; the record holds the session before the read is sent, so it names the session that the read reached.
+   */
+  async function recordedRead(name, requested, resolved, run) {
+    const started = performance.now();
+    const session = options.sessionOf ? options.sessionOf(resolved) : null;
+    const fields = (outcome) => ({ name, requested: requested ?? null, resolved, session, micros: Math.round((performance.now() - started) * 1000), ...outcome });
+    try {
+      const value = await run();
+      emitEvent("debug", "workbench.status.read", fields({ ok: true, code: null }));
+      return value;
+    } catch (error) {
+      emitEvent("warn", "workbench.status.read", fields({ ok: false, code: error instanceof ExposureError ? error.code : null }));
+      throw error;
+    }
+  }
+
   async function forward(surface, method, params, origin) {
     if (!call) throw new ExposureError(EXPOSURE_ERRORS.gone, `surface ${surface} has no host`);
     const request = origin === undefined ? { id: ++forwards, surface, method, params } : { id: ++forwards, origin, surface, method, params };
@@ -341,6 +360,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     }
     const surface = pick(kind, name, requested);
     if (method === "element.act" && options.elementInert(null, surface)) throw inertRefusal(name);
+    if (method === "status.get") return recordedRead(name, requested, surface, () => forward(surface, method, params, origin));
     if (method !== "status.watch") return forward(surface, method, params, origin);
     // The watch exists before the surface answers, because the surface sends the current value as it starts the watch. Each watch
     // receives from version 0, so a watch of a name that the surface already follows receives the current value again.

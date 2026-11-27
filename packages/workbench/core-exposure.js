@@ -1053,6 +1053,8 @@ export async function installCoreExposure({ home, renames, chrome, drawn, memory
   onSaved(coreChanged);
 
   await connectExposure({ surfacePlugin, preferred, registrationChanged: coreChanged,
+    // The owned session that a surface shows, for the record of a status read (workbench.status.read).
+    sessionOf: (surface) => ownedSessionsState().find((entry) => entry.shownBy === surface)?.session ?? null,
     // A modal that the command opened holds the input of the window once the host answered its show
     // (docs/spec/native-modals.md#keyboard).
     settled: async () => { await drawn(); await orderedCallsAnswered(); }, report,
