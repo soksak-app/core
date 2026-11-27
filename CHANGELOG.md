@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3: The plugin-api exposure list names the toast show and list commands.
 - F1222: The mygo notice glyph fails on a kind without a declared icon, and draws the progress ring.
 - F1222-1: A non-object data member of accounts is refused with the reader text, and the accounts check reads the data member explicitly.
 - F1217-12: A warning or error toast of a card that does not have the focus offers 카드로 가기, which focuses the card.

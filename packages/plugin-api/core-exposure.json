@@ -159,6 +159,8 @@
     "core.notices.read-all",
     "core.notices.clear",
     "core.notices.clear-all",
+    "core.notices.show",
+    "core.toasts.list",
     "core.notices.close",
     "core.notices.add",
     "core.notices.progress",
