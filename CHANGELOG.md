@@ -5,8 +5,8 @@
 
 ## 2026-11-27
 
+- F1124: The policy watch test passes two repeats of 320 runs with the fsnotify fork pinned, after 2 of 320 runs failed on HEAD.
 - F1217-17: The settings design reference is the handoff and settings-36 10.html of 11-27, which replace settings-renew.html.
-- F1217-17-7: The installed plugins page of mygo shows the development build badge, orders the badges as the specification states, and shows the required-plugin badge only for the state requires.
 - F1217-17-6: The diagnostics page head shows the badge 전역 전용 in place of the scope control on the web and mygo hosts.
 - F1233-3: Each hidden tab that the workbench leaves without a view is logged with its reason.
 - F1124: The host pins a fork of fsnotify whose kqueue registrations are serialized, and the policy test repeats pass with the pin; the whole-package run has one failure, which is tracked in F1124.
