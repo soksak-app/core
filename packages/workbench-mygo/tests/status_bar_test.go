@@ -34,3 +34,22 @@ func TestTheStatusBarShowsTheProjectCardsThemeAndKeyHintOnTheWorkScreen(t *testi
 		t.Fatal("the status bar is hidden while the settings tab is in front")
 	}
 }
+
+// The status bar names its three values as elements, so the element tree carries the project name, the card count and the theme
+// with its mode (docs/spec/external-sidebars.md#status-bar).
+func TestTheStatusBarNamesItsProjectCardsAndThemeElements(t *testing.T) {
+	f := projectWithPlugins(t)
+	f.settle()
+	project, ok := exposedNode(f.tester.ElementTree(), "core.statusbar.project", "")
+	if !ok || project.Text == "" {
+		t.Fatal("the status bar has no element core.statusbar.project with the project name")
+	}
+	cards, ok := exposedNode(f.tester.ElementTree(), "core.statusbar.cards", "")
+	if !ok || cards.Text != "카드 2" {
+		t.Fatalf("the element core.statusbar.cards is %q, want the card count 카드 2", cards.Text)
+	}
+	theme, ok := exposedNode(f.tester.ElementTree(), "core.statusbar.theme", "")
+	if !ok || !strings.Contains(theme.Text, " · ") {
+		t.Fatalf("the element core.statusbar.theme is %q, want the theme and mode with ·", theme.Text)
+	}
+}
