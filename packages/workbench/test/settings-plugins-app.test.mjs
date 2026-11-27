@@ -13,7 +13,7 @@ await pluginOperations.refresh();
 await pluginOperations.refreshOutdated();
 await appUpdate.refresh();
 
-test("the 설치됨 page shows the core update row with its release and its update button, and a notice for each incompatible plugin", async () => {
+test("the Installed page shows the core update row with its release and its update button, and a notice for each incompatible plugin", async () => {
   await openSettingsTab(ctx);
   await ctx.run("core.settings-tab.nav", { page: "installed" });
   const app = document.querySelector('[data-expose="core.settings-tab.plugins.app"]');

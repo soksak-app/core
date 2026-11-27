@@ -17998,7 +17998,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a window sidebar's missing plugin is a warning notice on its status line, and no line sits above its sections" },
-      { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a card sidebar's missing plugin is a toast with 카드로 가기 while its card does not have the focus" },
+      { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a card sidebar's missing plugin is a toast with the Go to card action (core.card.focus) while its card does not have the focus" },
       { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a redraw of the same missing plugin keeps one notice, and a set that stops drawing its sections withdraws it from the status line and the toasts" },
       { file: "packages/workbench-mygo/tests/sidebar_missing_notice_test.go", id: "TestTheMissingPluginOfAWindowSidebarIsAWarningNoticeOnItsStatusLine" },
       { file: "packages/workbench-mygo/tests/sidebar_missing_notice_test.go", id: "TestTheMissingPluginNoticeIsWithdrawnWhenThePluginReloads" },

@@ -71,7 +71,7 @@ test("the counter of the line form runs core.toasts.list with the opposite of th
   assert.deepEqual(JSON.parse(document.querySelector("#toasts .toast__more").dataset.params), { open: false });
 });
 
-test("an error toast offers 자세히 that runs core.notices.show with its id, and a warning offers none", (t) => {
+test("an error toast offers the Details action that runs core.notices.show with its id, and a warning offers none", (t) => {
   const { document, store } = fixture(t);
   const error = store.show({ kind: "error", title: "save failed" });
   store.show({ kind: "warning", title: "disk low" });

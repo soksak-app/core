@@ -24,7 +24,7 @@ function openCenter(t, quiet) {
   return dom.window.document;
 }
 
-test("the center has the switch 조용히 that sets quietToasts to its opposite", (t) => {
+test("the center has the Quiet switch (core.notices.quiet) that sets quietToasts to its opposite", (t) => {
   const document = openCenter(t, false);
   const quiet = document.querySelector('[data-expose="core.notices.quiet"]');
   assert.ok(quiet, "the open center has no switch core.notices.quiet");

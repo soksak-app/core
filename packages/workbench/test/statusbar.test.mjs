@@ -50,7 +50,7 @@ test("the status bar holds no project name without a project and is hidden when 
   assert.equal(root.hidden, true, "the bar stays visible on the project home");
 });
 
-test("the status bar starts with the entry 홈, element core.statusbar.home", () => {
+test("the status bar starts with the entry Home, element core.statusbar.home", () => {
   const { root } = build({ project: { title: "project1" }, cards: 2, theme: "midnight", mode: "dark" });
   const entry = root.querySelector('[data-expose="core.statusbar.home"]');
   assert.equal(entry?.textContent, "홈", "the status bar has no entry 홈");

@@ -23,7 +23,7 @@ function drawn(t, values = {}) {
   return root;
 }
 
-test("the group 알림 declares its five common-only rows in order, with the delay depending on its switch", () => {
+test("the group Notifications declares its five common-only rows in order, with the delay depending on its switch", () => {
   const rows = notices().rows;
   assert.deepEqual(rows.map((row) => row.key), ["toastStyle", "noticeCenterStyle", "quietToasts", "autoDismissProblemToasts", "problemToastDismissSeconds"]);
   for (const row of rows) assert.equal(row.scope, "common", `${row.key} is common only`);
@@ -56,7 +56,7 @@ test("the delay is enabled while the switch is on", (t) => {
   assert.ok(controls.length > 0 && controls.every((el) => !el.disabled), "the delay is enabled while the switch is on");
 });
 
-test("the group 프로젝트 폴더 on the page 작업 공간 draws the folder row with its button that chooses the folder", async (t) => {
+test("the group Project folder on the page Workspace draws the folder row with its button that chooses the folder", async (t) => {
   // The folder row shows projectsFolder and its 찾아보기 button runs core.settings.choose-folder for that key (docs/spec/settings.md#controls).
   const { workspacePage } = await import("../settings-pages.js");
   const dom = new JSDOM("<body></body>");

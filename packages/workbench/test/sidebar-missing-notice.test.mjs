@@ -60,7 +60,7 @@ test("a window sidebar's missing plugin is a toast and an entry of the center wh
   assert.equal(entry.kind, "warning");
 });
 
-test("a card sidebar's missing plugin is a toast with 카드로 가기 while its card does not have the focus", () => {
+test("a card sidebar's missing plugin is a toast with the Go to card action (core.card.focus) while its card does not have the focus", () => {
   notificationStore().focusCard("card-other");
   const container = sidebar();
   const footer = document.createElement("footer");

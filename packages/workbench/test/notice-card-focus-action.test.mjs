@@ -31,7 +31,7 @@ const actionsOf = (document, title) => {
   return toast ? [...toast.querySelectorAll(".toast__actions button")].map((button) => ({ label: button.textContent, command: button.dataset.command, params: JSON.parse(button.dataset.params ?? "{}") })) : null;
 };
 
-test("a warning of a card without the focus shows the action 카드로 가기 that focuses the card", (t) => {
+test("a warning of a card without the focus shows the Go to card action (core.card.focus) that focuses the card", (t) => {
   const { document, store } = fixture(t);
   store.show({ kind: "warning", title: "disk low", source: card("c1") });
   assert.deepEqual(actionsOf(document, "disk low"), [{ label: "카드로 가기", command: "core.card.focus", params: { card: "c1" } }]);
@@ -46,7 +46,7 @@ test("an error of a card without the focus shows the same action after the notic
   ]);
 });
 
-test("a card with the focus and an app warning show no 카드로 가기", (t) => {
+test("a card with the focus and an app warning show no Go to card action", (t) => {
   const { document, store } = fixture(t);
   store.focusCard("c3");
   store.show({ kind: "warning", title: "focused problem", source: card("c3") });

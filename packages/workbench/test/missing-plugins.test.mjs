@@ -82,7 +82,7 @@ test("missingLineNode draws the line element with the plugin, the warning tone a
   assert.equal(button.dataset.expose, "core.sidebar.missing");
 });
 
-test("a chip of a missing section is dashed, struck through and titled with the plugin, and no node shows the word 불러오지 않음", async () => {
+test("a chip of a missing section is dashed, struck through and titled with the plugin, and no node shows the word Not loaded", async () => {
   const { missingChipNode } = await import("../missing-plugins.js");
   const chip = missingChipNode(document, "gone.a", { id: "gone", name: "Gone", sections: ["gone.a"], state: "available", latest: "1.2.0" });
   assert.equal(chip.className, "set-chip set-chip--missing");

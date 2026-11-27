@@ -14,7 +14,7 @@ function fixture(t, { count = 3, open = 1, plugins = { enabled: 2, installed: 3 
   return { root, bar, text };
 }
 
-test("the home status line shows the projects, the open projects and the plugins as 프로젝트 n, 열림 n and 플러그인 a/b", (t) => {
+test("the home status line shows the projects, the open projects and the plugins as Projects n, Open n and Plugins a/b", (t) => {
   const { root, bar, text } = fixture(t);
   bar.draw(true);
   assert.equal(root.hidden, false);

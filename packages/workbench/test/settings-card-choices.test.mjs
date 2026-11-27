@@ -31,7 +31,7 @@ test("a card side without a set shows off, with no inherit option", async () => 
   }
 });
 
-test("core.settings.link refuses a set that the sets lack, and takes off as 사용 안 함", async () => {
+test("core.settings.link refuses a set that the sets lack, and takes off as Not in use", async () => {
   await assert.rejects(ctx.run("core.settings.link", { place: "card-right", plugin: "fixture", set: "missing-set" }), /unknown set missing-set/);
   // off is the option Not in use of every side link (docs/spec/settings.md#sidebar-choices), so it is a valid choice.
   await ctx.run("core.settings.link", { place: "card-right", plugin: "fixture", set: "off" });
