@@ -547,6 +547,7 @@
   "icons": {
     "control-select-arrows": "<path d=\"M.75 3.75l3-3 3 3M.75 6.25l3 3 3-3\"/>",
     "card-add": "<path d=\"M8 3v10M3 8h10\"/>",
+    "badge-warn": "<path d=\"M8 2.2l6.2 11H1.8z\"/><path d=\"M8 6.5v3M8 11.3v.01\"/>",
     "card-split-x": "<rect class=\"half\" x=\"2\" y=\"3\" width=\"6\" height=\"10\" rx=\"1.5\"/><rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><path d=\"M8 3v10\"/>",
     "card-split-y": "<rect class=\"half\" x=\"3\" y=\"2\" width=\"10\" height=\"6\" rx=\"1.5\"/><rect x=\"3\" y=\"2\" width=\"10\" height=\"12\" rx=\"2\"/><path d=\"M3 8h10\"/>",
     "card-expand": "<path d=\"M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4\"/>",
@@ -696,6 +697,8 @@
     "bar-tab-root-pad": "8px",
     "bar-tab-root-w": "180px",
     "bar-tab-root-h": "26px",
+    "project-chip-h": "24px",
+    "project-chip-pad": "10px",
     "act-w": "24px",
     "act-h": "22px",
     "act-icon": "16px",
@@ -1001,7 +1004,7 @@
             },
             {
               "key": "textSize",
-              "label": "textSize",
+              "label": "글자 크기 단계",
               "form": "choice",
               "scope": "common"
             }

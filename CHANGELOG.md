@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1256: The copies of packages/workbench/workbench.json in the Go, Rust and mygo hosts equal their source again (#F1256).
 - F1217-17-3: The open breaks of the sidebar sets editor are recorded as F1217-17-3-1 to F1217-17-3-3, and the mygo set card moves to F1250.
 - F1217-9-1: The installed count is the number of plugin folders, live through plugins-folders-changed.
 - F1237-3: The Go store check of view folders ends only the directories that hold an open data store.
