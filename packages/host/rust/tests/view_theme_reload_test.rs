@@ -13,6 +13,10 @@ mod main_thread;
 mod records;
 #[path = "support/sidecar_recorder.rs"]
 mod sidecar_recorder;
+// The sidecar key is the only item of this file that these tests use.
+#[allow(dead_code, unused_imports)]
+#[path = "support/platform/platform.rs"]
+mod platform;
 #[path = "support/surface_fixture.rs"]
 mod surface_fixture;
 // The test framework of the library names the framework and the menu of the host through these paths.

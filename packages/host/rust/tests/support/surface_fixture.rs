@@ -21,12 +21,10 @@ fn echo_sidecar_path() -> String {
     } else {
         "x64"
     };
-    let os = if cfg!(target_os = "macos") {
-        "darwin"
-    } else {
-        "linux"
-    };
-    format!("sidecars/fixture-sidecar-echo/{ECHO_VERSION}/{os}-{arch}")
+    format!(
+        "sidecars/fixture-sidecar-echo/{ECHO_VERSION}/{}-{arch}",
+        crate::platform::SIDECAR_OS
+    )
 }
 
 /// Installs the echo sidecar into the configuration folder config: its sidecar.json declares the executable `echo`, which is
