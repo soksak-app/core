@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- 자리표시 신원 사례를 제거했다: 신원 거부는 호스트 폴더 신원 테스트가 고정한다.
 - F1108: 메인 페이지 reload 뒤에 만들어진 view가 자기 window의 theme을 기록하며, 실제 window에서 host 테스트가 이를 확인한다. reload_surface_documents_for_test가 reload를 실행한다.
 - 빈 페이지 오류 사례를 제거했다: 해당 조항은 error-toasts 기준으로 test/page-error-display.test.mjs가 검증한다.
 - F1225: apps/tauriv2/gen 아래의 추적되거나 무시되지 않은 파일을 감사가 보고하며, F1225 feature link가 이 검사와 테스트를 적는다.
