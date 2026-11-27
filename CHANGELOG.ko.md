@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-7-2-2: 대화상자 명령 검사가 core.settings.choose-folder를 folderChoose 호스트 호출과 함께 나열한다.
 - F1217-17: 설정 탭은 handoff의 컨트롤 칸, 행 높이, 입력 높이, 작은 버튼, 라벨 아래 설명 규칙과 일치한다.
 - F1124: fsnotify fork를 고정한 뒤 policy watch 테스트의 320회 반복을 두 번 통과했다. HEAD에서는 320회 중 2회 실패했다.
 - F1217-17: 설정 디자인 기준은 11-27의 handoff와 settings-36 10.html이며, settings-renew.html을 대체한다.

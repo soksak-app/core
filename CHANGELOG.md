@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-7-2-2: The dialog command test lists core.settings.choose-folder with its folderChoose host call.
 - F1217-17: The settings tab matches the handoff rules for the control column, row height, input height, small button and label description.
 - F1124: The policy watch test passes two repeats of 320 runs with the fsnotify fork pinned, after 2 of 320 runs failed on HEAD.
 - F1217-17: The settings design reference is the handoff and settings-36 10.html of 11-27, which replace settings-renew.html.

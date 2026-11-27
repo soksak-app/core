@@ -8,6 +8,7 @@ import test from "node:test";
 // must match this map exactly: a new dialog command is added here in the same change.
 const DIALOG_COMMANDS = {
   "core.home.choose-folder": "folderChoose",
+  "core.settings.choose-folder": "folderChoose",
   "core.file.place": "filePlace",
   "core.debug.save": "debugSave",
   "core.debug.save-all": "debugSaveAll",
