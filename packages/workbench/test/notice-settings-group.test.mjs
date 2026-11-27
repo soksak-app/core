@@ -57,7 +57,7 @@ test("the delay is enabled while the switch is on", (t) => {
 });
 
 test("the group Project folder on the page Workspace draws the folder row with its button that chooses the folder", async (t) => {
-  // The folder row shows projectsFolder and its 찾아보기 button runs core.settings.choose-folder for that key (docs/spec/settings.md#controls).
+  // The folder row shows projectsFolder and its Browse button runs core.settings.choose-folder for that key (docs/spec/settings.md#controls).
   const { workspacePage } = await import("../settings-pages.js");
   const dom = new JSDOM("<body></body>");
   t.after(() => dom.window.close());

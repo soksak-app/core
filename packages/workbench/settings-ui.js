@@ -250,7 +250,7 @@ function menuEl() {
         expose: "core.settings-tab.plugin-item", command: "core.settings-tab.plugin", params: { plugin: row.id }, key: `plugin:${row.id}`,
         on: !searching && state.page === "plugin" && state.plugin === row.id, variant: "nav",
       });
-      // The chevron comes before the name; an enabled plugin shows the dot at the end, a disabled one the badge 꺼짐 (docs/spec/settings.md#menu).
+      // The chevron comes before the name; an enabled plugin shows the dot at the end, a disabled one the badge Off (docs/spec/settings.md#menu).
       item.insertAdjacentHTML("afterbegin", designIcon("chevron"));
       if (row.installed.enabled) {
         const dot = element("span", "set-dot");

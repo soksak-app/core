@@ -52,18 +52,18 @@ function badgesOf(row) {
 /** The letter icon of a plugin: the first letter of its name in the accent token. */
 const letter = (name) => element("span", "plug-letter", [...name][0]);
 
-/** The sidecars of a plugin as their names and ranges, or 없음 without a sidecar (docs/spec/settings.md#plugin-page). */
+/** The sidecars of a plugin as their names and ranges, or none without a sidecar (docs/spec/settings.md#plugin-page). */
 export function sidecarText(sidecars) {
   if (sidecars.length === 0) return "없음";
   return sidecars.map((sidecar) => (sidecar.range === null ? sidecar.name : `${sidecar.name} ${sidecar.range}`)).join(", ");
 }
 
-/** The name of a plugin in the state, which the row 필요 and its install button name; an id that the state does not list is its own name. */
+/** The name of a plugin in the state, which the row Required and its install button name; an id that the state does not list is its own name. */
 export function nameOfPlugin(id) {
-  return statusRows().find((item) => item.id === id)?.name ?? id; // default: a plugin that is not installed has no name in the state, so its id is its name, as docs/spec/settings.md states for "<id> 필요" (a plugin named in dependencies that is not installed).
+  return statusRows().find((item) => item.id === id)?.name ?? id; // default: a plugin that is not installed has no name in the state, so its id is its name, as docs/spec/settings.md states for the row Required of a plugin named in dependencies that is not installed.
 }
 
-/** The meta line of the row 사용 of a plugin page: its categories, its id, its installed version and the latest or published version, then its
+/** The meta line of the row Use of a plugin page: its categories, its id, its installed version and the latest or published version, then its
  * sidecars (docs/spec/settings.md#plugin-page). */
 export function useMetaOf(item) {
   const categories = Object.entries(pluginCategories()).filter(([, plugins]) => plugins.some((plugin) => plugin.id === item.id)).map(([name]) => name).join(", ");
@@ -362,7 +362,7 @@ function infoCard(item, unit) {
   if (item.installed === null) {
     card.append(row({ label: "설치", control: action(item.id, "install", "설치", "core.plugins.install", { plugin: item.id }, "primary"), key: "install" }));
     card.append(row({ label: "사이드카", description: sidecarText(item.sidecars), key: "sidecars" }));
-    // An uninstalled plugin has no loaded manifest, so 더하는 것 is the dash (docs/spec/settings.md#plugin-page).
+    // An uninstalled plugin has no loaded manifest, so the row Contributes is the dash (docs/spec/settings.md#plugin-page).
     card.append(row({ label: "더하는 것", description: "—", key: "contributes" }));
     return card;
   }
@@ -488,7 +488,7 @@ function accountRow(plugin, kinds, account) {
   return el;
 }
 
-/** The items of the group 설정이 있는 플러그인: every installed plugin by id, whether or not it declares settings (docs/spec/settings.md#menu). */
+/** The items of the group Plugins with settings: every installed plugin by id, whether or not it declares settings (docs/spec/settings.md#menu). */
 export function pluginMenuItems() {
   return menuItemsOf(statusRows());
 }

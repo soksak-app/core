@@ -1,4 +1,4 @@
-// The group 설정이 있는 플러그인 lists every installed plugin by id, whether or not it declares settings (docs/spec/settings.md#menu).
+// The group Plugins with settings lists every installed plugin by id, whether or not it declares settings (docs/spec/settings.md#menu).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { menuItemsOf } from "../settings-plugins.js";

@@ -1,4 +1,4 @@
-// The look preview of the 모양 page is drawn with the applied gap, radius, font and size, and with the seam when the gap is 0
+// The look preview of the Appearance page is drawn with the applied gap, radius, font and size, and with the seam when the gap is 0
 // (docs/spec/settings.md#look). The two cards touch and share one line when the gap is 0.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

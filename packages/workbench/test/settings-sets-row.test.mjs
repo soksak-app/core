@@ -1,6 +1,6 @@
 // The row of a set on the page Sidebar sets is one card: its head (the name, the layout badge and the places that use it), its
 // section chips and its missing-plugin notes sit in one body, and its actions sit in the second column of the same row, so every row
-// draws the same columns. The description of the page is drawn once, by the page head (docs/spec/settings.md#사이드바-세트).
+// draws the same columns. The description of the page is drawn once, by the page head (docs/spec/settings.md, the sidebar sets page).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";

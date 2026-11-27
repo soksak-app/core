@@ -1,4 +1,4 @@
-// The sidecar line of a plugin page names each sidecar with its range, or 없음 (docs/spec/settings.md#plugin-page).
+// The sidecar line of a plugin page names each sidecar with its range, or none (docs/spec/settings.md#plugin-page).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sidecarText } from "../settings-plugins.js";
