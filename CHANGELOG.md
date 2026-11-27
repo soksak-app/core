@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-12-8-1: The page-wire cases of a settings theme record the ok and warn tokens that setTheme sends.
 - F1217-17-5: The Korean checklist line states its closure with the `Closed:` label, as the English line does.
 - F1264-4: The plugin API document handle has `boxes(selector, properties)`, which resolves to the reply and rejects with the refusals of the host.
 - F1283-2: The Go comments that name the plugin folder count point at the installation spec heading that exists.

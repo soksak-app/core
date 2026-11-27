@@ -7,7 +7,7 @@
   "steps": [
     {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
     {"reply":{"result":{"common":{},"pluginData": {}, "projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settings":{}},{"id":"prj-refused","root":"/work/refused","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"root":{"card":"main"},"name":"one"}}}],"settingsError":"/work/refused/.soksak/settings.json: settings.json: format must be 1"}],"open":[]}}},
-    {"call":{"name":"setTheme","payload":{"scheme":"dark","tokens":{"--bg":"#101117","--card":"#191b24","--fg":"#ececf5","--muted":"#8f92a4","--edge":"#2b2e3d","--rule":"#22242f","--rail":"#7279ff","--focus":"#ffb36b","--no":"#ff7c7c", "--fail": "#ff7cd3","--r":"10px","--half-gap":"6px","--bw":"1px","--font":"ui-monospace,SFMono-Regular,Menlo,monospace","--size":"13px"}}}},
+    {"call":{"name":"setTheme","payload":{"scheme":"dark","tokens":{"--bg":"#101117","--card":"#191b24","--fg":"#ececf5","--muted":"#8f92a4","--edge":"#2b2e3d","--rule":"#22242f","--rail":"#7279ff","--focus":"#ffb36b","--no":"#ff7c7c", "--fail": "#ff7cd3", "--ok": "#4cc38a", "--warn": "#f0a33a","--r":"10px","--half-gap":"6px","--bw":"1px","--font":"ui-monospace,SFMono-Regular,Menlo,monospace","--size":"13px"}}}},
     {"reply":{"result":null}},
     {"call":{"name":"setMenuLanguage","payload":"en"}},
     {"reply":{"result":null}},

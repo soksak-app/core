@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-12-8-1: settings theme을 이름 붙인 page-wire case가 setTheme이 보내는 ok, warn token을 기록한다.
 - F1217-17-5: 한국어 checklist 줄이 영문 줄과 같이 `Closed:` 표지로 closure를 적는다.
 - F1264-4: plugin API 문서 손잡이가 `boxes(selector, properties)`를 가지며, 답으로 resolve하고 host의 거부 사유로 reject한다.
 - F1283-2: 플러그인 폴더 수를 가리키는 Go 주석은 설치 spec에 있는 제목을 가리킨다.

@@ -315,6 +315,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
     - [o] F1217-12-6 — filter segment 옆 조용히 switch가 두 page에서 `core.settings.set {patch: {quietToasts}, scope: "common"}`을 실행한다.
     - [o] F1217-12-7 — ⚙ 버튼이 동작 page의 알림 group에서 settings tab을 연다: `rows.groups`의 각 group에 `id`가 있고, `core.settings-tab.nav`가 선택 인자 `group`을 받으며 없는 id는 -32602로 거절한다.
     - [o] F1217-12-8 — 성공과 경고 icon이 모든 theme과 모드의 token `ok`, `warn`을 쓴다. 값은 디자인 파일 `settings-36 11.html`의 592행부터 594행까지에서 온다. Red: Go `TestNoticeKindColorDrawsTheOkAndWarnTokens`(packages/workbench-mygo/src)는 성공과 경고 icon이 muted 색을 쓰는 것을 보았고, 웹 `theme-mode-tokens.test.mjs`(packages/workbench/test)는 어떤 theme에도 `ok`, `warn`이 없는 것을 보았다. Green: 두 테스트가 통과한다. workbench.json 네 사본에 두 모드의 토큰이 선언되었고, 웹 설정이 이를 루트에 설정하며, app.css가 밝은 값을 가지고, mygo palette가 이를 읽는다.
+    - [o] F1217-12-8-1 — F1217-12-8의 후속: 페이지는 setTheme token `--ok`, `--warn`을 보내며, settings theme을 이름 붙인 page-wire case 아홉 개가 midnight dark theme의 값(`#4cc38a`, `#f0a33a`)으로 이를 기록한다. Red: case를 바꾸기 전에는 view-calls.test.mjs 27건과 projects-switch.test.mjs 7건이 실패한다. Green: 두 파일 모두 실패가 없고, plugin-api view-host.test.mjs는 101건이 통과한다.
     - [o] F1217-12-9 — 카드 notice의 source chip이 notice를 낸 tab의 label을 보여 주고 entry에 남긴다; `notices.json`은 format 2가 된다.
     - [o] F1217-12-10 — Escape가 열린 notice center를 닫는다(center가 열린 동안 shortcut 행 Escape → `core.notices.toggle`).
   - [o] F1217-13 — P0, F1217-10 다음: `@soksak/plugin-api`가 page에 카드 알림 호출을 주고, 이 호출이 `tab.notify`를 대신한다. `tab.notify`를 부르는 plugin은 각자의 체크리스트에서 옮긴다.
