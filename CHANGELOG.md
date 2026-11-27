@@ -5,10 +5,10 @@
 
 ## 2026-11-26
 
+- F1217-8: The side keys cmd+b, opt+cmd+b, shift+cmd+j and cmd+j run core.sidebar.toggle on the work screen, which shows or hides the left, right, top or bottom window sidebar; the shortcut reply case and the runtime.shortcuts.read test list the current rows.
 - F1228: The checklist keeps the lines of its parent and adds only the F1228 item.
 - F1228: The refusal of a positional window in describe, commands, exposures and mcp names the --window and --project options in Go and Rust.
 - F1222-2: The mygo progress notice ring is a sibling of its entry button, so it is the element core.notices.ring in the element tree, and a press on the ring still reads the entry.
-- F1226: A failed quit whose application handle already ended ends each process that holds the configuration directory of its run.
 - F239-209: The record of the declared search-focus operation names cmd+o, the key since F1217-8, and Command-K, the key when completed.
 - F1217-8: The test claim of the project home search focus names the cmd+o test, the key the row declares.
 - F1109: A view created after a main page reload resolves to its own surface; the Go and Rust host tests check surface.view.reload-keeps-bindings.
@@ -17,7 +17,6 @@
 - F1217-7: The work screen status bar starts with the entry 홈, element core.statusbar.home, which runs core.home.show, in both hosts.
 - F1222-2: The open notice center panel is a window overlay cut out of the surface hosts with the error toasts, so a plugin surface does not cover it in the Wails and Tauri hosts.
 - F1217: The project home's theme, menu language and folder check follow page-wire case home-removed-project, played by home-removed.test.mjs.
-- F1108: The checklist records the Rust and Go record tests, the causes found in the test harness, and the window check run that does not reproduce the defect.
 - F1222-2: The progress ring check waits until the stills of its recording are all planned, so the recording holds 30 frames; a stop before the plan ended kept 3.
 - F1217-8: cmd+Backspace asks the removal of the selected row from the search field too, in both hosts.
 - F1217: The project home removes a project with a missing folder as page-wire case home-folders-remove, played by home-folders.test.mjs.

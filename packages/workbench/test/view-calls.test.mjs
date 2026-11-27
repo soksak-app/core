@@ -775,7 +775,12 @@ test("runtime.shortcuts.read returns the rows of the workbench and view owners, 
   // runtime.shortcuts.read: the rows of packages/workbench/shortcuts.json whose owner is the workbench or the view
   assert.deepEqual((await h.call()).result, [
     { key: "shift+cmd+n", owner: "workbench", command: "core.window.new" },
-    { key: "cmd+k", owner: "workbench", command: "core.home.search.focus" },
+    { key: "cmd+Backspace", owner: "workbench", command: "core.home.confirm" },
+    { key: "cmd+o", owner: "workbench", command: "core.home.search.focus" },
+    { key: "cmd+b", owner: "workbench", command: "core.sidebar.toggle" },
+    { key: "opt+cmd+b", owner: "workbench", command: "core.sidebar.toggle" },
+    { key: "shift+cmd+j", owner: "workbench", command: "core.sidebar.toggle" },
+    { key: "cmd+j", owner: "workbench", command: "core.sidebar.toggle" },
     { key: "ArrowUp", owner: "workbench", command: "core.home.select" },
     { key: "ArrowDown", owner: "workbench", command: "core.home.select" },
     { key: "Escape", owner: "workbench", command: "core.home.search" },

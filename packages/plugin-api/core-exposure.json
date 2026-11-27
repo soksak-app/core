@@ -154,6 +154,7 @@
     "core.layout.plan",
     "core.layout.apply",
     "core.layout.close",
+    "core.sidebar.toggle",
     "core.notices.toggle",
     "core.notices.filter",
     "core.notices.read-all",

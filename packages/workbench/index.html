@@ -75,7 +75,7 @@ import { observePlaneGrid } from "./device-grid.js";
 /* Reads the plane and the compositor and verifies them. It changes nothing, so those two do not
    know this module. */
 import { verify } from "./verify.js";
-import { chromeSwitches } from "./window-sidebars.js";
+import { chromeSwitches, sideShortcut } from "./window-sidebars.js";
 /* Wiring of the error display and the layout queue. This document passes the document, the host, the plane and the compositor. */
 import { createPageLayout, reportUncaught, verificationRows } from "./page-layout.js";
 
@@ -661,6 +661,12 @@ addEventListener("keydown", (event) => {
   if (event.key.toLowerCase() === "o" && projects.inHome()) {
     event.preventDefault();
     return run("core.home.search.focus", {});
+  }
+  // The side keys show or hide a window sidebar on the work screen (docs/spec/external-sidebars.md#window-tools).
+  const side = sideShortcut(event);
+  if (side !== null && !projects.inHome()) {
+    event.preventDefault();
+    return run("core.sidebar.toggle", { side });
   }
   // Cmd+Backspace asks the removal of the selected row while the home has focus outside its search field (docs/spec/projects.md#project-home).
   if (event.key === "Backspace" && projects.inHome()) {

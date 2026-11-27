@@ -730,6 +730,7 @@ func (s *Shell) shortcutConditions() map[string]func() bool {
 		"A project home form field has focus":                                      formOpen,
 		"The project home is shown, a row is selected and no form field has focus": func() bool { return noForm() && len(s.homeRows()) > 0 },
 		"A picker layer is open":                                                   never,
+		"The work screen is shown":                                                 func() bool { return !s.inHome() },
 		"The notice center is open":                                                func() bool { return s.errors.noticeOpen },
 		"The toast list is open; the command gets open false":                      func() bool { return s.errors.toastListOpen },
 		"A native modal menu is open and has keyboard focus":                       never,

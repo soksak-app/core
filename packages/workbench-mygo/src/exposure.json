@@ -4757,6 +4757,16 @@
         }
       },
       {
+        "name": "core.sidebar.toggle",
+        "description": "Shows or hides one window sidebar: negates the setting of its side and writes it to the scope of the applied value (docs/spec/external-sidebars.md#window-tools).",
+        "params": {
+          "type": "object",
+          "properties": { "side": { "type": "string", "enum": ["left", "right", "top", "bottom"] } },
+          "required": ["side"]
+        },
+        "result": { "type": "null" }
+      },
+      {
         "name": "core.notices.toggle",
         "description": "Opens or closes the notice center (docs/spec/notifications.md#commands-and-statuses).",
         "params": { "type": "object", "properties": {} },

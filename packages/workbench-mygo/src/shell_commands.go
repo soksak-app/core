@@ -168,6 +168,7 @@ func (s *Shell) register() {
 	})
 	s.registerProjectClose()
 	s.registerNotices()
+	s.registerSidebarToggle()
 	s.registry.Command("core.notices.close", func(raw json.RawMessage) (any, error) {
 		var params struct {
 			ID string `json:"id"`

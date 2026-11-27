@@ -32,7 +32,7 @@ import {
 import { emitEvent, eventAdmits } from "./page-log.js";
 import { boundedJson, cutBytes } from "@soksak/plugin-api/bounded-json.js";
 import {
-  applyTheme, controlValue, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
+  appliedPatch, applyTheme, controlValue, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
 } from "./settings.js";
 import { changeRow, createSet, deleteSet, updateSet } from "./sidebar-sets.js";
 import { pluginCategories, pluginUnits } from "./environment.js";
@@ -748,6 +748,12 @@ export async function installCoreExposure({ home, renames, chrome, drawn, memory
   });
   registry.command("core.settings.change", invalid(async ({ key, value: input, scope }) => {
     await changeSetting(key, input, scope, "core.settings.change");
+  }));
+  // The side key of a window side negates its applied value, written to the scope of that value (docs/spec/external-sidebars.md#window-tools).
+  registry.command("core.sidebar.toggle", invalid(async ({ side }) => {
+    if (projects.inHome()) throw new Error("the work screen is not shown");
+    const next = !value(side);
+    await changeSetting(side, next, appliedPatch(side, next).scope, "core.sidebar.toggle");
   }));
   registry.command("core.settings.theme", async ({ name, mode, scope = "common" }) => {
     // default: when mode is omitted, the current mode is used, and when scope is omitted, the global scope is used (core.settings.theme in exposure.json).

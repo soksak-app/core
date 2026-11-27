@@ -5,10 +5,10 @@
 
 ## 2026-11-26
 
+- F1217-8: 변 단축키 cmd+b, opt+cmd+b, shift+cmd+j, cmd+j가 작업 화면에서 core.sidebar.toggle을 실행해 왼쪽, 오른쪽, 위, 아래 창 사이드바를 보이거나 숨기며, 단축키 응답 case와 runtime.shortcuts.read 테스트가 현재 행을 적는다.
 - F1228: 체크리스트는 부모의 줄을 유지하고 F1228 항목만 추가한다.
 - F1228: describe, commands, exposures, mcp의 위치 window 거절이 Go와 Rust에서 --window와 --project 옵션을 적는다.
 - F1222-2: mygo 진행 알림 고리는 entry 버튼의 형제이므로 element core.notices.ring으로 element tree에 나타나며, 고리를 눌러도 entry를 읽는다.
-- F1226: handle이 이미 끝난 application의 quit이 실패하면, 그 run의 configuration directory를 가진 각 process를 SIGKILL로 끝낸다.
 - F239-209: 선언된 검색 focus 명령의 기록이 F1217-8 이후 키인 cmd+o와 완료 당시 키인 Command-K를 함께 적는다.
 - F1217-8: 프로젝트 홈 검색 포커스의 테스트 주장이 선언된 키 cmd+o의 테스트 이름과 일치한다.
 - F1109: 메인 페이지를 다시 불러온 뒤 만든 view는 자기 표면으로 해석되며, Go와 Rust 호스트 테스트가 surface.view.reload-keeps-bindings 계약을 확인한다.
@@ -17,7 +17,6 @@
 - F1217-7: 작업 화면 상태줄이 두 host 모두에서 core.home.show를 실행하는 항목 홈(core.statusbar.home)으로 시작한다.
 - F1222-2: 열린 알림 센터 패널도 error toast와 함께 surface host에서 잘려 나가므로, Wails와 Tauri host에서 plugin surface가 센터를 가리지 않는다.
 - F1217: 프로젝트 home의 theme, 메뉴 언어, 폴더 확인은 page-wire case home-removed-project를 따르며, home-removed.test.mjs가 재생한다.
-- F1108: 체크리스트가 Rust와 Go 기록 테스트, 테스트 harness에서 찾은 원인, 결함을 재현하지 않은 window check 실행을 기록한다.
 - F1222-2: 진행 notice 고리 check가 녹화의 still이 모두 계획될 때까지 기다려 녹화가 30 frame을 담는다. 계획이 끝나기 전의 stop은 3 frame만 남겼다.
 - F1217-8: cmd+Backspace는 두 host 모두에서 검색 칸에서도 선택한 줄의 제거를 묻는다.
 - F1217: 폴더가 없는 프로젝트를 빼는 page-wire case home-folders-remove를 home-folders.test.mjs가 재생한다.

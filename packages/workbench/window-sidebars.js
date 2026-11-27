@@ -32,6 +32,17 @@ export function chromeSwitches() {
   ];
 }
 
+/**
+ * The window side of a side shortcut: ⌘B the left side, ⌥⌘B the right side, ⇧⌘J the top side and ⌘J the bottom side, and null for any
+ * other key (docs/spec/external-sidebars.md#window-tools). The key is read by its code, so Option does not change the letter.
+ */
+export function sideShortcut(event) {
+  if (!event.metaKey) return null;
+  if (event.code === "KeyB" && !event.shiftKey) return event.altKey ? "right" : "left";
+  if (event.code === "KeyJ" && !event.altKey) return event.shiftKey ? "top" : "bottom";
+  return null;
+}
+
 /** The orientation of the sections of the sidebar of a side: vertical at left and right, horizontal at top and bottom. */
 export function windowOrientation(side) {
   return windowAxis(side) === "x" ? "vertical" : "horizontal";

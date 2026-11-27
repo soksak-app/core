@@ -40,7 +40,9 @@ SOKSAK 로고는 모든 화면에서 제목줄의 첫 element `core.chrome.proje
 
 작업 화면의 제목줄에는 변마다 스위치 하나가 있으며, 고정된 순서 `left`, `right`, `top`, `bottom`으로 놓인다. Element는 `core.chrome.left`, `core.chrome.right`, `core.chrome.top`, `core.chrome.bottom`이고, 아이콘은 `panel-left`, `panel-right`, `panel-top`, `panel-bottom`이며, 툴팁은 왼쪽 사이드바 보이기, 오른쪽 사이드바 보이기, 위 사이드바 보이기, 아래 사이드바 보이기다. 스위치는 변의 적용 값을 보여 주며, 그 적용 값이 나온 범위로 `core.settings.change {key: <side>, value: <적용 값의 반대>, scope}`를 실행한다. 범위는 선택한 프로젝트가 그 변을 덮어쓰면 `project`, 아니면 `common`이다. 그러므로 누르면 스위치가 보여 주는 값만 바뀌고 프로젝트 값은 추가되지 않는다([컨트롤의 범위](settings.ko.md#컨트롤의-범위)). 적용 값이 참이면 스위치는 눌린 상태로 보인다. 누르면 그 차례에 값을 적용한다. 누른 뒤 첫 프레임은 바뀐 사이드바로 plane을 그리고 섹션 surface를 배치한다. 이 프레임과 배치는 뒤따르는 설정 쓰기를 기다리지 않는다. 명령은 host가 설정을 쓴 뒤에 응답한다.
 
-종은 element `core.chrome.notices`이며 모든 화면에서 제목줄의 마지막 element다. `core.notices.toggle`을 실행한다([종](notifications.ko.md#종)). 창 도구가 선언하는 element와 명령은 다음과 같다. Element는 `core.chrome.projects`, `core.chrome.settings`, `core.chrome.notices`, `core.chrome.left`, `core.chrome.right`, `core.chrome.top`, `core.chrome.bottom`, `core.sidebar.fold`, `core.sidebar.edge`이고, 명령은 `core.settings.open`, `core.settings.change`, `core.projects.browse`, `core.notices.toggle`이다.
+변마다 작업 화면의 단축키가 하나씩 있으며, `core.sidebar.toggle {side: <side>}`를 실행한다. `cmd+b`는 `left`, `opt+cmd+b`는 `right`, `shift+cmd+j`는 `top`, `cmd+j`는 `bottom`이다([키보드 단축키](exposure.ko.md#키보드-단축키)). 명령은 그 변의 적용 값을 반대로 바꾸고, 그 변의 스위치와 같은 범위로 쓴다. 그러므로 단축키와 스위치 누름은 같은 값을 바꾼다. 명령은 프로젝트 홈에서 거부하며, `left`, `right`, `top`, `bottom`이 아닌 변은 매개변수 스키마가 거부한다.
+
+종은 element `core.chrome.notices`이며 모든 화면에서 제목줄의 마지막 element다. `core.notices.toggle`을 실행한다([종](notifications.ko.md#종)). 창 도구가 선언하는 element와 명령은 다음과 같다. Element는 `core.chrome.projects`, `core.chrome.settings`, `core.chrome.notices`, `core.chrome.left`, `core.chrome.right`, `core.chrome.top`, `core.chrome.bottom`, `core.sidebar.fold`, `core.sidebar.edge`이고, 명령은 `core.settings.open`, `core.settings.change`, `core.sidebar.toggle`, `core.projects.browse`, `core.notices.toggle`이다.
 
 ## 상태줄
 
