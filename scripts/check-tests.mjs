@@ -97,7 +97,7 @@ lane("release packages", "js-ts", ["scripts/pack-release-packages.mjs"], ["scrip
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
   // The repository test judges the sources of the hosts and of the mygo workbench, which no package test of another package reads.
   lane("administrator rights of the hosts", "js-ts", ["scripts/check-administrator-rights.mjs"], ["scripts/test/administrator-rights.test.mjs"]),
-  lane("agent layout verifier", "js-ts", ["scripts/agent-layout.mjs", "scripts/agent-layout-run.mjs"], ["scripts/test/agent-layout.test.mjs"]),
+  lane("agent layout verifier", "js-ts", ["scripts/agent-layout.mjs", "scripts/agent-layout-run.mjs", "scripts/agent-layout-ready.mjs"], ["scripts/test/agent-layout.test.mjs", "scripts/test/agent-layout-ready.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs", "scripts/test/kit-records.test.mjs"]),
   lane("release notes", "js-ts", ["scripts/release-notes.mjs", "scripts/markdown-links.mjs"], ["scripts/test/release-notes.test.mjs"]),
   lane("markdown table cells", "js-ts", ["scripts/markdown-table.mjs"], ["scripts/test/markdown-table.test.mjs"]),
@@ -17998,7 +17998,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a window sidebar's missing plugin is a warning notice on its status line, and no line sits above its sections" },
-      { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a card sidebar's missing plugin is a toast with the Go to card action (core.card.focus) while its card does not have the focus" },
+      { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a card sidebar's missing plugin is a toast with 카드로 가기 while its card does not have the focus" },
       { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a redraw of the same missing plugin keeps one notice, and a set that stops drawing its sections withdraws it from the status line and the toasts" },
       { file: "packages/workbench-mygo/tests/sidebar_missing_notice_test.go", id: "TestTheMissingPluginOfAWindowSidebarIsAWarningNoticeOnItsStatusLine" },
       { file: "packages/workbench-mygo/tests/sidebar_missing_notice_test.go", id: "TestTheMissingPluginNoticeIsWithdrawnWhenThePluginReloads" },

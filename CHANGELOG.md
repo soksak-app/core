@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
+- F959-4: The layout runner waits for readiness by events, the endpoint file and the ready window of host.windows, and no longer retries reads.
 - F1217-18-4: The missing-plugin title of a window sidebar names the plugin id once.
 - F1236-3: The tracked Go sources are gofmt-clean; errors_screen.go and sidebar_missing_notice_test.go of packages/workbench-mygo are formatted.
 - F1239-2: An ordered host call without an argument is sent, so a window resize reads the window button region without an error.
