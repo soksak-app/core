@@ -73,6 +73,7 @@ func (s *Shell) drawNoticeCenter(c *ui.Context, width, height float32) {
 			s.drawNoticeFoot(c)
 		})
 	})
+	s.errors.revealShown = false
 }
 
 // noticeCenterStyle is the setting noticeCenterStyle: popover or drawer.
@@ -165,6 +166,13 @@ func (s *Shell) drawNoticeEntry(c *ui.Context, toast *errorToast) {
 	}
 	entry := s.binder.PressAll(c, "core.notices.entry", toast.id, steps...)
 	color := s.noticeKindColor(toast.kind)
+	shown := toast.id == s.errors.shownNotice
+	if shown && s.errors.revealShown {
+		entry.ScrollIntoView()
+	}
+	if shown {
+		entry.Background(s.palette.Bg)
+	}
 	entry.FillWidth().Row().AlignItems(ui.Start).Gap(m.toastGap).Padding(m.noticeEntryPad, m.noticeEntryPad, m.noticeEntryPad, m.noticeEntryPad).Children(func() {
 		s.noticeIcon(c, toast.kind, m.noticeGlyph, color)
 		ui.Column(c).FillWidth().Gap(m.toastGap).Children(func() {

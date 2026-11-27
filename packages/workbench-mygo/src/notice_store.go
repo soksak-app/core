@@ -326,8 +326,17 @@ func (e *ShownErrors) ShowNotice(id string) error {
 	}
 	e.noticeOpen = true
 	e.shownNotice = id
+	e.revealShown = true
 	e.ExpireNotices()
 	return nil
+}
+
+// ShownEntry is the id of the shown entry for core.notices, or nil while no entry is marked or the marked entry was removed.
+func (e *ShownErrors) ShownEntry() any {
+	if e.shownNotice == "" || !slices.ContainsFunc(e.toasts, func(toast *errorToast) bool { return toast.id == e.shownNotice }) {
+		return nil
+	}
+	return e.shownNotice
 }
 
 func (e *ShownErrors) ToggleNotices() {

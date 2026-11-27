@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-12: core.notices.show로 표시한 항목을 core.notices의 shown으로 보고하고, 알림 센터는 그 항목을 보이도록 스크롤하며 표시한 항목으로 그린다.
 - F1217-11-3: 웹 알림 센터는 core.notices.show의 항목을 표시한 항목으로 표시하고 core.notices의 shown에 보고하며, 그 항목을 보이도록 스크롤한다.
 - F1217-12-10: 워크벤치 단축키 표는 view-calls-shortcuts-read page-wire 케이스가 선언한 행과 묶이며, plugin-api 뷰 호스트 테스트는 그 선언된 행을 읽습니다.
 - F1217-11-3, F1217-12: Escape는 toast 목록을 core.toasts.list {open: false}로 닫고, 알림 센터보다 먼저 닫는다. 웹과 mygo workbench 모두에 적용된다.

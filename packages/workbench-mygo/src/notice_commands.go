@@ -44,7 +44,7 @@ func (s *Shell) noticeStatus() map[string]any {
 	if value, ok := s.settings.Value("noticeCenterStyle").(string); ok && value != "" {
 		style = value
 	}
-	return map[string]any{"open": s.errors.noticeOpen, "style": style, "filter": s.errors.noticeFilter, "unread": unread, "problems": problems, "entries": entries}
+	return map[string]any{"open": s.errors.noticeOpen, "style": style, "filter": s.errors.noticeFilter, "unread": unread, "problems": problems, "shown": s.errors.ShownEntry(), "entries": entries}
 }
 
 // noticeChanged writes the entries to notices.json and asks for a frame, and returns nothing.

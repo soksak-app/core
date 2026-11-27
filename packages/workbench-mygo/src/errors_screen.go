@@ -44,6 +44,9 @@ type ShownErrors struct {
 	noticeFilter string
 	// shownNotice is the entry that core.notices.show marked as the shown entry, or "" when none was shown.
 	shownNotice string
+	// revealShown is whether the next frame of the center scrolls shownNotice into view; the center clears it once drawn, so a
+	// later scroll of the person is kept.
+	revealShown bool
 	// toastListOpen is whether the line form shows the list of its other toasts (core.toasts.list).
 	toastListOpen bool
 }
@@ -463,27 +466,27 @@ func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
 	buildRows := func(rowStyle string, list []ToastStatus) []toastRow {
 		built := make([]toastRow, 0, len(list))
 		for _, status := range list {
-		toast := s.errors.toastByID(status.ID)
-		_, titleH := ui.ShapeRichTextWith([]ui.Span{{Text: status.Title}}, font, ui.TextShape{Direction: c.Direction(), KeepAll: true, Width: textWidth}).Size()
-		bodyH := float32(0)
-		if toast.text != "" && rowStyle != "line" {
-			_, bodyH = ui.ShapeRichTextWith([]ui.Span{{Text: toast.text}}, font, ui.TextShape{Direction: c.Direction(), KeepAll: true, Width: textWidth}).Size()
-		}
-		height := titleH + bodyH + m.toastPadTop + m.toastPadBottom
-		_, actionsHeight := ui.ShapeText("가", font, 0).Size()
-		if rowStyle == "line" {
-			height = m.toastLineH
-		}
-		actions := s.toastActions(toast)
-		if rowStyle == "line" && len(actions) > 1 {
-			actions = actions[:1]
-		}
-		if len(actions) > 0 && rowStyle != "line" {
-			height += actionsHeight + m.toastGap
-		}
-		built = append(built, toastRow{status: status, body: toast.text, actions: actions, width: maxWidth, form: rowStyle,
-			height: max(height, closeHeight+m.toastPadTop+m.toastPadBottom)})
-	
+			toast := s.errors.toastByID(status.ID)
+			_, titleH := ui.ShapeRichTextWith([]ui.Span{{Text: status.Title}}, font, ui.TextShape{Direction: c.Direction(), KeepAll: true, Width: textWidth}).Size()
+			bodyH := float32(0)
+			if toast.text != "" && rowStyle != "line" {
+				_, bodyH = ui.ShapeRichTextWith([]ui.Span{{Text: toast.text}}, font, ui.TextShape{Direction: c.Direction(), KeepAll: true, Width: textWidth}).Size()
+			}
+			height := titleH + bodyH + m.toastPadTop + m.toastPadBottom
+			_, actionsHeight := ui.ShapeText("가", font, 0).Size()
+			if rowStyle == "line" {
+				height = m.toastLineH
+			}
+			actions := s.toastActions(toast)
+			if rowStyle == "line" && len(actions) > 1 {
+				actions = actions[:1]
+			}
+			if len(actions) > 0 && rowStyle != "line" {
+				height += actionsHeight + m.toastGap
+			}
+			built = append(built, toastRow{status: status, body: toast.text, actions: actions, width: maxWidth, form: rowStyle,
+				height: max(height, closeHeight+m.toastPadTop+m.toastPadBottom)})
+
 		}
 		return built
 	}
