@@ -308,6 +308,22 @@ int main(void) { @autoreleasepool {
         && [timed indexOfObject:timerRegistrations[0]] < [timed indexOfObject:timerDeliveries[0]],
         [NSString stringWithFormat:@"a timer registration is recorded and its delivery is counted before its handler runs: %@", timed]);
 
+    // A removed local monitor is an event of its own, so each registration of a source pairs with one removal; a nil token is refused.
+    NSArray<NSDictionary *> *monitoring = capturedEvents(^{
+        id monitor = sp_observe_local_monitor("test.monitor", SP_OBSERVE_RECORD, NSEventMaskLeftMouseDown, ^NSEvent *(NSEvent *event) { return event; });
+        check(monitor != nil, @"a local monitor registration returns its token");
+        sp_observe_remove_local_monitor("test.monitor", monitor);
+        sp_observe_remove_local_monitor("test.monitor", nil);
+    });
+    NSArray *monitorRegistered = named(monitoring, @"native.observe.registered");
+    NSArray *monitorRemoved = named(monitoring, @"native.observe.removed");
+    NSArray *monitorFailed = named(monitoring, @"native.observe.failed");
+    check(monitorRegistered.count == 1 && monitorRemoved.count == 1 && monitorFailed.count == 1
+        && [monitorRemoved[0][@"fields"][@"source"] isEqual:@"test.monitor"] && [monitorRemoved[0][@"fields"][@"kind"] isEqual:@"local_monitor"]
+        && [monitorRemoved[0][@"fields"][@"mode"] isEqual:@"record"] && [monitorRemoved[0][@"fields"][@"removals"] intValue] == 1
+        && [monitoring indexOfObject:monitorRegistered[0]] < [monitoring indexOfObject:monitorRemoved[0]],
+        [NSString stringWithFormat:@"a removal is one event at the level info after its registration, with its count, and a nil token is one error event: %@", monitoring]);
+
     // A refused registration is an error event; no registration stays silent.
     NSArray<NSDictionary *> *refused = capturedEvents(^{
         check(sp_observe_notification("test.refused", SP_OBSERVE_RECORD, probe, nil, nil, nil) == nil, @"a registration without a handler returns nil");

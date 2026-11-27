@@ -14,6 +14,7 @@ typedef struct {
     char name[kNameBytes];
     sp_observe_mode mode;
     _Atomic unsigned long long registrations;
+    _Atomic unsigned long long removals;
     _Atomic unsigned long long total;
     _Atomic unsigned long long pending;
     _Atomic uint64_t lastSummary;
@@ -238,6 +239,27 @@ id sp_observe_local_monitor(const char *source, sp_observe_mode mode, NSEventMas
     }];
     if (!token) fail(source, "local_monitor", @"the system refused the monitor");
     return token;
+}
+
+// Stores `native.observe.removed` with the same serializer as the other records. The monitor of a source is removed only by its
+// owner, so the removal count of the source and its registrations are compared in the log.
+void sp_observe_remove_local_monitor(const char *source, id token) {
+    if (!token) {
+        fail(source, "local_monitor", @"the monitor token is missing");
+        return;
+    }
+    source_record *record = lookup(source);
+    if (!record) {
+        fail(source, "local_monitor", @"the source has no registration");
+        return;
+    }
+    [NSEvent removeMonitor:token];
+    unsigned long long number = atomic_fetch_add_explicit(&record->removals, 1, memory_order_relaxed) + 1;
+    NSDictionary *fields = @{@"source": @(source), @"kind": @"local_monitor", @"mode": @(modeName(record->mode)), @"removals": @(number)};
+    NSData *json = [NSJSONSerialization dataWithJSONObject:fields options:0 error:NULL];
+    NSCAssert(json != nil, @"the removal is serializable");
+    NSString *text = [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] autorelease];
+    sp_event(SP_CLASS_LIFECYCLE, SP_EVENT_INFO, "native.observe.removed", text.UTF8String);
 }
 
 id sp_observe_global_monitor(const char *source, sp_observe_mode mode, NSEventMask mask, void (^handler)(NSEvent *)) {

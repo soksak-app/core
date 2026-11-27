@@ -2000,7 +2000,7 @@ void sp_document_close(void *handle) {
     sp_surface_unplace_view(view);
     [view stopHiddenTimer];
     if (view.eventMonitor) {
-        [NSEvent removeMonitor:view.eventMonitor];
+        sp_observe_remove_local_monitor("document_view.click", view.eventMonitor);
         view.eventMonitor = nil;
     }
     [view.webSurface removeObserver:view forKeyPath:@"effectiveAppearance" context:&kAppearanceContext];

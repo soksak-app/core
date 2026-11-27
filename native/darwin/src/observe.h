@@ -56,6 +56,10 @@ bool sp_observe_key_path(const char *source, sp_observe_mode mode, id target, id
 // nil, after the event `native.observe.failed`, when the platform or a missing handler refuses it. Main thread only.
 id sp_observe_local_monitor(const char *source, sp_observe_mode mode, NSEventMask mask, NSEvent *(^handler)(NSEvent *));
 id sp_observe_global_monitor(const char *source, sp_observe_mode mode, NSEventMask mask, void (^handler)(NSEvent *));
+// Removes the monitor of `source` that sp_observe_local_monitor returned as `token`, and stores `native.observe.removed` (`source`, `kind`,
+// `mode`, `removals`) at the level `info`, where `removals` counts the removals of the source. A nil token stores `native.observe.failed`
+// at the level `error` and removes nothing. The caller sets its token to nil. Main thread only.
+void sp_observe_remove_local_monitor(const char *source, id token);
 
 // Creates the dispatch source that reports the exit of `pid` on `queue`. The caller sets its cancel handler and resumes it. Returns
 // NULL, after the event `native.observe.failed`, when the system refuses it or the handler is missing.

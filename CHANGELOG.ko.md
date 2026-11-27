@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1268: local monitor 제거마다 `native.observe.removed`를 저장하고, 등록과 짝을 제거 수로 맞춘다.
 - F1217-17-10: 계정 그룹 설명을 workbench.json에 한 번 선언하고 두 워크벤치가 읽는다.
 - F1266: mygo 호스트가 plugin folder 수를 `folders`로 보고하고, `plugins-folders-changed`를 받으면 상태를 다시 읽는다.
 - F1267: host와 시험 source가 folder 규칙을 가진 installation spec의 heading을 인용하도록 바꾼다.
