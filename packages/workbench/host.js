@@ -155,6 +155,44 @@ export function toastCuts() {
  */
 export const native = Boolean(bridge);
 
+// The reduced motion of the page: the override of the application when one is set (diagnostics.motion), else the platform value.
+export function reduceMotionValue(override, platformReduces) {
+  return override ?? platformReduces;
+}
+
+// Sets the reduced motion attribute of root to the effective value, which app.css reads.
+export function applyReduceMotion(root, override, platformReduces) {
+  root.dataset.reduceMotion = String(reduceMotionValue(override, platformReduces));
+}
+
+// The override of a motion answer or event: a boolean, or null for the platform value. Any other value is refused, so that a
+// malformed answer never reads as the platform value.
+function motionOverrideOf(value) {
+  const reduce = value?.reduce;
+  if (reduce !== null && typeof reduce !== "boolean") throw new TypeError("motion carries no boolean or null reduce");
+  return reduce;
+}
+
+// Follows the override of the application: the motion call reads it at start and the motion event carries each later change. The
+// platform value is followed through the media query. A failed call is reported to the application log.
+export function watchReduceMotion(root = document.documentElement, motionHost = bridge) {
+  const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let override = null;
+  const apply = () => applyReduceMotion(root, override, query.matches);
+  query.addEventListener("change", apply);
+  if (motionHost) {
+    motionHost.on("motion", (value) => {
+      override = motionOverrideOf(value);
+      apply();
+    });
+    motionHost.call("motion").then((value) => {
+      override = motionOverrideOf(value);
+      apply();
+    }, (error) => report(`motion: ${error}`));
+  }
+  apply();
+}
+
 // The reload request of the host, which names its cause. The page is read again after every call it sent has received its reply
 // (docs/spec/native-host.md#page-reload).
 if (bridge) bridge.on("page-reload", (event) => reloadPage(pageReloadCause(event)));

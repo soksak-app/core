@@ -63,6 +63,7 @@ const METHOD = {
   setTheme: "SetTheme",
   setMenuLanguage: "SetMenuLanguage",
   theme: "Theme",
+  motion: "Motion",
   overlayShow: "OverlayShow",
   overlayPlace: "OverlayPlace",
   setShape: "SetShape",

@@ -294,11 +294,27 @@ func noticeTurns(kind string, reduceMotion bool) bool {
 	return kind == "progress" && !reduceMotion
 }
 
+// effectiveReduceMotion returns the reduced motion of the application: the override when one is set, else the platform value.
+func effectiveReduceMotion(override *bool, platform bool) bool {
+	if override != nil {
+		return *override
+	}
+	return platform
+}
+
+// reduceMotionOverride returns the override of the window, or nil when the application gives none.
+func (s *Shell) reduceMotionOverride() *bool {
+	if s.options.ReduceMotion == nil {
+		return nil
+	}
+	return s.options.ReduceMotion()
+}
+
 // noticeIcon draws the icon of a notice kind at size. A progress ring turns with the frames of its window, which the Loop of the element
 // keeps coming while the ring is drawn, so a ring that is not drawn does not turn; the period is the time of one turn, not a frame time.
 func (s *Shell) noticeIcon(c *ui.Context, kind string, size float32, color ui.Color) ui.Element {
 	icon := ui.Icon(c, s.noticeGlyph(kind)).Size(size, size).Shrink(0).TextColor(color)
-	if noticeTurns(kind, c.Preferences().ReduceMotion) {
+	if noticeTurns(kind, effectiveReduceMotion(s.reduceMotionOverride(), c.Preferences().ReduceMotion)) {
 		icon.Rotate(icon.Loop("notice-ring", time.Second, ui.Linear) * 360)
 	}
 	return icon

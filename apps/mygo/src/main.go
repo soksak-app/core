@@ -63,13 +63,14 @@ type workbenchPort struct {
 // Prepared makes the workbench over the prepared host.
 func (p *workbenchPort) Prepared(h *host.Host) {
 	app, err := workbench.NewApp(workbench.AppOptions{
-		Environment: p.environment,
-		Post:        mygo.App.WhenReady,
-		Table:       workbench.HostTable(h),
-		Report:      func(line string) { host.LogError("workbench", errors.New(line)) },
-		Installed:   h.InstalledPlugins,
-		Element:     workbench.HostElement(h),
-		Detaching:   workbench.HostDetaching(h),
+		Environment:  p.environment,
+		Post:         mygo.App.WhenReady,
+		Table:        workbench.HostTable(h),
+		Report:       func(line string) { host.LogError("workbench", errors.New(line)) },
+		Installed:    h.InstalledPlugins,
+		Element:      workbench.HostElement(h),
+		Detaching:    workbench.HostDetaching(h),
+		ReduceMotion: workbench.HostReduceMotion(h),
 	})
 	if err != nil {
 		host.ExitOnFailure(err)

@@ -10,6 +10,22 @@ func (s *Surfaces) ReduceMotion() *bool {
 	return s.reduceMotion
 }
 
+// MotionState is the value of the motion call and of the motion event: the reduced motion override, null for the platform value.
+type MotionState struct {
+	Reduce *bool `json:"reduce"`
+}
+
+// ReduceMotionOf returns the reduced motion override of a window of h, or nil when the window has none.
+func ReduceMotionOf(h *Host, window Frontend) *bool {
+	h.mu.Lock()
+	s := h.windows[window.ID()]
+	h.mu.Unlock()
+	if s == nil {
+		return nil
+	}
+	return s.ReduceMotion()
+}
+
 // SetReduceMotion records the reduced motion override of the window and publishes it to the open pages with the motion event, which
 // carries {reduce}, true, false or null for the platform value.
 func (s *Surfaces) SetReduceMotion(reduce *bool) {

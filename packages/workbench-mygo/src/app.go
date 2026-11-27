@@ -88,6 +88,9 @@ type AppOptions struct {
 	Element func(window host.Frontend, id string) (surface, key uintptr, ok bool)
 	// Detaching returns the surfaces of window whose image detach is pending.
 	Detaching func(window host.Frontend) []string
+	// ReduceMotion returns the reduced motion override of window, or nil for the platform value. A nil function reads the platform value
+	// only.
+	ReduceMotion func(window host.Frontend) *bool
 	// Clock is the time of the tab parts, and nil the time of the system.
 	Clock TabClock
 }
@@ -126,6 +129,11 @@ func HostDetaching(h *host.Host) func(window host.Frontend) []string {
 	return func(window host.Frontend) []string { return host.DetachingSurfaces(h, window) }
 }
 
+// HostReduceMotion returns the reduced motion override of a window of h.
+func HostReduceMotion(h *host.Host) func(window host.Frontend) *bool {
+	return func(window host.Frontend) *bool { return host.ReduceMotionOf(h, window) }
+}
+
 // HostTable is the table of the calls of the host for a window of the application.
 func HostTable(h *host.Host) func(window host.Frontend) map[string]HostCall {
 	return func(window host.Frontend) map[string]HostCall {
@@ -156,7 +164,13 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 				window.StartWorkbench()
 			})
 		},
-		Detaching:   func() []string { return a.options.Detaching(window) },
+		Detaching: func() []string { return a.options.Detaching(window) },
+		ReduceMotion: func() *bool {
+			if a.options.ReduceMotion == nil {
+				return nil
+			}
+			return a.options.ReduceMotion(window)
+		},
 		Project:     projectOfAddress(painted.Address()),
 		Library:     libraryOfAddress(painted.Address()),
 		Located:     func(shown, held string) { painted.SetAddress(addressOfProject(shown, held)) },
@@ -441,7 +455,7 @@ func eventBody[T any](name string, data []any) (T, error) {
 var eventsLeft = map[string]bool{"diagnostics-tick": true, "diagnostics-unlistened": true, "document-event": true,
 	"document-message": true, "document-state": true, "document-stream": true, "exit-request": true, "exposure-registered": true,
 	"image-event": true, "log-policy": true, "memory-pressure": true, "modal-content": true,
-	"modal-position": true, "modal-rendered": true, "overlay-pick": true, "page-ready": true, "plugins-changed": true, "project-activate": true,
+	"modal-position": true, "modal-rendered": true, "motion": true, "overlay-pick": true, "page-ready": true, "plugins-changed": true, "project-activate": true,
 	"run-began": true, "run-ended": true, "sidecar-failure": true, "sidecar-message": true, "sidecars-changed": true, "surface-input": true,
 	"surface-pressed": true, "theme": true, "view-call": true, "view-process-ended": true,
 	"view-reply": true, "view-stopped": true,

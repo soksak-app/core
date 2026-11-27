@@ -111,6 +111,15 @@ func (h *Host) Theme(ctx context.Context) (Theme, error) {
 	return s.Theme(), nil
 }
 
+// Motion returns the reduced motion override of the window to a page that reads it at start: {reduce}, with null for the platform value.
+func (h *Host) Motion(ctx context.Context) (MotionState, error) {
+	s, err := h.surface(ctx)
+	if err != nil {
+		return MotionState{}, err
+	}
+	return MotionState{Reduce: s.ReduceMotion()}, nil
+}
+
 func (h *Host) SyncSurfaces(ctx context.Context, reqJSON json.RawMessage) (PreparedSurfaces, error) {
 	req, err := decodeSyncRequest(reqJSON)
 	if err != nil {

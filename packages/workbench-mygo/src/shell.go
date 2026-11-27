@@ -50,6 +50,9 @@ type ShellOptions struct {
 	Reload func()
 	// Detaching returns the surfaces of the window whose image detach is pending, which a start of the workbench holds.
 	Detaching func() []string
+	// ReduceMotion returns the reduced motion override of the window, or nil for the platform value. A nil function reads the platform
+	// value only.
+	ReduceMotion func() *bool
 	// Project is the project that the address of the window names, and "" without one.
 	Project string
 	// Library is the project that the `library` address parameter of the window names as the one to return to, and "" without one (F1149-1).
@@ -388,10 +391,12 @@ type Shell struct {
 	cardFrames map[string]layout.Rect
 	binder     *Binder
 	keys       *Shortcuts
-	calls      *Calls
-	requests   *Requests
-	errors     *ShownErrors
-	sidebars   *Sidebars
+	// textFocused tells that a text input of the window has focus in the frame, so the rows whose condition names no text input do not hold.
+	textFocused bool
+	calls       *Calls
+	requests    *Requests
+	errors      *ShownErrors
+	sidebars    *Sidebars
 	// operated holds the side of each axis of each card that was operated last, for the time the plane stands.
 	operated map[string]map[string]layout.Side
 	grip     *heldGrip
@@ -730,7 +735,7 @@ func (s *Shell) shortcutConditions() map[string]func() bool {
 		"A project home form field has focus":                                      formOpen,
 		"The project home is shown, a row is selected and no form field has focus": func() bool { return noForm() && len(s.homeRows()) > 0 },
 		"A picker layer is open":                                                   never,
-		"The work screen is shown":                                                 func() bool { return !s.inHome() },
+		"The work screen is shown and no text input has focus":                     func() bool { return !s.inHome() && !s.textFocused },
 		"The notice center is open":                                                func() bool { return s.errors.noticeOpen },
 		"The toast list is open; the command gets open false":                      func() bool { return s.errors.toastListOpen },
 		"A native modal menu is open and has keyboard focus":                       never,
@@ -1077,6 +1082,7 @@ func (s *Shell) View(c *ui.Context) {
 	contentHeight := max(0, height-s.chromeHeight()-s.statusBarHeight())
 	s.settingsForFrame(c, width, contentHeight)
 	dialogOpen := s.dialogOpen()
+	s.textFocused = c.FocusTakesText()
 	s.keys.Declare(c)
 	// Korean breaks at the spaces, as body of packages/workbench/app.css says. It is inherited, except by an overlay, whose root takes it.
 	root := s.binder.Watched(ui.Column(c).Size(width, height).Background(s.palette.Bg).TextColor(s.palette.Fg).KeepAll().Clip())

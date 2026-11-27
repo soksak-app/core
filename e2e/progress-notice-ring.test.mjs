@@ -1,13 +1,12 @@
 // The progress notice ring turns in a running window (docs/spec/notifications.md, the progress kind: a turning ring). The check adds a
 // progress notice to the plugin of the start tab with the declared command core.notices.add, opens the notice center, and keeps only
-// the progress entries with core.notices.filter, so the first core.notices.entry is the progress notice. It records the frames that
-// the window delivers while the ring is drawn (diagnostics.capture.start/stop, paced by the refresh rate that the recorder reads) and
-// compares the pixels of the leading square of the ring element core.notices.ring (the mark of the progress entry), from one
-// frame to the next. The ring
-// turns in the frames of a window without reduced motion and stays the same with reduced motion. The reduced motion setting is read
-// from the macOS accessibility preference with `defaults read`; the check changes no preference.
+// the progress entries with core.notices.filter, so the first core.notices.entry is the progress notice. It sets the reduced motion
+// override of the application with diagnostics.motion, records the frames that the window delivers while the ring is drawn
+// (diagnostics.capture.start/stop, paced by the refresh rate that the recorder reads), and compares the pixels of the leading square of
+// the ring element core.notices.ring (the mark of the progress entry), from one frame to the next. With the override true the ring
+// stays the same; with the override false it turns. The check changes no operating system preference, and it restores the platform value
+// when it ends.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
@@ -19,19 +18,6 @@ import { fresh, START_PLUGIN } from "./fixture.mjs";
 const RECORDED_STILLS = 30;
 const GRID = 6;
 const TITLE = "progress notice ring check";
-
-/**
- * Whether the macOS accessibility preference asks for reduced motion. The read changes nothing. A preference that was never set is
- * not reduced motion; any other failure of the read is an error.
- */
-function reducedMotion() {
-  try {
-    return execFileSync("defaults", ["read", "com.apple.universalaccess", "reduceMotion"], { encoding: "utf8" }).trim() === "1";
-  } catch (error) {
-    if (error.status === 1 && /does not exist/.test(String(error.stderr))) return false;
-    throw error;
-  }
-}
 
 /** The pixels of a GRID x GRID grid of window points over the leading square of `rect` in `frame`, as one string. */
 function ringSamples(frame, rect) {
@@ -46,48 +32,53 @@ function ringSamples(frame, rect) {
   return values.join(";");
 }
 
-for (const app of Object.values(APPS)) {
-  test(`${app.name}: the progress notice ring turns in the delivered frames unless reduced motion is set`, { timeout: 120000 }, async (t) => {
+// Each application runs both branches: the reduced motion override true, where the ring must not change, and false, where it must.
+for (const app of Object.values(APPS)) for (const reduced of [true, false]) {
+  test(`${app.name}: the progress notice ring ${reduced ? "does not change" : "turns"} with the reduced motion override ${reduced}`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
-    const reduced = reducedMotion();
-    const wasOpen = (await s.get("core.notices")).open;
-    if (!wasOpen) await s.run("core.notices.toggle");
-    const id = await s.run("core.notices.add", { plugin: START_PLUGIN, kind: "progress", title: TITLE });
+    await s.request("diagnostics.motion", { reduce: reduced });
     try {
-      await s.until("core.notices", (value) => value.entries.some((entry) => entry.id === id), "the progress notice is not listed");
-      await s.run("core.notices.filter", { filter: "progress" });
-      await s.until("core.notices", (value) => value.filter === "progress", "the notice center did not show the progress filter");
-      const rect = await s.rect("core.notices.ring", 0);
-      assert.ok(rect.height > 0 && rect.width > 0, `the progress ring has no drawn size: ${JSON.stringify(rect)}`);
+      const wasOpen = (await s.get("core.notices")).open;
+      if (!wasOpen) await s.run("core.notices.toggle");
+      const id = await s.run("core.notices.add", { plugin: START_PLUGIN, kind: "progress", title: TITLE });
+      try {
+        await s.until("core.notices", (value) => value.entries.some((entry) => entry.id === id), "the progress notice is not listed");
+        await s.run("core.notices.filter", { filter: "progress" });
+        await s.until("core.notices", (value) => value.filter === "progress", "the notice center did not show the progress filter");
+        const rect = await s.rect("core.notices.ring", 0);
+        assert.ok(rect.height > 0 && rect.width > 0, `the progress ring has no drawn size: ${JSON.stringify(rect)}`);
 
-      // Each still is taken at one refresh of the window, so the recording paces by the display and not by a fixed frame time.
-      const recording = await s.record({ frames: RECORDED_STILLS });
-      // A stop without `after` requests only the stills whose planned time has already come, so the check waits on the display clock
-      // until the stills of the recording are all planned, then stops after its first displayed time. The length of a still is the
-      // refresh of the window that the host reports, and a stop after a time beyond the last planned still fails.
-      const { refreshRate } = await s.get("host.window");
-      const gap = 1000 / refreshRate;
-      const start = (await s.presented()).displayed;
-      let displayed = start;
-      while (displayed - start < RECORDED_STILLS * gap) displayed = (await s.presented()).displayed;
-      const stopped = await recording.stop({ after: start });
-      requireNoLostStills(recording.judge(), "the recording");
-      const files = frames(stopped.frames);
-      assert.ok(files.length >= 2, `the recording holds ${files.length} frames, fewer than 2`);
-      const samples = files.map((file) => ringSamples(readFrame(file), rect));
-      const turns = samples.slice(1).filter((value, index) => value !== samples[index]).length;
-      recording.keep("progress-ring", { rect, samples, reduced, turns });
-      t.diagnostic(`${app.name}: ${files.length} frames, ${turns} changes of the progress ring, reduced motion ${reduced}`);
-      if (reduced) {
-        assert.equal(turns, 0, `the progress ring changed in ${turns} frames under reduced motion`);
-      } else {
-        assert.ok(turns > 0, `the progress ring did not change across the ${files.length} delivered frames`);
+        // Each still is taken at one refresh of the window, so the recording paces by the display and not by a fixed frame time.
+        const recording = await s.record({ frames: RECORDED_STILLS });
+        // A stop without `after` requests only the stills whose planned time has already come, so the check waits on the display clock
+        // until the stills of the recording are all planned, then stops after its first displayed time. The length of a still is the
+        // refresh of the window that the host reports, and a stop after a time beyond the last planned still fails.
+        const { refreshRate } = await s.get("host.window");
+        const gap = 1000 / refreshRate;
+        const start = (await s.presented()).displayed;
+        let displayed = start;
+        while (displayed - start < RECORDED_STILLS * gap) displayed = (await s.presented()).displayed;
+        const stopped = await recording.stop({ after: start });
+        requireNoLostStills(recording.judge(), "the recording");
+        const files = frames(stopped.frames);
+        assert.ok(files.length >= 2, `the recording holds ${files.length} frames, fewer than 2`);
+        const samples = files.map((file) => ringSamples(readFrame(file), rect));
+        const turns = samples.slice(1).filter((value, index) => value !== samples[index]).length;
+        recording.keep("progress-ring", { rect, samples, reduced, turns });
+        t.diagnostic(`${app.name}: ${files.length} frames, ${turns} changes of the progress ring, reduced motion override ${reduced}`);
+        if (reduced) {
+          assert.equal(turns, 0, `the progress ring changed in ${turns} frames under the reduced motion override`);
+        } else {
+          assert.ok(turns > 0, `the progress ring did not change across the ${files.length} delivered frames`);
+        }
+      } finally {
+        await s.run("core.notices.done", { id, kind: "success", title: TITLE });
+        await s.run("core.notices.filter", { filter: "all" });
+        if (!wasOpen) await s.run("core.notices.toggle");
       }
     } finally {
-      await s.run("core.notices.done", { id, kind: "success", title: TITLE });
-      await s.run("core.notices.filter", { filter: "all" });
-      if (!wasOpen) await s.run("core.notices.toggle");
+      await s.request("diagnostics.motion", { reduce: null });
     }
   });
 }

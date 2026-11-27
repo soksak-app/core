@@ -693,7 +693,9 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .toast[data-kind="warning"] .toast__mark { color: var(--warn); }
 .toast[data-kind="error"] .toast__mark { color: var(--no); }
 .toast[data-kind="progress"] .toast__mark svg, .notice-center__entry[data-kind="progress"] .notice-center__mark svg { animation: surface-status-spin var(--spinner-turn) linear infinite; }
-@media (prefers-reduced-motion: reduce) { .toast[data-kind="progress"] .toast__mark svg, .notice-center__entry[data-kind="progress"] .notice-center__mark svg { animation: none; } }
+/* The root attribute holds the effective reduced motion: the override of the application, else the platform value (host.js watchReduceMotion). */
+@media (prefers-reduced-motion: reduce) { :root:not([data-reduce-motion]) .toast[data-kind="progress"] .toast__mark svg, :root:not([data-reduce-motion]) .notice-center__entry[data-kind="progress"] .notice-center__mark svg { animation: none; } }
+:root[data-reduce-motion="true"] .toast[data-kind="progress"] .toast__mark svg, :root[data-reduce-motion="true"] .notice-center__entry[data-kind="progress"] .notice-center__mark svg { animation: none; }
 .toast__title { font-weight: 600; font-size: var(--text-small); }
 .toast__text { color: var(--muted); font-size: var(--text-small); overflow-wrap: anywhere; }
 .toast__actions { display: flex; gap: var(--toast-gap); margin-top: var(--toast-gap); }
@@ -707,7 +709,8 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .toast__bar[hidden] { display: none; }
 .toast:hover .toast__bar, .toast:focus-within .toast__bar { animation-play-state: paused; }
 @keyframes toast-bar { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-@media (prefers-reduced-motion: reduce) { .toast__bar { animation: none; } }
+@media (prefers-reduced-motion: reduce) { :root:not([data-reduce-motion]) .toast__bar { animation: none; } }
+:root[data-reduce-motion="true"] .toast__bar { animation: none; }
 /* The bell of the title bar: the unread count in the accent, or in the error color while an unread problem is shown. */
 .notice-bell { position: relative; }
 .notice-bell svg { display: block; width: var(--act-icon); height: var(--act-icon); fill: none; stroke: currentColor; stroke-width: var(--icon-stroke); stroke-linecap: round; stroke-linejoin: round; }

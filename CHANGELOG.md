@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222-2: The mygo and web workbenches and the Wails and Tauri pages apply the reduced motion override to the notice progress ring, and the web toast bar stops its countdown under the override.
 - F1217-12: toast_list_test.go is in gofmt form.
 - F1222: notice_center.go is in gofmt form.
 - F1217-7: The project home has the status line of the design in both hosts: the counts of projects and open projects, the enabled and installed plugins, the button back to the work screen through core.home.back, and the button for a new window.

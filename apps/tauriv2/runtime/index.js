@@ -30,6 +30,7 @@ const COMMAND = {
   setTheme: "set_theme",
   setMenuLanguage: "set_menu_language",
   theme: "theme",
+  motion: "motion",
  
   overlayShow: "overlay_show",
   overlayPlace: "overlay_place",
@@ -126,6 +127,7 @@ const ARG = {
     return { language: v };
   },
   theme: () => ({}),
+  motion: () => ({}),
   overlayShow: (v) => ({ request: v }),
   overlayPlace: (v) => ({ request: v }),
   setShape: (v) => ({ request: v }),
