@@ -52,7 +52,8 @@ test("the debug copy shares the foreground toast of the window and forwards its 
     assert.match(toast.querySelector(".toast__title").textContent, new RegExp(`^${message}( ×\\d+)?$`));
     assert.equal(document.querySelectorAll(".toast__close").length, 1);
     assert.equal(document.querySelector(`#${id} .toast`)?.closest('[role="dialog"]')?.id, id);
-    return toast.querySelector("button");
+    // The close control is the one that answers with the key of the notice; the actions of the toast come before it.
+    return toast.querySelector(".toast__close");
   }
 
   // The settings tab shows the error in the toast of the window, and opens no copy.
