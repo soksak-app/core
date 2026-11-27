@@ -35,7 +35,7 @@
 
 프로젝트 홈의 제목줄에는 설정 버튼 하나만 보인다([창 도구](external-sidebars.ko.md#창-도구)). 제목줄 로고는 `core.projects.browse`를 실행한다. 이 명령은 현재 작업을 유지하면서 그 창에 프로젝트 홈을 보여 준다. 작업 화면의 상태 막대에 있는 항목 홈은 `core.home.show`를 실행하며, 같은 방식으로 그 창에 프로젝트 홈을 보여 준다. 프로젝트를 선택하거나 작업으로 돌아오면 작업 화면을 복원한다. 새 창은 항상 프로젝트가 배정되지 않은 창을 만든다. macOS에서는 모든 창을 닫아도 이 동작을 쓸 수 있도록 앱을 유지한다. Command/Ctrl+Shift+N과 macOS Dock 메뉴는 같은 동작을 실행한다. 프로젝트 홈은 프로젝트 작업 화면에서 돌아온 경우에도 항상 공통 설정을 쓴다. 작업 화면으로 돌아가면 그 프로젝트의 덮어쓰기를 다시 적용한다.
 
-프로젝트 홈이 선언하는 명령과 element는 다음과 같다: `core.home.show`, `core.home.search`, `core.home.search.focus`, `core.home.select`, `core.home.open`, `core.home.form.open`, `core.home.pin`, `core.home.confirm`, `core.home.remove`, `core.home.no-results`, `core.home.add`, `core.home.remove-ask`. 상태 `core.home`은 `query`(검색 문구), `selected`(선택한 줄의 프로젝트 id 또는 `null`), `rows`(보이는 순서의 프로젝트 id), `previewErrors`, `folderErrors`를 보고한다.
+프로젝트 홈이 선언하는 명령과 element는 다음과 같다: `core.home.show`, `core.home.search`, `core.home.search.focus`, `core.home.select`, `core.home.open`, `core.home.form.open`, `core.home.pin`, `core.home.confirm`, `core.home.remove`, `core.home.no-results`, `core.home.add`, `core.home.remove-ask`, `core.home.back`, `core.home.status.projects`, `core.home.status.open`, `core.home.status.plugins`, `core.home.status.back`, `core.home.status.new`. 상태 `core.home`은 `query`(검색 문구), `selected`(선택한 줄의 프로젝트 id 또는 `null`), `rows`(보이는 순서의 프로젝트 id), `previewErrors`, `folderErrors`, 상태줄용 `projects`(프로젝트 수), `open`(창이 연 프로젝트 수), `plugins`(`enabled`, `installed` 수)를 보고한다.
 
 ## 프로젝트 열기
 
