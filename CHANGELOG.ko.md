@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1233: F1233 항목은 record 동작을 literal 동사로 적는다.
 - F1231-1: 카드 또는 창 사이드바의 없는 플러그인 경고가 사이드바를 source로 하는 warning notice가 되어, 상태줄과 토스트에 보인다.
 - F1234: F1234의 기능 연결이 exposure 검사와 parity 검사의 선언 copy, common-only key 검사와 그 test를 가리킨다.
 - F1232-1: packages/workbench-mygo의 한글 주석이 영어가 되었고, 노출된 보이는 라벨은 element 또는 command 식별자로 부른다.
