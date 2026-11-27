@@ -12,10 +12,14 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
+
+// policyApplyLimit bounds the wait of one policy change for its application by the watch of the policy file.
+const policyApplyLimit = 20 * time.Second
 
 const everything = `{"schema":1,"classes":{"lifecycle":"trace","input":"trace","call":"trace","io":"trace","frame":"trace"}}`
 
@@ -255,11 +259,16 @@ func TestThePolicyFileIsWatchedAndEveryChangeIsAppliedOnce(t *testing.T) {
 	}
 	t.Cleanup(stop)
 	// The step names the change that the check made, so a failure states which change gave which source and detail.
+	// Each wait has a bound, so a policy that is never applied fails the test at its step instead of waiting for the test timeout.
 	wait := func(step, want string) {
 		t.Helper()
-		got := <-applied
-		if got[0] != want {
-			t.Fatalf("%s: applied %q (%s), want %q", step, got[0], got[1], want)
+		select {
+		case got := <-applied:
+			if got[0] != want {
+				t.Fatalf("%s: applied %q (%s), want %q", step, got[0], got[1], want)
+			}
+		case <-time.After(policyApplyLimit):
+			t.Fatalf("%s: no policy was applied within %s, want %q", step, policyApplyLimit, want)
 		}
 	}
 	// The file does not exist: the default policy, which stores only errors, is in force.
@@ -456,11 +465,16 @@ func TestThePolicyThatAPageChangeWritesCarriesTheCidsOfTheChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(stop)
+	// Each wait has a bound, so a policy that is never applied fails the test at its step instead of waiting for the test timeout.
 	wait := func(step, want string) {
 		t.Helper()
-		got := <-applied
-		if got[0] != want {
-			t.Fatalf("%s: applied %q (%s), want %q", step, got[0], got[1], want)
+		select {
+		case got := <-applied:
+			if got[0] != want {
+				t.Fatalf("%s: applied %q (%s), want %q", step, got[0], got[1], want)
+			}
+		case <-time.After(policyApplyLimit):
+			t.Fatalf("%s: no policy was applied within %s, want %q", step, policyApplyLimit, want)
 		}
 	}
 	command := func(step string, request map[string]any) {
