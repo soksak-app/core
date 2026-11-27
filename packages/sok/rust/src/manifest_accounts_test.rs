@@ -26,5 +26,8 @@ fn accounts_without_a_programs_declaration_are_refused() {
     let mut manifest = accounts_manifest();
     manifest.as_object_mut().unwrap().remove("programs");
     let error = validate_manifest(&manifest).unwrap_err();
-    assert_eq!(error, "plugin probe: accounts need a programs declaration", "error = {error}");
+    assert_eq!(
+        error, "plugin probe: accounts need a programs declaration",
+        "error = {error}"
+    );
 }
