@@ -136,7 +136,7 @@ function viewShortcuts(shortcuts) {
 export const REGION_HOST_CALLS = new Set([
   "compositionDeclare", "compositionPlace",
   "documentAttach", "documentLoad", "documentZoom", "documentGo", "documentDetach", "documentSubscribe", "documentUnsubscribe",
-  "documentPost", "documentQuery", "documentInteractionState",
+  "documentPost", "documentQuery", "documentBoxes", "documentInteractionState",
   "imageAttach", "imageFocus", "imageCaret", "imageText", "imageDetach",
 ]);
 
@@ -488,6 +488,10 @@ async function run(command, params, { plugin, surface, tab, page, shortcuts, emi
     case "document.go": {
       const fields = regionOf(command, params);
       return composition.document.go(fields.name, fields.action, fields.offset);
+    }
+    case "document.boxes": {
+      const fields = regionOf(command, params);
+      return composition.document.boxes(fields.name, fields.selector, fields.properties);
     }
     case "document.post": {
       const fields = regionOf(command, params);

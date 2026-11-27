@@ -205,6 +205,7 @@ function pageRuntime(surface, scoped, compositionReady, lifetime) {
       unsubscribe: (name, handle) => hostClose("documentUnsubscribe", { document: name, handle }),
       onStream: (listener) => scoped.native.on("document-stream", (event) => listener(event.document, event.handle, event.message)),
       post: (name, message) => invoke("documentPost", { document: name, message }),
+      boxes: (name, selector, properties) => invoke("documentBoxes", { document: name, selector, properties }),
       onState: (listener) => scoped.native.on("document-state", (event) => listener(event.document, event.state)),
       onMessage: (listener) => scoped.native.on("document-message", (event) => listener(event.document, event.message)),
     },

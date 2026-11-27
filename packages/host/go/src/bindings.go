@@ -771,6 +771,12 @@ func runNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return s.ModalContent(id, instance), nil
 		}
 		return nil, s.ModalReady(id, instance)
+	case "DocumentBoxes":
+		var req DocumentBoxesRequest
+		if err := nativeArgs(call, nativeArg{"request", &req}); err != nil {
+			return nil, err
+		}
+		return s.boxDocument(viewID, req.DocumentRequest, req.Selector, req.Properties)
 	case "DocumentAttach", "DocumentLoad", "DocumentZoom", "DocumentGo", "DocumentPost", "DocumentDetach", "DocumentSubscribe", "DocumentUnsubscribe":
 		var req DocumentRequest
 		if err := nativeArgs(call, nativeArg{"request", &req}); err != nil {

@@ -636,6 +636,10 @@ fn dispatch(
             let request: documents::Request = argument(method, "request", body)?;
             json!(documents::query(webview, request)?)
         }
+        "document_boxes" => {
+            let request: documents::BoxRequest = argument(method, "request", body)?;
+            json!(documents::boxes(webview, request)?)
+        }
         "document_interaction_state" => {
             let request: documents::Request = argument(method, "request", body)?;
             json!(documents::interaction_state(webview, request)?)

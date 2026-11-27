@@ -559,6 +559,7 @@ export function createViewBridge({ handler, report }) {
       load: (name, url) => calls.request("document.load", { name, url }),
       zoom: (name, zoom) => calls.request("document.zoom", { name, zoom }),
       go: (name, action, offset) => calls.request("document.go", offset === undefined ? { name, action } : { name, action, offset }),
+      boxes: (name, selector, properties) => calls.request("document.boxes", { name, selector, properties }),
       post: (name, message) => calls.request("document.post", { name, message }),
       subscribe: (name, stream) => calls.request("document.subscribe", { name, stream }),
       unsubscribe: (name, handle) => calls.request("document.unsubscribe", { name, handle }),

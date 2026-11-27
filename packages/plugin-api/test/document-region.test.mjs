@@ -55,6 +55,7 @@ function port() {
     place: async (name, insets, visible) => { calls.push(["place", name, insets, visible]); },
     load: async (name, url) => { calls.push(["load", name, url]); },
     go: async (name, action, offset) => { calls.push(offset === undefined ? ["go", name, action] : ["go", name, action, offset]); return true; },
+    boxes: async (name, selector, properties) => { calls.push(["boxes", name, selector, properties]); return { total: 0, truncated: false, boxes: [] }; },
     detach: async (name) => { calls.push(["detach", name]); },
     onState: (fn) => { receive = fn; return Promise.resolve(() => { stopped = true; }); },
     post: async (name, message) => { calls.push(["post", name, message]); },
@@ -355,4 +356,24 @@ test("an unknown stream is rejected before the host is called", async () => {
   p.release();
   await assert.rejects(region.subscribe("pixels", () => {}), /unknown document stream "pixels"/);
   assert.deepEqual(p.calls.filter(([kind]) => kind === "subscribe"), []);
+});
+
+test("a box query is sent to the host with its selector and properties and resolves to the reply", async () => {
+  const f = fixture();
+  const p = port();
+  p.release();
+  const region = attachRegion(p, f.element, "page", f.window, { report: f.report });
+  assert.deepEqual(await region.boxes("h1", ["font-size"]), { total: 0, truncated: false, boxes: [] });
+  assert.deepEqual(p.calls.at(-1), ["boxes", "page", "h1", ["font-size"]]);
+});
+
+test("a box query with a selector that is not a string or properties that are not strings is rejected before the host is called", async () => {
+  const f = fixture();
+  const p = port();
+  p.release();
+  const region = attachRegion(p, f.element, "page", f.window, { report: f.report });
+  await assert.rejects(region.boxes(1, []), /selector must be a string/);
+  await assert.rejects(region.boxes("h1", "font-size"), /properties must be an array of strings/);
+  await assert.rejects(region.boxes("h1", ["font-size", 2]), /properties must be an array of strings/);
+  assert.deepEqual(p.calls.filter(([kind]) => kind === "boxes"), []);
 });

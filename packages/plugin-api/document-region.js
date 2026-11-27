@@ -185,6 +185,17 @@ export function attachRegion(port, element, name, view = element.ownerDocument.d
       if (!Number.isInteger(offset) || offset === 0) return Promise.reject(new Error(`invalid history offset ${offset}`));
       return queue(() => port.go(name, "entry", offset));
     },
+    /**
+     * Measures the elements of the page that match selector and reads the computed values of the CSS property names in properties
+     * (docs/spec/native-surfaces.md#box-query). It resolves to {total, truncated, boxes} and rejects with the refusal of the host.
+     */
+    boxes(selector, properties = []) {
+      if (typeof selector !== "string") return Promise.reject(new TypeError("document boxes selector must be a string"));
+      if (!Array.isArray(properties) || !properties.every((property) => typeof property === "string")) {
+        return Promise.reject(new TypeError("document boxes properties must be an array of strings"));
+      }
+      return queue(() => port.boxes(name, selector, properties));
+    },
     back() { return this.go("back"); },
     forward() { return this.go("forward"); },
     reload() { return this.go("reload"); },

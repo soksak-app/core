@@ -72,6 +72,7 @@ func hostCalls(h *host.Host) map[string]HostCall {
 		"documentZoom":             doneOf(h.DocumentZoom),
 		"documentGo":               answerOf(h.DocumentGo),
 		"documentQuery":            answerOf(h.DocumentQuery),
+		"documentBoxes":            answerOf(h.DocumentBoxes),
 		"documentInteractionState": answerOf(h.DocumentInteractionState),
 		"documentPost":             doneOf(h.DocumentPost),
 		"viewEvent":                answerOf(h.ViewEvent),

@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1264-4: plugin API 문서 손잡이가 `boxes(selector, properties)`를 가지며, 답으로 resolve하고 host의 거부 사유로 reject한다.
 - F1283-2: 플러그인 폴더 수를 가리키는 Go 주석은 설치 spec에 있는 제목을 가리킨다.
 - F1217-18-6: 제목줄의 프로젝트 탭이 선언된 24 point 높이와 10 point 가로 여백의 칩이 된다.
 - F1285: 영문 알림 명세의 사이드바 알림 절이 `Sidebar notice` 제목을 쓰며, 코드가 인용하는 anchor가 해석된다.

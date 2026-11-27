@@ -126,7 +126,7 @@ var viewEvents = map[string]bool{"document-stream": true, "document-state": true
 // regionCalls are the host calls of the composition and the regions (REGION_HOST_CALLS of view-answer.js).
 var regionCalls = map[string]bool{"compositionDeclare": true, "compositionPlace": true, "documentAttach": true, "documentLoad": true,
 	"documentZoom": true, "documentGo": true, "documentDetach": true, "documentSubscribe": true, "documentUnsubscribe": true,
-	"documentPost": true, "documentQuery": true, "documentInteractionState": true, "imageAttach": true, "imageFocus": true,
+	"documentPost": true, "documentQuery": true, "documentBoxes": true, "documentInteractionState": true, "imageAttach": true, "imageFocus": true,
 	"imageCaret": true, "imageText": true, "imageDetach": true}
 
 // binaryID is a binary id of the binary store of a view.
@@ -284,20 +284,22 @@ func (s *Shell) surfaceCall(call viewCallEvent, name string, fields map[string]a
 
 // region is the named fields of a region call.
 type region struct {
-	Name    string          `json:"name"`
-	Sidecar string          `json:"sidecar"`
-	URL     string          `json:"url"`
-	Zoom    json.RawMessage `json:"zoom"`
-	Action  string          `json:"action"`
-	Offset  json.RawMessage `json:"offset"`
-	Message json.RawMessage `json:"message"`
-	Stream  json.RawMessage `json:"stream"`
-	Handle  json.RawMessage `json:"handle"`
-	X       float64         `json:"x"`
-	Y       float64         `json:"y"`
-	Width   float64         `json:"width"`
-	Height  float64         `json:"height"`
-	Text    json.RawMessage `json:"text"`
+	Name       string          `json:"name"`
+	Sidecar    string          `json:"sidecar"`
+	URL        string          `json:"url"`
+	Zoom       json.RawMessage `json:"zoom"`
+	Action     string          `json:"action"`
+	Offset     json.RawMessage `json:"offset"`
+	Message    json.RawMessage `json:"message"`
+	Stream     json.RawMessage `json:"stream"`
+	Selector   json.RawMessage `json:"selector"`
+	Properties json.RawMessage `json:"properties"`
+	Handle     json.RawMessage `json:"handle"`
+	X          float64         `json:"x"`
+	Y          float64         `json:"y"`
+	Width      float64         `json:"width"`
+	Height     float64         `json:"height"`
+	Text       json.RawMessage `json:"text"`
 }
 
 // runRegion runs a region call. A region of a view is only reached through its composition, with the named fields of the call.
@@ -330,6 +332,8 @@ func (s *Shell) runRegion(call viewCallEvent, answer viewAnswer) error {
 			extra["offset"] = fields.Offset
 		}
 		document("documentGo", extra)
+	case "document.boxes":
+		document("documentBoxes", map[string]any{"selector": fields.Selector, "properties": fields.Properties})
 	case "document.post":
 		document("documentPost", map[string]any{"message": fields.Message})
 	case "document.subscribe":
