@@ -58,7 +58,7 @@ pub struct StarterRequest {
     pub plugins: Vec<String>,
 }
 
-/// The value of the plugins-folders-changed event (docs/spec/installation.md#plugin-folders).
+/// The value of the plugins-folders-changed event (docs/spec/installation.md#plugin-operations-in-the-application).
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct FoldersChanged {
     pub folders: usize,
@@ -118,7 +118,7 @@ impl Plugins {
     }
 
     /// Watches the plugins folder and calls changed with its folder count after each change of the count
-    /// (docs/spec/installation.md#plugin-folders). The folder is created when it is missing. The result stops the watch.
+    /// (docs/spec/installation.md#plugin-operations-in-the-application). The folder is created when it is missing. The result stops the watch.
     pub fn watch_folders(
         &self,
         changed: Arc<dyn Fn(usize) + Send + Sync>,

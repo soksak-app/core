@@ -841,7 +841,7 @@ pub(crate) fn notify_setup(app: &AppHandle) {
 }
 
 /// Sends plugins-folders-changed with the folder count to all windows; it does not restart a window
-/// (docs/spec/installation.md#plugin-folders).
+/// (docs/spec/installation.md#plugin-operations-in-the-application).
 pub(crate) fn notify_folders(app: &AppHandle, change: crate::plugins::FoldersChanged) {
     for window in app.windows().values() {
         if let Err(error) = emit_window(window, "plugins-folders-changed", change.clone()) {

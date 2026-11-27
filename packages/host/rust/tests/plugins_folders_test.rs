@@ -1,4 +1,4 @@
-//! Checks the count of the plugin folders that the host watches (docs/spec/installation.md#plugin-folders).
+//! Checks the count of the plugin folders that the host watches (docs/spec/installation.md#plugin-operations-in-the-application).
 
 use std::sync::Arc;
 use std::sync::mpsc;

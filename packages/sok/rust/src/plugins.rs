@@ -140,7 +140,7 @@ pub struct PluginsState {
     pub registry: Option<String>,
     pub index: IndexState,
     pub installed: InstalledState,
-    /// The number of directories directly in plugins/ (docs/spec/installation.md#plugin-folders).
+    /// The number of directories directly in plugins/ (docs/spec/installation.md#plugin-operations-in-the-application).
     pub folders: usize,
     /// True when plugins/installed.json does not exist. The application installs the starter pack then.
     #[serde(rename = "firstRun")]
@@ -231,7 +231,7 @@ pub enum IndexState {
 /// Reads the registry address, the checked index and the installation state. When the index cannot be read, the error is placed in the index
 /// field, and when the installation state cannot be read, the function fails.
 /// Counts the directories directly in plugins/ of the configuration directory, one for each plugin id with an installed folder;
-/// files are not counted, and a missing plugins/ counts zero (docs/spec/installation.md#plugin-folders).
+/// files are not counted, and a missing plugins/ counts zero (docs/spec/installation.md#plugin-operations-in-the-application).
 pub fn plugin_folders(config_dir: &Path) -> Result<usize, String> {
     let path = config_dir.join("plugins");
     let entries = match std::fs::read_dir(&path) {

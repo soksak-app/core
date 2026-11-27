@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1267: host와 시험 source가 folder 규칙을 가진 installation spec의 heading을 인용하도록 바꾼다.
 - F1236-5: mygo snapshot 테스트와 presentation 실패 테스트는 layout fixture가 설치한 sidebar plugin을 기대한다.
 - F1262: 가져오기 폼의 복제가 host.clone.start, host.clone.line, host.clone.end 이벤트를 gated writer로 event log에 기록한다.
 - F1265: 누른 전체 화면 도구 시험은 sidebar set이 없는 fixture를 써서, 없는 plugin의 알림이 그 머리 도구를 가리지 않는다.

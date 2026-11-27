@@ -104,7 +104,7 @@ type PluginFoldersChanged struct {
 }
 
 // WatchFolders creates the plugins folder of the configuration directory when it is missing, then watches it and calls changed with
-// the number of its folders after an event of the watch that changes that number (docs/spec/installation.md#plugin-folders). An
+// the number of its folders after an event of the watch that changes that number (docs/spec/installation.md#plugin-operations-in-the-application). An
 // error of the watch is logged under the place `plugin folders`. The watch ends when ctx is done.
 func (p *Plugins) WatchFolders(ctx context.Context, changed func(int)) error {
 	dir := filepath.Join(p.configDir, "plugins")
@@ -357,7 +357,7 @@ func (h *Host) notifySidecars() {
 }
 
 // notifyFolders sends plugins-folders-changed with the folder count to all windows; it does not restart a window
-// (docs/spec/installation.md#plugin-folders).
+// (docs/spec/installation.md#plugin-operations-in-the-application).
 func (h *Host) notifyFolders(folders int) {
 	h.mu.Lock()
 	windows := make([]*Surfaces, 0, len(h.windows))

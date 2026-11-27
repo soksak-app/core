@@ -168,7 +168,7 @@ type PluginsState struct {
 	Registry  *string         `json:"registry"`
 	Index     any             `json:"index"`
 	Installed *InstalledState `json:"installed"`
-	// Folders is the number of directories directly in plugins/ (docs/spec/installation.md#plugin-folders).
+	// Folders is the number of directories directly in plugins/ (docs/spec/installation.md#plugin-operations-in-the-application).
 	Folders int `json:"folders"`
 	// FirstRun is true when plugins/installed.json does not exist. The application then installs the starter pack.
 	FirstRun bool        `json:"firstRun"`
@@ -236,7 +236,7 @@ type StarterJobRequest struct {
 // ReadPluginsState reads the registry address, the checked index and the installation state. When the index cannot be
 // read, it holds that error in the index field, and when the installation state cannot be read, it fails.
 // PluginFolders counts the directories directly in plugins/ of the configuration directory, one for each plugin id with an installed
-// folder; files are not counted, and a missing plugins/ counts zero (docs/spec/installation.md#plugin-folders).
+// folder; files are not counted, and a missing plugins/ counts zero (docs/spec/installation.md#plugin-operations-in-the-application).
 func PluginFolders(configDir string) (int, error) {
 	path := filepath.Join(configDir, "plugins")
 	entries, err := os.ReadDir(path)
