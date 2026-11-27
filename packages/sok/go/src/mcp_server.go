@@ -1048,7 +1048,7 @@ func (s *mcpServer) leave(watch *statusWatch, waiter *watchWaiter, target map[st
 // runMCP serves MCP on standard input and output until standard input ends.
 func runMCP(a arguments, stderr io.Writer, options Options) error {
 	if len(a.positionals) > 1 {
-		return usage("mcp takes no argument besides [window]")
+		return usage("mcp takes no argument besides --window <name> or --project <directory>")
 	}
 	configDir, err := configDirOf(a.values, options)
 	if err != nil {

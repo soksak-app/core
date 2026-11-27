@@ -5,6 +5,8 @@
 
 ## 2026-11-26
 
+- F1228: 체크리스트는 부모의 줄을 유지하고 F1228 항목만 추가한다.
+- F1228: describe, commands, exposures, mcp의 위치 window 거절이 Go와 Rust에서 --window와 --project 옵션을 적는다.
 - F1222-2: mygo 진행 알림 고리는 entry 버튼의 형제이므로 element core.notices.ring으로 element tree에 나타나며, 고리를 눌러도 entry를 읽는다.
 - F1226: handle이 이미 끝난 application의 quit이 실패하면, 그 run의 configuration directory를 가진 각 process를 SIGKILL로 끝낸다.
 - F239-209: 선언된 검색 focus 명령의 기록이 F1217-8 이후 키인 cmd+o와 완료 당시 키인 Command-K를 함께 적는다.

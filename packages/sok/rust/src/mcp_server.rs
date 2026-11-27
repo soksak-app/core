@@ -1490,7 +1490,7 @@ fn bring_skill_current(stderr: &mut dyn Write) -> Result<(), Error> {
 pub(crate) fn run(a: &Arguments, stderr: &mut dyn Write, options: &Options) -> Result<(), Error> {
     if a.positionals.len() > 1 {
         return Err(Error::Usage(
-            "mcp takes no argument besides [window]".into(),
+            "mcp takes no argument besides --window <name> or --project <directory>".into(),
         ));
     }
     let config_dir = config_dir_of(&a.values, options)?;

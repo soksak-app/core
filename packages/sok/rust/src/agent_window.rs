@@ -1321,7 +1321,7 @@ fn view(
 ) -> Result<(), Error> {
     if a.positionals.len() > 1 {
         return Err(Error::Usage(format!(
-            "{command} takes no argument besides [window]"
+            "{command} takes no argument besides --window <name> or --project <directory>"
         )));
     }
     // default: a run without --kind lists every kind.

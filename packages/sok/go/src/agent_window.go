@@ -927,7 +927,7 @@ func runAgentView(a arguments, stdout io.Writer, options Options, connect func()
 		}
 	}
 	if len(a.positionals) > 1 {
-		return true, usage("%s takes no argument besides [window]", command)
+		return true, usage("%s takes no argument besides --window <name> or --project <directory>", command)
 	}
 	kind := a.values["kind"]
 	if byKind && kind != "status" && kind != "command" && kind != "element" {

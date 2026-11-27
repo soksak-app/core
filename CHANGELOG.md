@@ -5,6 +5,8 @@
 
 ## 2026-11-26
 
+- F1228: The checklist keeps the lines of its parent and adds only the F1228 item.
+- F1228: The refusal of a positional window in describe, commands, exposures and mcp names the --window and --project options in Go and Rust.
 - F1222-2: The mygo progress notice ring is a sibling of its entry button, so it is the element core.notices.ring in the element tree, and a press on the ring still reads the entry.
 - F1226: A failed quit whose application handle already ended ends each process that holds the configuration directory of its run.
 - F239-209: The record of the declared search-focus operation names cmd+o, the key since F1217-8, and Command-K, the key when completed.

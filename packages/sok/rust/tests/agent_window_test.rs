@@ -583,6 +583,27 @@ fn context_takes_only_the_configuration_directory() {
     }
 }
 
+// A view and mcp refuse a positional argument before they connect, and name the option form of the window (cli.md, the window
+// is the --window or --project option).
+#[test]
+fn a_positional_window_is_refused_with_the_option_form() {
+    let config = Folder::new("positional-window");
+    let option = "--window <name> or --project <directory>";
+    for (args, command) in [
+        (vec!["describe", "main"], "describe"),
+        (vec!["commands", "main", "--query", "project"], "commands"),
+        (vec!["exposures", "main", "--kind", "command"], "exposures"),
+        (vec!["mcp", "main"], "mcp"),
+    ] {
+        let want = format!("sok: {command} takes no argument besides {option}\n");
+        let (code, stdout, stderr) = run(&args, Some(config.text()));
+        assert!(
+            code == 2 && stdout.is_empty() && stderr.starts_with(&want),
+            "{args:?}: code {code} stdout {stdout:?} stderr {stderr:?}, want prefix {want:?}"
+        );
+    }
+}
+
 // contract: cli.describe.summary-and-full
 #[test]
 fn describe_summary_holds_summary_statuses_and_full_holds_every_status() {

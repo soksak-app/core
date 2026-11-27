@@ -386,6 +386,27 @@ func TestAQueryKeepsTheEntriesThatHoldEachWord(t *testing.T) {
 	}
 }
 
+// A view and mcp refuse a positional argument before they connect, and name the option form of the window (cli.md, the window
+// is the --window or --project option).
+func TestAPositionalWindowIsRefusedWithTheOptionForm(t *testing.T) {
+	config := t.TempDir()
+	const option = "--window <name> or --project <directory>"
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"describe", "main"}, "sok: describe takes no argument besides " + option + "\n"},
+		{[]string{"commands", "main", "--query", "project"}, "sok: commands takes no argument besides " + option + "\n"},
+		{[]string{"exposures", "main", "--kind", "command"}, "sok: exposures takes no argument besides " + option + "\n"},
+		{[]string{"mcp", "main"}, "sok: mcp takes no argument besides " + option + "\n"},
+	} {
+		code, stdout, stderr := run(append(c.args, "--config-dir", config)...)
+		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, c.want) {
+			t.Fatalf("%v: code %d stdout %q stderr %q, want prefix %q", c.args, code, stdout, stderr, c.want)
+		}
+	}
+}
+
 // contract: cli.describe.refuses-a-lone-surrogate
 func TestDescribeRefusesALoneSurrogateEscape(t *testing.T) {
 	snapshot := `{"window":{"window":"main","title":"soksak","project":null},"layout":{"space":"space-1","focused":null,"root":null},` +
