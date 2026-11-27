@@ -1,0 +1,21 @@
+{
+  "name": "host-chrome-window-controls",
+  "description": "The page asks the window for its button region with windowControls, a call without an argument, and the host answers the window button region and the title bar height.",
+  "replay": false,
+  "reason": "The producer runs only the calls log and workspace (docs/spec/cases/page-wire/README.md#producer-runs), and this case holds the call windowControls.",
+  "steps": [
+    {
+      "call": {
+        "name": "windowControls"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "controls": { "x": 13, "y": 20, "w": 54, "h": 14 },
+          "row": 40
+        }
+      }
+    }
+  ]
+}

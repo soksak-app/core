@@ -556,10 +556,12 @@ const tell = (name, payload) => {
  */
 let turn = Promise.resolve();
 // A payload that is a function is read when the turn reaches the call, and a function that returns undefined sends nothing, so a call
-// sends the state of its source at send time and never an older snapshot of it.
+// sends the state of its source at send time and never an older snapshot of it. Any other payload is sent as it is, and a call without an
+// argument (windowControls) is sent with none.
 const tellInTurn = (name, payload) => {
   const answered = turn.then(() => {
-    const body = typeof payload === "function" ? payload() : payload;
+    if (typeof payload !== "function") return tell(name, payload);
+    const body = payload();
     return body === undefined ? undefined : tell(name, body);
   });
   // The next call is sent even when this one fails. Swallowing the failure here would leave no record anywhere, so

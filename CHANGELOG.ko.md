@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
+- F1239-2: 인자 없는 ordered host call이 전송되어, window resize가 error 없이 window button 영역을 읽는다.
 - F1217-17-5: 에이전트 연동 요약은 web과 mygo에서 settings-36의 경고 아이콘을 보이며, mygo는 다르거나 없는 항목 수 배지를 보인다.
 - F1247: Rust host 테스트가 숨겨졌던 surface의 region이 표시될 때 drawing 상태를 받는지 검사한다.
 - F1217-17-1: 웹 모양 미리보기는 카드를 적용된 모서리, 글꼴, 글자 크기와 이음선으로 그린다.

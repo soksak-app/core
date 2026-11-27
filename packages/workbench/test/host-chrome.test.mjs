@@ -384,3 +384,19 @@ test("a view preparation notifies its prepared listeners, presents each ticket o
   }
   wire.finish();
 });
+
+test("a call without an argument is sent in its turn and returns the reply of the host", { timeout: 5000 }, async () => {
+  // The resize handler of index.html reads answer.controls of this reply (applyControls), so a call that is not sent leaves no answer to read.
+  const wire = selectPageWire("host-chrome-window-controls");
+  const dom = new JSDOM('<div id="plane"></div>');
+  globalThis.document = dom.window.document;
+  const { chrome } = await import("../host.js?window-controls");
+  try {
+    const answer = await chrome.controls();
+    assert.deepEqual(wire.calls.map(({ name }) => name), ["windowControls"], "the call without an argument was not sent");
+    assert.deepEqual(answer, { controls: { x: 13, y: 20, w: 54, h: 14 }, row: 40 });
+  } finally {
+    dom.window.close();
+  }
+  wire.finish();
+});
