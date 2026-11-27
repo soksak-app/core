@@ -1565,6 +1565,7 @@ Items:
 | `log.record.site-names-the-call` | A record that a record helper of the host writes carries the field `site`, the file name and line of the call of the helper. | all |
 | `log.record.start-buffer-holds-records-until-the-writer-exists` | A record written before the writer of the host exists waits in a start buffer, and the writer receives it in its order with the time it was written. | all |
 | `log.record.start-buffer-counts-its-loss` | The start buffer holds 1024 records and refuses the records beyond them; the writer records the refused records in a `log.dropped` with their count. | all |
+| `log.record.refused-is-reported` | A record that the writer refuses because its queue is full is written to standard error as one line that names the record, and its loss is counted as `cli.log.records-a-refused-event-as-log-dropped` states. A record that the policy gate refuses is not reported, since the gate counts it. | all |
 | `log.plugin-catalog.classifies-plugin-events` | The writer stores a plugin event with the class that the plugin classes give it, and an event that no catalog declares with `undeclared`. | all |
 | `log.plugin-gate.undeclared-takes-lifecycle` | An undeclared event of the layer plugin is stored with the class lifecycle and `undeclared`, and a policy that turns lifecycle off refuses it and counts it in `log.gated` under the class lifecycle. | all |
 | `log.plugin-gate.refuses-below-the-class-level` | A plugin event below the level of its class is refused by the writer and counted in `log.gated` under its class. | all |

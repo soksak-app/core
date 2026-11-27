@@ -6,6 +6,8 @@ package host_test
 import (
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"reflect"
 	"runtime"
 	"strings"
@@ -279,5 +281,41 @@ func TestAnUnrecordedEndIsStoredAsAnErrorEventWithItsFields(t *testing.T) {
 	}
 	if !reflect.DeepEqual(found[1]["fields"], map[string]any{"boot": "1700000000-4242", "pid": float64(4242)}) {
 		t.Fatalf("second event %v", found[1])
+	}
+}
+
+// contract: log.record.refused-is-reported
+// A record that the writer refuses because its queue is full is reported on standard error with the record's name, so the loss is
+// visible without the log (docs/spec/host-contract.md#contract-cases). The queue holds one event and the batch interval
+// is an hour, so the second error is refused.
+func TestARecordTheWriterRefusesIsReportedOnStandardError(t *testing.T) {
+	options := support.EventLogOptions(t.TempDir())
+	options.QueueEvents = 1
+	options.BatchInterval = time.Hour
+	log, err := host.StartEventLog(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host.UseHostEventLog(log)
+	t.Cleanup(func() { host.UseHostEventLog(nil); log.Close() })
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := os.Stderr
+	os.Stderr = writer
+	for i := 0; i < 3; i++ {
+		host.LogError("refusal test", fmt.Sprintf("record %d", i))
+	}
+	os.Stderr = saved
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reported, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(reported), "host.record.error") || !strings.Contains(string(reported), "refused") {
+		t.Fatalf("no report of the refused record on standard error; standard error holds %q", reported)
 	}
 }

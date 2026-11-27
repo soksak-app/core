@@ -311,8 +311,16 @@ func storeEvent(level Level, layer, name, place string, cids []string, fields js
 		}
 		return
 	}
-	if _, err := records.log.EmitRelayed(RelayedEvent{TsMicros: now, MonoNs: mono, Layer: layer, Level: level, Event: name, Cids: cids, Fields: fields, Produced: produced}); err != nil {
+	accepted, err := records.log.EmitRelayed(RelayedEvent{TsMicros: now, MonoNs: mono, Layer: layer, Level: level, Event: name, Cids: cids, Fields: fields, Produced: produced})
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "event writer: the record %q of %s cannot be stored: %v\n", place, layer, err)
+	}
+	// A record that the writer refuses for a full queue is reported here, since the writer counts it only as a loss. A record that
+	// the policy gate refuses is not reported: the gate counts it by design (docs/spec/logging.md#classes-and-policy).
+	if !accepted && err == nil {
+		if class, declared := sok.EventClassOf(name); !declared || sok.PassesEveryGate(name) || records.log.Enabled(class, level) {
+			fmt.Fprintf(os.Stderr, "event writer: the record %q of %s is refused by the writer queue: %s\n", place, layer, name)
+		}
 	}
 }
 

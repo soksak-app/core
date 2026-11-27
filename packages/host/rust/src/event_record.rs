@@ -169,7 +169,12 @@ fn store_event(
     let mono_ns = monotonic_ns();
     let mut records = records();
     if let Some(log) = records.log.clone() {
-        if let Err(error) = log.emit_relayed(RelayedEvent {
+        // A record that the policy gate refuses is counted by the gate and is not reported; a record that the writer queue refuses
+        // is reported here, since the writer counts it only as a loss (docs/spec/logging.md#classes-and-policy).
+        let gated = soksak_sok::event_classes::class_of(name).is_some_and(|class| {
+            !soksak_sok::event_log::passes_every_gate(name) && !log.enabled(class, level)
+        });
+        match log.emit_relayed(RelayedEvent {
             ts_us: now,
             mono_ns,
             layer: layer.to_string(),
@@ -180,7 +185,14 @@ fn store_event(
             cids,
             fields,
         }) {
-            eprintln!("event writer: the record {place:?} of {layer} cannot be stored: {error}");
+            Ok(true) => {}
+            Ok(false) if gated => {}
+            Ok(false) => eprintln!(
+                "event writer: the record {place:?} of {layer} is refused by the writer queue: {name}"
+            ),
+            Err(error) => {
+                eprintln!("event writer: the record {place:?} of {layer} cannot be stored: {error}")
+            }
         }
         return;
     }

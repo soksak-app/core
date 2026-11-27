@@ -1550,6 +1550,7 @@ fn invalid_json_closes_connection() {
 | `log.record.site-names-the-call` | host의 record helper가 쓰는 기록은 helper를 부른 호출의 파일 이름과 줄인 field `site`를 담는다. | all |
 | `log.record.start-buffer-holds-records-until-the-writer-exists` | host의 writer가 생기기 전에 쓴 기록은 시작 buffer에서 기다리고, writer는 그 기록을 쓴 시각 그대로 순서대로 받는다. | all |
 | `log.record.start-buffer-counts-its-loss` | 시작 buffer는 1024개를 담고 그 너머의 기록은 거부하며, writer는 거부한 기록을 그 수와 함께 `log.dropped`로 기록한다. | all |
+| `log.record.refused-is-reported` | writer queue가 가득 차서 거절한 record는 record의 이름을 담은 한 줄로 표준 오류에 쓰이고, 그 손실은 `cli.log.records-a-refused-event-as-log-dropped`가 정한 대로 세어진다. policy gate가 거절한 record는 gate가 세므로 보고하지 않는다. | all |
 | `log.plugin-catalog.classifies-plugin-events` | writer는 plugin event를 plugin class가 주는 class로, 어느 catalog도 선언하지 않은 event를 `undeclared`로 저장한다. | all |
 | `log.plugin-gate.undeclared-takes-lifecycle` | 선언되지 않은 layer plugin의 event는 class lifecycle과 `undeclared`로 저장되며, lifecycle을 끈 policy는 이를 거부하고 `log.gated`에 class lifecycle로 센다. | all |
 | `log.plugin-gate.refuses-below-the-class-level` | class의 level 아래의 plugin event는 writer가 거부하고 `log.gated`에 그 class로 센다. | all |

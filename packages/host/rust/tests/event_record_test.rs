@@ -9,6 +9,7 @@ mod folder;
 mod records;
 use std::fs;
 use std::path::Path;
+use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -381,5 +382,60 @@ fn an_unrecorded_end_is_stored_as_an_error_event_with_its_fields() {
         events[1]["fields"],
         json!({"boot": "1700000000-4242", "pid": 4242}),
         "{events:?}"
+    );
+}
+
+const REFUSED_CHILD: &str = "SOKSAK_EVENT_RECORD_REFUSED_CHILD";
+const REFUSED_NAME: &str = "a_record_the_writer_refuses_is_reported_on_standard_error";
+
+// contract: log.record.refused-is-reported
+// A record that the writer refuses because its queue is full is reported on standard error with the record's name. The child
+// process holds the refusal in its own standard error, so the test reads it without capturing the standard error of this process.
+#[test]
+fn a_record_the_writer_refuses_is_reported_on_standard_error() {
+    if let Some(config) = std::env::var_os(REFUSED_CHILD) {
+        // A queue that holds no event refuses every record that the policy gate does not refuse. The writer drains a queue of one
+        // event at once, so only a queue of no event refuses a record in every run.
+        let log = Arc::new(
+            records::start_every_level(Options {
+                directory: Path::new(&config).join("logs"),
+                role: "host".into(),
+                boot: "b1".into(),
+                queue_events: 0,
+                queue_bytes: 64 << 20,
+                batch_interval: Duration::from_millis(20),
+                rotate_bytes: 1 << 30,
+                pull: None,
+                wake: None,
+                pull_loss: None,
+                policy_path: None,
+                retention_bytes: 1 << 40,
+            })
+            .unwrap(),
+        );
+        use_host_event_log(Some(Arc::clone(&log)));
+        log_error("refusal test", "record 0");
+        log_error("refusal test", "record 1");
+        use_host_event_log(None);
+        return;
+    }
+    let config = folder::Folder::new();
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", REFUSED_NAME, "--nocapture", "--test-threads=1"])
+        .env(REFUSED_CHILD, config.path())
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    let standard_error = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "child ended with {:?}: {standard_error}",
+        output.status
+    );
+    assert!(
+        standard_error.contains(
+            "event writer: the record \"refusal test\" of host is refused by the writer queue: host.record.error"
+        ),
+        "no report of the refused record on standard error: {standard_error}"
     );
 }
