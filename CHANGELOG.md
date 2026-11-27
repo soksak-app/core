@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1221: The contract cases of the accounts refusal and the request root are declared in host-contract.md, and the debug follow declaration is attached to its test.
 - F999-5: A hidden tab that the page shows after a restart is recorded to publish its surface visible, with a page-wire case and a compositor test.
 - F1217-11-3: A warning or error of a card without the focus shows the toast action 카드로 가기, which focuses the card.
 - F1222: The plugin loader states the default of the optional categories and requires members of a manifest.

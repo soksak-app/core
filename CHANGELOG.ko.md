@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1221: 계정 거부와 요청 root의 계약 케이스가 host-contract.md에 선언되고, 디버그 follow 선언은 해당 테스트에 붙는다.
 - F999-5: 재시작 뒤 숨겨진 탭을 선택하면 표면을 visible로 게시하는 것을 page-wire 케이스와 compositor 테스트로 고정했습니다.
 - F1217-11-3: 포커스가 없는 카드의 warning 또는 error는 카드를 포커스하는 토스트 action 카드로 가기를 보입니다.
 - F1222: 플러그인 로더가 선택 항목인 categories와 requires의 기본값을 명시한다.

@@ -17,5 +17,3 @@ test("a notice of a file that is not an event file reads nothing, and a notice w
   }
   wire.finish();
 });
-
-// contract: debug.follow.view-tells-whether-it-follows

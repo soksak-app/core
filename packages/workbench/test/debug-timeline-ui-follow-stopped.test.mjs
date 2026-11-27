@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { queriesOf, followsOf, open, changed } from "./support/debug-timeline.mjs";
 
+// contract: debug.follow.view-tells-whether-it-follows
 test("stopping follows no more queries and resuming asks for what grew while stopped", async () => {
   const { ui, wire, close } = await open("debug-timeline-ui-follow-stopped");
   try {
