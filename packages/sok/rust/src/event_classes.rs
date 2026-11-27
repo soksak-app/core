@@ -63,6 +63,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "host.binding.call" => Some(Class::Call),
         "host.buffer.dropped" => Some(Class::Lifecycle),
         "host.call.peer-lost" => Some(Class::Call),
+        "host.clone.end" | "host.clone.line" | "host.clone.start" => Some(Class::Lifecycle),
         "host.crash.found" => Some(Class::Lifecycle),
         "host.endpoint.call" => Some(Class::Call),
         "host.endpoint.end" => Some(Class::Lifecycle),

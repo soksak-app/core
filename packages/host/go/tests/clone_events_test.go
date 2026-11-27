@@ -12,6 +12,7 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
 // cloneSource makes a repository with one commit and returns its file address.
@@ -75,5 +76,41 @@ func TestProjectCloneRecordsItsStartLinesAndEndAsEvents(t *testing.T) {
 	}
 	if end["status"] != float64(0) || end["target"] != target {
 		t.Fatalf("host.clone.end fields = %v, want status 0 and target %s", end, target)
+	}
+}
+
+// contract: logging.clone-events-default-policy
+func TestProjectCloneEventsPassTheDefaultPolicyOfADiagnosticBuild(t *testing.T) {
+	config := t.TempDir()
+	// The writer keeps its default policy, which stores only errors, so the clone events pass only as named exceptions.
+	log, err := host.StartHostEventLog(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host.UseHostEventLog(log)
+	t.Cleanup(func() { host.UseHostEventLog(nil); log.Close() })
+	request, err := json.Marshal(map[string]string{"address": cloneSource(t), "target": filepath.Join(t.TempDir(), "widget")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (&host.Host{}).ProjectClone(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, event := range support.ReadEvents(t, support.EventLogPath(t, config)) {
+		name, _ := event["event"].(string)
+		seen[name] = true
+	}
+	for _, name := range []string{"host.clone.start", "host.clone.line", "host.clone.end"} {
+		// The class table of the host declares each clone event as lifecycle, the class that the catalog declares for it.
+		if class, declared := sok.EventClassOf(name); !declared || class != sok.ClassLifecycle {
+			t.Errorf("EventClassOf(%s) = %v, %v, want lifecycle", name, class, declared)
+		}
+		if !seen[name] {
+			t.Errorf("the default policy stored no %s event", name)
+		}
 	}
 }

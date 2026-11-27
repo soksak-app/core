@@ -51,10 +51,11 @@ func DefaultLogPolicy() LogPolicy {
 // timestamps; host stall records, the only record of a main-thread stall; host.crash.found, the only record of a crash, which the
 // ledger of the reports lists once, so a gate would lose it for good; host.view.killed, which states the loss of a view's
 // unsent batch; host.test.start/end, whose flushed positions delimit a diagnostic window check under every selected policy;
-// and workbench.fixture.step, the steps of the fixture of a window check.
+// workbench.fixture.step, the steps of the fixture of a window check; and host.clone.start, host.clone.line and host.clone.end,
+// the records of a clone of the import form, which a diagnostic build keeps so that the event log holds every clone.
 func PassesEveryGate(event string) bool {
 	switch event {
-	case "workbench.start", "page.start", "workbench.log.clock", "page.log.clock", "host.stall", "host.stall.sampled", "host.stall.dump", "host.crash.found", "host.view.killed", "host.test.start", "host.test.end", "workbench.fixture.step":
+	case "workbench.start", "page.start", "workbench.log.clock", "page.log.clock", "host.stall", "host.stall.sampled", "host.stall.dump", "host.crash.found", "host.clone.start", "host.clone.line", "host.clone.end", "host.view.killed", "host.test.start", "host.test.end", "workbench.fixture.step":
 		return true
 	}
 	return false

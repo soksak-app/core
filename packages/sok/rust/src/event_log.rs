@@ -489,7 +489,9 @@ fn check_writer(
 /// timestamps; host stall records, the only record of a main-thread stall; `host.crash.found`, the only record of a crash, which
 /// the ledger of the reports lists once, so a gate would lose it for good; `host.view.killed`, which reports an ended view's
 /// unsent batch; `host.test.start`/`host.test.end`, whose flushed positions delimit a diagnostic window check under every
-/// selected policy; and `workbench.fixture.step`, the steps of the fixture of a window check.
+/// selected policy; `workbench.fixture.step`, the steps of the fixture of a window check; and `host.clone.start`,
+/// `host.clone.line` and `host.clone.end`, the records of a clone of the import form, which a diagnostic build keeps so that the
+/// event log holds every clone.
 pub fn passes_every_gate(event: &str) -> bool {
     matches!(
         event,
@@ -498,6 +500,9 @@ pub fn passes_every_gate(event: &str) -> bool {
             | "host.stall"
             | "host.stall.sampled"
             | "host.stall.dump"
+            | "host.clone.end"
+            | "host.clone.line"
+            | "host.clone.start"
             | "host.crash.found"
             | "host.view.killed"
             | "host.test.start"

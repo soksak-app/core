@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1270: 복제 이벤트는 모든 gate를 통과하는 명명된 예외라서 진단 빌드가 기본 정책에서도 저장한다.
 - F1236-6: sidebar 없는 mygo surface 테스트는 테스트 environment의 workspace를 유지하고, 두 테스트는 sidebar plugin을 설치한다.
 - F1268: local monitor 제거마다 `native.observe.removed`를 저장하고, 등록과 짝을 제거 수로 맞춘다.
 - F1217-17-10: 계정 그룹 설명을 workbench.json에 한 번 선언하고 두 워크벤치가 읽는다.

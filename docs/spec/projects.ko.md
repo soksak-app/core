@@ -51,7 +51,7 @@
 - `<projectsFolder> is not a folder`: `projectsFolder`가 있는 폴더를 가리키지 않을 때;
 - `<target> already exists`: 대상이 있을 때. 복제는 시작하지 않는다.
 
-제출은 `projectClone {address, target}`을 실행한다. 호스트는 `git clone --progress -- <address> <target>`을 자식 프로세스로 실행하며, git의 출력 줄은 실행 중 폼에 보이며, 호스트가 창에 보내는 이벤트 `project-clone {line}`에서 온다([native host](native-host.ko.md)). 성공하면 호스트는 대상을 프로젝트로 추가하고 그 [프로젝트 열기](#프로젝트-열기) 방식으로 열며, 폼은 닫힌다. git 실행 파일이 없으면 `git is not installed or not on PATH`로 실패한다. 복제가 실패하면 git의 글이 그대로 보인다. git은 실패한 복제에서 자기가 만든 대상 폴더를 지운다. 호스트는 실패 뒤 대상이 없는지 확인하고, 남은 폴더가 있으면 `<target> remains after the failed clone`로 보고한다. 모든 실패는 하나의 오류 표시 경로로 보이며, 프로젝트는 추가되지 않는다.
+제출은 `projectClone {address, target}`을 실행한다. 호스트는 `git clone --progress -- <address> <target>`을 자식 프로세스로 실행하며, git의 출력 줄은 실행 중 폼에 보이며, 호스트가 창에 보내는 이벤트 `project-clone {line}`에서 온다([native host](native-host.ko.md#프로젝트설정-연산)). 성공하면 호스트는 대상을 프로젝트로 추가하고 그 [프로젝트 열기](#프로젝트-열기) 방식으로 열며, 폼은 닫힌다. git 실행 파일이 없으면 `git is not installed or not on PATH`로 실패한다. 복제가 실패하면 git의 글이 그대로 보인다. git은 실패한 복제에서 자기가 만든 대상 폴더를 지운다. 호스트는 실패 뒤 대상이 없는지 확인하고, 남은 폴더가 있으면 `<target> remains after the failed clone`로 보고한다. 모든 실패는 하나의 오류 표시 경로로 보이며, 프로젝트는 추가되지 않는다.
 
 ## 프로젝트 열기
 
