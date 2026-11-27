@@ -13,27 +13,17 @@ use std::time::Instant;
 /// A named test of a main-thread target.
 pub type MainTest = (&'static str, fn() -> Result<(), String>);
 
-/// Runs each test of the target in a child process of the same executable with `--exact <name>`, and ends the process with
-/// status 1 when one child failed or could not start. The child output goes to the output of this process.
-fn run_each_in_process(tests: &[MainTest]) {
-    let executable = std::env::current_exe().unwrap_or_else(|error| panic!("the test executable is not known: {error}"));
-    let mut failed = 0;
-    for (name, _) in tests {
-        let status = std::process::Command::new(&executable)
-            .args(["--exact", name])
-            .status()
-            .unwrap_or_else(|error| panic!("{name} does not start: {error}"));
-        if !status.success() {
-            println!("failed {name}: {status}");
-            failed += 1;
-        }
-    }
-    let (passed, total) = (tests.len() - failed, tests.len());
-    let result = if failed == 0 { "ok" } else { "FAILED" };
-    println!("test result: {result}. {passed} passed; {failed} failed out of {total}");
-    if failed > 0 {
-        std::process::exit(1);
-    }
+/// Refuses a run without `--exact` and ends the process with status 1. Each test of the target sets the application arguments
+/// of its process, which are set once per process, so one process cannot run two tests.
+fn refuse_unfiltered_run() -> ! {
+    let file = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| "the test target".to_string());
+    eprintln!(
+        "{file}: each scenario sets the process arguments; run one test per process through scripts/rust-tests.mjs or with --exact"
+    );
+    std::process::exit(1);
 }
 
 /// Runs the tests of the target on the calling thread, which is the main thread of the process, and ends the process with
@@ -50,11 +40,8 @@ pub fn run(tests: &[MainTest]) {
         .iter()
         .position(|argument| argument == "--exact")
         .and_then(|at| arguments.get(at + 1));
-    // Without `--exact`, each test runs in a process of its own, as `scripts/rust-tests.mjs` runs it. The application arguments and
-    // the native state of a test are set once per process, so one process cannot run two tests.
     if exact.is_none() {
-        run_each_in_process(tests);
-        return;
+        refuse_unfiltered_run();
     }
     let (mut passed, mut failed) = (0, 0);
     for (name, test) in tests
