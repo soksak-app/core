@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F957: 마지막 card를 거듭 right로 나눠도 web과 mygo workbench에서 한 줄의 card가 고르게 남는다. 이 test는 회귀 coverage다.
 - F1231: count 테스트의 기록에 scratch 사본에서 관찰한 Red를 적는다.
 - F1217-10-1: 숨은 view 검사가 제거된 status core.workbench.error 대신 core.toasts를 읽으며, 세 application에서 통과한다.
 - F1215: 계정 선언은 하위 항목의 근거를 체크리스트에 남기고 닫는다. 코드는 바뀌지 않았다.

@@ -1212,3 +1212,29 @@ func tabOf(f *shellFixture, card string, index int) string {
 	f.t.Fatalf("card %s has no tab %d", card, index)
 	return ""
 }
+
+// Repeated splits of the last card toward right keep the cards of the row equal, so a row of n cards made by splits has n equal widths
+// (docs/spec/groups.md#rule-of-sizes, F957).
+func TestRepeatedSplitsTowardRightKeepTheCardsOfTheRowEqual(t *testing.T) {
+	f := viewShell(t)
+	ids := []string{f.tabbedCards()[0]}
+	for range 3 {
+		made, err := f.answer("core.card.split", map[string]string{"card": ids[len(ids)-1], "side": "right", "plugin": "textprobe"})
+		if err != nil {
+			t.Fatalf("split %d of the row: %v", len(ids), err)
+		}
+		ids = append(ids, made["card"].(string))
+	}
+	widest, narrowest := 0.0, math.Inf(1)
+	widths := make([]float64, 0, len(ids))
+	for _, id := range ids {
+		w := float64(f.box("core.card", id).W)
+		widths = append(widths, w)
+		widest = math.Max(widest, w)
+		narrowest = math.Min(narrowest, w)
+	}
+	if widest-narrowest > 1 {
+		t.Fatalf("the cards of the row have widths %v, want equal", widths)
+	}
+	f.audit()
+}

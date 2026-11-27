@@ -920,3 +920,15 @@ test("an observation of core.tab.role reads its surface, and a refused one leave
   stop();
   assert.deepEqual(screens.slice(before), ["role-observation-probe"], "a change of core.screen was not delivered after the refused observations");
 });
+
+// Repeated splits of the last card toward right keep the cards of the row equal, so a row of n cards made by splits has n equal widths
+// (docs/spec/groups.md#rule-of-sizes, F957).
+test("repeated splits of the last card toward right keep the cards of the row equal", { timeout: 5000 }, () => {
+  arrange({ card: "a", tabs: [view("tab-aaaaa1", PLAIN)] }, "a");
+  let last = "a";
+  for (let n = 0; n < 3; n++) last = plane.splitCard(last, "right", SESSION).card;
+  const widths = cardIds(layout().root).map((id) => cardNode(layout().root, id).frame.width);
+  assert.equal(widths.length, 4);
+  const widest = Math.max(...widths), narrowest = Math.min(...widths);
+  assert.ok(widest - narrowest <= 1, `the cards of the row have widths ${JSON.stringify(widths)}, want equal`);
+});
