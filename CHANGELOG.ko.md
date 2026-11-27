@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1266: 폴더 수 event test는 HEAD에서 통과하고, case를 되돌리면 실패한다. 체크리스트 항목을 완료한다.
 - F1271: 설치됨 페이지는 검색어로 이름, id, 설명, 분류를 거르며, F1250-3의 InstalledList가 이를 이어받는다.
 - F1272: Go view probe 테스트가 중첩 view store의 상위 폴더를 만든다.
 - F1270: 복제 이벤트의 Go host 테스트가 다시 빌드된 native library에서 실행되었고, Red와 Green 결과를 기록했다.

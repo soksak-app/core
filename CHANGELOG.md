@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1266: The folder count event test passes on HEAD and fails with its case reverted; the checklist item is complete.
 - F1271: The Installed page filters its rows by the search query over the name, id, description and category, as InstalledList of F1250-3 takes it over.
 - F1272: Create the parent folder of the nested view store in the Go view probe test.
 - F1270: The Go host tests of the clone events ran on the rebuilt native library, and their Red and Green results are recorded.
