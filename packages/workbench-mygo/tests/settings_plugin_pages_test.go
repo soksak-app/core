@@ -179,6 +179,24 @@ func TestAHeldOperationIsListedAndItsActionRunsItWithEnd(t *testing.T) {
 	if control.Label != "세션 2개를 끝내고 업데이트" || control.Command == nil || control.Command.Name != "core.plugins.update" {
 		t.Fatalf("the action is %q running %+v", control.Label, control.Command)
 	}
+	if _, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.plugins.end", "zzz"); !ok {
+		t.Fatal("the action that ends the sessions of zzz is not in the element tree")
+	}
+}
+
+// A string setting of a plugin is a text field named core.settings-tab.text, with the key as its item, in the page of the plugin
+// (docs/spec/settings.md#controls).
+func TestAStringSettingOfAPluginIsATextFieldInItsPage(t *testing.T) {
+	document := strings.Replace(acmeDocument, `"settings":{`, `"settings":{"title":{"type":"string","label":"제목","default":"a","maxLength":40},`, 1)
+	stored := acme()
+	stored.installed = document
+	f := startedShell(t, stored)
+	f.runQuiet("core.settings.open", nil)
+	f.runQuiet("core.settings-tab.plugin", map[string]any{"plugin": "acme"})
+	f.settle()
+	if _, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.text", "acme.title"); !ok {
+		t.Fatalf("the text field of acme.title is not in the element tree: %q", f.tester.Texts())
+	}
 }
 
 // An outdated sidecar shows its replacement, which runs core.plugins.replace for the sidecar and counts its sessions
