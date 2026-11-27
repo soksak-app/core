@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1216: plugin-api 패키지는 specFiles에 plugin-categories 케이스를 선언합니다.
 - F1217: 서피스 픽스처 테스트는 plugin-api 패키지 파일을 읽지 않고 빈 뷰 채널 스크립트를 직접 공급합니다.
 - F1217-11-3: 테스트 fixture는 알림 명령과 함께 core.toasts.list를 선언하고, 오류 토스트 테스트는 닫기 control을 class로 고른다.
 - F1217-12: core.notices.show로 표시한 항목을 core.notices의 shown으로 보고하고, 알림 센터는 그 항목을 보이도록 스크롤하며 표시한 항목으로 그린다.

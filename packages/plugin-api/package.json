@@ -67,6 +67,7 @@
   "specFiles": [
     "docs/spec/cases/command-params.json",
     "docs/spec/cases/manifest-validation.json",
+    "docs/spec/cases/plugin-categories.json",
     "docs/spec/cases/schema-subset.json",
     "docs/spec/cases/version-ranges.json",
     "docs/spec/cases/page-wire/",
