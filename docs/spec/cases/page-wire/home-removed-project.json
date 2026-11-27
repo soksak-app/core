@@ -1,6 +1,5 @@
 {
   "name": "home-removed-project",
-  "description": "The page applies the theme and the menu language of each project snapshot of the project home; the project home asks the host for the folder of a project when the project is listed, does not ask while the project home lists no project, asks again when the project is listed again, and writes the missing folder error in one log batch each time the project is listed with the missing folder.",
   "replay": false,
   "reason": "The case calls notificationState, setTheme, setMenuLanguage and projectFolder, which only the native host with a window answers (docs/spec/cases/page-wire/README.md#producer-runs).",
   "variables": {
@@ -105,7 +104,15 @@
       "type": "integer",
       "example": 5000000802,
       "source": "page"
+    },
+    "folder-identity": {
+      "type": "string",
+      "example": "id"
     }
+  },
+  "description": "The page applies the theme and the menu language of each project snapshot of the project home; the project home asks the host for the folder of a project when the project is listed, does not ask while the project home lists no project, asks again when the project is listed again, and writes the missing folder error in one log batch each time the project is listed with the missing folder.",
+  "writer": {
+    "policy": true
   },
   "steps": [
     {
@@ -119,6 +126,17 @@
           "authorization": "$authorization",
           "error": null
         }
+      }
+    },
+    {
+      "call": {
+        "name": "projectFolder",
+        "payload": "/work/missing"
+      }
+    },
+    {
+      "reply": {
+        "error": "project directory does not exist: /work/missing"
       }
     },
     {
@@ -141,17 +159,6 @@
     {
       "reply": {
         "result": null
-      }
-    },
-    {
-      "call": {
-        "name": "projectFolder",
-        "payload": "/work/missing"
-      }
-    },
-    {
-      "reply": {
-        "error": "project directory does not exist: /work/missing"
       }
     },
     {
@@ -252,13 +259,13 @@
               }
             },
             {
-              "ts_us": "$ts-us-1",
-              "mono_ns": "$mono-ns-1",
+              "ts_us": "$anchor-ts-us",
+              "mono_ns": "$anchor-mono-ns",
               "start": "$page-identity",
               "level": "error",
               "event": "workbench.record.error",
               "fields": {
-                "where": "library project /work/missing",
+                "where": "home project /work/missing",
                 "text": "폴더가 없습니다."
               }
             }
@@ -295,6 +302,17 @@
     },
     {
       "call": {
+        "name": "projectFolder",
+        "payload": "/work/missing"
+      }
+    },
+    {
+      "reply": {
+        "error": "project directory does not exist: /work/missing"
+      }
+    },
+    {
+      "call": {
         "name": "setTheme",
         "payload": "$theme-3"
       }
@@ -317,17 +335,6 @@
     },
     {
       "call": {
-        "name": "projectFolder",
-        "payload": "/work/missing"
-      }
-    },
-    {
-      "reply": {
-        "error": "project directory does not exist: /work/missing"
-      }
-    },
-    {
-      "call": {
         "name": "log",
         "payload": {
           "action": "batch",
@@ -339,7 +346,7 @@
               "level": "error",
               "event": "workbench.record.error",
               "fields": {
-                "where": "library project /work/missing",
+                "where": "home project /work/missing",
                 "text": "폴더가 없습니다."
               }
             }

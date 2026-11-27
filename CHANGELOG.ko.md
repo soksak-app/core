@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217: 프로젝트 home의 theme, 메뉴 언어, 폴더 확인은 page-wire case home-removed-project를 따르며, home-removed.test.mjs가 재생한다.
 - F1108: 체크리스트가 Rust와 Go 기록 테스트, 테스트 harness에서 찾은 원인, 결함을 재현하지 않은 window check 실행을 기록한다.
 - F1222-2: 진행 notice 고리 check가 녹화의 still이 모두 계획될 때까지 기다려 녹화가 30 frame을 담는다. 계획이 끝나기 전의 stop은 3 frame만 남겼다.
 - F1217-8: cmd+Backspace는 두 host 모두에서 검색 칸에서도 선택한 줄의 제거를 묻는다.

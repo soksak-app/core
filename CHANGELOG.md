@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217: The project home's theme, menu language and folder check follow page-wire case home-removed-project, played by home-removed.test.mjs.
 - F1108: The checklist records the Rust and Go record tests, the causes found in the test harness, and the window check run that does not reproduce the defect.
 - F1222-2: The progress ring check waits until the stills of its recording are all planned, so the recording holds 30 frames; a stop before the plan ended kept 3.
 - F1217-8: cmd+Backspace asks the removal of the selected row from the search field too, in both hosts.
