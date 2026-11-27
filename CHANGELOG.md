@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1239-3: The settings tab on the project home is checked by an e2e window check that opens it from the home and reads the rects of its pane, its search and its first menu item.
 - F1217-12-8-1: The page-wire cases of a settings theme record the ok and warn tokens that setTheme sends.
 - F1217-17-5: The Korean checklist line states its closure with the `Closed:` label, as the English line does.
 - F1264-4: The plugin API document handle has `boxes(selector, properties)`, which resolves to the reply and rejects with the refusals of the host.
