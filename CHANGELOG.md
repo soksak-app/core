@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-6: The mygo modal status test expects null while the settings tab is open, since the settings tab is a tab of the window.
 - F1217-6: The mygo settings tests find the toast dismissal switch by its spec label.
 - F1217-12-7: The settings nav command takes a group id, and the notice center gear opens the group 알림.
 - F1161: mygo formats the origin function of the outdated surface notices as gofmt does

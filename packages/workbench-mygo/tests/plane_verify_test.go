@@ -592,10 +592,11 @@ func TestTheModalStatusStatesTheOpenModal(t *testing.T) {
 	if got := f.status("core.modal"); got != "null" {
 		t.Fatalf("core.modal is %s after the menu closed", got)
 	}
+	// The settings tab is a tab of the main window, not a modal (docs/spec/settings.md#settings-tab), so it leaves core.modal null.
 	f.run("core.settings.open", nil)
 	f.settle()
-	if got, want := f.status("core.modal"), `{"id":"settings","mode":"dialog","document":null,"plugin":null}`; got != want {
-		t.Fatalf("core.modal is %s, want %s", got, want)
+	if got := f.status("core.modal"); got != "null" {
+		t.Fatalf("core.modal is %s with the settings tab open, want null", got)
 	}
 }
 
