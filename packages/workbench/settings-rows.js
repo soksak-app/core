@@ -9,6 +9,9 @@ import declaration from "./workbench.json" with { type: "json" };
 /** The pages in menu order (docs/spec/settings.md#menu), read from the rows section of the workbench declaration. */
 export const PAGES = declaration.rows.pages;
 
+/** The description of the account group of a plugin page, the one text that both workbenches draw (docs/spec/settings.md#plugins). */
+export const ACCOUNTS_DESCRIPTION = declaration.rows.accounts.description;
+
 /** The labels of the choices that have one. A choice without a label is shown by its value (docs/spec/settings.md#pages). The static labels
  * come from the rows section of the declaration; the language and font labels come from the menu languages and the fonts. */
 const LABELS = Object.freeze({

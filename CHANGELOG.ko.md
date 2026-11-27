@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-17-10: 계정 그룹 설명을 workbench.json에 한 번 선언하고 두 워크벤치가 읽는다.
 - F1266: mygo 호스트가 plugin folder 수를 `folders`로 보고하고, `plugins-folders-changed`를 받으면 상태를 다시 읽는다.
 - F1267: host와 시험 source가 folder 규칙을 가진 installation spec의 heading을 인용하도록 바꾼다.
 - F1236-5: mygo snapshot 테스트와 presentation 실패 테스트는 layout fixture가 설치한 sidebar plugin을 기대한다.

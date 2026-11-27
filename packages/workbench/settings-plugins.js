@@ -3,6 +3,7 @@
 import { appUpdate, pluginOperations } from "./installed-plugins.js";
 import { pluginAccounts, pluginCategories, pluginUnits } from "./environment.js";
 import { settingDefinitions, pluginsOfCategory, missingPluginValue } from "./settings.js";
+import { ACCOUNTS_DESCRIPTION } from "./settings-rows.js";
 import { accounts } from "./accounts-exposure.js";
 import { button, badge, element, iconButton, row, scopeMarks, select, slider, textField, toggle, choice, editable } from "./settings-controls.js";
 import { sideList } from "./settings-sides.js";
@@ -445,7 +446,7 @@ function accountsGroup(unit) {
   const add = button("추가", { expose: "core.settings-tab.account-add", command: "core.accounts.add", params: { plugin: unit.id, name: state.account.name, kind: state.account.kind ?? declared.kinds[0].value }, disabled: state.account.name === "", variant: "primary" });
   const fresh = element("div", "set-account set-account--new");
   fresh.append(nameField, kindSelect, add);
-  return group("계정", "에이전트 CLI 계정.", [...rows, row({ label: "새 계정", control: fresh, key: "account-new", wide: true })]);
+  return group("계정", ACCOUNTS_DESCRIPTION, [...rows, row({ label: "새 계정", control: fresh, key: "account-new", wide: true })]);
 }
 
 /** The login text of an account (docs/spec/plugins.md#accounts). */

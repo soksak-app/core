@@ -916,6 +916,7 @@
     "notice-tone-mix": "12%"
   },
   "rows": {
+    "accounts": { "description": "에이전트 CLI 계정." },
     "pages": [
       {
         "id": "look",

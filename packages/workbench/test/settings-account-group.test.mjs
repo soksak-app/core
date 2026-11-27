@@ -53,3 +53,9 @@ test("the account group of a plugin page reads the description of the design", a
   assert.ok(group, "the plugin page shows the account group");
   assert.equal(group.querySelector(".set-caption")?.textContent, "에이전트 CLI 계정.");
 });
+
+// The text of the account group is declared once, in the rows section of workbench.json, which both workbenches read.
+test("the account group description is declared in the rows section of workbench.json", async () => {
+  const { default: declaration } = await import("../workbench.json", { with: { type: "json" } });
+  assert.equal(declaration.rows.accounts.description, "에이전트 CLI 계정.");
+});
