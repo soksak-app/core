@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
+- F1239-1: The settings tab draws its menu beside the content, and the theme swatches of the page 모양 fill the width of the pane.
 - F1245-1: Name the reason of the three status read defaults of sok.rs, quoting the spec of sok.status.read.
 - F1217-9: The registry index format 3 carries maker, categories and updated, and plugin.json requires maker; the index build and the pages follow.
 - F1241: The shortcut table check reads a code comparison of a letter key, such as event.code === "KeyB", as the key of that letter.

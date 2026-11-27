@@ -1,7 +1,8 @@
 /* The settings tab (settings-ui.js). Lengths are chrome metrics or theme tokens; a rule holds no literal length or color of its own
    (docs/spec/settings.md#performance). The page links this file after app.css. */
 
-.set-tab {
+/* The container of the tab (index.html #settingsTab) holds the menu and the content beside it (docs/spec/settings.md#menu). */
+.settings-tab {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
   height: var(--fill);
@@ -100,6 +101,17 @@
 
 .set-row--wide {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* A wide control takes the whole row, and the marks of its scope wrap below it (docs/spec/settings.md#rows). */
+.set-row--wide > .set-row__control {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  max-width: none;
+}
+
+.set-row--wide > .set-row__control > :first-child {
+  flex: 1 1 var(--fill);
 }
 
 .set-row--indent {
