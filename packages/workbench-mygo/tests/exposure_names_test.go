@@ -65,9 +65,11 @@ func TestAPlaceWithoutADeclaredNameStaysEmpty(t *testing.T) {
 			t.Errorf("%s is %s, %s, %s", place.name, *got.Down, *got.Up, *got.Click)
 		}
 	}
+	// The project home shows its status line at the foot (docs/spec/external-sidebars.md#status-bar). A press on its spacer is the group of the
+	// line, as on the status bar of the work screen, so the foot is the line and not an unnamed place.
 	f.run("core.projects.browse", nil)
-	if got := pressedAt(t, f, 600, 790); *got.Down != "unknown" || got.PressedConnected != nil {
-		t.Errorf("the foot of the project home is %s", *got.Down)
+	if got := pressedAt(t, f, 1000, 790); *got.Down != "group" || got.PressedConnected == nil || !*got.PressedConnected {
+		t.Errorf("the foot of the project home is %s, not the status line", *got.Down)
 	}
 	if got := pressedAt(t, f, 1100, 500); *got.Down != "region" || *got.Click != "region" {
 		t.Errorf("the body of the project home is %s, %s", *got.Down, *got.Click)

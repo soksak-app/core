@@ -5375,6 +5375,12 @@
         }
       },
       {
+        "name": "core.home.back",
+        "description": "Restores the work screen of the window from the project home (docs/spec/projects.md#project-home). It fails when the window has no work screen to return to.",
+        "params": { "type": "object", "properties": {} },
+        "result": { "type": "null" }
+      },
+      {
         "name": "core.home.show",
         "description": "Shows the project home in this window while keeping its current work.",
         "params": {
@@ -5983,6 +5989,26 @@
       {
         "name": "core.settings-tab.reopen",
         "description": "The open button of the settings hint on the work screen; it runs core.settings.open."
+      },
+      {
+        "name": "core.home.status.projects",
+        "description": "The count of the projects in the status line of the project home, from the status core.home field projects."
+      },
+      {
+        "name": "core.home.status.open",
+        "description": "The count of the projects that a window has open in the status line of the project home, from the status core.home field open."
+      },
+      {
+        "name": "core.home.status.plugins",
+        "description": "The enabled and installed plugin counts in the status line of the project home, from the status core.plugins: enabled of installed."
+      },
+      {
+        "name": "core.home.status.back",
+        "description": "The button back to the work screen in the status line of the project home. Runs core.home.back and is absent when the window has no work screen."
+      },
+      {
+        "name": "core.home.status.new",
+        "description": "The button for a new window in the status line of the project home. Runs core.window.new."
       },
       {
         "name": "core.statusbar.home",

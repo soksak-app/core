@@ -3,6 +3,7 @@ package workbench
 import (
 	"cmp"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -194,6 +195,15 @@ func (s *Shell) registerHome() {
 		})
 	})
 	act(s, "core.home.show", func(struct{}) error { return s.browse() })
+	// The button back of the status line restores the work screen of the window (docs/spec/projects.md#project-home).
+	act(s, "core.home.back", func(struct{}) error {
+		project := s.returnable()
+		if project == nil {
+			return errors.New("there is no work screen to return to")
+		}
+		s.activate(project.ID)
+		return nil
+	})
 	act(s, "core.home.search", func(value struct {
 		Query string `json:"query"`
 	}) error {

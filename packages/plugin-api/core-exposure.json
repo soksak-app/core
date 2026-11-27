@@ -188,6 +188,7 @@
     "core.focus.set",
     "core.surface.hit",
     "core.surface.clock",
+    "core.home.back",
     "core.home.show",
     "core.home.search",
     "core.home.search.focus",

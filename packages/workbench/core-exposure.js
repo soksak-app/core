@@ -993,6 +993,12 @@ export async function installCoreExposure({ home, renames, chrome, drawn, memory
   registry.command("core.modal.dismiss", () => { closePicker("dismiss"); });
 
   registry.command("core.home.show", async () => { await projects.showHome(); });
+  // The button back of the project home restores the work screen of the window (docs/spec/projects.md#project-home).
+  registry.command("core.home.back", async () => {
+    const back = projects.returnable();
+    if (back === null) throw new Error("there is no work screen to return to");
+    await projects.activate(back.id);
+  });
   registry.command("core.home.search", ({ query }) => { home.actions.search(query); });
   registry.command("core.home.search.focus", () => {
     if (!projects.inHome()) throw new Error("the project home is not shown");

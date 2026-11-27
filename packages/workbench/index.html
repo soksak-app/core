@@ -80,7 +80,8 @@ import { chromeSwitches, sideShortcut } from "./window-sidebars.js";
 import { createPageLayout, reportUncaught, verificationRows } from "./page-layout.js";
 
 /* Application interface. When it is absent, an implementation that does nothing is used. */
-import { chrome, log, onDocumentState, recordPageReload, onImageDetachEnded, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host } from "./host.js";
+import { chrome, log, onDocumentState, recordPageReload, onImageDetachEnded, onMemoryPressure, onMenuCommand, retainSidecarSessions, surfaces as host, watchReduceMotion } from "./host.js";
+watchReduceMotion();
 import { holdImageDetachSurfaces, imageDetachEnded } from "./image-detach-waits.js";
 import { pressesFrame, setTextScope } from "./text-size.js";
 import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
@@ -111,7 +112,7 @@ import { mountPlacedSections, onChoicesChange, restoreSection, unloadedSections,
 import { createHome } from "./home.js";
 import { createSettingsChip } from "./settings-chip.js";
 import { createSidebarEdges } from "./sidebar-edges.js";
-import { createStatusBar } from "./statusbar.js";
+import { createHomeStatusBar, createStatusBar } from "./statusbar.js";
 import { gripMetrics, installBrandLogo, installChromeMetrics } from "./chrome-metrics.js";
 
 /* The chrome metrics and the tokens of the default theme are set on the root before anything is drawn, so the first screen and an error
@@ -530,6 +531,7 @@ function drawBars() {
   sideEdges.draw(browsing || chip.front);
   // The status bar shows on the work screen and in the settings tab, not on the project home.
   statusBar.draw(!browsing);
+  homeStatus.draw(browsing);
 }
 
 /* The logo is one declaration for both workbenches. */
@@ -564,6 +566,18 @@ const statusBar = createStatusBar(document.getElementById("statusBar"), {
   theme: () => value("theme"),
   mode: () => value("mode"),
 });
+// The status line of the project home (docs/spec/external-sidebars.md#status-bar): its counts come from the projects and the plugin rows.
+const homeStatus = createHomeStatusBar(document.getElementById("homeStatus"), {
+  count: () => projects.all().length,
+  open: () => projects.all().filter((project) => projects.isOpen(project.id)).length,
+  plugins: () => {
+    const rows = pluginOperations.status().plugins;
+    return { enabled: rows.filter((row) => row.installed?.enabled === true).length, installed: rows.filter((row) => row.installed !== null).length };
+  },
+  canReturn: () => projects.returnable() !== null,
+});
+bind(document.querySelector('[data-expose="core.home.status.back"]'), "core.home.back", {});
+bind(document.querySelector('[data-expose="core.home.status.new"]'), "core.window.new", {});
 
 // The entry 홈 of the status bar runs core.home.show (docs/spec/external-sidebars.md#status-bar).
 bind(document.querySelector('[data-expose="core.statusbar.home"]'), "core.home.show", {});
@@ -778,6 +792,7 @@ if (!chrome) addEventListener("pagehide", () => { projects.flush().catch(showErr
   <div class="tabs tabs--project tabs--bottom" id="projectRow" hidden></div>
   <!-- The status bar of the window: the project, the cards, the theme and the mode (docs/spec/external-sidebars.md#status-bar). -->
   <div id="statusBar" hidden></div>
+  <div id="homeStatus" hidden></div>
   </div>
 </div>
 

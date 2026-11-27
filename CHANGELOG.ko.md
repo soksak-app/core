@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: 두 호스트의 프로젝트 홈에 디자인의 상태줄이 있다. 프로젝트와 열린 프로젝트 수, 켜진 플러그인과 설치된 플러그인 수, core.home.back으로 작업 화면에 돌아가는 버튼, 새 창 버튼을 보인다.
 - F1226: quit은 연결에 응답한 process의 종료를 기다리고, 실패한 quit은 process.lock이 가리키는 교체 process를 따라가며, run은 process 점검 전에 persistent service를 끝낸다. 폴더 제거 뒤에도 남은 service에는 선언된 종료인 SIGTERM을 보내고, 그 뒤에도 남은 service는 pid를 적어 단계를 실패시킨다.
 - F957: 마지막 card를 거듭 right로 나눠도 web과 mygo workbench에서 한 줄의 card가 고르게 남는다. 이 test는 회귀 coverage다.
 - F1231: count 테스트의 기록에 scratch 사본에서 관찰한 Red를 적는다.
