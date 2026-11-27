@@ -205,7 +205,11 @@ impl FixtureFrontend {
 
     /// A window whose native window is the real window native and whose main webview is the real webview main, which the
     /// platform of the test created on the main thread. Its name is the label of the window.
-    pub fn with_main_webview(native: usize, main: usize, presentation: std::result::Result<usize, String>) -> Self {
+    pub fn with_main_webview(
+        native: usize,
+        main: usize,
+        presentation: std::result::Result<usize, String>,
+    ) -> Self {
         Self {
             main: Some(main),
             // The main page of the window receives the events of the window, such as the page-ready event of its first commit.
@@ -282,7 +286,11 @@ impl Frontend for FixtureFrontend {
     // A window with a main webview of the platform reports the scale of the standard display, which the layout of the test
     // windows aligns to. The layout asserts nothing about the scale, so the value is the one a standard display reports.
     fn scale_factor(&self) -> Result<f64> {
-        if self.main.is_some() { Ok(1.0) } else { Err(absent()) }
+        if self.main.is_some() {
+            Ok(1.0)
+        } else {
+            Err(absent())
+        }
     }
 
     fn size(&self) -> Result<LogicalSize> {

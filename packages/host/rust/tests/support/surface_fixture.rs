@@ -16,8 +16,16 @@ pub const ECHO_VERSION: &str = "0.0.1";
 
 /// The folder of the installed echo sidecar, relative to the configuration folder: the platform key of the running host.
 fn echo_sidecar_path() -> String {
-    let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
-    let os = if cfg!(target_os = "macos") { "darwin" } else { "linux" };
+    let arch = if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else {
+        "x64"
+    };
+    let os = if cfg!(target_os = "macos") {
+        "darwin"
+    } else {
+        "linux"
+    };
     format!("sidecars/fixture-sidecar-echo/{ECHO_VERSION}/{os}-{arch}")
 }
 
@@ -34,7 +42,10 @@ fn install_echo_sidecar(config: &Path) {
     install_fixture(
         &folder,
         "echo",
-        &format!("ignore-term\non any tee {}\n", folder.join("requests").display()),
+        &format!(
+            "ignore-term\non any tee {}\n",
+            folder.join("requests").display()
+        ),
     );
 }
 
@@ -50,7 +61,9 @@ pub fn installed_echo_requests_so_far(config: &Path) -> Result<String, String> {
     match std::fs::read_to_string(config.join(echo_sidecar_path()).join("requests")) {
         Ok(text) => Ok(text),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
-        Err(error) => Err(format!("read the requests of the installed echo sidecar: {error}")),
+        Err(error) => Err(format!(
+            "read the requests of the installed echo sidecar: {error}"
+        )),
     }
 }
 
@@ -63,8 +76,8 @@ fn probe_source() -> std::path::PathBuf {
 pub fn probe_version() -> String {
     let text = std::fs::read_to_string(probe_source().join("package.json"))
         .unwrap_or_else(|error| panic!("read the package.json of the probe plugin: {error}"));
-    let package: serde_json::Value =
-        serde_json::from_str(&text).unwrap_or_else(|error| panic!("parse the package.json of the probe plugin: {error}"));
+    let package: serde_json::Value = serde_json::from_str(&text)
+        .unwrap_or_else(|error| panic!("parse the package.json of the probe plugin: {error}"));
     package["version"]
         .as_str()
         .unwrap_or_else(|| panic!("the package.json of the probe plugin has no version"))
@@ -104,7 +117,6 @@ pub fn install_probe_plugin(config: &Path) {
     .expect("write plugins/installed.json");
 }
 
-
 /// Declares the echo sidecar in folder: the sidecar fixture program (docs/spec/cases/sidecars/fixture.sh) runs as `echo`, ignores
 /// the terminate signal of the stop, and appends each line that it receives to the file `requests` of folder, so the file is the
 /// observation of what the sidecar received. It panics on any error.
@@ -119,7 +131,8 @@ pub fn echo_sidecars(folder: &Folder) -> Sidecars<SidecarRecorder> {
     let declaration = SidecarDeclaration {
         name: ECHO.to_string(),
         folder: folder.path().to_path_buf(),
-        data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#.to_vec(),
+        data: br#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#
+            .to_vec(),
         error: None,
         version: "0.0.1".to_string(),
         dependents: Vec::new(),

@@ -18,7 +18,10 @@ pub type MainTest = (&'static str, fn() -> Result<(), String>);
 fn refuse_unfiltered_run() -> ! {
     let file = std::env::current_exe()
         .ok()
-        .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()))
+        .and_then(|path| {
+            path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
         .unwrap_or_else(|| "the test target".to_string());
     eprintln!(
         "{file}: each scenario sets the process arguments; run one test per process through scripts/rust-tests.mjs or with --exact"

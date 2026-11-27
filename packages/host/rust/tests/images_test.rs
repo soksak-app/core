@@ -1511,7 +1511,9 @@ fn drawing_state_is_sent_at_attach_and_on_change() {
         ("unchanged", Box::new(|| {}), vec![]),
         (
             "hidden surface",
-            Box::new(|| { images.set_surface_visible(&key.0, false); }),
+            Box::new(|| {
+                images.set_surface_visible(&key.0, false);
+            }),
             vec!["view=false hidden"],
         ),
         (
@@ -1521,7 +1523,9 @@ fn drawing_state_is_sent_at_attach_and_on_change() {
         ),
         (
             "shown surface while the region is hidden",
-            Box::new(|| { images.set_surface_visible(&key.0, true); }),
+            Box::new(|| {
+                images.set_surface_visible(&key.0, true);
+            }),
             vec!["view=false"],
         ),
         (
@@ -1536,7 +1540,9 @@ fn drawing_state_is_sent_at_attach_and_on_change() {
         ),
         (
             "hidden surface while occluded",
-            Box::new(|| { images.set_surface_visible(&key.0, false); }),
+            Box::new(|| {
+                images.set_surface_visible(&key.0, false);
+            }),
             vec!["view=false hidden"],
         ),
         (
@@ -1546,7 +1552,9 @@ fn drawing_state_is_sent_at_attach_and_on_change() {
         ),
         (
             "shown surface",
-            Box::new(|| { images.set_surface_visible(&key.0, true); }),
+            Box::new(|| {
+                images.set_surface_visible(&key.0, true);
+            }),
             vec!["view=true"],
         ),
     ];

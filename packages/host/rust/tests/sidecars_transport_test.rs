@@ -2701,7 +2701,9 @@ fn a_service_of_an_undeclared_sidecar_is_ended() {
     sidecars.declare(&[]).unwrap();
     assert_eq!(
         serde_json::to_string(&sidecars.outdated()).unwrap(),
-        format!(r#"[{{"sidecar":"{ECHO}","running":"0.0.7","installed":null,"sessions":1,"surfaces":["surface-1"]}}]"#)
+        format!(
+            r#"[{{"sidecar":"{ECHO}","running":"0.0.7","installed":null,"sessions":1,"surfaces":["surface-1"]}}]"#
+        )
     );
     sidecars.replace(ECHO).unwrap();
     let notice = events.recv().unwrap();
@@ -2791,7 +2793,10 @@ fn an_outdated_service_keeps_a_surface_that_a_layout_holds() {
         .unwrap();
     assert_no_replacement(&service, &sidecars);
     assert_eq!(sidecars.outdated()[0].sessions, 1);
-    assert_eq!(sidecars.outdated()[0].surfaces, vec!["space-b/left/probe.section".to_string()]);
+    assert_eq!(
+        sidecars.outdated()[0].surfaces,
+        vec!["space-b/left/probe.section".to_string()]
+    );
     // A layout surface leaves the count and the service is replaced.
     sidecars.retain_sessions(&[]).unwrap();
     service.second.recv().unwrap();
@@ -2832,7 +2837,9 @@ fn the_removal_of_the_plugin_of_a_service_keeps_the_sessions_of_its_layout_surfa
     assert_no_replacement(&service, &sidecars);
     assert_eq!(
         serde_json::to_string(&sidecars.outdated()).unwrap(),
-        format!(r#"[{{"sidecar":"{ECHO}","running":"0.0.7","installed":null,"sessions":1,"surfaces":["space-b/left/probe.section"]}}]"#)
+        format!(
+            r#"[{{"sidecar":"{ECHO}","running":"0.0.7","installed":null,"sessions":1,"surfaces":["space-b/left/probe.section"]}}]"#
+        )
     );
     sidecars.stop();
 }
@@ -4146,11 +4153,16 @@ fn a_plugin_operation_ends_the_holding_service_and_starts_the_next_after_it() {
 }
 
 /// The `host.sidecar.outdated` records of the event log of `config` after its writer flushed, as their fields.
-fn outdated_fields(config: &Path, writer: &soksak_host::event_log::EventLog) -> Vec<serde_json::Value> {
+fn outdated_fields(
+    config: &Path,
+    writer: &soksak_host::event_log::EventLog,
+) -> Vec<serde_json::Value> {
     writer.flush().unwrap();
     records::read_events(&records::event_log_path(config))
         .into_iter()
-        .filter(|event| event["event"] == "host.sidecar.outdated" && event["fields"]["name"] == OUTDATED)
+        .filter(|event| {
+            event["event"] == "host.sidecar.outdated" && event["fields"]["name"] == OUTDATED
+        })
         .map(|event| event["fields"].clone())
         .collect()
 }

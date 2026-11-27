@@ -17,12 +17,12 @@ mod framework {
 mod menu {
     pub use soksak_host::menu::*;
 }
-#[path = "support/framework.rs"]
-#[allow(dead_code)]
-mod test_framework;
 #[cfg(target_os = "macos")]
 #[path = "support/platform/darwin/surface_drawing.rs"]
 mod surface_drawing;
+#[path = "support/framework.rs"]
+#[allow(dead_code)]
+mod test_framework;
 
 fn main() {
     main_thread::run(TESTS);
@@ -79,9 +79,14 @@ fn an_echo_sidecar_records_each_line_sent_to_it() -> Result<(), String> {
 fn a_fixture_window_holds_the_native_window_it_was_given() -> Result<(), String> {
     use soksak_host::framework::Frontend;
     let frontend = test_framework::FixtureFrontend::with_native(0xABC, Ok(1));
-    let native = frontend.native_window().map_err(|error| format!("{error:?}"))?;
+    let native = frontend
+        .native_window()
+        .map_err(|error| format!("{error:?}"))?;
     if native as usize != 0xABC {
-        return Err(format!("the window answers {:x}, want abc", native as usize));
+        return Err(format!(
+            "the window answers {:x}, want abc",
+            native as usize
+        ));
     }
     Ok(())
 }
@@ -91,18 +96,31 @@ fn the_probe_plugin_installs_into_a_configuration_folder_with_its_page() -> Resu
     surface_fixture::install_probe_plugin(config.path());
     let (state, manifests) = soksak_sok::plugins::read_installed_manifests(config.path())
         .expect("the installed state reads back");
-    if !state.plugins.get("probe").is_some_and(|plugin| plugin.enabled) {
+    if !state
+        .plugins
+        .get("probe")
+        .is_some_and(|plugin| plugin.enabled)
+    {
         return Err("probe is not enabled".into());
     }
     if !manifests.contains_key("probe") {
         return Err("the manifest of probe does not read back".into());
     }
-    let page = config.path().join("plugins/probe").join(&surface_fixture::probe_version()).join("ui/page.html");
+    let page = config
+        .path()
+        .join("plugins/probe")
+        .join(&surface_fixture::probe_version())
+        .join("ui/page.html");
     if !page.is_file() {
         return Err("the probe page is not in its installed folder".into());
     }
     let folder = soksak_host::installed::plugin_folder(config.path(), "probe")?;
-    if folder != config.path().join("plugins/probe").join(&surface_fixture::probe_version()) {
+    if folder
+        != config
+            .path()
+            .join("plugins/probe")
+            .join(&surface_fixture::probe_version())
+    {
         return Err(format!("probe resolves to {}", folder.display()));
     }
     Ok(())
@@ -306,6 +324,7 @@ fn shown_surface_sends_drawing_state(phase: Phase) -> Result<(), String> {
     });
     let closed = surface_drawing::close_window(native);
     // The document data of the configuration folder is written by the web process until its store ends.
-    let store = surface_drawing::end_document_store(&config.path().join("document-data").to_string_lossy());
+    let store =
+        surface_drawing::end_document_store(&config.path().join("document-data").to_string_lossy());
     outcome.and(closed).and(store)
 }
