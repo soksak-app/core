@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- Removed the empty page error case: test/page-error-display.test.mjs asserts its clauses against error-toasts.
 - F1225: The audit reports each file under apps/tauriv2/gen that is tracked or not ignored, and the feature link of F1225 names the check and its test.
 - Removed the duplicate transcript case: transcript-order records the same transcript call shape.
 - F1224, F1225, F1217-11: The checklist records the term, schema and toast items as complete.
