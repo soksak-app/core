@@ -155,7 +155,7 @@ export function toastCuts() {
  */
 export const native = Boolean(bridge);
 
-// The reduced motion of the page: the override of the application when one is set (diagnostics.motion), else the platform value.
+// The reduced motion of the page: the override of the application when one is set by a diagnostic build, else the platform value.
 export function reduceMotionValue(override, platformReduces) {
   return override ?? platformReduces;
 }
