@@ -3,6 +3,10 @@
 
 [한국어](CHANGELOG.ko.md)
 
+## 2026-11-27
+
+- F1217-17-5: The mygo agent group shows 없음 for a missing setup part, as the settings specification states, instead of 설치 안 됨.
+
 ## 2026-11-26
 
 - F1217-17-1: The look page of the settings specification keeps its existing rows, ranges and defaults, and the design's system mode and D2Coding font are not adopted.

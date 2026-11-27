@@ -181,10 +181,10 @@ func TestTheAgentGroupShowsAndInstallsTheSetupParts(t *testing.T) {
 	}
 	modal := f.modal()
 	if labels, want := modal.labels("core.settings-tab.setup"), []string{
-		"명령 경로설치 안 됨/Users/person/.local/bin/sok끄기",
+		"명령 경로없음/Users/person/.local/bin/sok끄기",
 		"스킬다름/Users/person/.claude/skills/soksak/SKILL.md",
-		"MCP 등록설치 안 됨/Users/person/.claude.json",
-		"훅설치 안 됨/Users/person/.claude/settings.json",
+		"MCP 등록없음/Users/person/.claude.json",
+		"훅없음/Users/person/.claude/settings.json",
 	}; !slices.Equal(labels, want) {
 		t.Fatalf("the rows are %q, not %q", labels, want)
 	}

@@ -237,7 +237,7 @@ func (s *Shell) registerSetup() {
 // setupNames are the names of the setup parts, and setupStates the texts of their states.
 var (
 	setupNames  = map[string]string{"path": "명령 경로", "skill": "스킬", "mcp": "MCP 등록", "hook": "훅"}
-	setupStates = map[string]string{"ok": "설치됨", "absent": "설치 안 됨", "differs": "다름"}
+	setupStates = map[string]string{"ok": "설치됨", "absent": "없음", "differs": "다름"}
 )
 
 // buildSetup adds the agent group. A path row has a control for its desired state. The group also has the install button while a
