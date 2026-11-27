@@ -116,6 +116,36 @@ type WorkspaceRequest struct {
 
 // readProjects reads the projects of projects.json, which holds them under the `projects` member beside the format
 // member of the stored form (docs/spec/installation.md#stored-data-formats).
+// validateProjectsFolder accepts an absolute path or a path that starts with ~/, the base folder of new projects, with the text
+// of the workbench (docs/spec/settings.md#values). The value is written as JSON without HTML escaping, as the workbench writes it.
+func validateProjectsFolder(value any) error {
+	if text, ok := value.(string); ok && (filepath.IsAbs(text) || strings.HasPrefix(text, "~/")) {
+		return nil
+	}
+	var encoded bytes.Buffer
+	encoder := json.NewEncoder(&encoded)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
+		return fmt.Errorf("Invalid setting projectsFolder: %w", err)
+	}
+	return fmt.Errorf("Invalid setting projectsFolder: %s is not an absolute path or a path that starts with ~/", strings.TrimSuffix(encoded.String(), "\n"))
+}
+
+// commonSettings reads the common settings file at path; a missing file holds no setting, and a projectsFolder of another form
+// refuses the file with its path.
+func commonSettings(path string) (Record, error) {
+	settings, err := readStored(path, "settings.json", settingsFormat)
+	if err != nil || settings == nil {
+		return settings, err
+	}
+	if value, has := settings["projectsFolder"]; has {
+		if err := validateProjectsFolder(value); err != nil {
+			return nil, fmt.Errorf("%s: %w", path, err)
+		}
+	}
+	return settings, nil
+}
+
 // projectSettings reads the overrides of the project settings file at path; a missing file holds no override.
 func projectSettings(path string) (Record, error) {
 	settings, err := readStored(path, "settings.json", settingsFormat)
@@ -167,7 +197,7 @@ func snapshot(directory string, projects []Record, projectsErr error) (Record, e
 		document["projectsError"] = projectsErr.Error()
 		projects = []Record{}
 	}
-	common, err := readStored(filepath.Join(directory, "settings.json"), "settings.json", settingsFormat)
+	common, err := commonSettings(filepath.Join(directory, "settings.json"))
 	if err != nil {
 		document["settingsError"] = err.Error()
 		common = nil
@@ -790,7 +820,16 @@ func (w *Workspace) Apply(req WorkspaceRequest) (any, error) {
 			}
 			path = filepath.Join(projects[at]["root"].(string), ".soksak", "settings.json")
 		}
-		settings, err := readStored(path, "settings.json", settingsFormat)
+		if value, has := req.Patch["projectsFolder"]; has {
+			if err := validateProjectsFolder(value); err != nil {
+				return nil, err
+			}
+		}
+		read := commonSettings
+		if req.ID != "" {
+			read = func(path string) (Record, error) { return readStored(path, "settings.json", settingsFormat) }
+		}
+		settings, err := read(path)
 		if err != nil {
 			return nil, err
 		}

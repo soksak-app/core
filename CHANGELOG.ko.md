@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7-2-4: Wails host와 Tauri host가 절대 경로도 ~/로 시작하는 경로도 아닌 projectsFolder를 공통 설정 쓰기와 공통 settings.json에서 mygo와 web workbench와 같은 글로 거부한다.
 - F959-3: agent layout verifier가 창의 고정 window sidebar를 빼고 content card만 판정한다. 실패하던 요청이 이제 통과한다.
 - F1217-11-8: 토스트 동작 줄이기 테스트가 동작 재정의의 두 규칙을 고정하며, 다시 통과한다.
 - F1233: F1233 항목은 record 동작을 literal 동사로 적는다.

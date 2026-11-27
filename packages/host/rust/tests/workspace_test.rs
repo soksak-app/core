@@ -291,7 +291,7 @@ fn move_without_delta_is_refused() {
 }
 
 /// The common-only keys, each with a value.
-fn common_only_cases() -> [(&'static str, Value); 10] {
+fn common_only_cases() -> [(&'static str, Value); 11] {
     [
         ("autoDismissProblemToasts", json!(true)),
         ("memorySaver", json!(false)),
@@ -299,6 +299,7 @@ fn common_only_cases() -> [(&'static str, Value); 10] {
         ("noticeCenterStyle", json!("popover")),
         ("problemToastDismissSeconds", json!(5)),
         ("projectOpening", json!("tabs")),
+        ("projectsFolder", json!("~/Work")),
         ("quietToasts", json!(false)),
         ("textSize", json!(1.5)),
         ("toastStyle", json!("card")),
@@ -356,6 +357,68 @@ fn project_common_only_keys_are_rejected() {
             failures.push(format!(
                 "a project settings file with {key} reported {}",
                 snapshot["projects"][0]["settingsError"]
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+// contract: workspace.settings.refuses-relative-projects-folder
+#[test]
+fn a_relative_projects_folder_is_refused() {
+    let config = folder::Folder::new();
+    let store = Workspace::new(config.path().into());
+    let path = config.path().join("settings.json");
+    let relative = [
+        json!(""),
+        json!("Projects"),
+        json!("projects/work"),
+        json!("~"),
+        json!("~user/work"),
+        json!(3),
+    ];
+    let mut failures = Vec::new();
+    for value in &relative {
+        let refused = store.apply(
+            serde_json::from_value(json!({"kind":"settings", "patch":{"projectsFolder": value}}))
+                .unwrap(),
+        );
+        let want = format!(
+            "Invalid setting projectsFolder: {value} is not an absolute path or a path that starts with ~/"
+        );
+        if refused.as_ref().err() != Some(&want) {
+            failures.push(format!(
+                "a projectsFolder write of {value} returned {refused:?}"
+            ));
+        }
+        assert!(
+            !path.exists(),
+            "a refused projectsFolder write of {value} wrote settings.json"
+        );
+    }
+    for value in ["/work/base", "~/Work"] {
+        apply(
+            &store,
+            json!({"kind":"settings", "patch":{"projectsFolder": value}}),
+        );
+    }
+    let snapshot = apply(&store, json!({"kind":"snapshot"}));
+    assert_eq!(snapshot["common"]["projectsFolder"], json!("~/Work"));
+    for value in &relative {
+        fs::write(
+            &path,
+            json!({"format": 1, "projectsFolder": value}).to_string(),
+        )
+        .unwrap();
+        let snapshot = apply(&store, json!({"kind":"snapshot"}));
+        let want = json!(format!(
+            "{}: Invalid setting projectsFolder: {value} is not an absolute path or a path that starts with ~/",
+            path.display()
+        ));
+        if snapshot["settingsError"] != want {
+            failures.push(format!(
+                "a settings file with projectsFolder {value} reported {}",
+                snapshot["settingsError"]
             ));
         }
     }

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7-2-4: The Wails and Tauri hosts refuse a projectsFolder that is neither an absolute path nor a path that starts with ~/, in a common settings write and in a common settings.json, with the text of mygo and the web workbench.
 - F959-3: The agent layout verifier judges the content cards of a window, not its fixed window sidebars; the failing requests now pass.
 - F1217-11-8: The toast reduced motion test pins both rules of the motion override, and the test passes again.
 - F1233: The F1233 entries state their record actions with literal verbs.

@@ -159,11 +159,7 @@ fn snapshot(directory: &Path, listed: Result<Vec<Value>, String>) -> Result<Valu
             vec![]
         }
     };
-    let mut common = match read_stored(
-        &directory.join("settings.json"),
-        "settings.json",
-        SETTINGS_FORMAT,
-    ) {
+    let mut common = match common_settings(&directory.join("settings.json")) {
         Ok(common) => common.unwrap_or_default(), // default: a missing settings.json holds no common settings.
         Err(error) => {
             document.insert("settingsError".into(), error.into());
@@ -306,6 +302,30 @@ pub fn notifies_windows(kind: &str, result: &Value) -> bool {
         "pluginData" => result == &Value::Bool(true),
         _ => true,
     }
+}
+
+/// Accepts an absolute path or a path that starts with ~/, the base folder of new projects, with the text of the workbench
+/// (docs/spec/settings.md#values).
+fn validate_projects_folder(value: &Value) -> Result<(), String> {
+    match value.as_str() {
+        Some(text) if Path::new(text).is_absolute() || text.starts_with("~/") => Ok(()),
+        _ => Err(format!(
+            "Invalid setting projectsFolder: {value} is not an absolute path or a path that starts with ~/"
+        )),
+    }
+}
+
+/// Reads the common settings file at path; a missing file holds no setting, and a projectsFolder of another form refuses
+/// the file with its path.
+fn common_settings(path: &Path) -> Result<Option<Map<String, Value>>, String> {
+    let settings = read_stored(path, "settings.json", SETTINGS_FORMAT)?;
+    if let Some(value) = settings
+        .as_ref()
+        .and_then(|settings| settings.get("projectsFolder"))
+    {
+        validate_projects_folder(value).map_err(|error| format!("{}: {error}", path.display()))?;
+    }
+    Ok(settings)
 }
 
 /// Reads the overrides of the project settings file at path; a missing file holds no override.
@@ -890,8 +910,15 @@ impl Workspace {
                 } else {
                     self.directory.join("settings.json")
                 };
-                let mut settings =
-                    read_stored(&path, "settings.json", SETTINGS_FORMAT)?.unwrap_or_default(); // default: a missing project settings file holds no overrides.
+                if let Some(value) = patch.get("projectsFolder") {
+                    validate_projects_folder(value)?;
+                }
+                let stored = if req.id.is_some() {
+                    read_stored(&path, "settings.json", SETTINGS_FORMAT)?
+                } else {
+                    common_settings(&path)?
+                };
+                let mut settings = stored.unwrap_or_default(); // default: a missing settings file holds no setting.
                 let mut set: Vec<String> = patch.keys().cloned().collect();
                 settings.extend(patch);
                 let mut removed = vec![];

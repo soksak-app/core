@@ -371,6 +371,7 @@ var commonOnlyCases = []struct {
 	{"noticeCenterStyle", "popover", `"popover"`},
 	{"problemToastDismissSeconds", 5, `5`},
 	{"projectOpening", "tabs", `"tabs"`},
+	{"projectsFolder", "~/Work", `"~/Work"`},
 	{"quietToasts", false, `false`},
 	{"textSize", 1.5, `1.5`},
 	{"toastStyle", "card", `"card"`},
@@ -433,6 +434,52 @@ func TestCommonOnlyKeysAreTheDeclaredList(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cases, declaration.Settings.CommonOnly) {
 		t.Errorf("the refusal test covers %v, workbench.json declares %v", cases, declaration.Settings.CommonOnly)
+	}
+}
+
+// relativeProjectsFolders are values of projectsFolder that are neither an absolute path nor a path that starts with ~/.
+var relativeProjectsFolders = []struct {
+	value any
+	text  string
+}{{"", `""`}, {"Projects", `"Projects"`}, {"projects/work", `"projects/work"`}, {"~", `"~"`}, {"~user/work", `"~user/work"`}, {3, `3`}}
+
+// contract: workspace.settings.refuses-relative-projects-folder
+func TestARelativeProjectsFolderIsRefused(t *testing.T) {
+	directory := t.TempDir()
+	store := host.NewWorkspace(directory)
+	path := filepath.Join(directory, "settings.json")
+	for _, c := range relativeProjectsFolders {
+		_, err := store.Apply(host.WorkspaceRequest{Kind: "settings", Patch: host.Record{"projectsFolder": c.value}})
+		if want := "Invalid setting projectsFolder: " + c.text + " is not an absolute path or a path that starts with ~/"; err == nil || err.Error() != want {
+			t.Errorf("a projectsFolder write of %s returned %v, want %q", c.text, err, want)
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("a refused projectsFolder write of %s wrote settings.json: %v", c.text, err)
+		}
+	}
+	for _, value := range []string{"/work/base", "~/Work"} {
+		if _, err := store.Apply(host.WorkspaceRequest{Kind: "settings", Patch: host.Record{"projectsFolder": value}}); err != nil {
+			t.Errorf("a projectsFolder write of %s returned %v", value, err)
+		}
+	}
+	snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := snapshot.(host.Record)["common"].(host.Record)["projectsFolder"]; got != "~/Work" {
+		t.Errorf("the settings file holds projectsFolder %v, want ~/Work", got)
+	}
+	for _, c := range relativeProjectsFolders {
+		if err := os.WriteFile(path, []byte(`{"format":1,"projectsFolder":`+c.text+`}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := path + ": Invalid setting projectsFolder: " + c.text + " is not an absolute path or a path that starts with ~/"; snapshot.(host.Record)["settingsError"] != want {
+			t.Errorf("a settings file with projectsFolder %s reported %v, want %q", c.text, snapshot.(host.Record)["settingsError"], want)
+		}
 	}
 }
 
