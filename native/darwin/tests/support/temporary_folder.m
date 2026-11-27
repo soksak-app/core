@@ -71,7 +71,8 @@ static void recordStoreEnd(void *context, const char *error) {
 }
 
 // Ends the data store of each directory under the folders, because the WebKit network process of an open store writes into
-// it during the removal. A directory without a store ends at once. All stores end together: a store that stays open while
+// it during the removal. Only a directory with an open store is ended, because the end refuses a directory without one. All stores
+// end together: a store that stays open while
 // another ends starts the network process again, and that process writes into the folders. Ends only on the main thread,
 // which owns the documents.
 static BOOL endDocumentStores(char **list, int listCount) {
@@ -84,6 +85,7 @@ static BOOL endDocumentStores(char **list, int listCount) {
         if (!walk) continue;
         for (FTSENT *entry = fts_read(walk); entry; entry = fts_read(walk)) {
             if (entry->fts_info != FTS_D) continue;
+            if (!sp_document_store_is_open(entry->fts_path)) continue;
             if (count == capacity) ends = reallocf(ends, (capacity *= 2) * sizeof(StoreEnd));
             ends[count++] = (StoreEnd){ strdup(entry->fts_path), NO, NO };
         }

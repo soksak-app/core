@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
+- F1237-2: The store close refuses a directory without a data store with an error that names it, and keys stores by canonical path.
 - F1240: The record states the cause of the client watch test timeout: the case value changed by the F1217 design work, not the watch code.
 - F1217-17-1-1: The text size steps row of the look page is labeled 글자 크기 단계 in the declaration copies of the web and mygo hosts; the specification and the mygo label follow with the settings declaration.
 - F1217-17-5: The comments and the test message of the agent badge icon name the design element and no design file.

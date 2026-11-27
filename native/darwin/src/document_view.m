@@ -13,6 +13,7 @@
 #import <objc/runtime.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <mach/mach.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -1312,10 +1313,22 @@ static NSString *storeDirectory(const char *path) {
     return directory.absolutePath ? directory : nil;
 }
 
-static WKWebsiteDataStore *storeForDirectory(const char *path) {
+// The key of a data store: the directory with its parent resolved, so every spelling of one folder has one key (a path under
+// /var is /private/var). The parent resolves even when the folder does not exist yet, so the key of a store is the same before
+// its folder is created and after. nil when the path is not absolute or its parent does not exist.
+static NSString *canonicalDirectory(const char *path) {
     NSString *directory = storeDirectory(path);
+    if (!directory) return nil;
+    char parent[PATH_MAX];
+    if (!realpath(directory.stringByDeletingLastPathComponent.fileSystemRepresentation, parent)) return nil;
+    return [[NSFileManager.defaultManager stringWithFileSystemRepresentation:parent length:strlen(parent)]
+        stringByAppendingPathComponent:directory.lastPathComponent];
+}
+
+static WKWebsiteDataStore *storeForDirectory(const char *path) {
+    NSString *directory = canonicalDirectory(path);
     if (!directory) {
-        setDocumentFailure([NSString stringWithFormat:@"the data store directory %s is not an absolute path", path]);
+        setDocumentFailure([NSString stringWithFormat:@"the data store directory %s is not an absolute path with an existing parent", path]);
         return nil;
     }
     if ([endingStores() containsObject:directory]) {
@@ -2076,11 +2089,17 @@ static void endStoreProcesses(void) {
     [ended release];
 }
 
+bool sp_document_store_is_open(const char *directory) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    NSString *path = directory ? canonicalDirectory(directory) : nil;
+    return path && dataStores()[path] != nil;
+}
+
 void sp_document_store_close(const char *directory, sp_document_store_closed closed, void *context) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
-    NSString *path = directory ? storeDirectory(directory) : nil;
+    NSString *path = directory ? canonicalDirectory(directory) : nil;
     if (!path) {
-        closed(context, "the store directory is not an absolute path");
+        closed(context, "the store directory is not an absolute path with an existing parent");
         return;
     }
     if ([endingStores() containsObject:path]) {
@@ -2089,7 +2108,8 @@ void sp_document_store_close(const char *directory, sp_document_store_closed clo
     }
     WKWebsiteDataStore *store = dataStores()[path];
     if (!store) {
-        closed(context, NULL);
+        // A directory without a store is refused, because a caller that names the wrong spelling would otherwise see a finished end.
+        closed(context, [NSString stringWithFormat:@"no data store of the directory %s is open", directory].UTF8String);
         return;
     }
     // A configuration read returns an autoreleased copy that keeps the store, so the reads drain their own pool.

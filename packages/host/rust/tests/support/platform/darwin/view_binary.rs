@@ -30,6 +30,7 @@ unsafe extern "C" {
         closed: extern "C" fn(*mut c_void, *const std::ffi::c_char),
         context: *mut c_void,
     );
+    fn sp_document_store_is_open(directory: *const std::ffi::c_char) -> bool;
 }
 
 /// The end of the data store that `end_store` waits for: `None` until the store ended, then its error, if any.
@@ -52,6 +53,10 @@ extern "C" fn store_ended(context: *mut c_void, error: *const std::ffi::c_char) 
 /// its document closed, so the folder is removed only after the store ended.
 fn end_store(directory: &str) -> Result<(), String> {
     let directory = CString::new(directory).map_err(|error| error.to_string())?;
+    // A probe that created no document has no store, and the end refuses a directory without one, so there is nothing to end.
+    if !unsafe { sp_document_store_is_open(directory.as_ptr()) } {
+        return Ok(());
+    }
     let end: StoreEnd = std::cell::RefCell::new(None);
     unsafe {
         sp_document_store_close(

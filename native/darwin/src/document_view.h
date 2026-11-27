@@ -232,9 +232,13 @@ typedef void (*sp_document_store_closed)(void *context, const char *error);
 
 // Ends the persistent data store of directory, so its folder can be removed: closed is called after the session of the store
 // is removed and the WebKit network and GPU processes, which the documents of other stores start again, have ended, so nothing
-// writes to the directory any more. Every document of the directory
-// must be closed first. A directory without a store ends at once; documents of a directory whose store is ending are not
-// created. closed reports an error for a directory that is not an absolute path, a store that is already ending, an open
-// document of the directory, or a network process that holds the session of the store and has no identifier. A session that
-// is in no network process, because its process ended before the end asked it, ends without an error.
+// writes to the directory any more. Every document of the directory must be closed first. directory is an absolute path whose
+// parent exists; it is keyed by its canonical form, so any spelling of the folder ends the same store. A directory without a
+// store is refused, not ended: closed reports that no data store of the directory is open, with the directory as given.
+// Documents of a directory whose store is ending are not created. closed also reports an error for a directory that is not an
+// absolute path, a store that is already ending, an open document of the directory, or a network process that holds the
+// session of the store and has no identifier. A session that is in no network process, because its process ended before the
+// end asked it, ends without an error.
 void sp_document_store_close(const char *directory, sp_document_store_closed closed, void *context);
+// Returns whether a data store of directory is open, keyed as sp_document_store_close keys it. A store that is ending counts as open.
+bool sp_document_store_is_open(const char *directory);

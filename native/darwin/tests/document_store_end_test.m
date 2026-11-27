@@ -343,6 +343,14 @@ int main(int argc, char **argv) { @autoreleasepool {
         [NSString stringWithFormat:@"a child that leaves its document open fails and names the cause: %d, %@", status, message]);
     [NSFileManager.defaultManager removeItemAtPath:folder error:nil];
 
+    // A directory without a data store is refused with its path: the close of an unknown directory is not a success.
+    NSString *unknown = [temporary stringByAppendingPathComponent:@"never-created"];
+    storeClosed = NO;
+    storeError = nil;
+    sp_document_store_close(unknown.fileSystemRepresentation, recordStoreClosed, NULL);
+    check(storeClosed && storeError != nil && [storeError containsString:unknown],
+        [NSString stringWithFormat:@"closing a directory without a data store is refused with its path: %@", storeError]);
+
     nw_listener_cancel(listener);
     printf("%s\n", failures ? "FAIL: document_store_end_test" : "PASS: document_store_end_test");
     return failures ? 1 : 0;
