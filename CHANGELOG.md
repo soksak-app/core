@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-17-3: The select 섹션 추가… of an edited set in the mygo host takes no press once the set holds every registered section.
 - F1217-18-2: The mygo title bar shows the bell on the settings tab, as every other screen does.
 - F1235: The test names of the packages/workbench tests are English, and the feature links name them.
 - F1217-18-1: The window sidebar head is as high as a card header and takes its padding and gap in web and mygo.
