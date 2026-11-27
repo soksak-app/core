@@ -18,6 +18,7 @@ import (
 // pluginsHost is the plugin state of the host of a test: its installed plugins change with the operations, as the host changes them.
 type pluginsHost struct {
 	core     string
+	folders  int
 	registry any
 	index    any
 	plugins  map[string]map[string]any
@@ -41,7 +42,7 @@ func (p *pluginsHost) state(json.RawMessage) (any, error) {
 		return p.answer, nil
 	}
 	state := map[string]any{"core": p.core, "registry": p.registry, "index": p.index, "firstRun": p.firstRun, "starter": p.starter,
-		"installed": map[string]any{"format": 1, "plugins": p.plugins, "sidecars": p.sidecars}}
+		"installed": map[string]any{"format": 1, "plugins": p.plugins, "sidecars": p.sidecars}, "folders": p.folders}
 	if p.startUpdate != nil {
 		state["startUpdate"] = p.startUpdate
 	}
@@ -481,5 +482,29 @@ func TestAFailureOfTheUpdateAtStartIsShownThroughTheErrorDisplay(t *testing.T) {
 	}
 	if !shown {
 		t.Fatalf("the shell recorded %v, want the failure of the update at start", recorded)
+	}
+}
+
+// contract: plugins.folders.count-follows-a-folder-added-or-removed
+// The host announces a change of the plugin folders with plugins-folders-changed; the window reads the plugin state again, so the
+// count that it holds follows the folders.
+func TestTheFolderCountEventReadsThePluginStateAgain(t *testing.T) {
+	plugins := &pluginsHost{}
+	f := pluginShell(t, plugins, `{"plugins":[]}`)
+	reads := func() int {
+		count := 0
+		for _, call := range f.host.calls {
+			if call == "pluginsState" {
+				count++
+			}
+		}
+		return count
+	}
+	before := reads()
+	plugins.folders = 1
+	f.shell.Event("plugins-folders-changed", nil)
+	f.settle()
+	if reads() != before+1 {
+		t.Fatalf("plugins-folders-changed did not read the plugin state; the calls are %v", f.host.calls)
 	}
 }

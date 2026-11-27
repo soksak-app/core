@@ -375,6 +375,8 @@ func (s *Shell) event(name string, data []any) {
 		s.surfacePressed(data)
 	case "plugins-changed":
 		s.pluginsChanged()
+	case "plugins-folders-changed":
+		s.pluginOperations.Refresh(func() {})
 	case "image-detach-ended":
 		s.imageDetachEnded(data)
 	case "sidecars-changed":

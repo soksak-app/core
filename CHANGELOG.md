@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1266: The mygo host reports the plugin folder count as `folders` and reads the state again on `plugins-folders-changed`.
 - F1267: The host and test sources cite the folder rules at the heading of the installation spec that holds them.
 - F1236-5: The mygo snapshot and presentation failure tests expect the sidebar plugin that the layout fixture installs.
 - F1262: The clone of the import form writes host.clone.start, host.clone.line and host.clone.end to the event log through the gated writer.

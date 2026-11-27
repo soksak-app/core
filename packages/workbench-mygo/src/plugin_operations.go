@@ -26,8 +26,10 @@ type PluginsState struct {
 	Registry  *string            `json:"registry"`
 	Index     *PluginIndex       `json:"index"`
 	Installed sok.InstalledState `json:"installed"`
-	FirstRun  bool               `json:"firstRun"`
-	Starter   *sok.StarterJob    `json:"starter"`
+	// Folders is the number of plugin folders that the host watches (docs/spec/installation.md#plugin-folders).
+	Folders  int             `json:"folders"`
+	FirstRun bool            `json:"firstRun"`
+	Starter  *sok.StarterJob `json:"starter"`
 	// StartUpdate lists the failures of the update at start that the host keeps (docs/spec/installation.md#update-at-start).
 	StartUpdate []sok.StartFailure `json:"startUpdate,omitempty"`
 	// Held lists the latest held operation of each plugin (docs/spec/persistent-services.md#updates).
