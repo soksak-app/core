@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222: Four workbench files state the defaults of missing plugin groups, notice tabs, search labels and chips for the fallback check.
 - F1222: The compared-key default in the workspace host states its reason on the line of the unwrap.
 - F1222: The lost-count default of the log batch states its reason for the fallback check.
 - F1217-16: The IME window check ends the status observer of its owned session.

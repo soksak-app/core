@@ -28,8 +28,9 @@ export function missingGroups(sectionIds, pluginRows) {
     if (hasSection(id)) continue;
     const plugin = id.slice(0, id.indexOf("."));
     if (!groups.has(plugin)) {
+      // default: a plugin without a row is absent, with no latest version and its id as its name.
       const row = pluginRows.find((r) => r.id === plugin) ?? null;
-      groups.set(plugin, { id: plugin, name: row?.name ?? plugin, sections: [], state: row?.state ?? "absent", latest: row?.latest ?? null });
+      groups.set(plugin, { id: plugin, name: row?.name ?? plugin, sections: [], state: row?.state ?? "absent", latest: row?.latest ?? null }); // default: see the row above.
     }
     groups.get(plugin).sections.push(id);
   }

@@ -46,6 +46,7 @@ export function searchPage(query) {
   }
   for (const [key, def] of plugins) {
     const unit = pluginUnits().find((item) => item.id === def.plugin);
+    // default: a plugin that no unit names is labelled by its id.
     const label = `플러그인 › ${unit?.name ?? def.plugin}`;
     out.push(group(label, "", [element("p", "set-caption set-search__group", label), ...declaredRow(key, def)]));
   }

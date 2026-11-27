@@ -584,7 +584,9 @@ function paintFoot(statusText, card, text) {
 
 /** The label of the tab of a notice that is not the active tab of its card, or null for the active tab and for a notice of no tab. */
 function lineTabName(cardId, notice) {
+  // default: a notice of no tab has no tab id.
   const tab = notice.source.tab ?? null;
+  // default: a card without an active tab has no active tab id.
   const active = activeTab(grid.card(cardId))?.id ?? null;
   // default: a notice of the active tab, or of no tab, names no tab (null).
   if (tab === null || tab === active) return null;
@@ -2057,6 +2059,7 @@ function build(kept) {
 
 // The card that holds a tab id, for the notices of the tab (docs/spec/notifications.md#card-status-line).
 // The card, tab and plugin of a tab id, for the card notices of an outdated service on its surface (docs/spec/persistent-services.md#updates).
+// default: before the layout exists, no card holds the tab.
 setTargetOfTab((id) => noticeTargetIn(grid?.cards ?? [], id));
 // A visible tab means the active tab of the focused card. No notification is kept for that tab.
 setVisibleTab((id) => {

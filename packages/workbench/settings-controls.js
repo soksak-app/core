@@ -54,6 +54,7 @@ export function badge(text, tone = "neutral", { title = null, expose = "core.set
 /** A chip, which is a button of a state or a section, and runs its command when it is pressed. */
 export function chip(text, tone, { expose, command = null, params = {}, key = null }) {
   const el = command ? button(text, { expose, command, params, key, variant: "chip" }) : element("span", "set-chip", text);
+  // default: a chip without a tone is neutral.
   el.classList.add(`set-chip--${tone ?? "neutral"}`);
   if (key !== null) el.dataset.key = key;
   el.dataset.expose = expose;
@@ -129,6 +130,7 @@ export function toggle(key, now, { command = "core.settings.change", params = nu
   el.dataset.set = key;
   el.dataset.expose = expose;
   if (label !== null) el.setAttribute("aria-label", label);
+  // default: a control without command parameters marks its key and scope.
   mark(el, command, params ?? { key, scope }, valueName);
   return el;
 }
