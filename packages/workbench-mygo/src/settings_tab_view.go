@@ -113,6 +113,9 @@ type SettingsControl struct {
 	Disabled bool `json:"disabled"`
 	// Primary says that the button is the primary button of its group, drawn with the accent color (docs/spec/settings.md#controls).
 	Primary bool `json:"primary"`
+	// Icon is the name of the declared icon that a badge shows before its text: the warning icon of the summary of the agent group
+	// (docs/spec/settings.md#agents).
+	Icon string `json:"icon,omitempty"`
 
 	kind controlKind
 	// missingTip is the tooltip of a section chip whose plugin is not loaded (docs/spec/plugins.md#missing-plugins).

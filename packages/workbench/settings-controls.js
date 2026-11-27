@@ -2,7 +2,7 @@
 // command through the shared binder (commands.js), and every control and every reset, chip and badge of a row follows the scope rule
 // (docs/spec/settings.md#scope-of-a-control).
 import { mark } from "./commands.js";
-import { icon } from "./icons.js";
+import { badgeIcon, icon } from "./icons.js";
 import { isOverridden, commonOnly, projectSelected, projectTitle, state, writeScope } from "./settings-state.js";
 import { scopedValue } from "./settings.js";
 
@@ -42,9 +42,10 @@ export function iconButton(name, title, { expose, command, params = {}, key = nu
   return el;
 }
 
-/** A status badge: ok, warn, err, acc or neutral, which is the tone of the token of the badge (docs/spec/settings.md#controls). */
-export function badge(text, tone = "neutral", { title = null, expose = "core.settings-tab.badge", key = null } = {}) {
+/** A status badge: ok, warn, err, acc or neutral, which is the tone of the token of the badge, with the icon of its name when one is given (docs/spec/settings.md#controls). */
+export function badge(text, tone = "neutral", { title = null, expose = "core.settings-tab.badge", key = null, iconName = null } = {}) {
   const el = element("span", `set-badge set-badge--${tone}`, text);
+  if (iconName !== null) el.insertAdjacentHTML("afterbegin", badgeIcon(iconName));
   el.dataset.expose = expose;
   if (key !== null) el.dataset.key = key;
   if (title !== null) el.title = title;

@@ -337,3 +337,25 @@ func TestAMissingSkillOrMCPPartHasItsOwnFixOrInstallButton(t *testing.T) {
 		t.Fatalf("the part buttons are %q, want the skill and mcp parts %q (path %s and hook %s have none)", keys, []string{skill, mcp}, path, hook)
 	}
 }
+
+// TestTheAgentGroupSummarizesThePartsWithTheWarningIcon checks the summary of the group: the badge of the count of the parts that
+// differ or are missing, with the warning icon (docs/spec/settings.md#agents).
+func TestTheAgentGroupSummarizesThePartsWithTheWarningIcon(t *testing.T) {
+	host := &setupHost{states: []setupAnswer{{parts: setupMissing}}}
+	f := setupShell(t, host)
+	f.click("core.chrome.settings", "")
+	f.run("core.settings-tab.nav", map[string]any{"page": "agents"})
+	var icon string
+	found := false
+	for _, control := range f.modal().Controls {
+		if control.Name == "core.settings-tab.badge" && control.Label == "4개 중 4개가 다름" {
+			found, icon = true, control.Icon
+		}
+	}
+	if !found {
+		t.Fatalf("the agent group has no summary of 4개 중 4개가 다름")
+	}
+	if icon != "badge-warn" {
+		t.Fatalf("the summary icon is %q, not badge-warn", icon)
+	}
+}

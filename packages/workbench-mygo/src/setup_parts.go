@@ -284,11 +284,19 @@ func (s *Shell) buildSetup(b *settingsBuilder) {
 		rows = append(rows, settingsRow{description: "이 컴퓨터에서 설정할 에이전트 항목이 없습니다."})
 	}
 	// The install-all control (element `setup-install-all`, command `core.settings-tab.setup-install-all`) is always shown and is disabled when no part of the skill and mcp kinds is not ok (docs/spec/settings.md#agents).
+	// The summary is the badge of the count of the parts that differ or are missing with the warning icon, or 모두 설치됨 when every part is
+	// ok (docs/spec/settings.md#agents).
+	summary := b.add(SettingsControl{Name: "core.settings-tab.badge", Label: "모두 설치됨", tone: "ok", kind: controlBadge})
+	if warn := countSetupWarnings(parts); warn > 0 {
+		summary.Label = fmt.Sprintf("%d개 중 %d개가 다름", len(parts), warn)
+		summary.tone = "warn"
+		summary.Icon = "badge-warn"
+	}
 	kinds := missingSetupKinds(parts)
 	install := b.small("setup-install-all", "core.settings-tab.setup-install-all", "모두 설치", "core.setup.install", map[string]any{"parts": kinds})
 	install.Disabled = len(kinds) == 0
 	install.Primary = true
-	actions := []*SettingsControl{install}
+	actions := []*SettingsControl{summary, install}
 	actions = append(actions, b.small("setup-check", "core.settings-tab.setup-check", "다시 확인", "core.setup.check", nil))
 	rows = append(rows, settingsRow{controls: actions, list: true})
 	b.group("에이전트 연동", "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.", rows...)
@@ -299,4 +307,15 @@ type setupRow struct {
 	name, state, file string
 	failed            bool
 	action            *SettingsControl
+}
+
+// countSetupWarnings is the number of setup parts that are not ok, the count of the summary of the agent group.
+func countSetupWarnings(parts []SetupPart) int {
+	warn := 0
+	for _, part := range parts {
+		if part.State != "ok" {
+			warn++
+		}
+	}
+	return warn
 }
