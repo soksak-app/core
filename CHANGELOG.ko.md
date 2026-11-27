@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F795-13: 테스트 점검이 F795-13을 notice store 생성 함수, 오류 표시, occurrence 테스트 일곱 개와 연결한다.
 - F1217-11-7: 디버그 저장 거부 케이스는 알림으로 표시되는 실패한 저장의 overlay 호출을 기록합니다.
 - F1161: card notice는 같은 card의 떠 있는 notice하고만 합쳐지고, app notice는 kind와 title로 계속 합쳐진다
 - F1217-16: 설정 창을 settings tab으로 이름 바꾸고 settings_modal.go를 settings_tab_view.go로 옮겼다.

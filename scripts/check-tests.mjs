@@ -7376,6 +7376,24 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F795-13",
+    implementation: [
+      { file: "packages/workbench/tab-reports.js", symbol: "export function createPageNotices({ view, now, record, onChange })" },
+      { file: "packages/workbench/shown-errors.js", symbol: "export function createErrorDisplay(document, store)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/error-occurrences.test.mjs", id: "equal text from two origins shares a toast and records both occurrences" },
+      { file: "packages/workbench/test/error-occurrences.test.mjs", id: "recovering either origin leaves another origin's equal error open" },
+      { file: "packages/workbench/test/error-occurrences.test.mjs", id: "a dismissed occurrence stays closed on repaint and can reopen after recovery" },
+      { file: "packages/workbench/test/error-occurrences.test.mjs", id: "a toast expires after four seconds across repaint and movement into a dialog" },
+      { file: "packages/workbench/test/error-occurrences.test.mjs", id: "a cancelled toast timer leaves a later occurrence of the same text open" },
+      { file: "packages/workbench/test/error-occurrences.test.mjs", id: "toasts default to manual stacking and live settings replace or cancel their deadlines" },
+      { file: "packages/workbench/test/error-occurrences.test.mjs", id: "an error text longer than the title shows its first 120 characters as the title and keeps the whole text in the record" },
+    ],
+    expected: "The error display runs on a notice store of its own clock: equal occurrences share a toast, each recovery leaves other origins open, and a toast expires by the clock alone.",
+    levels: ["unit"],
+  },
+  {
     id: "F546",
     implementation: [
       { file: "packages/plugin-api/log-batch.js", symbol: "if (gatedTimer || wait === null) return;" },
