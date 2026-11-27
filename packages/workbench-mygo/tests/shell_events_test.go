@@ -73,6 +73,7 @@ func TestTheDebugMenuOpensTheDebugView(t *testing.T) {
 	app.Shown(window)
 	queue.drain(t)
 	tester := ui.NewTester(view, 900, 700)
+	tester.SetSystemSymbols(squareSymbols)
 	tester.Frame()
 	if slices.Contains(tester.Texts(), "newer.log") {
 		t.Fatal("the debug view shows before the menu opened it")
@@ -95,6 +96,7 @@ func TestTheSettingsItemOfTheMenuOpensTheSettingsTab(t *testing.T) {
 	app.Shown(window)
 	queue.drain(t)
 	tester := ui.NewTester(view, 900, 700)
+	tester.SetSystemSymbols(squareSymbols)
 	tester.Frame()
 	if slices.Contains(tester.Texts(), "모양") {
 		t.Fatal("the settings tab shows before the menu opened it")
@@ -131,6 +133,7 @@ func TestTheDebugViewShowsAFileAndSavesIt(t *testing.T) {
 		"params": map[string]any{"name": "core.debug.view", "params": map[string]string{"path": "newer.log"}}})
 	queue.drain(t)
 	tester := ui.NewTester(view, 900, 700)
+	tester.SetSystemSymbols(squareSymbols)
 	tester.Frame()
 	if !slices.Contains(tester.Texts(), "text of newer.log") {
 		t.Fatalf("the debug view shows %q", tester.Texts())

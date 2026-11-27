@@ -29,7 +29,10 @@ type sideList struct {
 // buttons (docs/spec/settings.md#작업-공간, docs/spec/settings.md#plugin-page).
 func (s *Shell) sideRows(b *settingsBuilder, list sideList, sets []StoredSet, links []StoredLink) ([]settingsRow, error) {
 	scope := s.controlScope(list.order)
-	order, _ := s.value(list.order).([]any) // silent: the settings store checks that the value is an order of the sides.
+	order, ok := s.value(list.order).([]any)
+	if !ok {
+		return nil, fmt.Errorf("sidebar order %s is not a list: %v", list.order, s.value(list.order))
+	}
 	inProject := s.settingsTab.scope == "project" && s.settings.Project() != ""
 	var projectLinks, commonLinks []StoredLink
 	if inProject && s.settings.Overridden("links") {
@@ -43,13 +46,20 @@ func (s *Shell) sideRows(b *settingsBuilder, list sideList, sets []StoredSet, li
 	}
 	rows := make([]settingsRow, 0, len(order)+2)
 	for index, item := range order {
-		side, _ := item.(string) // silent: the settings store checks that the value is an order of the sides.
+		side, ok := item.(string)
+		if !ok {
+			return nil, fmt.Errorf("sidebar order %s has a side that is not text: %v", list.order, item)
+		}
 		place := list.prefix + side
 		name := sideNames[side]
 		row := settingsRow{side: true, number: strconv.Itoa(index + 1), name: name}
 		on := true
 		if list.switches {
-			on, _ = s.value(side).(bool) // silent: the settings store checks the type of the value.
+			value, ok := s.value(side).(bool)
+			if !ok {
+				return nil, fmt.Errorf("sidebar switch %s is not a boolean: %v", side, s.value(side))
+			}
+			on = value
 		}
 		linkOverridden := inProject && s.settings.Overridden("links") && linked(projectLinks, place, list.plugin) != linked(commonLinks, place, list.plugin)
 		orderOverridden := inProject && s.settings.Overridden(list.order)

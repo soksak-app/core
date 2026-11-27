@@ -450,12 +450,6 @@
                             "null"
                           ]
                         },
-                        "notice": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
                         "footer": {
                           "type": [
                             "string",
@@ -5842,6 +5836,10 @@
       {
         "name": "core.notices.toggle",
         "description": "The close control of the notice center, which runs core.notices.toggle."
+      },
+      {
+        "name": "core.notices.quiet",
+        "description": "The switch 조용히 beside the filter of the notice center, which runs core.settings.set with the patch of quietToasts."
       },
       {
         "name": "core.notices.filter",

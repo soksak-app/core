@@ -284,6 +284,7 @@ func TestExposureRequestRunsACommandInAStep(t *testing.T) {
 	stored := &storedHost{}
 	app, window, queue, replies := fixtureApp(t, stored)
 	tester := ui.NewTester(app.Build(window), 1200, 800)
+	tester.SetSystemSymbols(squareSymbols)
 	app.Shown(window)
 	window.settle(t, queue, tester)
 	app.Emit(window, "exposure-request", map[string]any{"id": 7, "method": "command.run",
@@ -330,6 +331,7 @@ func TestAPlacementAnsweredAfterTheWorkbenchEndedStatesNothing(t *testing.T) {
 	app, window, queue, _ := fixtureApp(t, stored)
 	window.address = "/?project=prj-a"
 	tester := ui.NewTester(app.Build(window), 1200, 800)
+	tester.SetSystemSymbols(squareSymbols)
 	app.Shown(window)
 	queue.drain(t)
 	app.Emit(window, "exposure-request", map[string]any{"id": 1, "method": "status.watch", "params": map[string]any{"name": "core.verify"}})
@@ -430,6 +432,7 @@ func TestAPluginChangeStartsAfterTheReplyOfARunningCommand(t *testing.T) {
 	}
 	app, window, queue, replies := fixtureApp(t, stored)
 	tester := ui.NewTester(app.Build(window), 1200, 800)
+	tester.SetSystemSymbols(squareSymbols)
 	app.Shown(window)
 	window.settle(t, queue, tester)
 	app.Emit(window, "exposure-request", map[string]any{"id": 8, "method": "command.run",
@@ -555,6 +558,7 @@ func TestAShownTabStandsAfterTheImageDetachOfItsSurface(t *testing.T) {
 	app, window, queue, _ := fixtureApp(t, stored)
 	window.address = "/?project=prj-a"
 	tester := ui.NewTester(app.Build(window), 1200, 800)
+	tester.SetSystemSymbols(squareSymbols)
 	app.Shown(window)
 	queue.drain(t)
 	tester.Frame()
@@ -579,6 +583,7 @@ func TestAShownTabShowsTheFailureOfItsImageDetach(t *testing.T) {
 	app, window, queue, _ := fixtureApp(t, stored)
 	window.address = "/?project=prj-a"
 	tester := ui.NewTester(app.Build(window), 1200, 800)
+	tester.SetSystemSymbols(squareSymbols)
 	app.Shown(window)
 	queue.drain(t)
 	app.Emit(window, "image-detach-ended", map[string]any{"surface": "tab-bbbbbb", "error": "the supplier stopped"})
@@ -622,6 +627,7 @@ func TestAHiddenTabWithAViewOpensNoBackgroundSession(t *testing.T) {
 	app, window, queue, _ := fixtureApp(t, stored)
 	window.address = "/?project=prj-a"
 	tester := ui.NewTester(app.Build(window), 1200, 800)
+	tester.SetSystemSymbols(squareSymbols)
 	app.Shown(window)
 	queue.drain(t)
 	tester.Frame()

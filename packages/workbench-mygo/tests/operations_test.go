@@ -140,6 +140,7 @@ func TestASettingsCommandAnswersAfterTheWrite(t *testing.T) {
 	stored := &storedHost{common: map[string]any{}}
 	app, window, queue, replies := fixtureApp(t, stored)
 	tester := ui.NewTester(app.Build(window), 1200, 800)
+	tester.SetSystemSymbols(squareSymbols)
 	app.Shown(window)
 	window.settle(t, queue, tester)
 	release := newGate()

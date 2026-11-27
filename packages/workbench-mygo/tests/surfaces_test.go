@@ -420,6 +420,7 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 		shell.View(c)
 		stored.viewWindowReads = append(stored.viewWindowReads, stored.windowReads-before)
 	}, 1200, 800)
+	f.tester.SetSystemSymbols(squareSymbols)
 	shell.Start()
 	f.settle()
 	f.run("core.home.form.open", map[string]string{"mode": "open"})

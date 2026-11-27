@@ -73,6 +73,7 @@ func TestTheCloseOfAWindowWaitsForNoCommandThatStartsAfterIt(t *testing.T) {
 	app, window, queue, _ := fixtureApp(t, stored)
 	window.address = "/?project=prj-a"
 	tester := ui.NewTester(app.Build(window), 1200, 800)
+	tester.SetSystemSymbols(squareSymbols)
 	app.Shown(window)
 	window.settle(t, queue, tester)
 	stored.geometry = map[string]any{"x": 10, "y": 20, "width": 900, "height": 700}
@@ -99,6 +100,7 @@ func TestAPluginApplyStartsAgainWithoutARequestDeliveredAfterIt(t *testing.T) {
 	stored := &storedHost{extra: map[string]workbench.HostCall{"filePlace": neverAnswered(t)}}
 	app, window, queue, replies := fixtureApp(t, stored)
 	tester := ui.NewTester(app.Build(window), 1200, 800)
+	tester.SetSystemSymbols(squareSymbols)
 	app.Shown(window)
 	window.settle(t, queue, tester)
 	// The apply saves the projects through the workspace before its new start, and that save waits until the test releases it.
