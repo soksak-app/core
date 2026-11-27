@@ -97,6 +97,7 @@ lane("release packages", "js-ts", ["scripts/pack-release-packages.mjs"], ["scrip
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
   // The repository test judges the sources of the hosts and of the mygo workbench, which no package test of another package reads.
   lane("administrator rights of the hosts", "js-ts", ["scripts/check-administrator-rights.mjs"], ["scripts/test/administrator-rights.test.mjs"]),
+  lane("agent layout verifier", "js-ts", ["scripts/agent-layout.mjs"], ["scripts/test/agent-layout.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs", "scripts/test/kit-records.test.mjs"]),
   lane("release notes", "js-ts", ["scripts/release-notes.mjs", "scripts/markdown-links.mjs"], ["scripts/test/release-notes.test.mjs"]),
   lane("markdown table cells", "js-ts", ["scripts/markdown-table.mjs"], ["scripts/test/markdown-table.test.mjs"]),
@@ -579,6 +580,39 @@ const FEATURE_LINKS = [
       { file: "packages/sok/rust/src/manifest_categories_test.rs", id: "plugin_setting_refuses_an_unknown_category_a_default_and_an_unknown_type" },
     ],
     expected: "The Rust sok holds the plugin categories of the case file and validates categories, requires and the setting type plugin with the texts of the shared cases.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1215",
+    implementation: [
+      { file: "packages/workbench/accounts.js", symbol: "export function createAccounts({ host, declarations, data, changed, failed }) {" },
+      { file: "packages/workbench-mygo/src/accounts.go", symbol: "func NewAccounts(shell *Shell) *Accounts {" },
+      { file: "packages/host/go/src/account_run.go", symbol: "func (h *Host) AccountRun(ctx context.Context, reqJSON json.RawMessage) (ProgramRunReply, error) {" },
+      { file: "packages/host/rust/src/account_run.rs", symbol: "pub fn homes(config: &Path, plugin: &str) -> Result<Value, String> {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/accounts.test.mjs", id: "an add takes the least identifier that no record and no home has, and a remove removes the record and the home" },
+      { file: "packages/workbench/test/settings-accounts.test.mjs", id: "the plugin page draws a row per account in the order of the names, with the buttons of its login" },
+      { file: "packages/workbench-mygo/tests/accounts_test.go", id: "TestAnAccountIsAddedLoggedInCancelledLoggedOutAndRemoved" },
+      { file: "packages/host/go/src/account_run_test.go", id: "TestAnAccountRunStartsInThePluginDataFolder" },
+      { file: "packages/host/rust/src/account_run_test.rs", id: "an_account_run_starts_in_the_plugin_data_folder" },
+      { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
+      { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
+    ],
+    expected: "A plugin declares accounts, and the plugin page draws them with core controls. The manifest readers accept the accounts member, the host runs the account programs without a surface, and the web and mygo workbenches serve the core.accounts commands and status.",
+    levels: ["unit"],
+  },
+  {
+    id: "F957",
+    implementation: [
+      { file: "packages/workbench/group-tree.js", symbol: "  splitCard(target, side, id, data) {" },
+      { file: "packages/soksak/src/soksak.ts", symbol: "  private splitAt(" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/layout-operations.test.mjs", id: "repeated splits of the last card toward right keep the cards of the row equal" },
+      { file: "packages/workbench-mygo/tests/split_test.go", id: "TestRepeatedSplitsTowardRightKeepTheCardsOfTheRowEqual" },
+    ],
+    expected: "Repeated splits of the last card toward right keep the cards of a row equal in the web and mygo workbenches, and a balance keeps them equal.",
     levels: ["unit"],
   },
   {

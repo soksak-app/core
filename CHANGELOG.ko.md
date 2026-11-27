@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F959-1: agent layout 요청과 verifier가 core.grid가 보고하는 layout을 predicate마다 test와 함께 판정한다.
 - F1222-2: mygo와 웹 워크벤치, Wails와 Tauri 페이지가 동작 줄이기 재정의를 알림 진행 고리에 적용하고, 재정의가 켜지면 웹 토스트 막대는 줄어드는 애니메이션을 멈춘다.
 - F1217-12: toast_list_test.go가 gofmt 형식을 따른다.
 - F1222: notice_center.go가 gofmt 형식을 따른다.

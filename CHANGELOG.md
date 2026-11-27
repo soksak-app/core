@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F959-1: The agent layout requests and their verifier judge the layouts that core.grid reports, with a test for each predicate.
 - F1222-2: The mygo and web workbenches and the Wails and Tauri pages apply the reduced motion override to the notice progress ring, and the web toast bar stops its countdown under the override.
 - F1217-12: toast_list_test.go is in gofmt form.
 - F1222: notice_center.go is in gofmt form.

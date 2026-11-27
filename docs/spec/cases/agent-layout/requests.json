@@ -1,0 +1,24 @@
+{
+  "requests": [
+    {
+      "name": "row-of-four-equal-cards",
+      "request": "Arrange this window as one row of four equal cards.",
+      "predicates": [{ "kind": "row", "count": 4, "equal": true }]
+    },
+    {
+      "name": "grid-two-by-two",
+      "request": "Arrange this window as a grid of two rows and two columns.",
+      "predicates": [{ "kind": "grid", "rows": 2, "columns": 2 }]
+    },
+    {
+      "name": "split-card-with-two-plugins",
+      "request": "Split the card into two cards, one showing the terminal and one showing the browser.",
+      "predicates": [{ "kind": "plugins", "cards": 2, "distinct": 2 }]
+    },
+    {
+      "name": "two-groups-of-cards",
+      "request": "Make two groups, each holding two cards.",
+      "predicates": [{ "kind": "groups", "count": 2 }]
+    }
+  ]
+}
