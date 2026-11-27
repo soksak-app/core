@@ -258,3 +258,13 @@ test("cmd+Backspace in the focused search field asks the removal of the selected
   input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Backspace", metaKey: true, bubbles: true, cancelable: true }));
   assert.equal(home.state().confirming, "a", "cmd+Backspace in the search field does not ask the removal of the selected row");
 });
+
+test("the create form starts its parent folder with the common setting projectsFolder", async () => {
+  // The default of projectsFolder is ~/Projects (docs/spec/projects.md#project-folder), and the parent field takes it at each opening.
+  const { root, home } = mount([project("a", "alpha")]);
+  await settled();
+  home.render();
+  home.actions.openForm("create");
+  const parent = root.querySelector('input[name="parent"]');
+  assert.equal(parent?.value, "~/Projects", "the create form does not start in projectsFolder");
+});

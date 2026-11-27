@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7-2-2: The web project home starts the parent folder of the create form with projectsFolder.
 - F1222-2: The release page module names no diagnostic method in the comment of its reduced motion code, so the staging check of a release frontend passes.
 - F1217-7-2-2: The create form of the project home starts its parent folder with projectsFolder in mygo.
 - F1232-3: The comments of the three e2e test files that the comment-language check listed are English.

@@ -2,6 +2,7 @@
 // projects of the registry, opens one in place, pins, and removes records from the list. It has no tabs and no plugin entry.
 import * as projects from "./projects.js";
 import { fresh } from "./plane.js";
+import { value } from "./settings.js";
 import { windows } from "@soksak/runtime";
 import { icon } from "./icons.js";
 import { delegate, mark, run } from "./commands.js";
@@ -30,7 +31,7 @@ function folderReason(message) {
   return known ? known[1] : `폴더를 확인할 수 없습니다: ${message}`;
 }
 
-/** The relative day of the last opening: 오늘, 어제, N일 전 within the last week, and M월 D일 for older days. */
+/** The relative day of the last opening: today, yesterday, N days ago within the last week, and M/D for older days. */
 function dayLabel(time, nowTime) {
   const day = (value) => { const d = new Date(value); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000; };
   const days = Math.round(day(nowTime) - day(time));
@@ -346,7 +347,8 @@ export function createHome(root) {
       if (mode === 'create' && !windows.createsFolders) throw new Error('this application cannot create folders');
       if (mode !== 'create' && mode !== 'open') throw new Error(`unknown form mode ${mode}`);
       // default: a form without a parent has no parent folder.
-      formMode = mode; formPath = parent ?? null; form.hidden = false; form.dataset.mode = '';
+      // a create form starts in projectsFolder, the base folder of new projects; the person may replace it.
+      formMode = mode; formPath = parent ?? (mode === 'create' ? value('projectsFolder') : null); form.hidden = false; form.dataset.mode = '';
       errors.withdraw('home');
       render();
     },
