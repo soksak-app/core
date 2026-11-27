@@ -9004,7 +9004,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/core-exposure.js", symbol: "export async function installCoreExposure(" },
     ],
     tests: [
-      { file: "packages/workbench/test/home.test.mjs", id: "the declared cmd+k command focuses the project home search field and rejects a shown workspace" },
+      { file: "packages/workbench/test/home.test.mjs", id: "the declared cmd+o command focuses the project home search field and rejects a shown workspace" },
     ],
     expected: "The parameterless library search focus command and declared shortcut select the current projects/plugins search field and explicitly reject a hidden library.",
     levels: ["unit"],
