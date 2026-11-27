@@ -156,6 +156,12 @@ Group `프로젝트`, description `프로젝트를 여는 방식. 모든 프로�
 | --- | --- | --- | --- | --- |
 | `열기 방식` | Segment | `별도 창` (`windows`), `현재 창의 새 탭` (`tabs`) | `별도 창` | common only |
 
+Group `프로젝트 폴더`, description `새 프로젝트와 Git 저장소 가져오기가 시작하는 폴더. 모든 프로젝트에 적용된다.`
+
+| Label | Control | Choices | Default | Scope |
+| --- | --- | --- | --- | --- |
+| `프로젝트 폴더` | Folder | any folder | `~/Projects` | common only |
+
 Group `위치`, description `프로젝트 탭이 놓이는 위치. 바꾸면 카드 배치도 함께 바뀐다.`
 
 | Label | Control | Choices | Default | Scope |
@@ -439,6 +445,7 @@ The settings tab draws every setting with one control from a fixed set, chosen b
 | A theme of the catalog (`theme`) | Swatch grid with one swatch per theme, drawn with that theme's colors and shape | `core.settings.theme {name, scope}` |
 | A bounded integer with a unit (`gap`, `radius`, `memorySaverDelay`, the [layout values](#layout-values), a plugin `integer` with a continuous range) | Slider between the bounds, with the value and the unit; a drag shows each value beside the slider and runs the command once, with the value at its release | `core.settings.change {key, value, scope}` |
 | A small bounded integer (`size`, `problemToastDismissSeconds`, a plugin `integer` with a small range) | Stepper `− value +` with the unit | `core.settings.change {key, value, scope}` |
+| A folder path (`projectsFolder`) | Folder control: the path in a fixed-width font and a 찾아보기 button. The button runs `core.library.choose-folder`, and the chosen folder is set through `core.settings.change`; a cancelled dialog changes nothing | `core.library.choose-folder`, then `core.settings.change {key, value, scope}` |
 | A string (a plugin `string`) | One-line text field | `core.settings.change {key, value, scope}` |
 | An address (a plugin `address`) | One-line text field in a fixed-width font; an empty value or a value that starts with `http://` or `https://` is accepted, and any other value shows `http:// 또는 https:// 로 시작하는 주소여야 한다.` under the field | `core.settings.change {key, value, scope}` |
 | A plugin of a category (a plugin `plugin`, [plugin categories](plugins.md#plugin-categories)) | Select box with one option per loaded and enabled plugin of the category, labelled with its name | `core.settings.change {key, value, scope}` |
@@ -474,6 +481,7 @@ Each core setting accepts one form. Reading the settings files and every change 
 
 | Key | Form |
 | --- | --- |
+| `projectsFolder` | An absolute path, or a path that starts with `~/`, common scope, default `~/Projects`: the base folder of new projects and of Git imports ([project folder](projects.md#project-folder)). Another value is refused with `Invalid setting projectsFolder: <value>` |
 | `projectOpening` | `tabs` or `windows`, common scope |
 | `theme` | `midnight`, `nord`, `solar`, `forest`, `ember`, `slate`, `mist`, `grape`, `sand` or `paper` |
 | `mode` | `dark` or `light` |

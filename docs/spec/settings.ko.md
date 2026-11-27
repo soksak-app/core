@@ -156,6 +156,12 @@
 | --- | --- | --- | --- | --- |
 | `열기 방식` | 세그먼트 | `별도 창`(`windows`), `현재 창의 새 탭`(`tabs`) | `별도 창` | 전역 전용 |
 
+묶음 `프로젝트 폴더`, 설명 `새 프로젝트와 Git 저장소 가져오기가 시작하는 폴더. 모든 프로젝트에 적용된다.`
+
+| 라벨 | 컨트롤 | 선택지 | 기본값 | 범위 |
+| --- | --- | --- | --- | --- |
+| `프로젝트 폴더` | 폴더 | 임의의 폴더 | `~/Projects` | 전역 전용 |
+
 묶음 `위치`, 설명 `프로젝트 탭이 놓이는 위치. 바꾸면 카드 배치도 함께 바뀐다.`
 
 | 라벨 | 컨트롤 | 선택지 | 기본값 | 범위 |
@@ -439,6 +445,7 @@ host가 없는 browser 애플리케이션에서는 페이지가 불러온 플러
 | 카탈로그의 테마(`theme`) | 테마마다 그 테마의 색과 형태로 그린 견본 하나를 가진 견본 격자 | `core.settings.theme {name, scope}` |
 | 단위가 붙은 경계 정수(`gap`, `radius`, `memorySaverDelay`, [배치 값](#배치-값), 연속 범위의 플러그인 `integer`) | 경계 사이의 슬라이더. 값과 단위를 보인다. 끌기 동안 각 값을 슬라이더 옆에 보이고, 놓을 때의 값으로 명령을 한 번 실행한다 | `core.settings.change {key, value, scope}` |
 | 작은 경계 정수(`size`, `problemToastDismissSeconds`, 좁은 범위의 플러그인 `integer`) | 단위가 붙은 스테퍼 `− value +` | `core.settings.change {key, value, scope}` |
+| 폴더 경로(`projectsFolder`) | 폴더 컨트롤: 고정폭 글꼴의 경로와 찾아보기 버튼. 버튼은 `core.library.choose-folder`를 실행하고, 고른 폴더는 `core.settings.change`로 정해진다. 대화상자를 취소하면 아무것도 바뀌지 않는다 | `core.library.choose-folder`, 다음 `core.settings.change {key, value, scope}` |
 | 문자열(플러그인 `string`) | 한 줄 글자 입력 | `core.settings.change {key, value, scope}` |
 | 주소(플러그인 `address`) | 고정폭 글꼴의 한 줄 글자 입력. 빈 값이나 `http://` 또는 `https://`로 시작하는 값을 받는다. 그 밖의 값은 칸 아래에 `http:// 또는 https:// 로 시작하는 주소여야 한다.`를 보인다 | `core.settings.change {key, value, scope}` |
 | 분류의 플러그인(플러그인 `plugin`, [플러그인 분류](plugins.ko.md#plugin-categories)) | 불러오고 켜진 해당 분류의 플러그인마다 이름을 붙인 항목 하나를 가진 셀렉트 | `core.settings.change {key, value, scope}` |
@@ -474,6 +481,7 @@ host가 없는 browser 애플리케이션에서는 페이지가 불러온 플러
 
 | 키 | 형식 |
 | --- | --- |
+| `projectsFolder` | 절대 경로, 또는 `~/`로 시작하는 경로. 전역 범위, 기본값 `~/Projects`: 새 프로젝트와 Git 가져오기의 기본 폴더([프로젝트 폴더](projects.ko.md#프로젝트-폴더)). 다른 값은 `Invalid setting projectsFolder: <value>`로 거부된다 |
 | `projectOpening` | `tabs` 또는 `windows`, 전역 범위 |
 | `theme` | `midnight`, `nord`, `solar`, `forest`, `ember`, `slate`, `mist`, `grape`, `sand`, `paper` |
 | `mode` | `dark` 또는 `light` |

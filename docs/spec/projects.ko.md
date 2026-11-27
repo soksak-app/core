@@ -18,7 +18,7 @@
 
 1. SOKSAK 로고와 줄 어디서 시작할까?. 이 글은 명령이 없다.
 2. 자리 표시(placeholder) 문구 프로젝트 찾기 또는 폴더 경로 붙여넣기를 가진 검색 칸(element `core.home.search`). 홈이 보이면 칸이 포커스를 받는다. 입력하면 `core.home.search {query}`를 실행하며, 목록은 각 프로젝트를 이름과 경로로 맞춘다. `core.home.search.focus`는 칸에 포커스를 두며 `cmd+o`에 묶여 있다([exposure](exposure.ko.md)). Escape는 검색어가 비어 있지 않으면 `core.home.search {query: ""}`를 실행한다. 묶인 `core.home.search.focus`의 단축키 ⌘O를 칸 뒤의 글로 보이며, 묶인 단축키가 없는 동안에는 글을 보이지 않는다.
-3. 버튼 두 개가 있는 줄. 기본 버튼인 새 프로젝트(element `core.home.add`)는 `core.home.form.open {mode: "create"}`를 실행한다. 폴더 열기는 `core.home.form.open {mode: "open"}`을 실행하며, 이는 기존 폴더를 받아들이는 폼을 연다. Git clone 버튼은 보이지 않는다.
+3. 버튼 세 개가 있는 줄. 기본 버튼인 새 프로젝트(element `core.home.add`)는 `core.home.form.open {mode: "create"}`를 실행한다. 폴더 열기는 `core.home.form.open {mode: "open"}`을 실행하며, 이는 기존 폴더를 받아들이는 폼을 연다. Git 저장소 가져오기(element `core.home.import`)는 `core.home.form.open {mode: "import"}`를 실행하며, 이는 저장소를 복제하는 폼을 연다([프로젝트 폴더](#프로젝트-폴더)).
 4. 프로젝트 목록. 고정한 프로젝트가 먼저 묶음 제목 고정 아래에 나온다. 나머지 프로젝트는 묶음 제목 최근 아래에 나오며, 최근 묶음 제목은 고정한 프로젝트가 있는 동안에만 보인다. 각 묶음 안의 순서는 마지막으로 연 시각의 최신순이다. 목록에는 정렬 컨트롤이 없다. 줄의 어느 곳을 누르든 `core.home.open {project}`를 실행하며, 프로젝트를 그 자리에서 연다. 각 줄은 한 줄에 다음을 보여 준다:
    - 이름의 첫 글자를 담은 문자 정사각형. 적용된 테마의 text 토큰과 함께 accent 토큰을 쓴다.
    - 이름. `core.home.open {project}`를 실행하는 버튼이다(element `core.home.open`). 열린 프로젝트는 배지 열림을 보여 준다.
@@ -35,7 +35,23 @@
 
 프로젝트 홈의 제목줄에는 설정 버튼 하나만 보인다([창 도구](external-sidebars.ko.md#창-도구)). 제목줄 로고는 `core.projects.browse`를 실행한다. 이 명령은 현재 작업을 유지하면서 그 창에 프로젝트 홈을 보여 준다. 작업 화면의 상태 막대에 있는 항목 홈은 `core.home.show`를 실행하며, 같은 방식으로 그 창에 프로젝트 홈을 보여 준다. 프로젝트를 선택하거나 작업으로 돌아오면 작업 화면을 복원한다. 새 창은 항상 프로젝트가 배정되지 않은 창을 만든다. macOS에서는 모든 창을 닫아도 이 동작을 쓸 수 있도록 앱을 유지한다. Command/Ctrl+Shift+N과 macOS Dock 메뉴는 같은 동작을 실행한다. 프로젝트 홈은 프로젝트 작업 화면에서 돌아온 경우에도 항상 공통 설정을 쓴다. 작업 화면으로 돌아가면 그 프로젝트의 덮어쓰기를 다시 적용한다.
 
-프로젝트 홈이 선언하는 명령과 element는 다음과 같다: `core.home.show`, `core.home.search`, `core.home.search.focus`, `core.home.select`, `core.home.open`, `core.home.form.open`, `core.home.pin`, `core.home.confirm`, `core.home.remove`, `core.home.no-results`, `core.home.add`, `core.home.remove-ask`, `core.home.back`, `core.home.status.projects`, `core.home.status.open`, `core.home.status.plugins`, `core.home.status.back`, `core.home.status.new`. 상태 `core.home`은 `query`(검색 문구), `selected`(선택한 줄의 프로젝트 id 또는 `null`), `rows`(보이는 순서의 프로젝트 id), `previewErrors`, `folderErrors`, 상태줄용 `projects`(프로젝트 수), `open`(창이 연 프로젝트 수), `plugins`(`enabled`, `installed` 수)를 보고한다.
+프로젝트 홈이 선언하는 명령과 element는 다음과 같다: `core.home.show`, `core.home.search`, `core.home.search.focus`, `core.home.select`, `core.home.open`, `core.home.form.open`, `core.home.import`, `core.home.pin`, `core.home.confirm`, `core.home.remove`, `core.home.no-results`, `core.home.add`, `core.home.remove-ask`, `core.home.back`, `core.home.status.projects`, `core.home.status.open`, `core.home.status.plugins`, `core.home.status.back`, `core.home.status.new`. 상태 `core.home`은 `query`(검색 문구), `selected`(선택한 줄의 프로젝트 id 또는 `null`), `rows`(보이는 순서의 프로젝트 id), `previewErrors`, `folderErrors`, 상태줄용 `projects`(프로젝트 수), `open`(창이 연 프로젝트 수), `plugins`(`enabled`, `installed` 수)를 보고한다.
+
+## 프로젝트 폴더
+
+`projectsFolder`는 새 프로젝트의 기본 폴더를 정하는 공통 설정이다. 기본값은 `~/Projects`이며, 프로젝트별 덮어쓰기가 없다([설정](settings.ko.md#값)). 설정 탭은 작업 공간 페이지에 이것을 그린다([컨트롤](settings.ko.md#컨트롤)). 호스트는 맨 앞의 `~/`를 펼치며, 펼친 뒤 절대 경로여야 한다. 그 밖의 값은 설정이 거부한다. 새 프로젝트와 Git 가져오기는 모두 이 폴더에서 시작한다.
+
+새 프로젝트 폼에는 부모 칸이 있다. 이 칸은 `projectsFolder`의 값으로 시작하며, 사람이 다른 폴더로 바꿀 수 있다.
+
+가져오기 폼(`core.home.form.open {mode: "import"}`)에는 저장소 주소 칸 하나가 있고, 대상을 `<projectsFolder>/<name>`으로 읽기 전용으로 보여 준다. 이름은 주소의 마지막 경로 요소에서 끝의 `/`와 `.git` 접미사를 뺀 것이다. 제출은 아무것도 추가하지 않으며, 검사에 실패하면 다음 메시지 중 하나를 보여 준다:
+
+- `the address is empty`: 주소가 앞뒤 공백을 뺀 뒤 비어 있을 때;
+- `the address starts with -`: 주소가 `-`로 시작해 git이 옵션으로 읽을 수 있을 때;
+- `the address has no repository name`: 이름이 비어 있을 때;
+- `<projectsFolder> is not a folder`: `projectsFolder`가 있는 폴더를 가리키지 않을 때;
+- `<target> already exists`: 대상이 있을 때. 복제는 시작하지 않는다.
+
+제출은 `projectClone {address, target}`을 실행한다. 호스트는 `git clone -- <address> <target>`을 자식 프로세스로 실행하며, git의 출력 줄은 실행 중 폼에 보인다. 성공하면 호스트는 대상을 프로젝트로 추가하고 그 [프로젝트 열기](#프로젝트-열기) 방식으로 열며, 폼은 닫힌다. git 실행 파일이 없으면 `git is not installed or not on PATH`로 실패한다. 복제가 실패하면 git의 글이 그대로 보인다. git은 실패한 복제에서 자기가 만든 대상 폴더를 지운다. 호스트는 실패 뒤 대상이 없는지 확인하고, 남은 폴더가 있으면 `<target> remains after the failed clone`로 보고한다. 모든 실패는 하나의 오류 표시 경로로 보이며, 프로젝트는 추가되지 않는다.
 
 ## 프로젝트 열기
 
@@ -71,7 +87,7 @@
 
 애플리케이션은 정렬된 프로젝트 등록 목록, 공통 설정, 폴더별 덮어쓰기, 스페이스, 활성 스페이스, 카드와 탭 상태, 문서 영역의 session 이력(`tab-sessions/`), 포커스 카드(`focusedId`, 포커스된 카드가 없으면 `null`([group card의 focus](groups.ko.md#focus)). 레이아웃의 어떤 카드도 가리키지 않는 저장된 `focusedId`는 `null`과 같이 포커스된 카드 없이 열린다. workbench가 ring을 받을 카드를 고르지 않기 때문이다. 값 `null`은 member의 값을 넓힐 뿐이고 이전 파일은 모두 그대로 유효하므로, 형식 변경이 아니며 형식 번호도 올리지 않는다), 숨긴 사이드바를 포함한 사이드바와 카드 사이드바의 너비, 각 사이드바의 선택된 탭과 접힌 섹션, 프로젝트 창의 크기와 위치를 저장한다. 창의 프로젝트 소유 관계와 실행 중인 셸 프로세스는 런타임 상태다. 프로젝트 창을 닫아도 저장된 프로젝트와 화면 설정은 유지한다. Host는 레지스트리의 모든 쓰기에 대해 쓴 창을 포함한 모든 창으로 `workspace-changed`를 보내며, 창은 레지스트리를 다시 읽는다. 같은 프로젝트와 같은 열린 프로젝트 id를 읽으면 아무것도 그리지 않는다.
 
-네이티브 호스트는 앱 설정 디렉터리의 `settings.json`에서 공통 설정을 읽고, 프로젝트 디렉터리 안의 `.soksak/settings.json`에서 프로젝트 덮어쓰기를 읽는다. 설정 파일이 없으면 덮어쓰기가 없는 상태다. 프로젝트 파일은 명시적으로 바꾼 값만 담으며, 키를 지우면 상속이 복원된다. 공통 전용 키인 `projectOpening`, `textSize`, `memorySaver`, `memorySaverDelay`는 `packages/workbench/workbench.json`의 settings에 있는 목록 하나로 정하며, 각 language host 라이브러리가 내장 사본에서 읽는다([설정](settings.ko.md#값)). 이 키들은 프로젝트 설정에서 허용하지 않는다. 이 중 하나가 있는 프로젝트 설정 파일은 `<path>: <key> is common-only`로 거부되며, 프로젝트 쓰기는 `<key> is common-only`로 실패한다. 공통 전용 키가 있거나, 다른 형식이거나, 파싱되지 않아 거부된 프로젝트 설정 파일은 그 프로젝트에서 보고된다. 스냅샷은 그 프로젝트에 오류와 함께 `settingsError`를 주고 `settings`는 주지 않으며, 다른 프로젝트는 설정을 유지한다. 창은 그런 프로젝트를 열지 않는다. 거부된 파일을 대신할 설정이 없기 때문이다. 그 프로젝트를 열면 창, plane, 저장 기록이 바뀌기 전에 그 오류로 실패한다. 그 프로젝트를 가리키는 시작 문서는 프로젝트 홈을 그리고 오류를 한 번 보고한다. 표시 중인 프로젝트의 설정 파일이 거부되면 다음 스냅샷이 오류를 보고하며, 적용된 설정은 유지된다. 설정 폴더의 `projects.json`이나 `settings.json`이 거부되어도 스냅샷은 실패하지 않는다. 거부된 `projects.json`은 프로젝트 없이 오류를 담은 `projectsError`를 주고, 거부된 `settings.json`은 공통 설정 없이 오류를 담은 `settingsError`를 준다. 페이지는 각 오류를 보이고 시작한다. 그 뒤 프로젝트를 추가, 변경, 이동, 제거하면 `projects.json`의 오류로 실패하고, 공통 설정 쓰기는 `settings.json`의 오류로 실패한다. 두 파일 모두 바뀌지 않는다. Frame text factor는 공통 전용이다. 호스트가 페이지 시작 전에 이 값으로 창의 제목줄을 정하기 때문이다([제목줄 높이](native-surfaces.ko.md#제목줄-높이)).
+네이티브 호스트는 앱 설정 디렉터리의 `settings.json`에서 공통 설정을 읽고, 프로젝트 디렉터리 안의 `.soksak/settings.json`에서 프로젝트 덮어쓰기를 읽는다. 설정 파일이 없으면 덮어쓰기가 없는 상태다. 프로젝트 파일은 명시적으로 바꾼 값만 담으며, 키를 지우면 상속이 복원된다. 공통 전용 키인 `projectOpening`, `textSize`, `memorySaver`, `memorySaverDelay`, `projectsFolder`는 `packages/workbench/workbench.json`의 settings에 있는 목록 하나로 정하며, 각 language host 라이브러리가 내장 사본에서 읽는다([설정](settings.ko.md#값)). 이 키들은 프로젝트 설정에서 허용하지 않는다. 이 중 하나가 있는 프로젝트 설정 파일은 `<path>: <key> is common-only`로 거부되며, 프로젝트 쓰기는 `<key> is common-only`로 실패한다. 공통 전용 키가 있거나, 다른 형식이거나, 파싱되지 않아 거부된 프로젝트 설정 파일은 그 프로젝트에서 보고된다. 스냅샷은 그 프로젝트에 오류와 함께 `settingsError`를 주고 `settings`는 주지 않으며, 다른 프로젝트는 설정을 유지한다. 창은 그런 프로젝트를 열지 않는다. 거부된 파일을 대신할 설정이 없기 때문이다. 그 프로젝트를 열면 창, plane, 저장 기록이 바뀌기 전에 그 오류로 실패한다. 그 프로젝트를 가리키는 시작 문서는 프로젝트 홈을 그리고 오류를 한 번 보고한다. 표시 중인 프로젝트의 설정 파일이 거부되면 다음 스냅샷이 오류를 보고하며, 적용된 설정은 유지된다. 설정 폴더의 `projects.json`이나 `settings.json`이 거부되어도 스냅샷은 실패하지 않는다. 거부된 `projects.json`은 프로젝트 없이 오류를 담은 `projectsError`를 주고, 거부된 `settings.json`은 공통 설정 없이 오류를 담은 `settingsError`를 준다. 페이지는 각 오류를 보이고 시작한다. 그 뒤 프로젝트를 추가, 변경, 이동, 제거하면 `projects.json`의 오류로 실패하고, 공통 설정 쓰기는 `settings.json`의 오류로 실패한다. 두 파일 모두 바뀌지 않는다. Frame text factor는 공통 전용이다. 호스트가 페이지 시작 전에 이 값으로 창의 제목줄을 정하기 때문이다([제목줄 높이](native-surfaces.ko.md#제목줄-높이)).
 
 기본 앱 설정 디렉터리는 다음과 같다.
 
@@ -122,5 +138,6 @@ Origin은 탭이 자기 스페이스의 저장된 레이아웃을 떠날 때만 
 - 선택한 프로젝트의 레이아웃, 탭, 사이드바 너비, 테마 설정, 일반 창 기하가 복원된다. 창을 닫아도 저장된 데이터는 유지된다.
 - 등록되지 않은 플러그인을 이름으로 가리키는 저장된 스페이스는 검증 오류와 함께 열리지 않으며, 프로젝트 홈의 그 줄도 같은 오류를 보인다. 저장된 기록은 바뀌지 않는다.
 - 호스트가 폴더를 읽을 수 없는 프로젝트는 프로젝트 홈 줄의 폴더 경로 아래에 이유를 보이며, `core.home`은 호스트 메시지를 `folderErrors`에 보고한다. 두 호스트 모두 [`workspace.folder.messages`](host-contract.ko.md)의 메시지를 쓴다. 줄은 선언된 메시지(폴더 없음, 읽기 권한 없음, 파일)를 경로 없는 이유로 보이고, 다른 메시지는 그대로 보인다. 프로젝트 홈은 보일 때마다, 그리고 레지스트리가 바뀔 때마다 호스트에 다시 묻는다. 줄의 열기 버튼은 비활성화되며, 명령으로 그 프로젝트를 열면 호스트 메시지로 실패한다. 기록은 사용자가 줄의 제거 버튼과 빼기 확인(`core.home.confirm`, 그다음 `core.home.remove`)으로 지울 때까지 프로젝트 홈에 남는다. 제거는 프로젝트 탭 닫기처럼 기록과 스페이스를 지우며 폴더는 바꾸지 않는다. 제거된 프로젝트를 보이는 창은 [설정](#설정)의 프로젝트 창 규칙이 제거에 대해 정한 대로 그 프로젝트를 끝낸다.
+- Git 가져오기는 저장소를 `projectsFolder`에 복제하고, 복제본을 프로젝트로 추가해 연다. 가져오기 폼의 각 거부는 아무것도 추가하지 않고 대상 폴더를 남기지 않는다.
 - 두 창은 독립적으로 렌더링하고 입력을 받는다. 설정 효과, 네이티브 surface, 셸, 정리는 소유 창에만 제한된다.
 - 두 네이티브 호스트에서 기존 surface 배치, 소수점 렌더링, 모달 검사가 계속 통과한다. 운영체제별 네이티브 동작은 따로 기록한다.

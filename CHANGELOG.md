@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7-2: The project folder setting, the Git import form and the projectClone host call are specified in EN and KO.
 - F1122: The feature link table names the two runner tests that prove the services step, so the link table check covers F1122.
 - F1217-8: The side keys cmd+b, opt+cmd+b, shift+cmd+j and cmd+j run only while no text input has focus, in both hosts.
 - F1122: The services step of the runner ends the persistent services of a run before the remaining-processes step, and the hidden-view-reload check passes with no service left.
