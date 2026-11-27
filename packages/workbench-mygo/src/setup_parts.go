@@ -284,7 +284,7 @@ func (s *Shell) buildSetup(b *settingsBuilder) {
 		rows = append(rows, settingsRow{description: "이 컴퓨터에서 설정할 에이전트 항목이 없습니다."})
 	}
 	// The install-all control (element `setup-install-all`, command `core.settings-tab.setup-install-all`) is always shown and is disabled when no part of the skill and mcp kinds is not ok (docs/spec/settings.md#agents).
-	// The summary is the badge of the count of the parts that differ or are missing with the warning icon, or 모두 설치됨 when every part is
+	// The summary is the badge of the count of the parts that differ or are missing with the warning icon, or All installed when every part is
 	// ok (docs/spec/settings.md#agents).
 	summary := b.add(SettingsControl{Name: "core.settings-tab.badge", Label: "모두 설치됨", tone: "ok", kind: controlBadge})
 	if warn := countSetupWarnings(parts); warn > 0 {

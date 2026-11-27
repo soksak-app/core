@@ -110,7 +110,7 @@ func (s *Shell) buildWorkspace(b *settingsBuilder) error {
 	return s.buildSidebarRows(b)
 }
 
-// folderRow is the row of projectsFolder: the path, and the button 찾아보기 that runs core.settings.choose-folder (docs/spec/settings.md#controls).
+// folderRow is the row of projectsFolder: the path, and the browse button that runs core.settings.choose-folder (docs/spec/settings.md#controls).
 func (s *Shell) folderRow(b *settingsBuilder) settingsRow {
 	const key = "projectsFolder"
 	path := b.add(SettingsControl{Label: valueText(s.value(key)), kind: controlCaption})

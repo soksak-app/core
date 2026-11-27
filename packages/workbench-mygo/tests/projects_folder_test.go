@@ -78,7 +78,7 @@ func TestTheCreateFormStartsInTheProjectsFolder(t *testing.T) {
 	t.Fatalf("the project was not created in projectsFolder; projects %v", f.host.projects)
 }
 
-// The page 작업 공간 draws the folder row of projectsFolder with the path and the button that chooses another folder.
+// The Workspace page draws the folder row of projectsFolder with the path and the button that chooses another folder.
 func TestTheWorkspacePageDrawsTheProjectsFolderRow(t *testing.T) {
 	f := newShell(t, &storedHost{common: map[string]any{"projectsFolder": "~/Work"}})
 	f.settle()

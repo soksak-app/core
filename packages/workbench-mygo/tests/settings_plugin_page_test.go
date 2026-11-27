@@ -24,7 +24,7 @@ func pageTexts(f *shellFixture) []string {
 	return texts
 }
 
-// A plugin that is not installed shows its sidecars and the row 더하는 것 under the install button, with the sidecar names and ranges and
+// A plugin that is not installed shows its sidecars and the add row under the install button, with the sidecar names and ranges and
 // the dash of a plugin without a loaded manifest (docs/spec/settings.md#plugin-page).
 func TestAnUninstalledPluginPageShowsItsSidecarsAndContributions(t *testing.T) {
 	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.0.0"}, "beta": {"1.0.0"}})}
@@ -42,7 +42,7 @@ func TestAnUninstalledPluginPageShowsItsSidecarsAndContributions(t *testing.T) {
 	}
 }
 
-// The group 섹션 is not drawn for a plugin without sections (docs/spec/settings.md#plugin-page).
+// The Sections group is not drawn for a plugin without sections (docs/spec/settings.md#plugin-page).
 func TestAPluginWithoutSectionsDrawsNoSectionsGroup(t *testing.T) {
 	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.0.0"}})}
 	plugins.plugins = map[string]map[string]any{"alpha": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{"hello": "^2.0.0"}}}
@@ -55,7 +55,7 @@ func TestAPluginWithoutSectionsDrawsNoSectionsGroup(t *testing.T) {
 	}
 }
 
-// The plugin page shows the badge 개발 빌드 when the installed version is newer than the published one (docs/spec/settings.md#plugin-page).
+// The plugin page shows the development build badge when the installed version is newer than the published one (docs/spec/settings.md#plugin-page).
 func TestAPluginPageShowsTheDevelopmentBuildBadge(t *testing.T) {
 	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"zzz": {"1.0.0", "1.2.0"}}),
 		plugins: map[string]map[string]any{"zzz": {"version": "2.0.0", "enabled": true, "sidecars": map[string]string{}}}}
@@ -68,7 +68,7 @@ func TestAPluginPageShowsTheDevelopmentBuildBadge(t *testing.T) {
 	}
 }
 
-// The row 필요 of a plugin page names the required plugin by its name and id, and its button installs the plugin by its name
+// The Required row of a plugin page names the required plugin by its name and id, and its button installs the plugin by its name
 // (docs/spec/settings.md#plugin-page).
 func TestTheRequiredRowNamesTheRequiredPlugin(t *testing.T) {
 	const requiring = `{"plugins":[{"id":"alpha","package":"alpha","version":"1.0.0","folder": "/installed/plugin", "manifest":{"id":"alpha","name":"Alpha","description":"Loaded alpha",

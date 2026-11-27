@@ -2,7 +2,7 @@ package workbench_test
 
 import "testing"
 
-// The group 설정이 있는 플러그인 lists every installed plugin, and a plugin without settings has its item too
+// The group Plugins with settings lists every installed plugin, and a plugin without settings has its item too
 // (docs/spec/settings.md#menu).
 func TestTheMenuListsEveryInstalledPluginWithoutSettings(t *testing.T) {
 	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"zzz": {"1.0.0"}}),
@@ -20,7 +20,7 @@ func TestTheMenuListsEveryInstalledPluginWithoutSettings(t *testing.T) {
 	}
 }
 
-// A disabled installed plugin has its item with the badge 꺼짐 and no dot (docs/spec/settings.md#menu).
+// A disabled installed plugin has its item with the Off badge and no dot (docs/spec/settings.md#menu).
 func TestTheMenuItemOfADisabledPluginShowsTheOffBadge(t *testing.T) {
 	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"zzz": {"1.0.0"}}),
 		plugins: map[string]map[string]any{"zzz": {"version": "1.0.0", "enabled": false, "sidecars": map[string]string{}}}}

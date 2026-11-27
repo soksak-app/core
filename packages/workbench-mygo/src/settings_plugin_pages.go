@@ -155,7 +155,7 @@ func pluginMeta(row PluginRow, category string) string {
 	return strings.Join(parts, " · ")
 }
 
-// developmentBuild reports whether the installed version is newer than the newest published version, which the badge 개발 빌드 shows
+// developmentBuild reports whether the installed version is newer than the newest published version, which the development build badge shows
 // (docs/spec/settings.md#plugins).
 func developmentBuild(row PluginRow) (bool, error) {
 	if row.Installed == nil || row.Latest == nil {
@@ -516,7 +516,7 @@ func (s *Shell) buildPluginTab(b *settingsBuilder) error {
 	}
 	if item.Installed == nil {
 		info = append(info, settingsRow{name: "설치", controls: []*SettingsControl{s.pluginAction(b, busy, item.ID, "install", "설치", "core.plugins.install", map[string]any{"plugin": item.ID})}})
-		// An uninstalled plugin has no loaded manifest, so it adds no sections, settings or sidecar choices of its own: 더하는 것 is the dash.
+		// An uninstalled plugin has no loaded manifest, so it adds no sections, settings or sidecar choices of its own: the add column shows a dash.
 		info = append(info, settingsRow{name: "사이드카", description: sidecarText(item.Sidecars)}, settingsRow{name: "더하는 것", description: "—"})
 	} else {
 		use := settingsRow{name: "사용", description: useMeta(s, *item)}
@@ -698,7 +698,7 @@ func (s *Shell) pluginRowsOf(status PluginsStatus) []PluginRow {
 	return rows
 }
 
-// sidecarText lists the sidecars of a plugin as its name and range, or 없음 without a sidecar (docs/spec/settings.md#plugin-page).
+// sidecarText lists the sidecars of a plugin as its name and range, or none without a sidecar (docs/spec/settings.md#plugin-page).
 func sidecarText(sidecars []PluginSidecar) string {
 	if len(sidecars) == 0 {
 		return "없음"
@@ -723,7 +723,7 @@ func nameOfRow(rows []PluginRow, id string) string {
 	return id
 }
 
-// useMeta is the meta line of the row 사용 of a plugin page: its category, its id, its installed version and the latest or published
+// useMeta is the meta line of the Use row of a plugin page: its category, its id, its installed version and the latest or published
 // version, then its sidecars (docs/spec/settings.md#plugin-page).
 func useMeta(s *Shell, row PluginRow) string {
 	var parts []string

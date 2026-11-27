@@ -188,7 +188,7 @@ func (s *Shell) sectionAdder(b *settingsBuilder, set StoredSet, scope string) *S
 			options = append(options, group.Values...)
 		}
 	}
-	// The select takes no press once the set holds every registered section (docs/spec/settings.md#사이드바-세트).
+	// The select takes no press once the set holds every registered section (docs/spec/settings.md).
 	return b.add(SettingsControl{Name: "core.settings-tab.add", Key: text("add:" + set.ID), Label: "섹션 추가…", Options: options, Groups: groups,
 		Disabled: len(options) == 0, Command: settingCommand("core.settings.sets.row", map[string]any{"id": set.ID, "action": "add", "scope": scope}), kind: controlSelect, param: "section", labels: labels})
 }

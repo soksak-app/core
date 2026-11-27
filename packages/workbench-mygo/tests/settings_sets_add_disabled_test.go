@@ -2,8 +2,8 @@ package workbench_test
 
 import "testing"
 
-// TestTheAddSectionSelectIsDisabledWhenTheSetHoldsEverySection checks that the select 섹션 추가… of an edited set takes no press
-// once the set contains every registered section (docs/spec/settings.md#사이드바-세트).
+// TestTheAddSectionSelectIsDisabledWhenTheSetHoldsEverySection checks that the select labelled Add section… of an edited set takes no press
+// once the set contains every registered section (docs/spec/settings.md).
 func TestTheAddSectionSelectIsDisabledWhenTheSetHoldsEverySection(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-tab.nav", map[string]any{"page": "sets"})

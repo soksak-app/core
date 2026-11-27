@@ -97,11 +97,11 @@ type OptionGroup struct {
 type SettingsControl struct {
 	// small is the size sm of a button, 24 points high (docs/spec/settings.md#controls).
 	small bool
-	// pluginItem says that the item is a plugin of the group 설정이 있는 플러그인 (docs/spec/settings.md#menu).
+	// pluginItem says that the item is a plugin of the group Plugins with settings (docs/spec/settings.md#menu).
 	pluginItem bool
 	// dot says that the item of the menu shows the dot of an enabled plugin (docs/spec/settings.md#menu).
 	dot bool
-	// Badge is the badge 꺼짐 of a disabled plugin item of the menu (docs/spec/settings.md#menu).
+	// Badge is the Off badge of a disabled plugin item of the menu (docs/spec/settings.md#menu).
 	Badge string `json:"badge,omitempty"`
 	Name    string          `json:"name"`
 	Index   int             `json:"index"`
@@ -176,7 +176,7 @@ type settingsModel struct {
 	close        *SettingsControl
 	find         *SettingsControl
 	nav, scopes  []*SettingsControl
-	headBadge    *SettingsControl // the badge 전역 전용 of a page with no setting that a project can override, in place of the scopes
+	headBadge    *SettingsControl // the Global only badge of a page with no setting that a project can override, in place of the scopes
 	folder       string
 	groups       []settingsGroup
 	declaredRows []settingsRow
@@ -379,7 +379,7 @@ func (s *Shell) settingsBuild() (*settingsModel, error) {
 	if err := s.pageBuilders()[w.page](b); err != nil {
 		return nil, err
 	}
-	// A page that has settings and none that a project can override shows the badge 전역 전용 in place of the scope control
+	// A page that has settings and none that a project can override shows the Global only badge in place of the scope control
 	// (docs/spec/settings.md#page-head).
 	if len(model.groups) > 0 && !s.hasProjectOverride(model) {
 		model.scopes = nil

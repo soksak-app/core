@@ -2,8 +2,8 @@ package workbench_test
 
 import "testing"
 
-// TestTheDiagnosticsPageHeadShowsTheCommonOnlyBadgeInPlaceOfTheScope pins the page head of 진단: a page that has settings and none
-// that a project can override shows the badge 전역 전용 and no scope control (docs/spec/settings.md#page-head).
+// TestTheDiagnosticsPageHeadShowsTheCommonOnlyBadgeInPlaceOfTheScope pins the page head of Diagnostics: a page that has settings and none
+// that a project can override shows the Global only badge and no scope control (docs/spec/settings.md#page-head).
 func TestTheDiagnosticsPageHeadShowsTheCommonOnlyBadgeInPlaceOfTheScope(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-tab.nav", map[string]any{"page": "diag"})

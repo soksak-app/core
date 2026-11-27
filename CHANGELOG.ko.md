@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
+- F1232-1-1: workbench-mygo의 설정 comment가 UI 표시 이름을 영어로 적고, 한글 spec anchor 참조는 spec 파일을 가리킨다.
 - F1239-5: 알림 센터와 토스트는 모든 frame text 배율에서 title bar row 아래에 선다. web과 mygo 모두.
 - F1253: `make benchmark-go`와 `make benchmark-rust`가 벤치마크 실행 전에 네이티브 라이브러리를 빌드한다.
 - F1250-4: mygo 설정 검색칸과 입력은 텍스트 줄 높이가 아니라 선언된 필드 높이 28 point다.
