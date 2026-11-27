@@ -62,7 +62,7 @@
       },
       {
         "name": "layoutprobe.surface",
-        "description": "The size and scale of the tab view, the rectangle of its document region in the view, its document visibility and its theme.",
+        "description": "The size and scale of the tab view, the rectangle of its document region in the view, its document visibility and its theme: the scheme, the body background, the text color, the button colors and the tokens it reads.",
         "schema": {
           "type": "object",
           "properties": {
@@ -71,7 +71,16 @@
             "scale": { "type": "number" },
             "region": { "type": "object", "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "width": { "type": "number" }, "height": { "type": "number" } } },
             "visibility": { "type": "string", "enum": ["visible", "hidden"] },
-            "theme": { "type": "object", "properties": { "scheme": { "type": ["string", "null"] }, "background": { "type": "string" } } }
+            "theme": {
+              "type": "object",
+              "properties": {
+                "scheme": { "type": ["string", "null"] },
+                "background": { "type": "string" },
+                "text": { "type": "string" },
+                "button": { "type": "object", "properties": { "color": { "type": "string" }, "background": { "type": "string" } } },
+                "tokens": { "type": "object", "properties": { "--fg": { "type": "string" }, "--card": { "type": "string" } } }
+              }
+            }
           }
         }
       },

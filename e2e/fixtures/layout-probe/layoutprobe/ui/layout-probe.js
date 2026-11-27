@@ -73,6 +73,25 @@ function createState(initial) {
   };
 }
 
+/**
+ * The theme of the view as the person sees it: the scheme, the background of the body, the computed text color and the computed colors
+ * of a button of the page, and the theme tokens that the view reads (docs/spec/native-surfaces.md#view-surfaces).
+ */
+function readTheme(view, scheme) {
+  const { document } = view;
+  const style = (element) => view.getComputedStyle(element);
+  const root = style(document.documentElement);
+  const text = style(document.getElementById("probe-text"));
+  const button = style(document.getElementById("probe-button"));
+  return {
+    scheme,
+    background: style(document.body).backgroundColor,
+    text: text.color,
+    button: { color: button.color, background: button.backgroundColor },
+    tokens: { "--fg": root.getPropertyValue("--fg").trim(), "--card": root.getPropertyValue("--card").trim() },
+  };
+}
+
 /** The size, scale, region rectangle, visibility and theme of the tab view. */
 function readSurface(view, element) {
   const rect = element.getBoundingClientRect();
@@ -82,7 +101,7 @@ function readSurface(view, element) {
     width: view.innerWidth, height: view.innerHeight, scale: view.devicePixelRatio,
     region: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
     visibility: view.document.visibilityState,
-    theme: { scheme, background: view.getComputedStyle(view.document.body).backgroundColor },
+    theme: readTheme(view, scheme),
   };
 }
 
