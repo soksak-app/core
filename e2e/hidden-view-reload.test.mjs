@@ -110,7 +110,8 @@ for (const app of Object.values(APPS)) {
     assert.deepEqual(failedCalls, [], `reload and reveal produced failed runtime calls: ${JSON.stringify(failedCalls)}`);
     const errors = rows.filter(({ event }) => event.level === "error");
     assert.deepEqual(errors, [], `reload and reveal produced host, page, or supplier errors: ${JSON.stringify(errors)}`);
-    assert.equal(await s.get("core.workbench.error"), null, "the reload or reveal displayed a page error");
+    const { toasts } = await s.get("core.toasts");
+    assert.deepEqual(toasts.filter((toast) => toast.kind === "error"), [], "the reload or reveal displayed a page error");
     t.diagnostic(`${app.name}: workbench.start ${JSON.stringify(start.event.fields.started_at)}, sidecar seq ${headlessMode.event.seq}->${reattachedMode.event.seq}, attachment generation ${oldGeneration}->${newRegion.presented.generation}, session ${beforeSession.session}`);
   });
 }

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-10-1: 숨은 view 검사가 제거된 status core.workbench.error 대신 core.toasts를 읽으며, 세 application에서 통과한다.
 - F1215: 계정 선언은 하위 항목의 근거를 체크리스트에 남기고 닫는다. 코드는 바뀌지 않았다.
 - F1231: 카드와 창 사이드바의 상태 줄이 섹션 위 줄 대신 세트 순서에서 맨 뒤인 없는 플러그인의 경고를 보이고, core.sidebars가 status와 warning을 보고한다.
 - F999: 남은 일에 raster view 재시작 check를 근거로 적고, 설치된 plugin view(terminal) 재현은 release를 기다린다고 적는다.
