@@ -54,7 +54,8 @@ Publication runs the same checks on the files of `main`. A core version enters `
 - A carried release is not read. Its `sha256` is the hash that the previous build checked, and a listed version does not change ([entry rules](#entry-rules)).
 - Every other release is read and checked as in [check](#check): a new release, or a release whose recorded facts changed.
 - Every entry is still validated, and the index is still checked as a whole and written in one step. Each plugin version records its plugin dependencies in `plugins` of the index ([registry index](installation.md#registry-index)): a read release records the dependencies of its `plugin.json`, and a carried version keeps the `plugins` of the previous index. Every plugin version, read or carried, is judged by the same dependency check against the listed versions, so a carried version whose dependency has no listed version fails the build.
-- A previous index whose `format` is not 2, or whose plugin versions lack `plugins`, fails the build with an error that names `<location>`. The publication of this format change therefore runs one first build without `--previous`; later builds pass the index that it published.
+- Each plugin entry takes `maker` and `categories` from the `plugin.json` of its newest listed version when the build reads that release; a carried version keeps the values of the previous index. `updated` is the UTC date of the build that first lists the newest version, and a carried version keeps the `updated` of the previous index.
+- A previous index whose `format` is not 3, or whose plugin entries lack `maker`, `categories` or `updated`, or whose plugin versions lack `plugins`, fails the build with an error that names `<location>`. The publication of this format change therefore runs one first build without `--previous`; later builds pass the index that it published.
 
 ## Merge and publication
 

@@ -73,6 +73,7 @@ The package holds what every plugin repository needs for those checks, so a plug
 | --- | --- | --- |
 | `id` | yes | Lowercase identifier of the form `[a-z][a-z0-9-]*`. Tabs and settings reference it. `core` is reserved for the core root and is refused |
 | `name` | yes | Display name |
+| `maker` | yes | The publisher's display name, 1 to 100 characters. The [registry index](installation.md#registry-index) copies it; the settings tab marks a plugin whose `maker` is `soksak` as 공식 |
 | `description` | yes | One or two sentences of 1 to 200 characters that say what the plugin does; the [settings tab](settings.md#plugins) shows it, and the settings tab searches it |
 | `surface` | no | `{ "composition": ... }`: the required [surface composition](surface-composition.md). A `view` composition declares its page inside the composition ([view surfaces](#view-surfaces)); the surface has no `module`. External web documents use document regions. A web address is not a surface |
 | `surface.unload` | no; forbidden beside `background` | `{ "format": <positive integer>, "maxBytes": <positive integer> }` for a plugin whose tabs the core can unload and restore from the state they write ([memory saver](#memory-saver)); forbidden beside `background`; a surface without it is never unloaded (`undeclared`) |

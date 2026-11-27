@@ -47,17 +47,17 @@ A sidecar version is released as one release per platform, `<file name>-<version
 
 ## Registry index
 
-The registry index `index.json` has `format` 2 and these lists:
+The registry index `index.json` has `format` 3 and these lists:
 
 | Field | Entry |
 | --- | --- |
-| `plugins` | `{ id, package, name, description, license, repository, versions }`; each version is `{ version, release: { url, sha256 }, engines: { soksak }, sidecars, plugins }` where `sidecars` maps the sidecar dependencies of the version's `plugin.json` to their ranges and `plugins` maps its plugin dependencies to their ranges; each is `{}` when there is none |
+| `plugins` | `{ id, package, name, description, license, repository, maker, categories, updated, versions }`. `maker` and `categories` are the `maker` and `categories` of the `plugin.json` of the newest listed version, and `updated` is the UTC date (`YYYY-MM-DD`) of the build that first lists that version; each version is `{ version, release: { url, sha256 }, engines: { soksak }, sidecars, plugins }` where `sidecars` maps the sidecar dependencies of the version's `plugin.json` to their ranges and `plugins` maps its plugin dependencies to their ranges; each is `{}` when there is none |
 | `sidecars` | `{ name, repository, versions }`; each version is `{ version, protocol: 1, releases }` where `releases` maps platforms to `{ url, sha256 }` |
 | `core` | Optional; an index without it lists no core release. `{ versions }`; each version is `{ version, releases }` where `releases` maps `<platform>-<host>` to `{ url, sha256 }`, the zip of the application bundle of that platform and host (`wailsv3`, `tauriv2` or `mygo`), for example `darwin-arm64-wailsv3` ([application update](#application-update)) |
 | `packs` | `{ name, description, plugins }`: plugin ids installed together |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }], core: [{ version, reason }] }` |
 
-`url` is an `https:` URL of a published release or an absolute `file:` URL of a local one ([fetching](#fetching)); `sha256` is 64 lowercase hexadecimal digits. A description has 1 to 200 characters (Unicode code points). The index check also rejects a repeated plugin id, package, sidecar, pack or version; a pack that names an unknown plugin; a plugin version that needs an unknown sidecar or a range that no listed sidecar version satisfies; and a revoked version that is not listed. `sok registry build` also reads the `plugin.json` of each plugin and fails when a dependency names neither a listed plugin nor a listed sidecar, or when no listed version of a plugin dependency satisfies its range. A carried version keeps its recorded `plugins` and `sidecars` and is judged by the same check ([build](registry.md#build)). An index whose `format` is not 2, or whose plugin version lacks `plugins`, is refused with an error that names the index and what it found.
+`url` is an `https:` URL of a published release or an absolute `file:` URL of a local one ([fetching](#fetching)); `sha256` is 64 lowercase hexadecimal digits. A description has 1 to 200 characters (Unicode code points). The index check also rejects a repeated plugin id, package, sidecar, pack or version; a pack that names an unknown plugin; a plugin version that needs an unknown sidecar or a range that no listed sidecar version satisfies; and a revoked version that is not listed. `sok registry build` also reads the `plugin.json` of each plugin and fails when a dependency names neither a listed plugin nor a listed sidecar, or when no listed version of a plugin dependency satisfies its range. A carried version keeps its recorded `plugins` and `sidecars` and is judged by the same check ([build](registry.md#build)). An index whose `format` is not 3, or whose plugin entry lacks `maker`, `categories` or `updated`, or whose plugin version lacks `plugins`, is refused with an error that names the index and what it found.
 
 ## Application update
 

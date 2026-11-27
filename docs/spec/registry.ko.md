@@ -54,7 +54,8 @@ pull request의 검사는 base branch의 script로 pull request의 파일을 데
 - 이월된 release는 읽지 않는다. 그 `sha256`은 이전 build가 검사한 hash이며, 나열된 version은 바뀌지 않는다([항목 규칙](#항목-규칙)).
 - 그 밖의 release는 [검사](#검사)와 같이 읽고 검사한다. 새 release이거나, 기록된 사실이 바뀐 release이다.
 - 모든 항목은 여전히 검증되며, index는 전체로 검사되어 한 번에 쓰인다. 각 plugin version은 index의 `plugins`에 plugin 의존을 기록한다([registry index](installation.ko.md#registry-index)). 읽은 release는 그 `plugin.json`의 의존을 기록하고, 이월된 version은 이전 index의 `plugins`를 유지한다. 읽었거나 이월된 모든 plugin version은 같은 의존 검사로 나열된 version과 대조되므로, 의존이 나열된 version을 갖지 못하는 이월된 version은 build를 실패시킨다.
-- `format`이 2가 아니거나 plugin version에 `plugins`가 없는 이전 index는 `<location>`을 밝힌 오류로 build를 실패시킨다. 그러므로 이 형식 변경의 게시는 `--previous` 없이 한 번의 첫 build를 실행하고, 이후 build는 그 build가 게시한 index를 넘긴다.
+- 가장 새로 나열된 version을 build가 읽을 때 각 plugin 항목의 `maker`와 `categories`는 그 `plugin.json`에서 받는다. 이월된 version은 이전 index의 값을 유지한다. `updated`는 가장 새 version을 처음 나열한 build의 UTC 날짜이며, 이월된 version은 이전 index의 `updated`를 유지한다.
+- `format`이 3이 아니거나, plugin 항목에 `maker`, `categories`, `updated`가 없거나, plugin version에 `plugins`가 없는 이전 index는 `<location>`을 밝힌 오류로 build를 실패시킨다. 그러므로 이 형식 변경의 게시는 `--previous` 없이 한 번의 첫 build를 실행하고, 이후 build는 그 build가 게시한 index를 넘긴다.
 
 ## Merge와 게시
 

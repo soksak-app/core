@@ -73,6 +73,7 @@ plugin 동작의 창 검사는 그 plugin의 repository에서 실행된다([검�
 | --- | --- | --- |
 | `id` | 예 | `[a-z][a-z0-9-]*` 형식의 소문자 식별자. 탭과 설정이 참조한다. `core`는 core root가 예약하므로 거부한다 |
 | `name` | 예 | 표시 이름 |
+| `maker` | 예 | 게시자의 표시 이름. 1자에서 100자다. [registry index](installation.ko.md#registry-index)가 복사하며, 설정 탭은 `maker`가 `soksak`인 plugin에 공식을 표시한다 |
 | `description` | 예 | 플러그인이 하는 일을 말하는 1자에서 200자 사이의 한두 문장. [설정 탭](settings.ko.md#플러그인)이 보여 주고, 설정 탭이 검색한다 |
 | `surface` | 아니오 | `{ "composition": ... }`: 필수 [표면 합성](surface-composition.ko.md). `view` 합성은 페이지를 합성 안에 선언한다([view 표면](#view-표면)). 표면에는 `module`이 없다 |
 | `surface.unload` | 아니오. `background`와 함께 쓰면 거부 | 코어가 탭을 unload하고 탭이 쓴 상태로 restore할 수 있는 plugin의 `{ "format": <양의 정수>, "maxBytes": <양의 정수> }`([메모리 절약](#메모리-절약)). `background`와 함께 쓰면 거부한다. 선언이 없는 표면은 unload하지 않는다(`undeclared`) |

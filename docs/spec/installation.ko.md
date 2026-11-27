@@ -47,17 +47,17 @@ Sidecar version은 플랫폼마다 release 하나로 낸다. `<file name>-<versi
 
 ## Registry index
 
-Registry index `index.json`은 `format` 2와 다음 목록을 가진다.
+Registry index `index.json`은 `format` 3과 다음 목록을 가진다.
 
 | 필드 | 항목 |
 | --- | --- |
-| `plugins` | `{ id, package, name, description, license, repository, versions }`. 각 version은 `{ version, release: { url, sha256 }, engines: { soksak }, sidecars, plugins }`이다. `sidecars`는 그 version의 `plugin.json`의 sidecar 의존을 범위에 대응시키고, `plugins`는 plugin 의존을 범위에 대응시킨다. 의존이 없으면 각각 `{}`다 |
+| `plugins` | `{ id, package, name, description, license, repository, maker, categories, updated, versions }`. `maker`와 `categories`는 가장 새로 나열된 version의 `plugin.json`의 `maker`와 `categories`이고, `updated`는 그 version을 처음 나열한 build의 UTC 날짜(`YYYY-MM-DD`)다. 각 version은 `{ version, release: { url, sha256 }, engines: { soksak }, sidecars, plugins }`이다. `sidecars`는 그 version의 `plugin.json`의 sidecar 의존을 범위에 대응시키고, `plugins`는 plugin 의존을 범위에 대응시킨다. 의존이 없으면 각각 `{}`다 |
 | `sidecars` | `{ name, repository, versions }`. 각 version은 `{ version, protocol: 1, releases }`이며, `releases`는 플랫폼마다 `{ url, sha256 }`을 정한다 |
 | `core` | 선택 항목이다. 없는 index는 core release를 나열하지 않는다. `{ versions }`이며, 각 version은 `{ version, releases }`다. `releases`는 `<platform>-<host>`마다 `{ url, sha256 }`을 정한다. 이것은 그 플랫폼과 host(`wailsv3`, `tauriv2` 또는 `mygo`)의 애플리케이션 번들 zip이다. 예: `darwin-arm64-wailsv3`([애플리케이션 업데이트](#애플리케이션-업데이트)) |
 | `packs` | `{ name, description, plugins }`: 함께 설치하는 plugin id |
 | `revoked` | `{ plugins: [{ id, version, reason }], sidecars: [{ name, version, reason }], core: [{ version, reason }] }` |
 
-`url`은 게시된 release의 `https:` URL이거나 로컬 release의 절대 `file:` URL이다([받기](#받기)). `sha256`은 소문자 16진수 64자리다. 설명은 1자에서 200자(Unicode code point)다. Index 검사는 이 밖에도 plugin id, package, sidecar, pack, version의 중복을 거부한다. 알 수 없는 plugin을 가리키는 pack, 알 수 없는 sidecar를 가리키는 plugin version, 어떤 sidecar version도 채우지 않는 범위가 필요한 plugin version을 거부한다. 목록에 없는 revoked version도 거부한다. `sok registry build`는 각 plugin의 `plugin.json`도 읽는다. 의존이 목록의 plugin도 목록의 sidecar도 가리키지 않거나, plugin 의존의 범위를 채우는 목록의 version이 없으면 실패한다. 이월된 version은 기록된 `plugins`와 `sidecars`를 유지하며, 같은 검사로 판정된다([build](registry.ko.md#build)). `format`이 2가 아니거나 plugin version에 `plugins`가 없는 index는 index와 발견한 내용을 밝힌 오류로 거부한다.
+`url`은 게시된 release의 `https:` URL이거나 로컬 release의 절대 `file:` URL이다([받기](#받기)). `sha256`은 소문자 16진수 64자리다. 설명은 1자에서 200자(Unicode code point)다. Index 검사는 이 밖에도 plugin id, package, sidecar, pack, version의 중복을 거부한다. 알 수 없는 plugin을 가리키는 pack, 알 수 없는 sidecar를 가리키는 plugin version, 어떤 sidecar version도 채우지 않는 범위가 필요한 plugin version을 거부한다. 목록에 없는 revoked version도 거부한다. `sok registry build`는 각 plugin의 `plugin.json`도 읽는다. 의존이 목록의 plugin도 목록의 sidecar도 가리키지 않거나, plugin 의존의 범위를 채우는 목록의 version이 없으면 실패한다. 이월된 version은 기록된 `plugins`와 `sidecars`를 유지하며, 같은 검사로 판정된다([build](registry.ko.md#build)). `format`이 3이 아니거나, plugin 항목에 `maker`, `categories`, `updated`가 없거나, plugin version에 `plugins`가 없는 index는 index와 발견한 내용을 밝힌 오류로 거부한다.
 
 ## 애플리케이션 업데이트
 

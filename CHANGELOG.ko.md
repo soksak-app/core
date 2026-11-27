@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
+- F1217-9: registry index 형식 3이 maker, categories, updated를 가지며, plugin.json은 maker를 요구한다. index 작성기와 page는 이어서 바꾼다.
 - F1241: 단축키 표 검사가 `event.code === "KeyB"`처럼 문자 키의 code 비교를 그 문자 키로 읽는다.
 - F1217-17-5: 에이전트 연동 요약은 모든 설정 항목이 ok일 때 settings-36의 확인 아이콘을 쓴다고 명세에 적는다.
 - F1217-17: 설정 탭을 settings-36 디자인과 page별로 비교했으며, 두 host에 없는 모양 미리보기를 결함으로 기록했다.
