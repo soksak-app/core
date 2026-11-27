@@ -266,15 +266,15 @@ The group 에이전트 연동 has one wide row `연동 상태`:
 
 - The summary shows the badge `<n>개 중 <m>개가 다름` (warn, with a warning icon), where `<m>` counts the parts that are `differs` or `missing`. When every part is `ok` the summary shows `모두 설치됨` (ok).
 - The button `다시 확인` (refresh icon, sm) runs `core.settings-tab.setup-check`, which runs `core.setup.check`.
-- The button `모두 설치` (primary, sm) runs `core.settings-tab.setup-install-all` with the kinds `skill` and `mcp` that have a part that is not `ok`. It is disabled when no such part exists.
+- The button `모두 설치` (primary, sm), element `core.settings-tab.setup-install-all`, runs `core.setup.install {parts}` with the kinds `skill` and `mcp` that have a part that is not `ok`. It is disabled when no such part exists.
 
 Each part is one row, in part order (element name `core.settings-tab.setup`). A row shows the name, the file and the state:
 
 | Part | Name | File | Actions |
 | --- | --- | --- | --- |
 | `path` | 명령 경로 | the `sok` of the application bundle | `끄기` runs `core.settings-tab.setup-change {part: "path", enabled: false}` while enabled. While disabled the state shows `사용 안 함` and `켜기` runs the same command with `enabled: true` |
-| `skill` | 스킬 | the skill file | `고치기` (state `missing` with reason `differs`) or `설치` (state `missing` with another reason), sm, each running `core.settings-tab.setup-install {parts: ["skill"]}` |
-| `mcp` | MCP 등록 | the registration file | `고치기` or `설치`, sm, each running `core.settings-tab.setup-install {parts: ["mcp"]}` |
+| `skill` | 스킬 | the skill file | `고치기` (state `missing` with reason `differs`) or `설치` (state `missing` with another reason), sm, each the element `core.settings-tab.setup-install`, which runs `core.setup.install {parts: ["skill"]}` |
+| `mcp` | MCP 등록 | the registration file | `고치기` or `설치`, sm, each the element `core.settings-tab.setup-install`, which runs `core.setup.install {parts: ["mcp"]}` |
 | `hook` | 훅 | the hook file | none; the install command does not take hooks |
 
 The state badge is `설치됨` (ok, state `ok`), `다름` (warn, state `missing` with reason `differs` or `<kind> differs`) or `없음` (warn, state `missing` with reason `absent`). A part in state `error` shows its error text through the error display path ([controls](#controls)). A part that does not apply has no row. When no row exists, the page shows `이 컴퓨터에서 설정할 에이전트 항목이 없습니다.`

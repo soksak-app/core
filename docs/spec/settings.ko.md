@@ -266,15 +266,15 @@
 
 - 요약은 배지 `<n>개 중 <m>개가 다름`(warn, 경고 아이콘)을 보인다. `<m>`은 `differs` 또는 `missing`인 part의 수다. 모든 part가 `ok`이면 `모두 설치됨`(ok)을 보인다.
 - 버튼 `다시 확인`(refresh 아이콘, sm)은 `core.settings-tab.setup-check`를 실행하며, 이는 `core.setup.check`를 실행한다.
-- 버튼 `모두 설치`(primary, sm)는 상태가 `ok`가 아닌 part가 있는 종류 `skill`과 `mcp`로 `core.settings-tab.setup-install-all`을 실행한다. 그런 part가 없으면 비활성이다.
+- 버튼 `모두 설치`(primary, sm, 요소 `core.settings-tab.setup-install-all`)는 상태가 `ok`가 아닌 part가 있는 종류 `skill`과 `mcp`로 `core.setup.install {parts}`를 실행한다. 그런 part가 없으면 비활성이다.
 
 part마다 행이 하나이며 part 순서를 따른다(요소 이름 `core.settings-tab.setup`). 행은 이름, 파일, 상태를 보인다.
 
 | Part | 이름 | 파일 | 동작 |
 | --- | --- | --- | --- |
 | `path` | 명령 경로 | 애플리케이션 bundle의 `sok` | 켜져 있으면 `끄기`가 `core.settings-tab.setup-change {part: "path", enabled: false}`를 실행한다. 꺼져 있으면 상태에 `사용 안 함`을 보이고 `켜기`가 `enabled: true`로 같은 명령을 실행한다 |
-| `skill` | 스킬 | 스킬 파일 | 상태 `missing`이고 사유가 `differs`이면 `고치기`, 그 밖의 `missing`이면 `설치`(sm). 각각 `core.settings-tab.setup-install {parts: ["skill"]}`을 실행한다 |
-| `mcp` | MCP 등록 | 등록 파일 | `고치기` 또는 `설치`(sm). 각각 `core.settings-tab.setup-install {parts: ["mcp"]}`을 실행한다 |
+| `skill` | 스킬 | 스킬 파일 | 상태 `missing`이고 사유가 `differs`이면 `고치기`, 그 밖의 `missing`이면 `설치`(sm). 각각 요소 `core.settings-tab.setup-install`이며 `core.setup.install {parts: ["skill"]}`을 실행한다 |
+| `mcp` | MCP 등록 | 등록 파일 | `고치기` 또는 `설치`(sm). 각각 요소 `core.settings-tab.setup-install`이며 `core.setup.install {parts: ["mcp"]}`을 실행한다 |
 | `hook` | 훅 | 훅 파일 | 없음. 설치 명령은 훅을 받지 않는다 |
 
 상태 배지는 `설치됨`(ok, 상태 `ok`), `다름`(warn, 상태 `missing`과 사유 `differs` 또는 `<kind> differs`), `없음`(warn, 상태 `missing`과 사유 `absent`)이다. 상태가 `error`인 part는 [컨트롤](#컨트롤)의 오류 표시를 거쳐 오류 글을 보인다. 해당하지 않는 part에는 행이 없다. 행이 하나도 없으면 페이지는 `이 컴퓨터에서 설정할 에이전트 항목이 없습니다.`를 보인다.
