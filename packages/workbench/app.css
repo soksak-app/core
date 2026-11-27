@@ -126,9 +126,9 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .tabs--space{flex:0 0 auto;gap:var(--space-tabs-gap);
   padding:var(--tabs-pad) var(--space-3);
   align-items:center;background:var(--card);border-bottom:var(--bw) solid var(--edge)}
-.tabs--space .bar-tab{height:var(--space-tab-h);border-radius:var(--r-xs) var(--r-xs) 0 0}
+.tabs--space .bar-tab{height:var(--space-tab-h);padding:0 var(--space-2);border-radius:var(--r-xs) var(--r-xs) 0 0}
 
-.bar-tab{display:flex;align-items:center;gap:var(--bar-tab-gap);padding:0 var(--space-2);border:0;
+.bar-tab{display:flex;align-items:center;gap:var(--bar-tab-gap);height:var(--project-chip-h);padding:0 var(--project-chip-pad);border:0;
   border-radius:var(--r-xs);background:var(--chip);color:var(--muted);
   font:inherit;font-size:var(--text-control);cursor:pointer;max-width:var(--bar-tab-max-w);white-space:nowrap}
 .bar-tab:hover{background:var(--chip-hover)}

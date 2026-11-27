@@ -194,6 +194,8 @@ type barTab struct {
 	drop func(chip ui.Element)
 	// activity is the activity of the project or the space id of the tab, "" for none, and activityName the element name of its icon.
 	id, activity, activityName string
+	// project marks the tab of a project, which is the project chip of the top bar: its height and padding are the declared project chip values.
+	project bool
 }
 
 // barTabColors returns the text color and the fill of a tab.
@@ -239,6 +241,9 @@ func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 	pad := s.frameLength(m.chromeGap)
 	line := lineBox(size, m.lineHeight)
 	high := s.frameLength(m.spaceTabH)
+	if tab.project {
+		high, pad = s.frameLength(m.projectChipH), s.frameLength(m.projectChipPad)
+	}
 	holder := ui.Box(c.Key(tab.key)).Shrink(0)
 	color, fill := s.barTabColors(tab, holder.Hovered())
 	holder.Children(func() {
@@ -306,7 +311,7 @@ func (s *Shell) projectTab(c *ui.Context, project projectRecord) barTab {
 	radius := s.radiusSmall()
 	// silent: shownActivities gives the activities of the tabs, the group cards, the projects and the spaces; a project tab reads only those of the projects.
 	_, _, activities, _ := s.shownActivities()
-	return barTab{key: "project-" + project.ID, title: project.Title, on: project.ID == s.active, tint: project.Color, rename: renameTarget{"project", project.ID},
+	return barTab{key: "project-" + project.ID, title: project.Title, on: project.ID == s.active, tint: project.Color, rename: renameTarget{"project", project.ID}, project: true,
 		id: project.ID, activity: activities[project.ID], activityName: "core.activity.project",
 		radius: [4]float32{radius, radius, radius, radius}, drag: projectTabDrag{project.ID},
 		drop: func(chip ui.Element) {

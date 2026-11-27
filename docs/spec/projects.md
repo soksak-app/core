@@ -69,6 +69,8 @@ The project home and project workspace use the same typography, color, border, c
 
 The configured font family and base size apply to both screens. At the default 13px base size, project names and controls use 12px, secondary content uses 11px, and metadata and status text use 10px. These sizes scale with the base size. Body and control text use the same line height and normal letter spacing; section captions share one letter-spacing value. Screen headings use the base size rather than a separate large display style.
 
+A project tab of the top bar is a chip of the height `project-chip-h` (24 points) with the horizontal padding `project-chip-pad` (10 points). The chip keeps the corner radius of the theme, as the other controls do, and the space tabs keep the height `space-tab-h`.
+
 Project home controls, forms, rows, and the key hint line use the workspace's compact spacing and theme-derived borders and corners. Changing font, size, theme, or corner settings applies the same definitions in both screens.
 
 ## Settings

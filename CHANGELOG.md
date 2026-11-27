@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-18-6: A project tab of the top bar is a chip of the declared height and padding, 24 points high with 10 points of side padding.
 - F1285: The English notifications spec names its sidebar notice section `Sidebar notice`, so the anchor that the code cites resolves.
 - F1282: The benchmark runner test runs only on darwin, so the linux-node job does not run the darwin native build.
 - F1281: The clone, clone event and notification identifier tests name contract rows that the host contract defines, and the Rust host runs the clone cases and the parent refusal.

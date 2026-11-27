@@ -110,6 +110,7 @@ type metrics struct {
 	fieldPadY, selectArrowRoom, selectArrowInset,
 	lineHeight, lineHeightTight, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH,
 	barTabRootPad, barTabRootW, barTabRootH, dropMix, dropBorder, dropBand, dropBandMargin, groupFocusFade, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
+	projectChipH, projectChipPad                                                                                                                                                          float32
 	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, activityIconEm, activityGapEm, activityStroke, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW, tabGrabW float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, groupFramePad, groupFrameRadius, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, renameSelectionMix, insetMix, tabXHoverMix float32
@@ -191,6 +192,8 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("head-h", &m.headH)
 	read("foot-h", &m.footH)
 	read("space-tab-h", &m.spaceTabH)
+	read("project-chip-h", &m.projectChipH)
+	read("project-chip-pad", &m.projectChipPad)
 	read("act-w", &m.actW)
 	read("notice-dot", &m.noticeDot)
 	// The activity icon and its gap are lengths in em of the text size of their holder, as the page declares them.
