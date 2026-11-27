@@ -129,8 +129,13 @@ func (s *Shell) drawSettingsTab(c *ui.Context, rect ui.Rect) {
 	tab.Absolute().Left(rect.X).Top(rect.Y).Size(rect.W, rect.H).Background(s.palette.Card).Clip().Row().Children(func() {
 		s.drawSettingsMenu(c, model, pane)
 		ui.Column(c).FillWidth().Children(func() {
-			s.drawSettingsHead(c, model, rect.W-pane.navW, pane)
-			s.drawSettingsBody(c, model, rect.W-pane.navW, rect.H-s.settingsHeadHeight(pane), pane)
+			width := rect.W - pane.navW
+			foot := s.settingsFootHeight(pane)
+			s.drawSettingsHead(c, model, width, pane)
+			s.drawSettingsBody(c, model, width, rect.H-s.settingsHeadHeight(pane)-foot, pane)
+			if s.settingsTab.undo != nil {
+				s.drawSettingsToast(c, width, foot, pane)
+			}
 		})
 	})
 }
@@ -138,6 +143,28 @@ func (s *Shell) drawSettingsTab(c *ui.Context, rect ui.Rect) {
 // exposedBox is a box with an element name that takes no input.
 func (s *Shell) exposedBox(c *ui.Context, name, command, item string) ui.Element {
 	return ui.Box(c.Key(Exposed{Name: name, Command: command, Item: item}))
+}
+
+// settingsFootHeight is the height of the foot of the tab, which holds the undo toast while one is shown, and 0 otherwise. The foot is
+// the button height between the paddings of the pane (docs/spec/settings.md#saving-and-undo).
+func (s *Shell) settingsFootHeight(pane settingsPane) float32 {
+	if s.settingsTab.undo == nil {
+		return 0
+	}
+	return s.metrics.actH + pane.paneTop + pane.paneBottom
+}
+
+// drawSettingsToast draws the undo toast in the foot of the tab: its text and the button 되돌리기, which runs core.settings-tab.undo
+// (docs/spec/settings.md#saving-and-undo).
+func (s *Shell) drawSettingsToast(c *ui.Context, width, height float32, pane settingsPane) {
+	toast := s.settingsTab.undo
+	text := fmt.Sprintf("%s: %v → %v", toast.label, toast.old, toast.new)
+	// The row is a status with the text as its label, so the element tree keeps it (an unnamed container is not kept).
+	row := ui.Row(s.binder.Name(c, "core.settings-tab.toast", "")).Role(ui.RoleStatus).Label(text).Size(width, height).Padding(pane.paneTop, pane.paneX, pane.paneBottom, pane.paneX)
+	row.AlignItems(ui.Center).Gap(pane.rowGap).Children(func() {
+		ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Grow(1).Basis(0).FontSize(s.textControl()).TextColor(s.palette.Fg)
+		s.uiButton(c, s.binder.Press(c, "core.settings-tab.undo", "core.settings-tab.undo", "", windowParam{}), "되돌리기", false)
+	})
 }
 
 // settingsTabInFront tells whether the settings tab is in front. The chrome of the window draws the tab only while this is true.

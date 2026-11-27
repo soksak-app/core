@@ -273,3 +273,23 @@ func TestTheSetsPageShowsSectionChipsWithOneRemoveAndAnAddSelect(t *testing.T) {
 		t.Fatalf("the set has %d section select boxes", len(add))
 	}
 }
+
+// The toast is the element core.settings-tab.toast in the foot of the tab, with its text and the button 되돌리기 (core.settings-tab.undo),
+// and it leaves the tab with the undo (docs/spec/settings.md#saving-and-undo).
+func TestTheToastIsDrawnInTheFootOfTheTab(t *testing.T) {
+	f := newShell(t, acme())
+	f.run("core.settings.open", nil)
+	f.run("core.settings.change", map[string]any{"key": "gap", "value": 20, "scope": "common"})
+	f.settle()
+	if !f.has("core.settings-tab.toast", "") || !f.has("core.settings-tab.undo", "") {
+		t.Fatal("the toast of the change is not drawn in the foot of the tab")
+	}
+	if !f.tester.HasText("통로: 12 → 20") {
+		t.Fatalf("the toast text is not 통로: 12 → 20: %q", f.tester.Texts())
+	}
+	f.run("core.settings-tab.undo", map[string]any{})
+	f.settle()
+	if f.has("core.settings-tab.toast", "") {
+		t.Fatal("the toast stays drawn after the undo")
+	}
+}

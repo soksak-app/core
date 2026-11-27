@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: The undo toast of a settings change is drawn in the tab foot as core.settings-tab.toast, with the button core.settings-tab.undo.
 - F1217-7: The plugin page shows the manifest description, and each line of it is the element core.settings-tab.plugins.about.
 - F1217-7: The agent group shows the install button as 모두 설치 with the element core.settings-tab.setup-install-all, disabled when no part is missing.
 - F999-5: The compositor test file registers its fullscreen probe once, so the restarted hidden-tab test runs with the other tests of the file.

@@ -85,7 +85,7 @@ Every control of a setting follows one rule, in the tab and in the window chrome
 
 - Every change is saved when it is made. The page has no save button.
 - The foot of the tab shows a check icon and the text `바꾼 값은 바로 저장된다`.
-- A change of a setting shows a toast `<label>: <old> → <new>` with the button `되돌리기` for 5 seconds (5000 ms). The button `되돌리기` (`core.settings-tab.undo`) runs the command of the change with the old value and removes the toast. A new toast replaces the one that is shown. The toast has no close control and disappears when its time ends.
+- A change of a setting shows a toast `<label>: <old> → <new>` with the button `되돌리기` for 5 seconds (5000 ms). The button `되돌리기` (`core.settings-tab.undo`) runs the command of the change with the old value and removes the toast. A new toast replaces the one that is shown. The toast has no close control and disappears when its time ends. The toast is the element `core.settings-tab.toast`, drawn in the foot of the tab with its text and the button `되돌리기`; the foot is the row below the page body.
 - The toast of a side switch reads `왼쪽 사이드바 보이기: 켬 → 끔`. The toast of a sidebar order reads `배치 순서: 왼쪽 → 오른쪽 → 위 → 아래`. The toast of a plugin order reads `창 사이드바 배치 순서: <sides>` or `카드 사이드바 배치 순서: <sides>`, where `<sides>` joins the side names with ` → `.
 - A slider does not show a toast while it is dragged. It shows one toast when the drag ends.
 - The toast appears on the settings tab only. A change made on the work screen, such as a sidebar shortcut, shows no toast and writes the same stored value.
