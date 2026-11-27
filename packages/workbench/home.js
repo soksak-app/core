@@ -63,6 +63,14 @@ export function createHome(root) {
       </div>
     </main>`;
   const search = root.querySelector('[data-expose="core.home.search"]');
+  // Cmd+Backspace in the search field asks the removal of the selected row, as the design's launcher input does; the field keeps its text
+  // (docs/spec/projects.md#project-home). The event stops here, so the window shortcut does not ask it again.
+  search.addEventListener('keydown', (event) => {
+    if (event.key !== 'Backspace' || !event.metaKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    actions.confirm(undefined, 'ask');
+  });
   const list = root.querySelector('.home__list');
   const actionsRow = root.querySelector('.home__actions');
   const form = root.querySelector('.home__form');

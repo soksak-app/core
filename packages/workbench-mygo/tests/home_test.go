@@ -546,8 +546,8 @@ func selectRow(t *testing.T, f *shellFixture, id string) {
 	}
 }
 
-// Cmd+Backspace puts the selected row into the removal confirm state, as its × button does, and does nothing while the search field
-// has focus (docs/spec/projects.md#project-home).
+// Cmd+Backspace puts the selected row into the removal confirm state, as its × button does, also while the search field has focus: the
+// design's launcher input runs it (docs/spec/projects.md#project-home).
 func TestTheShortcutAsksTheRemovalOfTheSelectedRow(t *testing.T) {
 	f, alpha, _ := twoProjects(t)
 	f.run("core.projects.browse", nil)
@@ -561,8 +561,8 @@ func TestTheShortcutAsksTheRemovalOfTheSelectedRow(t *testing.T) {
 	f.run("core.home.search.focus", nil)
 	f.tester.Key(ui.Cmd, ui.KeyBackspace)
 	f.settle()
-	if f.has("core.home.confirm", alpha) {
-		t.Fatal("cmd+Backspace in the search field asks the removal of a row")
+	if !f.has("core.home.confirm", alpha) {
+		t.Fatal("cmd+Backspace in the search field does not ask the removal of the selected row")
 	}
 }
 

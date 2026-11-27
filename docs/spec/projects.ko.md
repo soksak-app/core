@@ -25,7 +25,7 @@
    - 고정폭 글꼴의 전체 경로. 한 줄로 자르며, 툴팁은 전체 경로다.
    - 스페이스 수 스페이스 <n>과 마지막으로 연 날: 최근 일주일 안이면 오늘, 어제, <n>일 전, 그보다 오래되었으면 <M>월 <D>일.
    - 고정 버튼. 마우스를 올리거나 선택하면 보이며, 고정한 줄에는 항상 보인다. `core.home.pin {project}`를 실행한다(element `core.home.pin`). 툴팁은 위에 고정 또는 고정 풀기다.
-   - × 버튼(element `core.home.remove-ask`). 마우스를 올리거나 선택하면 보인다. 프로젝트를 제거하지 않으며, `core.home.confirm {project, answer: "ask"}`를 실행해 줄을 확인 상태로 바꾼다. `cmd+Backspace`는 글 칸에 포커스가 없을 때 선택한 줄에 같은 `ask`를 실행하며, `core.home.confirm`에 project가 없으면 선택한 줄을 고른다.
+   - × 버튼(element `core.home.remove-ask`). 마우스를 올리거나 선택하면 보인다. 프로젝트를 제거하지 않으며, `core.home.confirm {project, answer: "ask"}`를 실행해 줄을 확인 상태로 바꾼다. `cmd+Backspace`는 양식이 없을 때 선택한 줄에 같은 `ask`를 실행한다. 검색 칸에서도 실행되며 칸의 글은 그대로 둔다. `core.home.confirm`에 project가 없으면 선택한 줄을 고른다.
 
    확인 상태는 줄을 "<name> — 목록에서 뺄까? 폴더는 그대로 둔다." 글과 버튼 두 개로 바꾼다. 취소는 `core.home.confirm {project, answer: "no"}`를 실행하며 줄을 되돌린다. 위험 버튼인 빼기는 `core.home.confirm {project, answer: "yes"}`를 실행하고, 이 명령은 `core.home.remove {project}`를 실행한다. 제거는 기록과 그 스페이스를 지우며 폴더는 바꾸지 않는다.
 

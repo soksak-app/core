@@ -25,7 +25,7 @@ The project home is a launcher: one screen with no tabs and no plugin entry. Plu
    - The full path in a fixed-width font, cut at one line, with the full path as its tooltip.
    - The space count 스페이스 <n> and the last-opened day: 오늘, 어제, <n>일 전 within the last week, and <M>월 <D>일 for older days.
    - A pin button, shown on hover or selection and always shown on a pinned row. It runs `core.home.pin {project}` (element `core.home.pin`). Its tooltip is 위에 고정 or 고정 풀기.
-   - A × button (element `core.home.remove-ask`), shown on hover or selection. It does not remove the project. It runs `core.home.confirm {project, answer: "ask"}`, which puts the row into the confirm state. `cmd+Backspace` runs the same `ask` for the selected row while no text field has focus, and `core.home.confirm` with no project names the selected row.
+   - A × button (element `core.home.remove-ask`), shown on hover or selection. It does not remove the project. It runs `core.home.confirm {project, answer: "ask"}`, which puts the row into the confirm state. `cmd+Backspace` runs the same `ask` for the selected row while the home shows no form, also in the search field, which keeps its text; `core.home.confirm` with no project names the selected row.
 
    The confirm state replaces the row with the text "<name> — 목록에서 뺄까? 폴더는 그대로 둔다." and two buttons. 취소 runs `core.home.confirm {project, answer: "no"}` and restores the row. 빼기, the danger button, runs `core.home.confirm {project, answer: "yes"}`, which runs `core.home.remove {project}`. The removal deletes the record and its spaces and leaves the folder unchanged.
 

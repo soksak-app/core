@@ -659,8 +659,8 @@ addEventListener("keydown", (event) => {
     event.preventDefault();
     return run("core.home.search.focus", {});
   }
-  // The row Cmd+Backspace asks the removal of the selected row; a text field keeps the key (docs/spec/projects.md#project-home).
-  if (event.key === "Backspace" && projects.inHome() && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName ?? "")) {
+  // Cmd+Backspace asks the removal of the selected row while the home has focus outside its search field (docs/spec/projects.md#project-home).
+  if (event.key === "Backspace" && projects.inHome()) {
     event.preventDefault();
     return run("core.home.confirm", { answer: "ask" });
   }

@@ -726,14 +726,13 @@ func (s *Shell) shortcutConditions() map[string]func() bool {
 		"The project home is shown and no form field has focus; the command gets step -1":        noForm,
 		"The project home is shown and no form field has focus; the command gets step 1":         noForm,
 		"The project home search field holds a non-empty query; the command gets an empty query": func() bool { return home() && s.home.query != "" },
-		"The tab rename field has focus":      never,
-		"A project home form field has focus": formOpen,
-		"The project home is shown, a row is selected and no text field has focus; the command gets answer ask": func() bool { return noForm() && len(s.homeRows()) > 0 },
-		"The project home is shown, a row is selected and no form field has focus":                              func() bool { return noForm() && len(s.homeRows()) > 0 },
-		"A picker layer is open":                              never,
-		"The notice center is open":                           func() bool { return s.errors.noticeOpen },
-		"The toast list is open; the command gets open false": func() bool { return s.errors.toastListOpen },
-		"A native modal menu is open and has keyboard focus":  never,
+		"The tab rename field has focus":                                           never,
+		"A project home form field has focus":                                      formOpen,
+		"The project home is shown, a row is selected and no form field has focus": func() bool { return noForm() && len(s.homeRows()) > 0 },
+		"A picker layer is open":                                                   never,
+		"The notice center is open":                                                func() bool { return s.errors.noticeOpen },
+		"The toast list is open; the command gets open false":                      func() bool { return s.errors.toastListOpen },
+		"A native modal menu is open and has keyboard focus":                       never,
 	}
 }
 

@@ -95,7 +95,7 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 | `shift+cmd+n` | native menu | core.window.new | window/new-window | 모든 포커스 |
 | `shift+cmd+n` | workbench | core.window.new | — | host 크롬이 없음(브라우저 빌드) |
 | `cmd+o` | workbench | core.home.search.focus | — | 프로젝트 홈이 보임 |
-| `cmd+Backspace` | workbench | core.home.confirm | — | 프로젝트 홈이 보이고, 줄이 선택되어 있으며, 글 칸에 포커스가 없음; 명령은 answer ask를 받는다 |
+| `cmd+Backspace` | workbench | core.home.confirm | — | 프로젝트 홈이 보이고, 줄이 선택되어 있으며, 양식 칸에 포커스가 없음; 명령은 answer ask를 받는다 |
 | `Enter` | workbench | core.rename.commit | — | 탭 이름 변경 필드에 포커스가 있음 |
 | `Escape` | workbench | core.rename.cancel | — | 탭 이름 변경 필드에 포커스가 있음 |
 | `Enter` | workbench | core.home.form.submit | — | 프로젝트 홈 양식 필드에 포커스가 있음 |

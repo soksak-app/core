@@ -54,13 +54,33 @@ func (s *Shell) drawHomeSearch(c *ui.Context) {
 	ui.Row(c).FillWidth().Gap(s.metrics.space2).AlignItems(ui.Center).Children(func() {
 		run := s.binder.Control(c, "core.home.search", "core.home.search", "")
 		field := s.drawnTextField(s.binder.Bound(ui.TextInputBase(c, &query), "core.home.search")).Grow(1).MinWidth(0).Label("프로젝트 찾기").
-			Placeholder("프로젝트 찾기 또는 폴더 경로 붙여넣기")
+			Placeholder("프로젝트 찾기 또는 폴더 경로 붙여넣기").OnTextKey(func(k ui.TextKey) bool {
+			// Cmd+Backspace asks the removal of the selected row in the field too, as the design's launcher input does, and the field
+			// keeps its text (docs/spec/projects.md#project-home). The window shortcut of the row does not run here, because the field edits with it.
+			if k.Key != ui.KeyBackspace || k.Mods&ui.Cmd == 0 {
+				return false
+			}
+			if err := s.askRemoval(); err != nil {
+				s.fail(err)
+			}
+			return true
+		})
 		if field.Changed() {
 			run(map[string]string{"query": query})
 		}
 		// The caption is the shortcut of core.home.search.focus (docs/spec/projects.md#project-home).
 		ui.Text(c, "⌘O").LineHeight(s.metrics.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.Muted)
 	})
+}
+
+// askRemoval runs core.home.confirm with answer ask for the selected row, the command of cmd+Backspace.
+func (s *Shell) askRemoval() error {
+	raw, err := json.Marshal(map[string]string{"answer": "ask"})
+	if err != nil {
+		return err
+	}
+	_, err = s.registry.Run("core.home.confirm", raw)
+	return err
 }
 
 // drawHomeButtons draws the primary button 새 프로젝트 and the button 폴더 열기, which open the form in their mode.

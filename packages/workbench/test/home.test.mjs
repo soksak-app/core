@@ -248,3 +248,13 @@ test("the search field shows the shortcut of its focus command after the field",
   await settled();
   assert.equal(root.querySelector(".home__search .home__search-key")?.textContent, "⌘O", "the search field shows no caption ⌘O");
 });
+
+test("cmd+Backspace in the focused search field asks the removal of the selected row, as the design's launcher input does", async () => {
+  const { root, home } = mount([project("a", "alpha"), project("b", "bravo")]);
+  await settled();
+  home.render();
+  const input = root.querySelector(".home__search input");
+  input.focus();
+  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Backspace", metaKey: true, bubbles: true, cancelable: true }));
+  assert.equal(home.state().confirming, "a", "cmd+Backspace in the search field does not ask the removal of the selected row");
+});
