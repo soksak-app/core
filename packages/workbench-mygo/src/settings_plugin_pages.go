@@ -491,6 +491,10 @@ func (s *Shell) buildPluginTab(b *settingsBuilder) error {
 	}
 	back := b.button("plugin-back", "core.settings-tab.back", "‹ "+backName, "core.settings-tab.back", map[string]any{})
 	info := []settingsRow{{controls: []*SettingsControl{back}}}
+	// The description of the manifest, one element per line (docs/spec/settings.md#plugin-page).
+	if unit != nil && unit.Description != "" {
+		info = append(info, settingsRow{description: unit.Description, aboutLines: true})
+	}
 	if item.Installed == nil {
 		info = append(info, settingsRow{name: "설치", controls: []*SettingsControl{s.pluginAction(b, busy, item.ID, "install", "설치", "core.plugins.install", map[string]any{"plugin": item.ID})}})
 	} else {

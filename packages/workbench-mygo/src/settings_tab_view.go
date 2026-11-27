@@ -138,7 +138,9 @@ type settingsRow struct {
 	name        string
 	key         string
 	description string
-	controls    []*SettingsControl
+	// aboutLines says that each line of the description is one element core.settings-tab.plugins.about (docs/spec/settings.md#plugin-page).
+	aboutLines bool
+	controls   []*SettingsControl
 	// list says that the controls stand in the flow of a line, one after the other (.set-list).
 	list bool
 	// side says that the row is a row of the sidebar list: number is its number in the order, and name its side name

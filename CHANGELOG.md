@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: The plugin page shows the manifest description, and each line of it is the element core.settings-tab.plugins.about.
 - F1217-7: The agent group shows the install button as 모두 설치 with the element core.settings-tab.setup-install-all, disabled when no part is missing.
 - F999-5: The compositor test file registers its fullscreen probe once, so the restarted hidden-tab test runs with the other tests of the file.
 - F1222: The progress ring reads the declared spinner turn duration instead of a literal.

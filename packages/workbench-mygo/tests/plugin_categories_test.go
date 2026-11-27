@@ -6,6 +6,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
 // categoryPlugin is the manifest of a plugin of the test documents: a plugin with a surface, with the members that the test adds.
@@ -247,5 +250,32 @@ func TestThePluginScreenShowsAPluginThatRequiresAMissingCategoryAsRequires(t *te
 	}
 	if states["textprobe"] != "requires" || states["boxprobe"] != "loaded" || got.Reload {
 		t.Fatalf("the plugin screen states are %v with reload %v", states, got.Reload)
+	}
+}
+
+// Each description line of a plugin page is the element core.settings-tab.plugins.about (docs/spec/settings.md#plugin-page).
+func TestAPluginPageNamesEachDescriptionLine(t *testing.T) {
+	f := categoryShell(t, enabledPlugins("card"), settingsWithTerminal)
+	f.clickQuiet("core.chrome.settings", "")
+	f.runQuiet("core.settings-tab.nav", map[string]any{"page": "installed"})
+	f.clickQuiet("core.settings-tab.plugin", "plugin:card")
+	var about []string
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
+		for _, n := range nodes {
+			if e, ok := n.Key.(workbench.Exposed); ok && e.Name == "core.settings-tab.plugins.about" {
+				about = append(about, n.Text)
+			}
+			walk(n.Children)
+		}
+	}
+	walk(f.tester.ElementTree())
+	if len(about) == 0 {
+		t.Fatal("the plugin page of card names no description line core.settings-tab.plugins.about")
+	}
+	for _, line := range about {
+		if line == "" {
+			t.Fatalf("a description line is empty: %q", about)
+		}
 	}
 }

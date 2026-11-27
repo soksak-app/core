@@ -311,7 +311,7 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 		line.Padding(0, 0, 0, pane.indent)
 	}
 	line.Children(func() {
-		s.drawLabelArea(c, row.name, row.description, pane)
+		s.drawLabelArea(c, row.name, row.description, row.aboutLines, pane)
 		// The control area is 260 points at the end of the row, so the controls of every row start at the same x and end at its end. A
 		// disabled row takes no press in its control area. The reset marks of the project scope wrap inside it, so each mark stays inside
 		// the window.
@@ -370,7 +370,7 @@ func (s *Shell) sideSelectWidth(c *ui.Context, control *SettingsControl, pane se
 
 // drawLabelArea draws the label area of a row, which takes the width that the control area leaves: the name, and under it the
 // description of the row (docs/spec/settings.md#rows). A row without a label keeps the area empty.
-func (s *Shell) drawLabelArea(c *ui.Context, name, description string, pane settingsPane) {
+func (s *Shell) drawLabelArea(c *ui.Context, name, description string, aboutLines bool, pane settingsPane) {
 	if name == "" && description == "" {
 		ui.Box(c).Grow(1).Basis(0)
 		return
@@ -380,7 +380,15 @@ func (s *Shell) drawLabelArea(c *ui.Context, name, description string, pane sett
 			// .set-row__name: one line that ends with an ellipsis, so a long label does not grow the row.
 			ui.Text(c, name).SingleLine().Ellipsis("…").MinWidth(0).FontSize(s.textControl()).TextColor(s.palette.Muted)
 		}
-		if description != "" {
+		if aboutLines {
+			// Each line is a named element; the item is the line number, so the lines of one plugin page stay apart.
+			for index, line := range strings.Split(description, "\n") {
+				if line == "" {
+					continue
+				}
+				ui.Text(s.binder.Name(c, "core.settings-tab.plugins.about", fmt.Sprint(index)), line).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
+			}
+		} else if description != "" {
 			ui.Text(c, description).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
 		}
 	})
@@ -794,7 +802,7 @@ func (s *Shell) drawSearchControl(c *ui.Context, control *SettingsControl) {
 func (s *Shell) drawSetupRow(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	row := control.setup
 	s.exposedBox(c, control.Name, "", control.item()).FillWidth().Row().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Role(ui.RoleGroup).Label(control.Label).Children(func() {
-		s.drawLabelArea(c, row.name, "", pane)
+		s.drawLabelArea(c, row.name, "", false, pane)
 		// The state, the file and the action are in the control area, which starts at the same x as the controls of every row.
 		ui.Row(c).Width(pane.controlW).Shrink(0).Gap(pane.rowGap).AlignItems(ui.Center).Children(func() {
 			ui.Column(c).Grow(1).Basis(0).Gap(pane.captionGap).Children(func() {
