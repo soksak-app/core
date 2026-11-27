@@ -11,7 +11,7 @@
 import { registry } from "./exposure.js";
 import { commandOf, delegate, mark, run } from "./commands.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
-import { ALL_ROWS, PAGES, choicesOf } from "./settings-rows.js";
+import { ALL_ROWS, GROUPS, PAGES, choicesOf } from "./settings-rows.js";
 import { badge, button, editable, element } from "./settings-controls.js";
 import { state, setScope, projectSelected, projectTitle, projectFolder, shownValue } from "./settings-state.js";
 import { agentsPage, behaviorPage, diagPage, headScope, lookPage, scopeSegment, setupWarnings, workspacePage } from "./settings-pages.js";
@@ -591,12 +591,16 @@ export function installSettingsTab(sink) {
   if (installed) return;
   installed = true;
   statusSink = sink;
-  registry.command("core.settings-tab.nav", ({ page }) => {
+  registry.command("core.settings-tab.nav", ({ page, group }) => {
     oneOf("page", page, [...CORE_PAGES, ...PLUGIN_LIST_PAGES]);
+    if (group !== undefined && !(GROUPS[page] ?? []).some((item) => item.id === group)) throw invalid(`unknown group "${group}" of page "${page}"`);
     state.page = page;
     state.plugin = null;
     state.find = "";
+    front = true;
     draw();
+    // A named group is scrolled to the top of the pane; the group keeps its id as data-group (docs/spec/settings.md#rows).
+    if (group !== undefined) root?.querySelector(`[data-group="${group}"]`)?.scrollIntoView({ block: "start" });
   });
   registry.command("core.settings-tab.scope", ({ scope }) => {
     oneOf("scope", scope, ["common", "project"]);

@@ -169,13 +169,14 @@ func (s *Shell) buildBehavior(b *settingsBuilder) error {
 // buildNotices builds the group 알림 of the behavior page from the rows of the workbench declaration, with their labels, descriptions,
 // units and dependencies, in the declared order (docs/spec/notifications.md#settings).
 func (s *Shell) buildNotices(b *settingsBuilder, rows declaredRows) error {
-	group, err := rows.group("behavior", "알림")
-	if err != nil {
-		return err
+	group, ok := rows.groupByID("behavior", "notices")
+	if !ok {
+		return fmt.Errorf("the workbench declaration has no group notices on the page behavior")
 	}
 	var built []settingsRow
 	for _, def := range group.Rows {
 		var row settingsRow
+		var err error
 		switch def.Form {
 		case "choice":
 			row, err = s.choiceRow(b, def.Label, def.Key, rows.Labels[def.Key])

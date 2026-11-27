@@ -48,7 +48,7 @@ The catalog holds the plugins that the registry index lists with a version that 
 
 Group `설정이 있는 플러그인`: one item per loaded and enabled plugin that declares settings or accounts, labelled with the plugin name and marked with a green dot (title `사용 중`). The group lists only these plugins. Every other plugin page opens from 설치됨, so the menu stays short with many installed plugins.
 
-Each page item runs `core.settings-tab.nav {page}`. Each plugin item runs `core.settings-tab.plugin {plugin}`. The item of the page in front is selected: its background is the accent tint and its text is bold. A search shows no selected item.
+Each page item runs `core.settings-tab.nav {page}`. `core.settings-tab.nav` also takes the optional `group`, the `id` of a group of that page ([rows](#rows)): the page scrolls the group to the top of the view. The command brings the settings tab to the front, also when the tab is closed, as core.settings.open does, so the gear of the notice center can run it. An unknown group is refused with -32602 and the page does not change. Each plugin item runs `core.settings-tab.plugin {plugin}`. The item of the page in front is selected: its background is the accent tint and its text is bold. A search shows no selected item.
 
 ## Page head
 
@@ -66,6 +66,8 @@ The head of a page shows the title, a one-line description and the scope control
 A setting is a row. The row shows its label in bold, its description under the label and its control in the control column at the right. The control column is 260 points wide. A row without a label keeps an empty label cell, so its control stays in the control column. Wide controls (the theme swatches, the account list, the setup state) take the whole row. A unit is part of its control.
 
 Every control is usable from the keyboard, shows its focus and has a disabled state. Korean text wraps at spaces.
+
+Each group of a page has an `id`, unique within its page, in the rows declaration of `workbench.json`. The `id` names the group for `core.settings-tab.nav {page, group}`; the group name is only its title.
 
 ### Scope of a control
 
@@ -252,7 +254,7 @@ Group `메모리`, description `메모리 절약을 켜면 숨긴 지 정한 시
 | `메모리 절약` | Switch | on, off | on | none |
 | `숨긴 뒤 내리기까지` | Slider with unit `분` | 5–720 | 120 | Indented. Disabled while `메모리 절약` is off |
 
-Group `알림` follows [notifications](notifications.md#settings). Its keys are `toastStyle`, `noticeCenterStyle`, `quietToasts`, `autoDismissProblemToasts` and `problemToastDismissSeconds`, and every row of the group is common only.
+Group `알림` (`id` `notices`) follows [notifications](notifications.md#settings). Its keys are `toastStyle`, `noticeCenterStyle`, `quietToasts`, `autoDismissProblemToasts` and `problemToastDismissSeconds`, and every row of the group is common only.
 
 ### 에이전트
 

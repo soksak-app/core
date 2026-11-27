@@ -5529,12 +5529,15 @@
       },
       {
         "name": "core.settings-tab.nav",
-        "description": "Shows a page of the settings tab.",
+        "description": "Shows a page of the settings tab, and scrolls the named group of the page into view.",
         "params": {
           "type": "object",
           "properties": {
             "page": {
               "enum": ["look", "workspace", "sets", "behavior", "agents", "diag", "installed", "browse", "plugin"]
+            },
+            "group": {
+              "type": "string"
             }
           },
           "required": ["page"]

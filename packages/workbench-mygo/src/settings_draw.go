@@ -214,7 +214,11 @@ func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width, mos
 		// packages/workbench/app.css does.
 		ui.Column(c).FillWidth().Padding(pane.paneTop, pane.paneX, pane.paneBottom, pane.paneX).Children(func() {
 			for index, group := range model.groups {
-				s.drawSettingsGroup(c, group, pane, index == len(model.groups)-1)
+				reveal := group.name == w.revealGroup
+				if reveal {
+					w.revealGroup = ""
+				}
+				s.drawSettingsGroup(c, group, pane, index == len(model.groups)-1, reveal)
 			}
 		})
 	})
@@ -239,12 +243,16 @@ func (s *Shell) drawSettingsScope(c *ui.Context, control *SettingsControl, pane 
 	})
 }
 
-func (s *Shell) drawSettingsGroup(c *ui.Context, group settingsGroup, pane settingsPane, last bool) {
+func (s *Shell) drawSettingsGroup(c *ui.Context, group settingsGroup, pane settingsPane, last, reveal bool) {
 	margin := pane.gap
 	if last {
 		margin = 0
 	}
-	ui.Column(c).FillWidth().Margin(0, 0, margin, 0).Role(ui.RoleGroup).Label(group.name).Children(func() {
+	column := ui.Column(c).FillWidth().Margin(0, 0, margin, 0).Role(ui.RoleGroup).Label(group.name)
+	if reveal {
+		column = column.ScrollIntoView()
+	}
+	column.Children(func() {
 		size := s.textCaption()
 		ui.Text(c, group.name).Bold().FontSize(size).LetterSpacing(size*pane.tracking).TextColor(s.palette.Rail).Margin(0, 0, pane.nameGap, 0)
 		ui.Text(c, group.text).Wrap().LineHeight(pane.lineHeight).TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)

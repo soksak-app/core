@@ -20,6 +20,7 @@ type declaredRows struct {
 
 // declaredGroup is a group of a page with its rows.
 type declaredGroup struct {
+	ID          string        `json:"id"`
 	Name        string        `json:"name"`
 	Description string        `json:"description"`
 	Rows        []declaredRow `json:"rows"`
@@ -36,13 +37,13 @@ type declaredRow struct {
 }
 
 // group returns the declared group of the page with the name, or an error when the declaration has none.
-func (r declaredRows) group(page, name string) (declaredGroup, error) {
+func (r declaredRows) groupByID(page, id string) (declaredGroup, bool) {
 	for _, group := range r.Groups[page] {
-		if group.Name == name {
-			return group, nil
+		if group.ID == id {
+			return group, true
 		}
 	}
-	return declaredGroup{}, fmt.Errorf("the workbench declaration has no group %s on the page %s", name, page)
+	return declaredGroup{}, false
 }
 
 // rowMatch is a row that a search matched, with the page and the group that draw it.

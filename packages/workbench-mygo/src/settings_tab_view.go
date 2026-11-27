@@ -193,7 +193,9 @@ type settingsTab struct {
 	width, height   float64
 	scroll          ui.ScrollState
 	scrollKey       string
-	drafts          map[string]string
+	// revealGroup is the name of the group that the next draw scrolls into view, from core.settings-tab.nav with a group.
+	revealGroup string
+	drafts      map[string]string
 	// The fields of the group 계정 of the shown plugin page (docs/spec/plugins.md#accounts): the plugin of the page, the name and the
 	// kind of the row 새 계정, the account whose name is edited and the text of its field. Another page clears them.
 	accountPlugin, accountName, accountKind, accountEdit, accountEditName string
@@ -1285,6 +1287,7 @@ func (s *Shell) registerSettingsSets() {
 type windowParam struct {
 	// The members that a command does not declare are omitted, so a run of the workbench gives a command only its own members.
 	Page   string `json:"page,omitempty"`
+	Group  string `json:"group,omitempty"`
 	Answer string `json:"answer,omitempty"`
 	// HideInstalled is the switch of 찾아보기, and More asks for the next rows of 찾아보기.
 	HideInstalled *bool   `json:"hideInstalled,omitempty"`
@@ -1326,19 +1329,33 @@ func (s *Shell) registerSettingsTab() {
 		return nil
 	})
 	act(s, "core.settings.close", func(struct{}) error { s.closeSettings(); return nil })
-	windowAct(s, "core.settings-tab.nav", func(value windowParam) error {
+	// The page is shown from the notice center too, where the tab may be closed, so the command does not require the open tab; it opens
+	// the tab as core.settings.open does.
+	act(s, "core.settings-tab.nav", func(value windowParam) error {
 		if !slices.ContainsFunc(settingsPages[:len(settingsPages)-1], func(page [2]string) bool { return page[0] == value.Page }) {
 			return fmt.Errorf("unknown settings page %s", value.Page)
 		}
 		w.page = value.Page
 		w.chosen = ""
 		w.scroll = ui.ScrollState{}
+		// The page comes to the front, as core.settings.open brings the tab forward (docs/spec/settings.md#opening-and-closing).
+		w.open, w.openedOnce = true, true
+		w.revealGroup = ""
+		if value.Group != "" {
+			// The group is named by its id in the rows declaration; the page scrolls it into view when it draws it.
+			group, ok := s.settings.Catalog.Rows.groupByID(value.Page, value.Group)
+			if !ok {
+				return Refuse(InvalidParams, "unknown group %q of page %q", value.Group, value.Page)
+			}
+			w.revealGroup = group.Name
+		}
 		if value.Page == "installed" {
 			// The installed page reads the plugin state and the application update of the host when it is shown, as the plugin page did
 			// before the library was removed (docs/spec/settings.md#설치됨).
 			s.pluginOperations.Refresh(func() {})
 			s.appUpdates.Refresh(func() {})
 		}
+		s.options.Invalidate()
 		return nil
 	})
 	windowAct(s, "core.settings-tab.scope", func(value windowParam) error {

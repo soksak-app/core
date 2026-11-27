@@ -10,9 +10,10 @@ import { missingKinds } from "./setup-parts.js";
 import { hideTabError, showTabError } from "./settings-errors.js";
 import { mark } from "./commands.js";
 
-/** Creates one group: its name, its description, and its rows. */
-export function group(name, description, children) {
+/** Creates one group: its name, its description, and its rows. A declared group carries its id as data-group (docs/spec/settings.md#rows). */
+export function group(name, description, children, id) {
   const el = element("section", "set-group");
+  if (id !== undefined) el.dataset.group = id;
   el.append(element("h3", "set-group__name", name), element("p", "set-caption", description), ...children);
   return el;
 }
@@ -111,7 +112,7 @@ export function lookPage() {
   }
   return [
     preview,
-    ...GROUPS.look.map((item) => group(item.name, item.description, rowsOfGroup("look", item.name))),
+    ...GROUPS.look.map((item) => group(item.name, item.description, rowsOfGroup("look", item.name), item.id)),
   ];
 }
 
@@ -120,7 +121,8 @@ function sidebarGroup() {
   const sides = sideList({ order: "sidebarOrder", place: (side) => side, sideSwitch: (side) => side, title: "사이드바" });
   // The shortcuts follow a fixed order, not the rows (docs/spec/settings.md#작업-공간).
   const shortcuts = element("p", "set-caption", "⌘B 왼쪽 · ⌥⌘B 오른쪽 · ⇧⌘J 위 · ⌘J 아래");
-  return group("사이드바", groupOf("workspace", "사이드바").description, [sides, shortcuts]);
+  const declared = groupOf("workspace", "사이드바");
+  return group("사이드바", declared.description, [sides, shortcuts], declared.id);
 }
 
 /**
@@ -142,13 +144,13 @@ export function sizeGroup() {
       expose: "core.settings-tab.fix", command: "core.settings.change", params: { key: "sidebarWidth", value: cut, scope: writeScope() }, key: "sidebarWidth", variant: "sm",
     }));
   } else hideTabError(where);
-  return group(sizes.name, sizes.description, children);
+  return group(sizes.name, sizes.description, children, sizes.id);
 }
 
 /** The workspace page: the project and position groups, the four-row sidebar list, and the sizes (docs/spec/settings.md#작업-공간). */
 export function workspacePage() {
   return [
-    ...["프로젝트", "위치"].map((name) => group(name, groupOf("workspace", name).description, rowsOfGroup("workspace", name))),
+    ...["프로젝트", "위치"].map((name) => group(name, groupOf("workspace", name).description, rowsOfGroup("workspace", name), groupOf("workspace", name).id)),
     sidebarGroup(),
     sizeGroup(),
   ];
@@ -156,12 +158,12 @@ export function workspacePage() {
 
 /** The behavior page: language, cards, memory and notifications (docs/spec/settings.md#pages). */
 export function behaviorPage() {
-  return GROUPS.behavior.map((item) => group(item.name, item.description, rowsOfGroup("behavior", item.name)));
+  return GROUPS.behavior.map((item) => group(item.name, item.description, rowsOfGroup("behavior", item.name), item.id));
 }
 
 /** The diagnostics page (docs/spec/settings.md#진단). */
 export function diagPage() {
-  return GROUPS.diag.map((item) => group(item.name, item.description, rowsOfGroup("diag", item.name)));
+  return GROUPS.diag.map((item) => group(item.name, item.description, rowsOfGroup("diag", item.name), item.id));
 }
 
 /** The name of a setup part, and the state label of its state (docs/spec/settings.md#agents). */
