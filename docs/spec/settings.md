@@ -46,7 +46,7 @@ Group `플러그인`:
 
 The catalog holds the plugins that the registry index lists with a version that is not revoked, and the plugins that are installed or loaded ([registry index](installation.md#registry-index)).
 
-Group `설정이 있는 플러그인`: one item per loaded and enabled plugin that declares settings or accounts, labelled with the plugin name and marked with a dot (title `사용 중`). Each item is the element `core.settings-tab.plugin-item` with the item `plugin:<id>`; the dot takes the accent color, as the web draws it. The group lists only these plugins. Every other plugin page opens from 설치됨, so the menu stays short with many installed plugins.
+Group `설정이 있는 플러그인`: one item for each installed plugin (`installed.json` lists it or the window loaded it), labelled with the plugin name and a chevron icon before the name. An enabled plugin shows a dot at its end (title `사용 중`, in the accent color, as the web draws it); a disabled plugin shows the badge `꺼짐` (neutral). Each item is the element `core.settings-tab.plugin-item` with the item `plugin:<id>`. Every installed plugin has its plugin page, whether or not it declares settings or accounts.
 
 Each page item runs `core.settings-tab.nav {page}`. `core.settings-tab.nav` also takes the optional `group`, the `id` of a group of that page ([rows](#rows)): the page scrolls the group to the top of the view. The command brings the settings tab to the front, also when the tab is closed, as core.settings.open does, so the gear of the notice center can run it. An unknown group is refused with -32602 and the page does not change. Each plugin item runs `core.settings-tab.plugin {plugin}`. The item of the page in front is selected: its background is the accent tint and its text is bold. A search shows no selected item.
 
@@ -369,7 +369,7 @@ The rows are sorted by name with `localeCompare`. The registry index lists no ca
 
 ### Plugin page
 
-A plugin page has the back link, the title (the plugin name), and the description. The name, id, version, description, sections, settings, accounts and categories come from the loaded manifest. The latest version and the revocation come from the registry index ([registry index](installation.md#registry-index)). The description of the registry entry stands in only while no manifest is loaded. The plugin page of a plugin that only `installed.json` lists has the plugin id as its name and no description. The description line of the plugin is the element `core.settings-tab.plugins.about`, and it shows only when the plugin has a description.
+A plugin page has one head: the back link above, the title (the plugin name), the description, and the row `사용` with its switch and its version. The title is shown once, and the head holds no other title. The name, id, version, description, sections, settings, accounts and categories come from the loaded manifest. The latest version and the revocation come from the registry index ([registry index](installation.md#registry-index)). The description of the registry entry stands in only while no manifest is loaded. The plugin page of a plugin that only `installed.json` lists has the plugin id as its name and no description. The description line of the plugin is the element `core.settings-tab.plugins.about`, and it shows only when the plugin has a description.
 
 Before installation the page shows:
 
