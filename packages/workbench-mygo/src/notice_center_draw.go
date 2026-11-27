@@ -107,6 +107,9 @@ func (s *Shell) drawNoticeFilters(c *ui.Context, counts map[string]int) {
 			button := s.binder.Press(c, "core.notices.filter", "core.notices.filter", filter, map[string]any{"filter": filter})
 			s.uiButton(c, button, label, filter == s.errors.noticeFilter)
 		}
+		// The switch 조용히 runs core.settings.set with the patch of quietToasts (docs/spec/notifications.md#notice-center).
+		quiet, _ := s.settings.Value("quietToasts").(bool)
+		s.uiButton(c, s.binder.Press(c, "core.notices.quiet", "core.settings.set", "", s.appliedPatch("quietToasts", !quiet)), "조용히", quiet)
 	})
 }
 

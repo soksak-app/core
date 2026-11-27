@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-12-6: The notice center has the switch 조용히, which sets quietToasts through core.settings.set.
 - F1217-7: The status bar draws no top line at the seam, where the plane shares its bottom line.
 - F1217-6: A sidebar value of the wrong type shows an error on the settings page, and the mygo tests install the symbol provider for the settings search.
 - F1217-11-7: The captures-cleared case records the toast update and the re-place of the debug view.

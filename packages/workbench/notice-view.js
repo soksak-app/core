@@ -215,6 +215,11 @@ export function mountNoticeView(document, store) {
       button.setAttribute("aria-pressed", String(status.filter === filter));
       filters.append(button);
     }
+    const quiet = settingValue("quietToasts") === true;
+    // The switch 조용히 runs core.settings.set with the patch of quietToasts (docs/spec/notifications.md#notice-center).
+    const quietButton = control(document, "button", "notice-center__quiet", "조용히", "core.notices.quiet", "core.settings.set", { patch: { quietToasts: !quiet }, scope: "common" });
+    quietButton.setAttribute("aria-pressed", String(quiet));
+    filters.append(quietButton);
     const groups = el(document, "div", "notice-center__groups");
     const shownEntries = entries.filter((e) => status.filter === "all" || (status.filter === "problems" ? e.kind === "warning" || e.kind === "error" : e.kind === "progress"));
     const order = ["progress", ...new Set(shownEntries.map((e) => e.group).filter((g) => g !== "progress"))];
