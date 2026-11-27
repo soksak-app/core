@@ -128,16 +128,18 @@ impl Plugins {
             .map_err(|error| format!("{}: {error}", folder.display()))?;
         let last = Mutex::new(soksak_sok::plugins::plugin_folders(&self.config_dir)?);
         let config_dir = self.config_dir.clone();
-        let notify = Arc::new(move || match soksak_sok::plugins::plugin_folders(&config_dir) {
-            Ok(count) => {
-                let mut last = last.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-                if *last != count {
-                    *last = count;
-                    changed(count);
+        let notify = Arc::new(
+            move || match soksak_sok::plugins::plugin_folders(&config_dir) {
+                Ok(count) => {
+                    let mut last = last.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                    if *last != count {
+                        *last = count;
+                        changed(count);
+                    }
                 }
-            }
-            Err(error) => crate::application_log::log_error("plugin folders", error),
-        });
+                Err(error) => crate::application_log::log_error("plugin folders", error),
+            },
+        );
         crate::platform::current()?.watch_file(&folder, notify)
     }
 

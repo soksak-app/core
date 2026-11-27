@@ -57,7 +57,9 @@ fn clone_records_its_start_lines_and_end_as_events() {
     let mut names = Vec::new();
     let mut end = None;
     for event in &events {
-        let Some(name) = event["event"].as_str() else { continue };
+        let Some(name) = event["event"].as_str() else {
+            continue;
+        };
         if !name.starts_with("host.clone.") {
             continue;
         }
@@ -71,10 +73,25 @@ fn clone_records_its_start_lines_and_end_as_events() {
         }
         names.push(name.to_string());
     }
-    assert_eq!(names.first().map(String::as_str), Some("host.clone.start"), "events {names:?}");
-    assert_eq!(names.last().map(String::as_str), Some("host.clone.end"), "events {names:?}");
-    assert!(names.iter().any(|name| name == "host.clone.line"), "events {names:?}");
+    assert_eq!(
+        names.first().map(String::as_str),
+        Some("host.clone.start"),
+        "events {names:?}"
+    );
+    assert_eq!(
+        names.last().map(String::as_str),
+        Some("host.clone.end"),
+        "events {names:?}"
+    );
+    assert!(
+        names.iter().any(|name| name == "host.clone.line"),
+        "events {names:?}"
+    );
     let end = end.expect("host.clone.end");
     assert_eq!(end["status"], 0, "host.clone.end fields {end}");
-    assert_eq!(end["target"], target_text.as_str(), "host.clone.end fields {end}");
+    assert_eq!(
+        end["target"],
+        target_text.as_str(),
+        "host.clone.end fields {end}"
+    );
 }

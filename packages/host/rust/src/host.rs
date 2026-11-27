@@ -514,9 +514,11 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
     )?);
     // The watch of the plugins folder notifies the windows of each change of its folder count (docs/spec/installation.md#plugin-operations-in-the-application).
     let counting = app.clone();
-    let folder_watch = app.state::<plugins::Plugins>().watch_folders(std::sync::Arc::new(
-        move |folders| windows::notify_folders(&counting, plugins::FoldersChanged { folders }),
-    ))?;
+    let folder_watch = app
+        .state::<plugins::Plugins>()
+        .watch_folders(std::sync::Arc::new(move |folders| {
+            windows::notify_folders(&counting, plugins::FoldersChanged { folders })
+        }))?;
     app.manage(PluginFolderWatch(std::sync::Mutex::new(Some(folder_watch))));
     // The setup operations use the sok of the application bundle, next to the executable
     // (docs/spec/cli.md#agents-in-the-application).

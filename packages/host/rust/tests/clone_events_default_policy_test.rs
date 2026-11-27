@@ -61,7 +61,10 @@ fn clone_events_pass_the_default_policy_of_a_diagnostic_build() {
     log.flush().unwrap();
     soksak_host::event_record::use_host_event_log(None);
     let events = records::read_events(&records::event_log_path(&config));
-    let names: Vec<&str> = events.iter().filter_map(|event| event["event"].as_str()).collect();
+    let names: Vec<&str> = events
+        .iter()
+        .filter_map(|event| event["event"].as_str())
+        .collect();
     for name in ["host.clone.start", "host.clone.line", "host.clone.end"] {
         // The class table declares each clone event as lifecycle, the class that the catalog declares for it.
         assert_eq!(
@@ -69,6 +72,9 @@ fn clone_events_pass_the_default_policy_of_a_diagnostic_build() {
             Some(soksak_sok::event_classes::Class::Lifecycle),
             "class_of({name})"
         );
-        assert!(names.contains(&name), "the default policy stored no {name} event: {names:?}");
+        assert!(
+            names.contains(&name),
+            "the default policy stored no {name} event: {names:?}"
+        );
     }
 }

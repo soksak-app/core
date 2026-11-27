@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1276: Format four Rust host sources with rustfmt.
 - F1275: The host contract declares the cases of the diagnostic motion, the positional window refusal and the plugin categories in the Go and Rust tests, so the wailsv3 host contract check lists none of them.
 - F1255: The Rust diagnostics motion test file has the name of its Go counterpart, so the host file audit pairs the two.
 - Retired checklist entry `F1217-17-14`: it repeats F1217-17-3-1, which tracks the same defect.
