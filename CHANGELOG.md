@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-18-5: The closed settings hint of mygo stands above the status line.
 - F1217-12-8: The success and warning notice icons draw the ok and warn tokens of each mode from the design file.
 - F1231-3: A sidebar whose plugin is missing shows its warning once as a line at its top, above its sections; the warning is a notice-center record and no toast or status line notice.
 - F1217-17-3: Record the set row and list Red in both records

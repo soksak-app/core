@@ -10,7 +10,8 @@ func (s *Shell) drawClosedSettingsHint(c *ui.Context) {
 		return
 	}
 	m := s.metrics
-	box := ui.Box(c).Absolute().Right(s.frameLength(m.spacePad)).Bottom(s.frameLength(m.spacePad))
+	// The hint stands above the status bar, so the status line keeps its own content (docs/spec/settings.md#opening-and-closing).
+	box := ui.Box(c).Absolute().Right(s.frameLength(m.spacePad)).Bottom(s.frameLength(m.spacePad) + s.statusBarHeight())
 	box.Row().AlignItems(ui.Center).Gap(s.frameLength(m.chromeGap)).Children(func() {
 		ui.Text(c, "설정이 닫혀 있다").SingleLine().FontSize(s.frameFont(s.textControl())).TextColor(s.palette.Muted)
 		open := s.binder.Press(c, "core.settings-tab.reopen", "core.settings.open", "", nil)

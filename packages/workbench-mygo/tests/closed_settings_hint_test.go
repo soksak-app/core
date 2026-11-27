@@ -21,3 +21,18 @@ func TestTheClosedSettingsHintShowsAfterCloseAndHidesOnReopen(t *testing.T) {
 		t.Fatal("the closed hint stays after the settings tab opened again")
 	}
 }
+
+// The hint stands above the status bar at the bottom right of the work screen, so its open button does not cover the status line
+// (docs/spec/settings.md#opening-and-closing).
+func TestTheClosedSettingsHintEndsAboveTheStatusBar(t *testing.T) {
+	f := projectWithPlugins(t)
+	f.click("core.chrome.settings", "")
+	f.run("core.settings.close", nil)
+	f.settle()
+	open := exposedNodeOf(f, "core.settings-tab.reopen", "").Bounds
+	// The home button of the status bar is the first element inside the bar, so its top is the top of the status line.
+	bar := exposedNodeOf(f, "core.statusbar.home", "").Bounds
+	if bottom := open.Y + open.H; bottom > bar.Y+0.5 {
+		t.Fatalf("the open button of the closed hint ends at y %v, below the status line whose content starts at %v", bottom, bar.Y)
+	}
+}
