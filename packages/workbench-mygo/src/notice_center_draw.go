@@ -244,13 +244,24 @@ func (e *ShownErrors) cardNotice(card string) *errorToast {
 	return nil
 }
 
-// noticeGlyph is the declared icon of a kind; a kind without an icon draws the info icon.
-func (s *Shell) noticeGlyph(kind string) *ui.SVG {
-	glyph := "notice-" + kind
-	if _, ok := s.options.Declared.Icons[glyph]; !ok {
-		glyph = "notice-info"
+// noticeGlyphName is the key of the declared icon of a notice kind. The kinds are a closed set, so a kind without a declared icon is an error.
+func noticeGlyphName(kind string, icons map[string]string) (string, error) {
+	name := "notice-" + kind
+	if _, ok := icons[name]; !ok {
+		return "", fmt.Errorf("no icon for notice kind %s", kind)
 	}
-	return s.declaredIcon("0 0 24 24", fmt.Sprintf(`fill="none" stroke="currentColor" stroke-width="%g"`, 2.0), s.options.Declared.Icons[glyph])
+	return name, nil
+}
+
+// noticeGlyph is the declared icon of a kind. A kind without a declared icon is reported as an error and draws no icon.
+func (s *Shell) noticeGlyph(kind string) *ui.SVG {
+	paint := fmt.Sprintf(`fill="none" stroke="currentColor" stroke-width="%g"`, 2.0)
+	name, err := noticeGlyphName(kind, s.options.Declared.Icons)
+	if err != nil {
+		s.fail(err)
+		return s.declaredIcon("0 0 24 24", paint, "")
+	}
+	return s.declaredIcon("0 0 24 24", paint, s.options.Declared.Icons[name])
 }
 
 // noticeKindColor is the color of a kind's icon: the error token for an error, the accent for info and progress.
