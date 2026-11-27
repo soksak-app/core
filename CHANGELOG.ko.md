@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3: 포커스가 없는 카드의 warning 또는 error는 카드를 포커스하는 토스트 action 카드로 가기를 보입니다.
 - F1222: 플러그인 로더가 선택 항목인 categories와 requires의 기본값을 명시한다.
 - F999-4: 숨겨진 탭이 재시작 뒤 선택되면 입력 없이 region의 그리기 상태를 보내는 동작을 Go와 Rust 테스트로 고정했습니다.
 - F1217-16: S15 상태의 설정 탭 footprint 목표는 G3-S15-settings-tab-footprint로 부른다.

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3: A warning or error of a card without the focus shows the toast action 카드로 가기, which focuses the card.
 - F1222: The plugin loader states the default of the optional categories and requires members of a manifest.
 - F999-4: A hidden tab selected after its view restarts is tested to send the drawing state of its region without input.
 - F1217-16: The footprint goal of the settings tab in the S15 state is named G3-S15-settings-tab-footprint.

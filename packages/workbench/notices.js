@@ -453,6 +453,15 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
     /** The notice by id, or null. */
     // default: a notice id that no notice holds has no notice.
     notice(id) { return notices.find((n) => n.id === id) ?? null; },
+
+    /** The actions that a shown toast offers: the notice's own actions, then 카드로 가기 for a warning or error of a card that does not
+     * have the focus (docs/spec/notifications.md#toasts). The center and the status line keep the notice's own actions. */
+    toastActions(id) {
+      const n = notices.find((x) => x.id === id);
+      if (!n) return [];
+      if (n.source.kind !== "card" || n.source.card === focusedCard || (n.kind !== "warning" && n.kind !== "error")) return n.actions;
+      return [...n.actions, { label: "카드로 가기", command: "core.card.focus", params: { card: n.source.card } }];
+    },
   };
   return store;
 }

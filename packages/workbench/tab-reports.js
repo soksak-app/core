@@ -49,7 +49,7 @@ const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 // left out, because the store changes it without a change of the toasts.
 const toastState = () => JSON.stringify(noticeStore.toasts().map((toast) => {
   const notice = noticeStore.notice(toast.id);
-  return [toast.id, toast.kind, toast.title, toast.count, notice.text, notice.actions];
+  return [toast.id, toast.kind, toast.title, toast.count, notice.text, noticeStore.toastActions(toast.id)];
 }));
 
 function notify() {

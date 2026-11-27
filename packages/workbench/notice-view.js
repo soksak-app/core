@@ -137,7 +137,8 @@ export function mountNoticeView(document, store) {
     node.querySelector(".toast__text").hidden = notice.text === "";
     const actions = node.querySelector(".toast__actions");
     actions.replaceChildren();
-    const shown = style === "line" ? notice.actions.slice(0, 1) : notice.actions;
+    const actionsOfToast = store.toastActions(notice.id);
+    const shown = style === "line" ? actionsOfToast.slice(0, 1) : actionsOfToast;
     for (const action of shown) {
       // default: an action without parameters runs its command with none.
       const button = control(document, "button", "toast__action", action.label, "core.notices.action", action.command, action.params ?? {});
