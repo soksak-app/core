@@ -174,7 +174,12 @@ func (s *Shell) drawNoticeEntry(c *ui.Context, toast *errorToast) {
 		entry.Background(s.palette.Bg)
 	}
 	entry.FillWidth().Row().AlignItems(ui.Start).Gap(m.toastGap).Padding(m.noticeEntryPad, m.noticeEntryPad, m.noticeEntryPad, m.noticeEntryPad).Children(func() {
-		s.noticeIcon(c, toast.kind, m.noticeGlyph, color)
+		// The ring of a progress entry carries its element name, which the check of the turning ring samples (core.notices.ring).
+		iconContext := c
+		if toast.kind == "progress" {
+			iconContext = s.binder.Name(c, "core.notices.ring", toast.id)
+		}
+		s.noticeIcon(iconContext, toast.kind, m.noticeGlyph, color)
 		ui.Column(c).FillWidth().Gap(m.toastGap).Children(func() {
 			ui.Text(c, displayTitle(toast)).Wrap().TextColor(s.palette.Fg).Label(displayTitle(toast))
 			if toast.text != "" {

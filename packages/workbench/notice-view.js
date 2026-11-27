@@ -267,6 +267,8 @@ export function mountNoticeView(document, store) {
     node.dataset.read = String(entry.read);
     const mark = el(document, "span", "notice-center__mark");
     mark.innerHTML = icon(glyphOf(entry.kind));
+    // The ring of a progress entry is the element that the check of the turning ring samples (docs/spec/notifications.md#notice-center).
+    if (entry.kind === "progress") mark.dataset.expose = "core.notices.ring";
     const body = el(document, "div", "notice-center__body");
     body.append(el(document, "div", "notice-center__title", entry.title));
     if (entry.text) body.append(el(document, "div", "notice-center__text", entry.text));

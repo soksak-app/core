@@ -5865,6 +5865,10 @@
         "description": "The notice center, popover or drawer."
       },
       {
+        "name": "core.notices.ring",
+        "description": "The turning ring of a progress entry of the notice center; it runs no command."
+      },
+      {
         "name": "core.toasts.more",
         "description": "The count of the other toasts: in the line form it runs core.toasts.list {open} with the opposite of the list state; in the card form it counts the rest."
       },

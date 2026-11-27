@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222-2: 진행 알림의 회전 고리는 두 workbench 모두에서 element core.notices.ring이며, 고리 check는 그 element를 sample한다.
 - F1217-7: 작업 화면 상태줄이 두 host 모두에서 core.home.show를 실행하는 항목 홈(core.statusbar.home)으로 시작한다.
 - F1222-2: 열린 알림 센터 패널도 error toast와 함께 surface host에서 잘려 나가므로, Wails와 Tauri host에서 plugin surface가 센터를 가리지 않는다.
 - F1217: 프로젝트 home의 theme, 메뉴 언어, 폴더 확인은 page-wire case home-removed-project를 따르며, home-removed.test.mjs가 재생한다.

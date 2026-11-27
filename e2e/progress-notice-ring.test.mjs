@@ -2,7 +2,8 @@
 // progress notice to the plugin of the start tab with the declared command core.notices.add, opens the notice center, and keeps only
 // the progress entries with core.notices.filter, so the first core.notices.entry is the progress notice. It records the frames that
 // the window delivers while the ring is drawn (diagnostics.capture.start/stop, paced by the refresh rate that the recorder reads) and
-// compares the pixels of the leading square of that entry, where the mark of an entry is drawn, from one frame to the next. The ring
+// compares the pixels of the leading square of the ring element core.notices.ring (the mark of the progress entry), from one
+// frame to the next. The ring
 // turns in the frames of a window without reduced motion and stays the same with reduced motion. The reduced motion setting is read
 // from the macOS accessibility preference with `defaults read`; the check changes no preference.
 import assert from "node:assert/strict";
@@ -57,8 +58,8 @@ for (const app of Object.values(APPS)) {
       await s.until("core.notices", (value) => value.entries.some((entry) => entry.id === id), "the progress notice is not listed");
       await s.run("core.notices.filter", { filter: "progress" });
       await s.until("core.notices", (value) => value.filter === "progress", "the notice center did not show the progress filter");
-      const rect = await s.rect("core.notices.entry", 0);
-      assert.ok(rect.height > 0 && rect.width > 0, `the progress entry has no drawn size: ${JSON.stringify(rect)}`);
+      const rect = await s.rect("core.notices.ring", 0);
+      assert.ok(rect.height > 0 && rect.width > 0, `the progress ring has no drawn size: ${JSON.stringify(rect)}`);
 
       // Each still is taken at one refresh of the window, so the recording paces by the display and not by a fixed frame time.
       const recording = await s.record({ frames: RECORDED_STILLS });
