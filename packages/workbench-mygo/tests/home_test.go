@@ -399,7 +399,7 @@ func TestTheSearchFocusRefusesOutsideTheHome(t *testing.T) {
 
 func TestTheShortcutFocusesTheSearch(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	f.tester.Key(ui.Cmd, ui.KeyK)
+	f.tester.Key(ui.Cmd, ui.KeyO)
 	f.settle()
 	if !f.tester.Focused("프로젝트 찾기") {
 		t.Fatal("the project search has no focus")

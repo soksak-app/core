@@ -16,7 +16,7 @@
     { "key": "cmd+0", "owner": "native menu", "command": "core.text.reset", "menu": "view/text-default", "when": "Any focus" },
     { "key": "shift+cmd+n", "owner": "native menu", "command": "core.window.new", "menu": "window/new-window", "when": "Any focus" },
     { "key": "shift+cmd+n", "owner": "workbench", "command": "core.window.new", "menu": null, "when": "No host chrome (browser build)" },
-    { "key": "cmd+k", "owner": "workbench", "command": "core.home.search.focus", "menu": null, "when": "The project home is shown" },
+    { "key": "cmd+o", "owner": "workbench", "command": "core.home.search.focus", "menu": null, "when": "The project home is shown" },
     { "key": "ArrowUp", "owner": "workbench", "command": "core.home.select", "menu": null, "when": "The project home is shown and no form field has focus; the command gets step -1", "params": { "step": -1 } },
     { "key": "ArrowDown", "owner": "workbench", "command": "core.home.select", "menu": null, "when": "The project home is shown and no form field has focus; the command gets step 1", "params": { "step": 1 } },
     { "key": "Escape", "owner": "workbench", "command": "core.home.search", "menu": null, "when": "The project home search field holds a non-empty query; the command gets an empty query", "params": { "query": "" } },

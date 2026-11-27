@@ -192,10 +192,10 @@ test("the project form uses the shared error toast when its folder is empty", as
   assert.ok(document.querySelector('.toast [data-expose="core.notices.close"]'), "the error toast has no dismiss control");
 });
 
-test("the declared cmd+k command focuses the project home search field and rejects a shown workspace", { timeout: 5000 }, async () => {
+test("the declared cmd+o command focuses the project home search field and rejects a shown workspace", { timeout: 5000 }, async () => {
   const shortcut = JSON.parse(readFileSync(new URL("../shortcuts.json", import.meta.url), "utf8")).shortcuts
-    .find((row) => row.key === "cmd+k" && row.owner === "workbench");
-  assert.equal(shortcut?.command, "core.home.search.focus", "the workbench cmd+k row does not name the project home search focus");
+    .find((row) => row.key === "cmd+o" && row.owner === "workbench");
+  assert.equal(shortcut?.command, "core.home.search.focus", "the workbench cmd+o row does not name the project home search focus");
   const { home } = mount([project("a", "alpha", { spaces: [{ id: "a-s", title: "main", layout: fresh() }] })]);
   // The window checks a stored layout of the project before it shows the project, so the check of the layout is registered first.
   projectStore.onSwitch({ check: checkStoredLayout, save: capture, load: adopt, update: settle });

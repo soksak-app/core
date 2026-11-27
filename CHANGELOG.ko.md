@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-8: 프로젝트 홈 검색 포커스를 두 host 모두 cmd+o에 묶고 cmd+k를 뺐다.
 - F1222-2: e2e/progress-notice-ring.test.mjs 창 check가 전달된 frame으로 진행 notice 고리를 판정한다. 동작 줄이기가 켜지면 고리가 바뀌지 않아야 한다. 실행: 대기.
 - F1108: 메인 페이지 reload로 만들어진 view가 적용한 theme을 page.theme.applied 기록으로 남기며, Go 호스트 테스트가 probe view로 reload를 실행해 이를 확인한다.
 - F1217-7: sok 감시 테스트는 endpoint case의 값 home을 기대한다.

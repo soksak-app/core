@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-8: The project home search focus is bound to cmd+o in both hosts, and cmd+k is removed.
 - F1222-2: The window check e2e/progress-notice-ring.test.mjs judges the progress notice ring by the frames that the window delivers, which must differ unless reduced motion is set. Run: pending.
 - F1108: A view that a main page reload creates records its applied theme as page.theme.applied, checked by a Go host test that runs the reload through the probe view.
 - F1217-7: The watch test of the sok command expects the value of its endpoint case, home.

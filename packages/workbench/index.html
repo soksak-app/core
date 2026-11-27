@@ -655,7 +655,7 @@ onDrag(coreChanged);
 addEventListener("keydown", (event) => {
   if (!(event.metaKey || event.ctrlKey)) return;
   if (!chrome && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); return run("core.window.new"); }
-  if (event.key.toLowerCase() === "k" && projects.inHome()) {
+  if (event.key.toLowerCase() === "o" && projects.inHome()) {
     event.preventDefault();
     return run("core.home.search.focus", {});
   }
