@@ -511,6 +511,10 @@ func (s *Shell) drawButton(c *ui.Context, control *SettingsControl, pane setting
 	if on {
 		fill = faded(s.palette.Fg, s.metrics.chipSelMix)
 	}
+	if control.Primary {
+		edge = s.palette.Rail
+		fill = faded(s.palette.Rail, s.metrics.chipOnMix)
+	}
 	button.Padding(pane.fieldPadY, pane.buttonPadX).Border(s.palette.BorderWidth, edge).Radius(s.radiusSmall()).Background(fill).AlignItems(ui.Center).Label(control.Label)
 	if control.small {
 		button.Height(pane.buttonSmH)

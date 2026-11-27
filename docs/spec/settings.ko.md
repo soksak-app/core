@@ -594,7 +594,7 @@ host가 없는 browser 애플리케이션에서는 페이지가 불러온 플러
 | `back` | `installed` 또는 `browse`: 플러그인 페이지의 뒤로 가기 링크가 돌아가는 페이지 |
 | `editing` | 편집 중인 세트 id, 또는 `null` |
 | `rows` | 플러그인 페이지에서 선언된 설정 행마다 `{key, name, description}` |
-| `controls` | 모든 컨트롤의 요소 이름, 키, 명령, 현재 값, `disabled`(의존 설정의 부모가 꺼져 있거나 전역 전용 설정을 프로젝트 범위에서 보일 때 true), 셀렉트의 선택지 값(`options`, 아니면 `null`) |
+| `controls` | 모든 컨트롤의 요소 이름, 키, 명령, 현재 값, `disabled`(의존 설정의 부모가 꺼져 있거나 전역 전용 설정을 프로젝트 범위에서 보일 때 true), `primary`(모두 설치처럼 그룹의 주 버튼이면 true), 셀렉트의 선택지 값(`options`, 아니면 `null`) |
 | `scroll` | 보이는 내용의 스크롤 위치. 맨 위에서부터의 포인트다. 내용이 시작보다 더 당겨진 동안은 음수다. 숫자가 아닌 값은 거부한다 |
 | `undo` | 보이는 토스트를 `{key, label, old, new}`로, 없으면 `null` |
 | `confirm` | 열린 확인을 `{kind, id}`로. `kind`는 `set` 또는 `plugin`이며, 없으면 `null` |

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: The agent group title is 에이전트 연동, and 모두 설치 is drawn as the primary button.
 - F1217-11-3: The modal error toast test answers through the close control of the copied toast, not its first button.
 - F1217-11-3: The refused save case records the toast markup of the error notice with 자세히 and the line counter.
 - F1217-7: The set layout segments are the element core.settings-tab.layout, with the item layout:<set id>.

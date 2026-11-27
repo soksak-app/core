@@ -109,6 +109,8 @@ type SettingsControl struct {
 	// Disabled is true while the control takes no press: a dependent setting whose parent is off, a side whose switch is off for its
 	// set select, and the first row's ↑ or the last row's ↓ (docs/spec/settings.md#status).
 	Disabled bool `json:"disabled"`
+	// Primary says that the button is the primary button of its group, drawn with the accent color (docs/spec/settings.md#controls).
+	Primary bool `json:"primary"`
 
 	kind controlKind
 	// missingTip is the tooltip of a section chip whose plugin is not loaded (docs/spec/plugins.md#missing-plugins).

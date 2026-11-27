@@ -594,7 +594,7 @@ The settings tab keeps these rules, which apply to every page:
 | `back` | `installed` or `browse`: the page that the back link of the plugin page returns to |
 | `editing` | The edited set id, or `null` |
 | `rows` | Each declared plugin setting row on a plugin page as `{key, name, description}` |
-| `controls` | Every control with its element name, key, command, current value, `disabled` (true while a dependent setting's parent is off or a common-only setting is shown in the project scope), and the option values of a select box (`options`, otherwise `null`) |
+| `controls` | Every control with its element name, key, command, current value, `disabled` (true while a dependent setting's parent is off or a common-only setting is shown in the project scope), `primary` (true for the primary button of its group, such as 모두 설치), and the option values of a select box (`options`, otherwise `null`) |
 | `scroll` | The scroll position of the shown content, in points from the top. It is negative while the content is pulled past its start, and a value that is not a number is refused |
 | `undo` | The toast that is shown as `{key, label, old, new}`, or `null` |
 | `confirm` | The open confirmation as `{kind, id}`, `kind` being `set` or `plugin`, or `null` |

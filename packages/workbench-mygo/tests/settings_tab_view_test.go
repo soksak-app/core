@@ -57,6 +57,7 @@ type modalStatus struct {
 		Value    *string  `json:"value"`
 		Options  []string `json:"options"`
 		Disabled bool     `json:"disabled"`
+		Primary  bool     `json:"primary"`
 		Groups   []struct {
 			Label  string   `json:"label"`
 			Values []string `json:"values"`

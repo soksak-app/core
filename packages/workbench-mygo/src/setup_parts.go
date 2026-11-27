@@ -279,10 +279,11 @@ func (s *Shell) buildSetup(b *settingsBuilder) {
 	kinds := missingSetupKinds(parts)
 	install := b.small("setup-install-all", "core.settings-tab.setup-install-all", "모두 설치", "core.setup.install", map[string]any{"parts": kinds})
 	install.Disabled = len(kinds) == 0
+	install.Primary = true
 	actions := []*SettingsControl{install}
 	actions = append(actions, b.small("setup-check", "core.settings-tab.setup-check", "다시 확인", "core.setup.check", nil))
 	rows = append(rows, settingsRow{controls: actions, list: true})
-	b.group("에이전트", "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.", rows...)
+	b.group("에이전트 연동", "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.", rows...)
 }
 
 // setupRow is the content of a row of the agent group.

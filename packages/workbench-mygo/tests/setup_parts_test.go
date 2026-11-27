@@ -278,6 +278,24 @@ func TestTheSetupFailuresAreShownAndKeepTheParts(t *testing.T) {
 	}
 }
 
+// The button 모두 설치 is the primary button of its group, and the group is titled 에이전트 연동 (docs/spec/settings.md#에이전트).
+func TestTheInstallButtonIsPrimaryInTheAgentGroup(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-tab.nav", map[string]any{"page": "agents"})
+	primary := false
+	for _, control := range f.modal().Controls {
+		if control.Name == "core.settings-tab.setup-install-all" {
+			primary = control.Primary
+		}
+	}
+	if !primary {
+		t.Fatal("모두 설치 is not the primary button")
+	}
+	if !f.tester.HasText("에이전트 연동") {
+		t.Fatalf("the agent group is not titled 에이전트 연동: %q", f.tester.Texts())
+	}
+}
+
 // setupInstallDisabled reports whether the button 모두 설치 is drawn and disabled: it stays shown when no part is missing.
 func setupInstallDisabled(f *shellFixture) bool {
 	f.t.Helper()
