@@ -154,7 +154,7 @@ export function createRegistry({ call = null, report = null } = {}) {
   /**
    * Runs a status read that names a surface and stores its record, workbench.status.read: the surface that the request named, the
    * surface that answers it and the owned session that the answering surface shows. A failed read is stored at the level warn with its
-   * error code; the record holds the session before the read is sent, so it names the session that the read reached.
+   * error code; the record holds the session before the read is sent, so it names the session that the resolved surface shows.
    */
   async function recordedRead(name, requested, resolved, run) {
     const started = performance.now();

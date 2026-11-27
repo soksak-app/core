@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1107: status read 기록은 resolved surface가 보여 주는 owned session을 이름으로 적는다.
 - F1217-8: 프로젝트 홈 키 안내 줄이 두 host 모두에서 제거 키 cmd+Backspace를 적는다.
 - F1217-8: cmd+Backspace는 두 host에서 선택한 프로젝트 홈 줄의 제거를 묻고, core.home.confirm은 선택한 줄에 project를 받지 않는다.
 - F1107: status 읽기 단위 F1107-1부터 F1107-5까지 기록했으며, F1107-4의 실행 확인은 아직 남았다.
@@ -34,7 +35,7 @@
 - F1217-7: 사이드바 크기 그룹은 처음 폭 오류와 범위 맞추기 버튼 core.settings-tab.fix, 그리고 최소 폭 오류를 보인다.
 - F1217-7: 최소와 최대 밖의 저장된 처음 폭은 저장된 대로 열리고, 그대로 두는 변경만 거부된다.
 - F1217-7: 긴 선택지 너비 테스트는 세트 배치 세그먼트를 core.settings-tab.layout으로 읽는다.
-- F1107: surface의 status read는 요청한 surface, 응답한 surface, 도달한 owned session과 함께 workbench.status.read로 저장된다.
+- F1107: surface의 status read는 요청한 surface, 응답한 surface, resolved surface가 보여 주는 owned session과 함께 workbench.status.read로 저장된다.
 - F1217-11-3: 알림 테스트는 원천의 다시 시도가 오류 토스트의 첫 동작이고 코어가 다시 시도를 더하지 않음을 고정한다.
 - F1217-11-3: 토스트 테스트는 덱의 마우스 오버 펼침, 동작 줄이기 설정의 막대 정지, 동작으로 닫힘을 고정한다.
 - F1224: 클립보드 테스트 이름이 권한을 clipboard capability로 쓴다. 이 이름은 plugin category가 아닌 권한을 가리킨다.

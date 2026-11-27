@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1107: The status-read record names the owned session that the resolved surface shows.
 - F1217-8: The project home key hint names the removal key cmd+Backspace in both hosts.
 - F1217-8: cmd+Backspace asks the removal of the selected project home row in both hosts, and core.home.confirm takes no project for the selected row.
 - F1107: The status-read units F1107-1 to F1107-5 are recorded; the live run of F1107-4 is still open.
@@ -34,7 +35,7 @@
 - F1217-7: The sidebar size group shows the first-width error and its fix button core.settings-tab.fix, and the minimum error.
 - F1217-7: A stored first width outside the minimum and maximum loads as stored, and only a change that leaves it outside is refused.
 - F1217-7: The width test of a long select reads the set layout segments as core.settings-tab.layout.
-- F1107: A status read of a surface is stored as workbench.status.read with the requested surface, the resolved surface and the owned session it reached.
+- F1107: A status read of a surface is stored as workbench.status.read with the requested surface, the resolved surface and the owned session that the resolved surface shows.
 - F1217-11-3: The notice tests pin that a source retry is the first action of its error toast and that core adds no retry.
 - F1217-11-3: The toast tests pin the deck spread on hover, the reduced-motion stop of the toast bar, and the close of a toast by its action.
 - F1224: The clipboard test names its grant a clipboard capability, which is a grant and not a plugin category.
