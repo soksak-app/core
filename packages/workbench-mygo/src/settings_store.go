@@ -578,6 +578,20 @@ func jsonText(value any) (string, error) {
 	return strings.TrimSuffix(text.String(), "\n"), nil
 }
 
+// typedSetting returns value, the value of the setting key, as T, or an error that names the key and the value. The store holds only
+// values of the declared type, so the error reports a value that the store refused to check.
+func typedSetting[T any](key string, value any) (T, error) {
+	typed, ok := value.(T)
+	if !ok {
+		text, err := jsonText(value)
+		if err != nil {
+			return typed, fmt.Errorf("settings: %s: %w", key, err)
+		}
+		return typed, fmt.Errorf("settings: %s is %s, not a %T", key, text, typed)
+	}
+	return typed, nil
+}
+
 // jsonTexts writes each item as jsonText does and joins them with commas.
 func jsonTexts[T any](items []T) (string, error) {
 	named := make([]string, len(items))

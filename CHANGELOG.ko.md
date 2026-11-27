@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1245-2: 설정 type assertion의 ok 결과나 strings.Cut의 결과를 버리던 packages/workbench-mygo/src의 Go 위치 10곳이 key와 값을 적은 명시적 error를 돌려준다.
 - F1250-4: 보기 페이지의 검색칸과 선택 상자 크기 테스트가 stepper 테스트 옆에 복구된다.
 - F1217-17-3: 사이드바 세트 항목을 닫는다. 편집기의 버튼 완료는 두 host 모두에서 시험으로 지킨다. 남은 차이는 후속 F1217-17-14부터 F1217-17-16이다.
 - F1250-4: 작은 정수의 stepper는 입력 높이의 한 상자이며 core.settings-tab.stepper로 노출된다.

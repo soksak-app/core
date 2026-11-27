@@ -157,9 +157,16 @@ const sizeErrorWhere = "settings sidebar-size"
 // them. A first width outside the range shows its line and the Fit to range button, which runs core.settings.change with the width cut
 // to the range (docs/spec/settings.md#pages). A valid group shows no error.
 func (s *Shell) sizeErrorRows(b *settingsBuilder) []settingsRow {
-	least, _ := s.value("sidebarMinWidth").(float64)
-	most, _ := s.value("sidebarMaxWidth").(float64)
-	width, _ := s.value("sidebarWidth").(float64)
+	var sizes [3]float64
+	for i, key := range []string{"sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth"} {
+		size, err := typedSetting[float64](key, s.value(key))
+		if err != nil {
+			s.errors.Show(sizeErrorWhere, err.Error(), "")
+			return nil
+		}
+		sizes[i] = size
+	}
+	least, most, width := sizes[0], sizes[1], sizes[2]
 	if least >= most {
 		s.errors.Show(sizeErrorWhere, fmt.Sprintf("최소 폭(%spt)이 최대 폭(%spt)보다 작아야 한다.", valueText(least), valueText(most)), "")
 		return nil

@@ -302,7 +302,10 @@ func (s *Shell) registerHome() {
 		s.home.formMode = value.Mode
 		if value.Mode == "create" {
 			// The parent folder of a new project starts with the base folder of new projects; the person may replace it.
-			folder, _ := s.settings.Value("projectsFolder").(string)
+			folder, err := typedSetting[string]("projectsFolder", s.settings.Value("projectsFolder"))
+			if err != nil {
+				return err
+			}
 			s.home.parent = folder
 		}
 		s.options.Invalidate()
@@ -400,7 +403,10 @@ func (s *Shell) importTarget(address string) (string, error) {
 	if name == "" {
 		return "", fmt.Errorf("the address has no repository name")
 	}
-	folder, _ := s.settings.Value("projectsFolder").(string)
+	folder, err := typedSetting[string]("projectsFolder", s.settings.Value("projectsFolder"))
+	if err != nil {
+		return "", err
+	}
 	return strings.TrimSuffix(folder, "/") + "/" + name, nil
 }
 

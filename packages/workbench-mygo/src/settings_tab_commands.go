@@ -185,7 +185,11 @@ func (s *Shell) undoChange() {
 	w.undo = nil
 	// The change goes through the store and the same path as its command, without a toast of its own.
 	if toast.key == "theme" {
-		name, _ := toast.old.(string)
+		name, err := typedSetting[string]("theme", toast.old)
+		if err != nil {
+			s.fail(err)
+			return
+		}
 		if err := s.changing("core.settings.theme", func() error { return s.settings.Theme(name, toast.mode, toast.scope) }); err != nil {
 			s.fail(err)
 		}

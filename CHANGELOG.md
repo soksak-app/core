@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1245-2: The ten Go sites of packages/workbench-mygo/src that dropped the ok result of a setting type assertion or a result of strings.Cut return an explicit error, which names the key and the value.
 - F1250-4: The search field and select size tests of the look page are restored beside the stepper test.
 - F1217-17-3: The sidebar sets item closes with the editor's button 완료 guarded in both hosts; its open breaks are the follow-ups F1217-17-14 to F1217-17-16.
 - F1250-4: The stepper of a small integer is one box of the input height, exposed as core.settings-tab.stepper.

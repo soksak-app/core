@@ -597,9 +597,9 @@ func (s *Sidebars) fill(frame *SidebarFrame, set *SidebarSet) {
 		frame.Sections = append(frame.Sections, drawn)
 	}
 	// The card of a card sidebar is the part of its key before the colon, and a window sidebar has no card.
-	card, _, _ := strings.Cut(frame.Sidebar, ":")
-	if !strings.Contains(frame.Sidebar, ":") {
-		card = ""
+	card := ""
+	if colon := strings.IndexByte(frame.Sidebar, ':'); colon >= 0 {
+		card = frame.Sidebar[:colon]
 	}
 	s.missing.reconcile(frame.Sidebar, card, MissingLines(*frame, s.options.Plugin))
 	frame.Notice = s.options.Notices.sidebarNotice(frame.Sidebar)

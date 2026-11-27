@@ -1258,14 +1258,23 @@ func (s *Shell) registerSettingsValues() {
 	})
 	act(s, "core.settings.theme", func(value settingsParam) error {
 		scope := inScope(value.Scope)
-		oldName, _ := s.settings.Scoped("theme", scope).(string)
-		oldMode, _ := s.settings.Scoped("mode", scope).(string)
-		err := s.changing("core.settings.theme", func() error { return s.settings.Theme(value.Name, value.Mode, value.Scope) })
-		if err == nil {
-			newName, _ := s.settings.Scoped("theme", scope).(string)
-			s.recordTheme(scope, oldName, oldMode, newName)
+		oldName, err := typedSetting[string]("theme", s.settings.Scoped("theme", scope))
+		if err != nil {
+			return err
 		}
-		return err
+		oldMode, err := typedSetting[string]("mode", s.settings.Scoped("mode", scope))
+		if err != nil {
+			return err
+		}
+		if err := s.changing("core.settings.theme", func() error { return s.settings.Theme(value.Name, value.Mode, value.Scope) }); err != nil {
+			return err
+		}
+		newName, err := typedSetting[string]("theme", s.settings.Scoped("theme", scope))
+		if err != nil {
+			return err
+		}
+		s.recordTheme(scope, oldName, oldMode, newName)
+		return nil
 	})
 	// The folder of a setting: the system folder dialog gives the folder, and a cancelled dialog changes nothing.
 	later(s, "core.settings.choose-folder", func(value settingsParam, answer func(any, error)) {
