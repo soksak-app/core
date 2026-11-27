@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7-2-2: mygo의 프로젝트 홈 생성 폼은 부모 폴더를 projectsFolder로 시작한다.
 - F1232-3: comment-language 검사가 보고한 e2e test 파일 세 개의 주석을 영어로 바꿨다.
 - F1233-1: 다른 plugin이나 generation의 runtime.log는 둘 다 이름 붙인 오류로 거절된다.
 - F1217-7: 홈 상태줄 웹 Red는 createHomeStatusBar를 내보내지 않아 가져오기에서 실패한다.

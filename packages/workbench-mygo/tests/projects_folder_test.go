@@ -61,3 +61,19 @@ func TestAProjectsFolderIsCommonOnly(t *testing.T) {
 		t.Fatalf("project scope: %v", err)
 	}
 }
+
+// The parent folder of a new project starts with projectsFolder, so a new project created without a change is made in it.
+func TestTheCreateFormStartsInTheProjectsFolder(t *testing.T) {
+	f := newShell(t, &storedHost{common: map[string]any{"projectsFolder": "~/Work"}})
+	f.settle()
+	f.run("core.home.form.open", map[string]string{"mode": "create"})
+	f.run("core.home.form.set", map[string]string{"field": "name", "value": "alpha"})
+	f.run("core.home.form.submit", nil)
+	f.settle()
+	for _, project := range f.host.projects {
+		if project["root"] == "~/Work/alpha" {
+			return
+		}
+	}
+	t.Fatalf("the project was not created in projectsFolder; projects %v", f.host.projects)
+}

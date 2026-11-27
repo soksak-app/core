@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7-2-2: The create form of the project home starts its parent folder with projectsFolder in mygo.
 - F1232-3: The comments of the three e2e test files that the comment-language check listed are English.
 - F1233-1: A runtime.log of another plugin or generation is refused with an error that names both.
 - F1217-7: The web Red of the home status line fails at import, because its module exports no createHomeStatusBar.

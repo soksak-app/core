@@ -297,6 +297,11 @@ func (s *Shell) registerHome() {
 			return fmt.Errorf("unknown form mode %s", value.Mode)
 		}
 		s.home.formMode = value.Mode
+		if value.Mode == "create" {
+			// The parent folder of a new project starts with the base folder of new projects; the person may replace it.
+			folder, _ := s.settings.Value("projectsFolder").(string)
+			s.home.parent = folder
+		}
 		s.options.Invalidate()
 		return nil
 	})
