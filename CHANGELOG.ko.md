@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1161: mygo는 card notice를 같은 card의 떠 있는 notice하고만 합치고, app notice는 kind와 title로 계속 합친다
 - F1161: 이전 버전 서비스를 쓰는 tab에는 같은 경고가 card notice로 보인다
 - F1217-12-6: 알림 센터에 조용히 스위치를 두고, core.settings.set으로 quietToasts를 설정한다.
 - F1217-7: seam에서 상태 막대는 위 선을 그리지 않고 평면의 아래 선을 함께 쓴다.

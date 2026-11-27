@@ -42,7 +42,7 @@ func (e *ShownErrors) NotifyFrom(origin string, fields NoticeFields, source Noti
 			if toast.origin != origin {
 				continue
 			}
-			if toast.kind == fields.Kind && toast.title == fields.Title {
+			if toast.kind == fields.Kind && toast.title == fields.Title && noticeCardOf(toast.source) == noticeCardOf(source) {
 				// A closed occurrence stays closed: its entry is rewritten and no toast opens (docs/spec/notifications.md#notices).
 				toast.text, toast.source, toast.actions, toast.at, toast.read = fields.Text, source, actionsOf(fields), e.now(), false
 				if !toast.closed {
@@ -65,7 +65,7 @@ func (e *ShownErrors) NotifyFrom(origin string, fields NoticeFields, source Noti
 func (e *ShownErrors) Notify(fields noticeFields, source NoticeSource) string {
 	if fields.Kind != "progress" {
 		for _, toast := range e.toasts {
-			if !toast.closed && toast.kind == fields.Kind && toast.title == fields.Title {
+			if !toast.closed && toast.kind == fields.Kind && toast.title == fields.Title && noticeCardOf(toast.source) == noticeCardOf(source) {
 				toast.count++
 				toast.text, toast.source, toast.actions, toast.at, toast.read = fields.Text, source, actionsOf(fields), e.now(), false
 				e.scheduleNotice(toast)
@@ -79,6 +79,15 @@ func (e *ShownErrors) Notify(fields noticeFields, source NoticeSource) string {
 	e.toasts = append(e.toasts, toast)
 	e.scheduleNotice(toast)
 	return toast.id
+}
+
+// noticeCardOf returns the card that a notice belongs to, or "" for an app notice. A card notice merges only within its card
+// (docs/spec/notifications.md#notices).
+func noticeCardOf(source NoticeSource) string {
+	if source.Kind == "card" {
+		return source.Card
+	}
+	return ""
 }
 
 // actionsOf returns the actions of a notice as a list, which is empty for a notice without an action.
