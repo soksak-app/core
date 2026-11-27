@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222: A progress notice draws a declared turning ring that reduced motion stops, and an unknown notice kind fails.
 - F1217-11-1: The toast bar keeps its first width on a later redraw, and time that passes notifies no toast watcher, pinned on the page clock.
 - F1222: The settings tab leaves out an unknown plugin version, refuses an invalid string setting declaration, and states the states of plugin setting values.
 - F1222: The accounts of a plugin without a data declaration are refused with the reader text of a data key of another form, and the string maxLength cases of a missing or fractional value are in the shared manifest table.

@@ -7,7 +7,14 @@ import { onTabReports, onToastChange } from "./tab-reports.js";
 import { value as settingValue } from "./settings.js";
 
 // The glyph of each kind; the color is never the only mark (docs/spec/notifications.md#notices).
-const GLYPH = { success: "notice-success", info: "notice-info", warning: "notice-warning", error: "notice-error" };
+const GLYPH = { success: "notice-success", info: "notice-info", warning: "notice-warning", error: "notice-error", progress: "notice-progress" };
+
+// The icon of a notice kind. The kinds are a closed set (notices.js KINDS), so a kind without an icon is a fault that fails.
+function glyphOf(kind) {
+  const name = GLYPH[kind];
+  if (name === undefined) throw new Error(`no icon for notice kind ${kind}`);
+  return name;
+}
 const GROUP_LABEL = { progress: "진행 중", today: "오늘", yesterday: "어제" };
 const FILTER_LABEL = { all: "전체", problems: "오류·경고", progress: "진행 중" };
 const FILTERS = ["all", "problems", "progress"];
@@ -108,7 +115,7 @@ export function mountNoticeView(document, store) {
     const body = el(document, "div", "toast__body");
     const head = el(document, "div", "toast__head");
     const mark = el(document, "span", "toast__mark");
-    mark.innerHTML = icon(GLYPH[notice.kind] ?? "notice-info");
+    mark.innerHTML = icon(glyphOf(notice.kind));
     head.append(mark, el(document, "span", "toast__title"));
     const message = el(document, "div", "toast__text");
     const actions = el(document, "div", "toast__actions");
@@ -259,7 +266,7 @@ export function mountNoticeView(document, store) {
     node.dataset.id = entry.id;
     node.dataset.read = String(entry.read);
     const mark = el(document, "span", "notice-center__mark");
-    mark.innerHTML = icon(GLYPH[entry.kind] ?? "notice-info");
+    mark.innerHTML = icon(glyphOf(entry.kind));
     const body = el(document, "div", "notice-center__body");
     body.append(el(document, "div", "notice-center__title", entry.title));
     if (entry.text) body.append(el(document, "div", "notice-center__text", entry.text));

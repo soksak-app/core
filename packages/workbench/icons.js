@@ -13,6 +13,7 @@ const PATHS = {
   "notice-info": declaredIcons["notice-info"],
   "notice-warning": declaredIcons["notice-warning"],
   "notice-error": declaredIcons["notice-error"],
+  "notice-progress": declaredIcons["notice-progress"],
   "panel-left": declaredIcons["panel-left"],
   "panel-right": declaredIcons["panel-right"],
   "panel-top": declaredIcons["panel-top"],
