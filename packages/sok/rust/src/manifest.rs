@@ -972,12 +972,15 @@ fn check_accounts(where_: &str, manifest: &Map<String, Value>) -> Result<(), Str
                     .all(|role| programs.get(*role).is_some_and(Value::is_string))
         })
         .ok_or_else(|| format!("{at} programs must be {{status, login, logout}}"))?;
-    let declared = manifest.get("programs").and_then(Value::as_object);
+    let declared = manifest
+        .get("programs")
+        .and_then(Value::as_object)
+        .ok_or_else(|| format!("{where_}: accounts need a programs declaration"))?;
     for role in roles {
         // default: the filter above holds a text for each role, so the empty name never stands.
         let name = programs[role].as_str().unwrap_or_default();
         let entry = declared
-            .and_then(|declared| declared.get(name))
+            .get(name)
             .and_then(Value::as_object)
             .ok_or_else(|| format!("{at} program {name} is not declared"))?;
         // The workbench passes the kind and the home folder of the account as the two arguments
@@ -2151,6 +2154,10 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
 #[cfg(test)]
 #[path = "manifest_programs_test.rs"]
 mod programs_tests;
+
+#[cfg(test)]
+#[path = "manifest_accounts_test.rs"]
+mod accounts_tests;
 
 #[cfg(test)]
 #[path = "manifest_categories_test.rs"]
