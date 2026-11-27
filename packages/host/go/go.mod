@@ -10,3 +10,5 @@ require (
 )
 
 require github.com/Masterminds/semver/v3 v3.5.0 // indirect
+
+replace github.com/fsnotify/fsnotify => github.com/min-0-max/fsnotify v0.0.0-20261127100643-abf10e7717d2
