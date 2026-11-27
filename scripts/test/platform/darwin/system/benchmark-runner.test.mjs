@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const root = resolve(import.meta.dirname, '../..');
+const root = resolve(import.meta.dirname, '../../../../..');
 const fixtures = join(root, 'scripts/test/fixtures/benchmarks');
 const goModule = join(fixtures, 'go');
 const goBench = `./${relative(root, join(goModule, 'bench'))}`;
