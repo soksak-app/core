@@ -267,3 +267,13 @@ test("a card notice with an origin takes the new content of its origin and is wi
   store.withdrawOrigin("sidecar-outdated:svc:tab-a");
   assert.equal(store.toasts().length, 0);
 });
+
+// A source passes its failed operation as the first action of its error notice; core adds no retry to an error that it makes
+// (docs/spec/notifications.md#toasts).
+test("a source retry is the first action of its error toast, and an error without one has no retry", () => {
+  const { store } = fixture();
+  const sourced = store.show({ kind: "error", title: "sync failed", origin: "sync-2", actions: [{ label: "다시 시도", command: "core.notices.retry", params: {} }] });
+  assert.equal(store.toastActions(sourced)[0].label, "다시 시도");
+  const core = store.show({ kind: "error", title: "config unreadable", origin: "config-2" });
+  assert.equal(store.toastActions(core).some((action) => action.label === "다시 시도"), false, "core adds no retry");
+});
