@@ -51,7 +51,7 @@ import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
 import { foldSection, onSectionsChange, sectionDrawn, selectSection, sidebarsState, sizeSections } from "./sidebar-sections.js";
-import { notificationStore, onTabReports, reportPageNotice, tabError, tabFooter, tabLabel, tabModified } from "./tab-reports.js";
+import { noticeTargetOfTab, notificationStore, onTabReports, reportPageNotice, tabError, tabFooter, tabLabel, tabModified } from "./tab-reports.js";
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { followOutdatedSidecars } from "./sidecar-outdated.js";
 import { pageIdentity } from "./page-identity.js";
@@ -650,7 +650,7 @@ export async function installCoreExposure({ home, renames, chrome, drawn, memory
   onSectionsChange(coreChanged);
   onPluginOperations(coreChanged);
   followSidecarChanges();
-  followOutdatedSidecars({ store: notificationStore() });
+  followOutdatedSidecars({ store: notificationStore(), targetOf: noticeTargetOfTab });
   followActivation();
   onTabReports(coreChanged);
   status("core.surfaces", surfacesState);

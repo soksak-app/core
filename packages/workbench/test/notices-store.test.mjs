@@ -255,3 +255,15 @@ test("the same card with the same kind and title merges into the shown card noti
   assert.equal(again, first);
   assert.equal(store.notice(first).count, 2);
 });
+
+test("a card notice with an origin takes the new content of its origin and is withdrawn with it", () => {
+  const { store } = fixture();
+  const target = { card: "card-a", tab: "tab-a", plugin: "plugin" };
+  const first = store.showTab({ kind: "warning", title: "service outdated", text: "one" }, target, "sidecar-outdated:svc:tab-a");
+  const again = store.showTab({ kind: "warning", title: "service outdated", text: "two" }, target, "sidecar-outdated:svc:tab-a");
+  assert.equal(again, first);
+  assert.equal(store.notice(first).count, 1, "a show of the same origin is the same occurrence");
+  assert.equal(store.notice(first).text, "two");
+  store.withdrawOrigin("sidecar-outdated:svc:tab-a");
+  assert.equal(store.toasts().length, 0);
+});

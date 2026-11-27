@@ -188,6 +188,19 @@ export function setCardOfTab(probe) {
   cardOfTab = probe;
 }
 
+// The plane tells the card, tab and plugin of a tab id, or null when no card holds it.
+let targetOfTab = () => null;
+
+/** Sets the probe with which the plane tells the card, tab and plugin of a tab id. */
+export function setTargetOfTab(probe) {
+  targetOfTab = probe;
+}
+
+/** The notice target {card, tab, plugin} of a tab id, or null when no card holds the tab (docs/spec/notifications.md#card-status-line). */
+export function noticeTargetOfTab(tabId) {
+  return targetOfTab(tabId);
+}
+
 /** Withdraws the notices of a card that has the focus, which the plane reports when the focus moves (docs/spec/notifications.md#places). */
 export function reportFocusedCard(card) {
   noticeStore.focusCard(card);

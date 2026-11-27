@@ -15,7 +15,7 @@ function store() {
   return { notices, logs };
 }
 
-const service = { sidecar: "@fixture/echo", running: "0.0.6", installed: "0.0.7", sessions: 2 };
+const service = { sidecar: "@fixture/echo", running: "0.0.6", installed: "0.0.7", sessions: 2, surfaces: [] };
 
 test("the notice of a service with a version names both versions, its sessions and the action that ends it", () => {
   const notice = outdatedNotice(service);
@@ -33,7 +33,7 @@ test("a service that sent no version is named without a version", () => {
 test("each outdated service shows one warning, and a repeated list shows nothing new", () => {
   const { notices, logs } = store();
   const outdated = createOutdatedNotices(notices);
-  const other = { sidecar: "@fixture/other", running: null, installed: "1.0.0", sessions: 0 };
+  const other = { sidecar: "@fixture/other", running: null, installed: "1.0.0", sessions: 0, surfaces: [] };
   outdated.reconcile([service, other]);
   outdated.reconcile([service, other]);
   assert.equal(notices.toasts().length, 2);
@@ -57,7 +57,7 @@ test("a changed session count rewrites the shown notice of its service and keeps
 test("a service that leaves outdated is withdrawn and its entry stays read; the other service keeps its notice", () => {
   const { notices } = store();
   const outdated = createOutdatedNotices(notices);
-  const other = { sidecar: "@fixture/other", running: "0.1.0", installed: "0.2.0", sessions: 1 };
+  const other = { sidecar: "@fixture/other", running: "0.1.0", installed: "0.2.0", sessions: 1, surfaces: [] };
   outdated.reconcile([service, other]);
   outdated.reconcile([other]);
   assert.deepEqual(notices.toasts().map(({ title }) => title), ["@fixture/other 0.1.0이 실행 중이고 설치된 버전은 0.2.0다"]);
@@ -79,4 +79,19 @@ test("the window takes the list from the plugin operation state at its start and
   listener();
   assert.equal(notices.toasts().length, 0, "a change that leaves the list withdraws the notice");
   assert.equal(reads, 2);
+});
+
+test("each surface of an outdated service shows its warning as a card notice on its tab, withdrawn when the surface leaves", () => {
+  const { notices } = store();
+  const targets = {
+    "surface-1": { card: "card-a", tab: "surface-1", plugin: "plugin" },
+    "surface-2": { card: "card-b", tab: "surface-2", plugin: "plugin" },
+  };
+  const outdated = createOutdatedNotices(notices, { targetOf: (surface) => targets[surface] ?? null });
+  // A withdrawn notice keeps its center entry, read, so the cards that show a notice are the unread card entries.
+  const cardsShown = () => notices.status().entries.filter((entry) => entry.source.kind === "card" && !entry.read).map((entry) => entry.source.card).sort();
+  outdated.reconcile([{ ...service, surfaces: ["surface-1", "surface-2"] }]);
+  assert.deepEqual(cardsShown(), ["card-a", "card-b"]);
+  outdated.reconcile([{ ...service, surfaces: ["surface-1"] }]);
+  assert.deepEqual(cardsShown(), ["card-a"]);
 });

@@ -46,7 +46,7 @@ import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, setTabError, surfaceErrorText } from "./surface-status.js";
 import { imageDetachHold } from "./image-detach-waits.js";
 import { clearVisibleNotices, missingOriginRecords, onTabReports, recordOrigin, reportError, setVisibleTab, storedLayoutState, tabButtonData, tabError, tabFooter,
-  tabLabel, tabModified, tabOrigin, reportFocusedCard, setCardOfTab, notificationStore } from "./tab-reports.js";
+  tabLabel, tabModified, tabOrigin, reportFocusedCard, setCardOfTab, setTargetOfTab, notificationStore } from "./tab-reports.js";
 import { cardNoticeLine } from "./notice-view.js";
 import { errorToasts, hideError, showError } from "./shown-errors.js";
 import { registry } from "./exposure.js";
@@ -2057,6 +2057,12 @@ function build(kept) {
 
 // The card that holds a tab id, for the notices of the tab (docs/spec/notifications.md#card-status-line).
 setCardOfTab((id) => grid?.cards.find((card) => tabsOf(card).some((tab) => tab.id === id))?.id ?? null);
+// The card, tab and plugin of a tab id, for the card notices of an outdated service on its surface (docs/spec/persistent-services.md#updates).
+setTargetOfTab((id) => {
+  const card = grid?.cards.find((candidate) => tabsOf(candidate).some((tab) => tab.id === id));
+  const tab = card ? tabsOf(card).find((candidate) => candidate.id === id) : undefined;
+  return tab ? { card: card.id, tab: tab.id, plugin: tab.plugin } : null;
+});
 // A visible tab means the active tab of the focused card. No notification is kept for that tab.
 setVisibleTab((id) => {
   const card = grid?.card(focusedId);
