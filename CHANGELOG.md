@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3: A toast has the role alert when it is an error and status otherwise, and a success or info card notice shows on its status line for six seconds.
 - F1222: The exposed settings tab state and the card footer state their defaults for the fallback check.
 - F1221: Every feature link key names an item of docs/features.md, and an orphan key is reported.
 - F1222: The notice view states its action, toast and group defaults, and reads a boolean hold and the bell refresh directly.
