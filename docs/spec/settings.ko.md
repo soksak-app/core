@@ -295,7 +295,7 @@ part마다 행이 하나이며 part 순서를 따른다(요소 이름 `core.sett
 
 ## 플러그인
 
-플러그인 페이지는 불러온 플러그인의 설정을 담는다. 플러그인의 설정, 섹션, 사이드바 선택은 불러온 manifest에서 오기 때문이다. 플러그인은 표면, 섹션, 설정, 계정을 함께 제공하는 한 단위다. 플러그인 참조를 담는 플러그인 설정의 각 컨트롤은, 값이 불러온 플러그인을 가리키지 않으면 배지 `<id> 필요`(warn)를 보인다([의존과 검증 규칙](#의존과-검증-규칙)). 불러오지 않은 플러그인은 창과 카드 선택자를 선언하지 않으므로, 플러그인 페이지는 정보 카드만 그리고 사이드바 묶음을 보이지 않는다.
+플러그인 페이지는 불러온 플러그인의 설정을 담는다. 플러그인의 설정, 섹션, 사이드바 선택은 불러온 manifest에서 오기 때문이다. 플러그인은 표면, 섹션, 설정, 계정을 함께 제공하는 한 단위다. 플러그인 참조를 담는 플러그인 설정의 각 컨트롤은, 값이 불러온 플러그인을 가리키지 않으면 배지 `<id> 필요`(warn)를 보인다([의존과 검증 규칙](#의존과-검증-규칙)). 불러오지 않은 플러그인은 창과 카드 선택자를 선언하지 않으므로, 플러그인 페이지는 정보 카드만 그리고 사이드바 묶음을 보이지 않는다. 값이 없는 플러그인 설정은 값이 빈 선택지 `선택`을 고른 상태로 보인다.
 
 플러그인 페이지는 설치됨, 찾아보기, 플러그인마다 한 페이지다. 페이지는 플러그인의 설명, 버전, 사이드카를 보여 주고 플러그인 작업을 실행한다. 플러그인 작업은 [애플리케이션의 플러그인 작업](installation.ko.md#애플리케이션-안의-plugin-작업)이, 작업이 적용하는 상태 변화는 [변경 적용](installation.ko.md#변경-적용)이 정의한다.
 
@@ -349,7 +349,7 @@ part마다 행이 하나이며 part 순서를 따른다(요소 이름 `core.sett
 - 스위치 `설치한 것 숨기기`(기본 끔)는 `core.settings-tab.browse {hideInstalled}`를 실행한다.
 - 개수 줄은 `<N>개`를 보이며, 검색어나 스위치가 목록을 거르면 `<shown> / <N>개`를 보인다.
 
-행 하나가 카탈로그 플러그인 하나다. 행은 이름(버튼, 굵게), 필요한 플러그인이 설치되지 않았으면 배지 `<id> 필요`(warn), 한 줄 설명, 메타 줄 `<package> · v<latest>`를 보인다. 행의 오른쪽에는 다음이 보인다.
+행 하나가 카탈로그 플러그인 하나다. 행은 이름(버튼, 굵게), 필요한 플러그인이 설치되지 않았으면 배지 `<id> 필요`(warn), 한 줄 설명, 메타 줄 `<package> · v<latest>`를 보인다. 버전을 모르는 부분은 빼며, 설치된 행과 같다. 행의 오른쪽에는 다음이 보인다.
 
 - 설치되지 않은 플러그인이면 `설치`(primary, sm, plus 아이콘). `core.plugins.install {plugin}`을 실행한다. 플러그인의 dependencies는 [dependencies](plugins.ko.md#pluginjson)가 정한 대로 함께 설치된다.
 - 설치되어 켜져 있으면 배지 `설치됨`(ok).
@@ -390,7 +390,7 @@ part마다 행이 하나이며 part 순서를 따른다(요소 이름 `core.sett
 
 정보 카드 아래에는 다음 순서로 묶음이 있다: `계정`, `설정`, `섹션`, `창 사이드바`, `카드 사이드바`. 묶음은 제목과 설명을 보인다. `계정`은 `에이전트 CLI 계정.`, `설정`은 `플러그인이 선언한 설정.`, `섹션`은 `이 플러그인이 사이드바에 제공하는 섹션.`이다. 묶음 `설정`은 항상 보이며, 플러그인이 설정을 선언하지 않으면 `이 플러그인에는 설정이 없다.`를 보인다. 다른 묶음은 비어 있으면 보이지 않는다.
 
-묶음 `계정`은 [계정](plugins.ko.md#accounts)을 선언한 플러그인에만 있다. 계정 목록은 계정마다 행 하나를 가진다. 행의 요소는 `core.settings-tab.account`이고 `id`를 가진다. 행은 식별자, CLI, 로그인 상태(`로그인됨`(ok) 또는 `로그인 안 됨`(neutral)), 사용량 줄을 보이며, 버튼 `로그인`, `취소`, `로그아웃`, `이름 변경`, `삭제`를 가진다. 요소는 각각 `core.settings-tab.account-login`, `account-login-cancel`, `account-logout`, `account-edit`, `account-remove`다. 이름을 바꾸는 행은 칸과 버튼 `core.settings-tab.account-edit-name`, `account-save`, `account-edit-cancel`을 보인다. 마지막 행 `새 계정`은 placeholder `새 계정 식별자`의 칸(`core.settings-tab.account-name`), CLI 종류 셀렉트(`core.settings-tab.account-kind`), 버튼 `추가`(`core.settings-tab.account-add`)를 가진다. 칸이 비면 `추가`는 비활성이다. 거부된 식별자는 칸 아래에 `소문자, 숫자, _ - 만 쓸 수 있다.` 또는 `이미 있는 식별자다.` 줄을 보인다. 묶음의 명령은 `core.accounts.add`, `core.accounts.rename`, `core.accounts.remove`, `core.accounts.login`, `core.accounts.login-cancel`, `core.accounts.logout`이며 각각 `{plugin, ...}`을 받는다. 페이지의 스크롤 영역은 요소 `core.settings-tab.pane`이다.
+묶음 `계정`은 [계정](plugins.ko.md#accounts)을 선언한 플러그인에만 있다. 계정 목록은 계정마다 행 하나를 가진다. 행의 요소는 `core.settings-tab.account`이고 `id`를 가진다. 행은 식별자, CLI, 로그인 상태(`로그인됨`(ok) 또는 `로그인 안 됨`(neutral)), 사용량 줄을 보이며, 버튼 `로그인`, `취소`, `로그아웃`, `이름 변경`, `삭제`를 가진다. 요소는 각각 `core.settings-tab.account-login`, `account-login-cancel`, `account-logout`, `account-edit`, `account-remove`다. 이름을 바꾸는 행은 칸과 버튼 `core.settings-tab.account-edit-name`, `account-save`, `account-edit-cancel`을 보인다. 마지막 행 `새 계정`은 placeholder `새 계정 식별자`의 칸(`core.settings-tab.account-name`), CLI 종류 셀렉트(`core.settings-tab.account-kind`), 버튼 `추가`(`core.settings-tab.account-add`)를 가진다. 칸이 비면 `추가`는 비활성이다. 거부된 식별자는 칸 아래에 `소문자, 숫자, _ - 만 쓸 수 있다.` 또는 `이미 있는 식별자다.` 줄을 보인다. 묶음의 명령은 `core.accounts.add`, `core.accounts.rename`, `core.accounts.remove`, `core.accounts.login`, `core.accounts.login-cancel`, `core.accounts.logout`이며 각각 `{plugin, ...}`을 받는다. 페이지의 스크롤 영역은 요소 `core.settings-tab.pane`이다. 새 계정 행의 종류 선택은 사람이 다른 종류를 고르기 전까지 선언의 첫 종류를 고른다. 선언이 더 이상 이름 붙이지 않는 종류의 계정은 그 종류 값을 종류 글로 보인다.
 
 묶음 `설정`은 manifest가 선언한 설정마다 행 하나를 manifest 순서로 보인다. 행의 이름은 `label`이고, 선언에 `description`이 있으면 이름 아래에 보인다. 컨트롤은 형식을 따른다([컨트롤](#컨트롤)).
 

@@ -378,9 +378,10 @@ export function setPluginSettings(manifests, applicationValues = {}, categoryPlu
       if (pluginDefinitions.has(key) || Object.hasOwn(defaults, key)) {
         throw new Error(`duplicate setting: ${key}`);
       }
-      // docs/spec/plugins.md: a string declaration states its maxLength, so a declaration without a positive integer is refused.
-      if (definition.type === "string" && !(Number.isInteger(definition.maxLength) && definition.maxLength > 0)) {
-        throw new Error(`${key}: a string setting needs a positive integer maxLength`);
+      // docs/spec/plugins.md: a string declaration states a non-empty default of at most maxLength characters; the same refusal as plugin-api.
+      if (definition.type === "string" && !(Number.isInteger(definition.maxLength) && definition.maxLength > 0 &&
+          typeof definition.default === "string" && definition.default.length > 0 && definition.default.length <= definition.maxLength)) {
+        throw new Error(`plugin ${key}: string default and maxLength are invalid`);
       }
       pluginDefinitions.set(key, Object.freeze({ ...definition, plugin: manifest.id, local }));
       // default: a plugin setting has no default; without a value it names the one plugin of its category when there is exactly one (undefined otherwise).

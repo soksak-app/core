@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222: 설정 탭은 알 수 없는 플러그인 버전을 빼고, 잘못된 문자열 설정 선언을 거부하며, 플러그인 설정 값의 상태를 명시한다.
 - F1222: data 선언이 없는 plugin accounts는 다른 형태의 data key와 같은 reader 문구로 거부되며, maxLength가 없거나 소수인 문자열 설정 사례가 공유 manifest 표에 들어간다.
 - F1217-11-3: 오류 toast의 자세히는 core.notices.show로 알림 센터를 그 notice에 연다. 줄 형식의 수는 core.toasts.list로 나머지 toast를 목록으로 보인다.
 - F1221: Rust 계정 거부 테스트는 cargo fmt가 쓰는 형식이다.

@@ -50,7 +50,7 @@ function badgesOf(row) {
 }
 
 /** The letter icon of a plugin: the first letter of its name in the accent token. */
-const letter = (name) => element("span", "plug-letter", [...name][0] ?? "?");
+const letter = (name) => element("span", "plug-letter", [...name][0]);
 
 /** The meta line of a plugin: its plugin categories, its key and its version (docs/spec/settings.md#설치됨). A category is listed when the window loads the plugin in it. */
 function metaOf(row) {
@@ -179,6 +179,7 @@ function outdatedRows() {
     const el = element("div", "set-plugin-row set-outdated");
     el.dataset.expose = "core.settings-tab.plugins.outdated";
     el.dataset.sidecar = item.sidecar;
+    // default: docs/spec/settings.md#plugins, a running side that the service did not report shows 이전 버전.
     el.append(element("p", "set-caption", `${item.sidecar}: ${item.running ?? "이전 버전"} → ${declared ? item.installed : "선언 없음"}`));
     el.append(button(`세션 ${item.sessions}개를 끝내고 ${declared ? "적용" : "종료"}`, {
       expose: "core.settings-tab.plugins.replace", command: "core.plugins.replace", params: { sidecar: item.sidecar }, key: item.sidecar, disabled: busy(), variant: "sm",
@@ -267,10 +268,11 @@ function descriptionLine(text) {
 }
 
 /** The version text of a catalog plugin: its latest version, or the line that no version fits the running core (docs/spec/installation.md#plugin-states). */
-function versionText(item) {
+export function versionText(item) {
   if (item.latest !== null) return `v${item.latest}`;
   if (item.incompatible) return `core ${pluginOperations.status().core}에 맞는 버전 없음`;
-  return `v${item.installed?.version ?? "-"}`;
+  // A version that is not known is left out (docs/spec/settings.md#plugins).
+  return item.installed === null ? "" : `v${item.installed.version}`;
 }
 
 /** One row of 찾아보기 (docs/spec/settings.md#찾아보기). */
@@ -283,7 +285,7 @@ function catalogRow(item) {
   head.append(name);
   for (const id of missingDependencies(item)) head.append(badge(`${id} 필요`, "warn"));
   if (item.description) head.append(descriptionLine(item.description));
-  head.append(element("p", "set-caption", `${item.id} · ${versionText(item)}`));
+  head.append(element("p", "set-caption", [item.id, versionText(item)].filter(Boolean).join(" · ")));
   const actions = element("div", "set-plugin-row__actions");
   if (item.installed === null) actions.append(action(item.id, "install", "설치", "core.plugins.install", { plugin: item.id }, "primary"));
   else if (item.installed.enabled) actions.append(badge("설치됨", "ok"));
@@ -391,9 +393,10 @@ export function declaredRow(key, def) {
     const options = def.values.map((value) => [value, String(value)]);
     control = options.length <= 3 ? choice(key, options, now, { disabled }) : select(key, options, now, { disabled });
   } else if (def.type === "integer") control = slider(key, [def.minimum, def.maximum], now, { disabled });
-  else if (def.type === "string" || def.type === "address") control = textField(key, { command: "core.settings.change", params: { key, scope: writeScope() }, now: String(now ?? ""), maxLength: def.maxLength, mono: def.type === "address" });
+  else if (def.type === "string" || def.type === "address") control = textField(key, { command: "core.settings.change", params: { key, scope: writeScope() }, now: String(now), maxLength: def.maxLength, mono: def.type === "address" });
   else if (def.type === "plugin") {
     const options = [...(now === undefined ? [["", "선택"]] : []), ...pluginsOfCategory(def.category).map(({ id, name }) => [id, name])];
+    // default: docs/spec/settings.md#plugins, a plugin setting without a value shows the empty choice 선택.
     control = select(key, options, now ?? "", { disabled });
   } else throw new Error(`setting ${key} has an unknown type ${def.type}`);
   const marks = scopeMarks(key, def.label);
@@ -408,10 +411,12 @@ function accountsGroup(unit) {
   const declared = pluginAccounts(unit.id).accounts;
   const listed = accounts.list(unit.id);
   const rows = listed.map((account) => accountRow(unit.id, declared.kinds, account));
+  // default: docs/spec/settings.md#plugins, the new account form selects the first declared kind until the person chooses one.
   const kindSelect = select("account-kind", declared.kinds.map((item) => [item.value, item.label]), state.account.kind ?? declared.kinds[0].value, {
     command: "core.settings-tab.account-kind", params: {}, valueName: "kind", expose: "core.settings-tab.account-kind",
   });
   const nameField = textField("account-name", { command: "core.settings-tab.account-name", params: {}, now: state.account.name, maxLength: 40, valueName: "name", expose: "core.settings-tab.account-name" });
+  // default: docs/spec/settings.md#plugins, the new account form selects the first declared kind until the person chooses one.
   const add = button("추가", { expose: "core.settings-tab.account-add", command: "core.accounts.add", params: { plugin: unit.id, name: state.account.name, kind: state.account.kind ?? declared.kinds[0].value }, disabled: state.account.name === "", variant: "primary" });
   const fresh = element("div", "set-account set-account--new");
   fresh.append(nameField, kindSelect, add);
@@ -431,6 +436,7 @@ function accountRow(plugin, kinds, account) {
   const el = element("div", "set-account");
   el.dataset.expose = "core.settings-tab.account";
   el.dataset.account = account.id;
+  // default: docs/spec/settings.md#plugins, an account whose kind the declaration no longer names shows its kind value.
   const kind = kinds.find((item) => item.value === account.kind)?.label ?? account.kind;
   el.append(element("p", "set-account__line", `${account.id} · ${kind} · ${loginText(account)}`));
   for (const usage of account.usage) {
