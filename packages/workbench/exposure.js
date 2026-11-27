@@ -159,7 +159,7 @@ export function createRegistry({ call = null, report = null } = {}) {
   async function recordedRead(name, requested, resolved, run) {
     const started = performance.now();
     const session = options.sessionOf ? options.sessionOf(resolved) : null;
-    const fields = (outcome) => ({ name, requested: requested ?? null, resolved, session, micros: Math.round((performance.now() - started) * 1000), ...outcome });
+    const fields = (outcome) => ({ name, requested: requested ?? null, resolved, session, micros: Math.round((performance.now() - started) * 1000), ...outcome }); // default: null when the request names none, as docs/spec/events.json states for workbench.status.read: "(null when the request names none)".
     try {
       const value = await run();
       emitEvent("debug", "workbench.status.read", fields({ ok: true, code: null }));

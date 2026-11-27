@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1245-3: workbench 기본값 8곳에 따르는 명세 줄을 인용한 이유를 적고, 이전 집합 기본값 하나를 명시적 분기로 바꾼다.
 - F1256: packages/workbench/workbench.json의 Go, Rust, mygo 호스트 복사본이 원본과 다시 같습니다(#F1256).
 - F1217-17-3: 사이드바 세트 편집기의 남은 차이는 F1217-17-3-1부터 F1217-17-3-3으로 기록하고, mygo 세트 카드는 F1250으로 옮긴다.
 - F1217-9-1: 설치됨 수는 plugin folder 수이며 plugins-folders-changed로 실시간 갱신된다.

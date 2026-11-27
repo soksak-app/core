@@ -53,7 +53,7 @@ export function sideShortcut(event) {
  * (docs/spec/exposure.md#keyboard-shortcuts). The rows of the side keys hold only while no text input has focus.
  */
 export function textInputFocused(element) {
-  return element?.matches?.("input, textarea, [contenteditable]") === true;
+  return element?.matches?.("input, textarea, [contenteditable]") === true; // default: without a focused element no text input has focus, as docs/spec/exposure.md states: "no text input has focus".
 }
 
 /** The orientation of the sections of the sidebar of a side: vertical at left and right, horizontal at top and bottom. */

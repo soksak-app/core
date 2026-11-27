@@ -375,7 +375,7 @@ export function createHome(root) {
     // default: without an id the selected row is the row of the answer (docs/spec/projects.md#project-home).
     confirm(id, answer) {
       if (!['ask', 'no', 'yes'].includes(answer)) throw new Error(`unknown answer ${answer}`);
-      const target = id ?? selected;
+      const target = id ?? selected; // default: without an id the selected row is the row of the answer, as docs/spec/projects.md states: "for the selected row".
       if (target === null) throw new Error('there is no row to confirm');
       if (answer === 'yes') return actions.remove(target);
       confirming = answer === 'ask' ? target : null;

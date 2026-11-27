@@ -531,7 +531,7 @@ const missingOrigins = new Map();
  */
 function reconcileMissing(sidebar, context, groups) {
   const store = notificationStore();
-  const card = context.window ? null : context.card ?? null;
+  const card = context.window ? null : context.card ?? null; // default: a window sidebar has no card, as docs/spec/notifications.md states: "null for a window sidebar".
   const next = new Set();
   for (const group of groups) {
     const line = missingText(group);
@@ -541,7 +541,8 @@ function reconcileMissing(sidebar, context, groups) {
     store.show({ kind: "warning", title: line.title, text: line.text, source: { kind: "sidebar", sidebar, card, plugin: group.id },
       actions: line.button === null ? [] : [line.button], origin });
   }
-  for (const origin of missingOrigins.get(sidebar) ?? []) if (!next.has(origin)) store.withdrawOrigin(origin);
+  const previous = missingOrigins.get(sidebar);
+  if (previous !== undefined) for (const origin of previous) if (!next.has(origin)) store.withdrawOrigin(origin);
   missingOrigins.set(sidebar, next);
 }
 
@@ -576,7 +577,7 @@ onTabReports(() => {
 function reportedStatus(record) {
   const notice = notificationStore().sidebarLineOf(record.sidebar);
   if (notice !== null) return { status: null, notice: { id: notice.id, kind: notice.kind, title: notice.base } };
-  return { status: statuses.get(record.container)?.text ?? null, notice: null };
+  return { status: statuses.get(record.container)?.text ?? null, notice: null }; // default: null when no status text is shown, as docs/spec/external-sidebars.md states: "the shown status text (`status`, null while a notice shows)".
 }
 
 export function sidebarsState() {

@@ -60,7 +60,7 @@ export function sidecarText(sidecars) {
 
 /** The name of a plugin in the state, which the row 필요 and its install button name; an id that the state does not list is its own name. */
 export function nameOfPlugin(id) {
-  return statusRows().find((item) => item.id === id)?.name ?? id;
+  return statusRows().find((item) => item.id === id)?.name ?? id; // default: a plugin that is not installed has no name in the state, so its id is its name, as docs/spec/settings.md states for "<id> 필요" (a plugin named in dependencies that is not installed).
 }
 
 /** The meta line of the row 사용 of a plugin page: its categories, its id, its installed version and the latest or published version, then its
