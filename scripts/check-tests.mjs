@@ -14550,7 +14550,7 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F502-18-2",
+    id: "F332-10",
     implementation: [
       { file: "packages/workbench/memory-placement.js", symbol: "record.surfaces = record.surfaces.filter(({ id }) => !unloaded.has(id));" },
       { file: "packages/workbench/sidebar-sections.js", symbol: "export function unloadSections(ids) {" },
@@ -17937,6 +17937,13 @@ const FEATURE_LINKS = [
     expected: "A declared program of the form plugin:<path> runs the file in the installed version folder of its plugin, is refused when its path leaves the folder, and fails the run when the file is missing or not executable; sok install refuses a release whose program file is missing or not executable.",
     levels: ["unit"],
   },
+  {
+    id: "F1221",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditFeatureKeys" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "every feature link key names an item of the checklist" }],
+    expected: "Every key of the feature link table names an item of docs/features.md, so a link left behind by a renamed or removed item is reported.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
@@ -18928,6 +18935,15 @@ function removalFollowUps(lines) {
   return { errors, removed };
 }
 
+// Every key of FEATURE_LINKS names an item of docs/features.md, so an entry that names no item (a key left behind by a renamed
+// or removed item) is reported. The item ids are the lines `- [<state>] <ID> —` at any indent.
+export function auditFeatureKeys(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
+  const items = new Set([...checklistSource.matchAll(/^\s*- \[.\] (\S+) —/gm)].map((match) => match[1]));
+  return features
+    .filter((feature) => !items.has(feature.id))
+    .map((feature) => `${feature.id}: feature link key names no item of docs/features.md`);
+}
+
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));
   const { errors, removed } = removalFollowUps(checklistSource.split("\n"));
@@ -19187,6 +19203,7 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
     errors.push(`${adapterManifestFile}: cannot read language adapter cases: ${error.message}`);
   }
   errors.push(...auditCompletedFeatureLinks(featureLinks));
+  errors.push(...auditFeatureKeys(featureLinks));
   errors.push(...auditDeclaredContractCases(readFileSync(`${ROOT}docs/spec/host-contract.md`, "utf8"),
     repositoryFiles().filter((path) => CONTRACT_DECLARATION_SOURCES.some(({ directory, file }) => path.startsWith(directory) && file.test(path)))
       .map((path) => ({ path, text: readFileSync(`${ROOT}${path}`, "utf8") }))));

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
-import { auditDeclaredContractCases, auditWorkbenchCases, auditCompletedFeatureLinks, auditFixedTemporaryPaths, auditJoinedFailures, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditInventory, auditJsFailurePropagation, auditNativeFailurePropagation, auditOwnership, inventorySummary, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles, auditRequirementCoverage, readRequirementScope, requirementSummary } from "../check-tests.mjs";
+import { auditDeclaredContractCases, auditWorkbenchCases, auditCompletedFeatureLinks, auditFeatureKeys, auditFixedTemporaryPaths, auditJoinedFailures, auditExecutableLanguageCoverage, auditFailureMatrix, auditFeatureLinks, auditGoFailurePropagation, auditInventory, auditJsFailurePropagation, auditNativeFailurePropagation, auditOwnership, inventorySummary, auditRustFailurePropagation, discoverInventory, packageIndex, repositoryFiles, auditRequirementCoverage, readRequirementScope, requirementSummary } from "../check-tests.mjs";
 
 const files = repositoryFiles();
 
@@ -326,6 +326,15 @@ test("feature-link audit self-check detects an omitted error and response", { ti
     assert.equal(result.status, 1, `${name}: audit defect escaped its assertion\n${result.stdout}\n${result.stderr}`);
     assert.match(result.stderr, /ERR_ASSERTION/, `${name}: an execution error is not an audit assertion`);
   }
+});
+
+test("every feature link key names an item of the checklist", { timeout: 1000 }, () => {
+  const inventory = auditInventory(files);
+  assert.deepEqual(auditFeatureKeys(inventory.featureLinks), []);
+  assert.deepEqual(
+    auditFeatureKeys([{ id: "F1" }, { id: "F9-9" }], "- [o] F1 — one\n  - [-] F1-1 — Closed: removed by F2: text.\n"),
+    ["F9-9: feature link key names no item of docs/features.md"],
+  );
 });
 
 test("completed capability entries all have feature evidence links", { timeout: 1000 }, () => {
