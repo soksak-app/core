@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: A missing skill or mcp setup part has a 고치기 or 설치 button, core.settings-tab.setup-install, that runs core.setup.install.
 - F1217-7: The plugin end action and the text field of a plugin string setting are read from the element tree by the tests.
 - F1107: sok records each status read with its window, status name, surface, and result as sok.status.read in the Go and Rust tools.
 - F1217-7: The sidebar size group shows the first-width error and its fix button core.settings-tab.fix, and the minimum error.

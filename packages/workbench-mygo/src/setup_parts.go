@@ -270,6 +270,14 @@ func (s *Shell) buildSetup(b *settingsBuilder) {
 			control.setup.action = b.button("setup-change:path", "core.settings-tab.setup-change", label, "core.setup.change",
 				map[string]any{"part": "path", "enabled": !*part.Enabled})
 		}
+		// A missing skill or mcp part has its own button: 고치기 when the file differs, else 설치 (docs/spec/settings.md#에이전트).
+		if (part.Part == "skill" || part.Part == "mcp") && part.State == "missing" {
+			label := "설치"
+			if part.Reason == "differs" {
+				label = "고치기"
+			}
+			control.setup.action = b.small(key, "core.settings-tab.setup-install", label, "core.setup.install", map[string]any{"parts": []string{part.Part}})
+		}
 		rows = append(rows, settingsRow{controls: []*SettingsControl{control}, list: true})
 	}
 	if len(parts) == 0 {

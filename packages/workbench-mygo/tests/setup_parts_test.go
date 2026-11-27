@@ -306,3 +306,34 @@ func setupInstallDisabled(f *shellFixture) bool {
 	}
 	return false
 }
+
+// A missing skill or mcp part has its own button in its row: 고치기 when the file differs, else 설치, which runs core.setup.install with
+// that part (docs/spec/settings.md#에이전트). A part that is ok or is path or hook has none.
+func TestAMissingSkillOrMCPPartHasItsOwnFixOrInstallButton(t *testing.T) {
+	host := &setupHost{states: []setupAnswer{{parts: setupMissing}, {parts: setupInstalled}, {parts: setupInstalled}}, installs: []setupAnswer{{parts: setupInstalled}}}
+	f := setupShell(t, host)
+	f.click("core.chrome.settings", "")
+	f.run("core.settings-tab.nav", map[string]any{"page": "agents"})
+	skill := "setup:skill:/Users/person/.claude/skills/soksak/SKILL.md"
+	mcp := "setup:mcp:/Users/person/.claude.json"
+	path := "setup:path:/Users/person/.local/bin/sok"
+	hook := "setup:hook:/Users/person/.claude/settings.json"
+	for key, label := range map[string]string{skill: "고치기", mcp: "설치"} {
+		found := false
+		for _, control := range f.modal().Controls {
+			if control.Name != "core.settings-tab.setup-install" || control.Key == nil || *control.Key != key {
+				continue
+			}
+			found = true
+			if control.Label != label || control.Command == nil || control.Command.Name != "core.setup.install" {
+				t.Fatalf("the button of %s is %q running %+v, want %q running core.setup.install", key, control.Label, control.Command, label)
+			}
+		}
+		if !found {
+			t.Fatalf("no button of %s in the element tree", key)
+		}
+	}
+	if keys := f.modal().keys("core.settings-tab.setup-install"); !slices.Equal(keys, []string{skill, mcp}) {
+		t.Fatalf("the part buttons are %q, want the skill and mcp parts %q (path %s and hook %s have none)", keys, []string{skill, mcp}, path, hook)
+	}
+}
