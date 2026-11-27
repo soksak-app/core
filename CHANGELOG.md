@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F715-3: The test-link check points the F715-2 library and settings links at the current home, settings and e2e tests and removes the library pane entry that the project home has no rule for.
 - F1107: Tests pin that the main page forwards a status read to the named one of two surfaces that register the status, and that a view answers the read of the named surface; the CLI and the host pass the named surface.
 - F1220-1: The page log and performance cases record the loss of a refused batch in the next batch, and their tests flush at their own points; the logging specification names the reason of that loss (Red: 9 page log tests and 1 performance test failed after F1220).
 - F999: A surface that a layout shows sends the drawing states of its image regions to their suppliers after the layout, in the Go and the Rust host, so a terminal shown after a restart draws without input (Red: showing the surface sent its region no drawing state that draws).

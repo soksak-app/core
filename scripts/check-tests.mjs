@@ -280,7 +280,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin host process footprint bridge", "objective-c", ["native/darwin/src/host_api_process_footprint.m"], ["native/darwin/tests/host_api_process_footprint_test.m"], { testLanguage: "objective-c", sharedTests: true }),
   lane("Darwin test native fixture", "objective-c", ["native/darwin/tests/support/host_test_api.m"], ["native/darwin/tests/host_test_api_test.m"], { sharedTests: true }),
   lane("Darwin test native facade", "go", ["packages/host/go/tests/platform/darwin/stack_sampler.go"], ["packages/host/go/tests/platform/darwin/stack_sampler_test.go", "packages/host/mygo/tests/platform/darwin/main_thread_stack_test.go", "packages/host/wailsv3/tests/platform/darwin/main_thread_stack_test.go"], { sharedTests: true }),
-  lane("Workbench styles", "stylesheet", ["packages/workbench/app.css", "packages/workbench/library.css"], ["packages/workbench/test/background.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Workbench styles", "stylesheet", ["packages/workbench/app.css", "packages/workbench/home.css", "packages/workbench/settings.css"], ["packages/workbench/test/background.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Workbench declarations", "declaration", ["packages/workbench/exposure.json"], ["packages/workbench/test/exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("mygo workbench declarations", "declaration", ["packages/workbench-mygo/src/exposure.json"], ["scripts/test/check-exposure.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Workbench shortcuts", "declaration", ["packages/workbench/shortcuts.json"], ["scripts/test/shortcut-table.test.mjs"], { testLanguage: "js-ts" }),
@@ -292,6 +292,40 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
+  {
+    id: "F1160",
+    implementation: [
+      { file: "packages/host/go/src/app_update.go", symbol: "func refuseTranslocated(executable string) error {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/app_update_test.go", id: "TestTheHostRefusesATranslocatedBundleBeforeAnyChange" },
+    ],
+    expected: "An application update refuses a translocated bundle before it stages or quits, so the quit never targets a read-only copy.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1219",
+    implementation: [
+      { file: "scripts/measure-object-counts.mjs", symbol: "    client.close();" },
+      { file: "packages/client/client.js", symbol: "const released = this.#subscribe(key, () => this.request(\"status.unwatch\", target));" },
+    ],
+    tests: [
+      { file: "packages/client/test/client.test.mjs", id: "a predicate that throws ends the watch with its error and unwatches" },
+    ],
+    expected: "A watch whose predicate throws ends with that error, the client unwatches and closes, and the caller does not wait for its timeout.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1220",
+    implementation: [
+      { file: "packages/plugin-api/log-batch.js", symbol: "events.unshift(ownRecord(now(), \"warn\", own.dropped, { count, bytes, reason }));" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/log-batch-refused.test.mjs", id: "a refused batch is reported once and its events are counted as dropped in the batch that follows the next event" },
+    ],
+    expected: "A refused log batch is reported once through the error display path, its events are counted as dropped in the next batch, and the batcher keeps working.",
+    levels: ["unit"],
+  },
   {
     id: "F1098",
     implementation: [
@@ -361,12 +395,12 @@ const FEATURE_LINKS = [
   {
     id: "F1149",
     implementation: [
-      { file: "packages/workbench/projects.js", symbol: "async function emptyToLibrary() {" },
+      { file: "packages/workbench/projects.js", symbol: "async function emptyToHome() {" },
       { file: "packages/workbench-mygo/src/shell_project.go", symbol: "func (s *Shell) browse() error {" },
     ],
     tests: [
-      { file: "packages/workbench/test/projects-switch.test.mjs", id: "browsing shows the library in the draw that empties the plane, not where a later host reply resolves" },
-      { file: "packages/workbench-mygo/tests/project_opening_test.go", id: "TestTheLibraryNamesNoProjectInTheAddress" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "browsing shows the project home in the draw that empties the plane, not where a later host reply resolves" },
+      { file: "packages/workbench-mygo/tests/project_opening_test.go", id: "TestTheHomeNamesNoProjectInTheAddress" },
     ],
     expected: "The library names no project in the window address, so a new start of the workbench after a plugin change starts at the library.",
     levels: ["unit"],
@@ -420,9 +454,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/shell.go", symbol: "func (s *Shell) returnable() *projectRecord {" },
     ],
     tests: [
-      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a start at the library address draws no project and returns to the project that it names (F1149-1)" },
-      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a start at a library address of a project that no window holds open has no way back" },
-      { file: "packages/workbench-mygo/tests/project_opening_test.go", id: "TestANewStartAtTheLibraryReturnsToTheProjectOfTheWindow" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a start at the project home address draws no project and returns to the project that it names (F1149-1)" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a start at a project home address of a project that no window holds open has no way back" },
+      { file: "packages/workbench-mygo/tests/project_opening_test.go", id: "TestANewStartAtTheProjectHomeReturnsToTheProjectOfTheWindow" },
       { file: "packages/workbench-mygo/tests/project_opening_test.go", id: "TestALibraryAddressOfAProjectThatNoWindowHoldsHasNoWayBack" },
     ],
     expected: "A new start at the library address draws no project and keeps the way back to the project that a window holds open.",
@@ -552,14 +586,14 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/workbench/accounts.js", symbol: "export function createAccounts({ host, declarations, data, changed, failed }) {" },
       { file: "packages/workbench/accounts-exposure.js", symbol: "export function installAccountsExposure({ showError, changed }) {" },
-      { file: "packages/workbench/settings-ui.js", symbol: "function accountsGroup(unit, declared) {" },
+      { file: "packages/workbench/settings-plugins.js", symbol: "function accountsGroup(unit) {" },
     ],
     tests: [
       { file: "packages/workbench/test/accounts.test.mjs", id: "showing a page runs status for each account in turn, a failure keeps the state before, and window-active reads again" },
       { file: "packages/workbench/test/accounts.test.mjs", id: "an add takes the least identifier that no record and no home has, and a remove removes the record and the home" },
       { file: "packages/workbench/test/accounts.test.mjs", id: "a login reports running until it ends, a cancel ends it, and a login and a logout read the status after them" },
       { file: "packages/workbench/test/accounts.test.mjs", id: "the commands refuse what the contract refuses before any host call" },
-      { file: "packages/workbench/test/settings-accounts.test.mjs", id: "the plugin page draws a row per account with the buttons of its login, and the fields keep their text for 추가 and 저장" },
+      { file: "packages/workbench/test/settings-accounts.test.mjs", id: "the plugin page draws a row per account in the order of the names, with the buttons of its login" },
     ],
     expected: "The web workbench draws the group 계정 of a plugin page from the stored records and the status runs, serves the core.accounts commands and status, and keeps the fields of the group in the settings window.",
     levels: ["unit"],
@@ -703,17 +737,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/verify-empty-card.test.mjs", id: "T5 fails for an empty card that the layout could close" },
     ],
     expected: "The diagnostic check T5 fails only for an empty card that the layout could close.",
-    levels: ["unit"],
-  },
-  {
-    id: "F1197",
-    implementation: [
-      { file: "packages/workbench/library-preview.js", symbol: "else if(active) pane.dataset.plugin=active.plugin;" },
-    ],
-    tests: [
-      { file: "packages/workbench/test/library-preview.test.mjs", id: "a library preview draws a content card without tabs as an empty pane" },
-    ],
-    expected: "The library preview draws a content card without tabs as an empty pane without a plugin and a mark.",
     levels: ["unit"],
   },
   {
@@ -993,10 +1016,10 @@ const FEATURE_LINKS = [
   {
     id: "F1145",
     implementation: [
-      { file: "packages/workbench/library.js", symbol: "mark(add,'core.library.form.open',{mode:'create'});" },
+      { file: "packages/workbench/home.js", symbol: "mark(add, 'core.home.form.open', { mode: 'create' });" },
     ],
     tests: [
-      { file: "packages/workbench/test/library-commands.test.mjs", id: "each pressable element of the library carries the parameters that its command requires" },
+      { file: "packages/workbench/test/home.test.mjs", id: "each pressable element of the project home carries the parameters that its command requires" },
     ],
     expected: "Each pressable element of the library runs its command with the parameters that the declaration of the command requires.",
     levels: ["unit"],
@@ -1153,13 +1176,13 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/sok/go/src/service_hold.go", symbol: "func heldBy(id string, state *InstalledState, recorded map[string]string, services Services) *Held {" },
       { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) EndServices(ctx context.Context, held sok.Held) error {" },
-      { file: "packages/workbench/library.js", symbol: "button.dataset.expose = 'core.library.plugins.end'; button.dataset.action = held.action;" },
+      { file: "packages/workbench/settings-plugins.js", symbol: "expose: \"core.settings-tab.plugins.end\"" },
     ],
     tests: [
       { file: "packages/sok/go/tests/service_hold_test.go", id: "TestAnUpdateThatChangesTheSidecarOfARunningServiceWritesNothing" },
       { file: "packages/host/go/tests/plugins_held_test.go", id: "TestAHeldUpdateIsListedAndRunsWithTheEndOfItsService" },
       { file: "packages/host/rust/tests/plugins_held_test.rs", id: "a_held_update_is_listed_and_runs_with_the_end_of_its_service" },
-      { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
+      { file: "packages/workbench/test/settings-plugins-state.test.mjs", id: "a held operation shows its error and the action that ends its sessions, and no action while a session count is unknown" },
     ],
     expected: "No plugin operation leaves a running persistent service of another version than installed.json records: a held operation writes nothing and is listed, and its action on the plugin card ends the holding services before installed.json is written.",
     levels: ["unit"],
@@ -1167,17 +1190,17 @@ const FEATURE_LINKS = [
   {
     id: "F1138-3",
     implementation: [
-      { file: "packages/workbench/library.js", symbol: "button.dataset.expose = 'core.library.plugins.end'; button.dataset.action = held.action;" },
+      { file: "packages/workbench/settings-plugins.js", symbol: "expose: \"core.settings-tab.plugins.end\"" },
       { file: "packages/workbench/core-exposure.js", symbol: "if (ends && \"end\" in rest && rest.end !== true) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, \"end must be true\");" },
-      { file: "packages/workbench-mygo/src/plugin_screen.go", symbol: "func drawCardHeld(c *ui.Context, binder *Binder, page PluginPage, row PluginRow, shown *ShownErrors, look PluginLook) {" },
+      { file: "packages/workbench-mygo/src/settings_plugin_pages.go", symbol: "control := b.button(held.Plugin, \"core.settings-tab.plugins.end\"" },
       { file: "packages/workbench-mygo/src/shell_plugins.go", symbol: "if ends && value.End != nil && !*value.End {" },
     ],
     tests: [
-      { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
+      { file: "packages/workbench/test/settings-plugins-state.test.mjs", id: "a held operation shows its error and the action that ends its sessions, and no action while a session count is unknown" },
       { file: "packages/workbench/test/plugin-operations.test.mjs", id: "status lists the held operations of the state, and a run with end passes end to the host" },
       { file: "packages/workbench/test/plugin-command-end.test.mjs", id: "a plugin command passes end true to the operation and refuses another end" },
-      { file: "packages/workbench-mygo/tests/plugin_screen_test.go", id: "TestAHeldOperationShowsItsErrorAndTheActionThatEndsItsSessions" },
-      { file: "packages/workbench-mygo/tests/plugin_operations_test.go", id: "TestAHeldOperationIsListedAndItsActionRunsItWithEnd" },
+      { file: "packages/workbench-mygo/tests/settings_plugin_pages_test.go", id: "TestAHeldOperationIsListedAndItsActionRunsItWithEnd" },
+      { file: "packages/workbench-mygo/tests/settings_plugin_pages_test.go", id: "TestAHeldOperationIsListedAndItsActionRunsItWithEnd" },
     ],
     expected: "The workbench and mygo plugin screens show the error of a held operation through the error display and the action 세션 <n>개를 끝내고 업데이트 (설치, 사용), which runs its command with end true and is absent while a sessions count is not known; core.plugins reports held, and the commands refuse an end other than true.",
     levels: ["unit"],
@@ -1581,10 +1604,12 @@ const FEATURE_LINKS = [
   },
   {
     id: "F1031-1",
-    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.error.dismiss"' }],
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.error.dismiss"' },
+    ],
     tests: [
       { file: "packages/workbench/test/core-exposure-memory-saver.test.mjs", id: "installCoreExposure refuses a page without its memory saver and installs the entries of a page that gives it" },
-      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "a screen that never loaded answers its status as closed, and its first command loads it" },
+      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "a settings tab that never loaded answers its status as absent, and its first command loads it" },
     ],
     expected: "The page starts and registers its commands before the lazy screen opens.",
     levels: ["unit"],
@@ -1593,7 +1618,7 @@ const FEATURE_LINKS = [
     id: "F1031-2",
     implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "core.error.dismiss names no open toast")' }],
     tests: [
-      { file: "packages/workbench/test/workbench-statuses.test.mjs", id: "core.window.workbench, core.workbench.error and core.workbench.audit describe the workbench and the page names are refused" },
+      { file: "packages/workbench/test/workbench-statuses.test.mjs", id: "core.window.workbench, core.toasts and core.workbench.audit describe the workbench and the page names are refused" },
       { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "a presentation after a failed presentation withdraws the toast of that failure" },
       { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "a layout failure that no command waits for writes one workbench error line" },
     ],
@@ -1680,8 +1705,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (s *Shell) drawErrorToasts(" },
     ],
     tests: [
-      { file: "packages/workbench/test/settings-error-toast.test.mjs", id: "the settings dialog owns the existing toast until it closes" },
-      { file: "packages/workbench/test/modal-error-toasts.test.mjs", id: "the native settings and debug copies share the foreground toast and forward its close once" },
+      { file: "packages/workbench/test/modal-error-toasts.test.mjs", id: "the debug copy shares the foreground toast of the window and forwards its close once" },
       { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestApplicationToastMovesIntoTheActiveNativeModal" },
     ],
     expected: "The active modal owns the dismissible shared toast without opening another occurrence.",
@@ -1695,10 +1719,10 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/error-occurrences.test.mjs", id: "equal text from two origins shares a toast and records both occurrences" },
-      { file: "packages/workbench/test/stored-file-errors.test.mjs", id: "the actual start document shows and exposes a dismissible failed workspace toast before the library starts" },
-      { file: "packages/workbench/test/library-error-toast.test.mjs", id: "the project form uses the shared error toast when its folder is empty" },
+      { file: "packages/workbench/test/stored-file-errors.test.mjs", id: "the actual start document shows and exposes a dismissible failed workspace toast before the project home starts" },
+      { file: "packages/workbench/test/home.test.mjs", id: "the project form uses the shared error toast when its folder is empty" },
       { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestWorkbenchErrorsWithTheSameTextKeepTheirOrigins" },
-      { file: "packages/workbench-mygo/tests/library_test.go", id: "TestAFailedOpenOfTheLibraryShowsADismissibleToast" },
+      { file: "packages/workbench-mygo/tests/home_test.go", id: "TestAFailedOpenFromTheHomeShowsADismissibleToast" },
     ],
     expected: "The shared toast component owns occurrence, dismissal and recovery for the workbench and library.",
     levels: ["unit"],
@@ -1783,11 +1807,11 @@ const FEATURE_LINKS = [
   {
     id: "F1037",
     implementation: [
-      { file: "packages/workbench/settings-ui.js", symbol: "const SETUP_NAMES = {" },
+      { file: "packages/workbench/settings-pages.js", symbol: "const SETUP_NAMES = {" },
       { file: "packages/workbench-mygo/src/setup_parts.go", symbol: "setupNames  = map[string]string{" },
     ],
     tests: [
-      { file: "packages/workbench/test/settings-setup.test.mjs", id: "the agent group reads the parts, shows the PATH preference, and runs the setup commands" },
+      { file: "packages/workbench/test/settings-setup.test.mjs", id: "the agent page reads the parts when it shows, shows the PATH preference, and runs the setup commands" },
       { file: "packages/workbench-mygo/tests/setup_parts_test.go", id: "TestTheAgentGroupShowsAndInstallsTheSetupParts" },
     ],
     expected: "The agent group of the settings window names every setup part, the hook parts as 훅, in both workbenches.",
@@ -3144,8 +3168,12 @@ const FEATURE_LINKS = [
   },
   {
     id: "F895",
-    implementation: [{ file: "packages/workbench/settings.js", symbol: "const { projectOpening, viewProcess, projectTabs, focusInd, fullRule, cardArrange } = declaration.settings.choices;" }],
-    tests: [{ file: "packages/workbench/test/settings-controls.test.mjs", id: "every setting form is drawn with its one control" }],
+    implementation: [
+      { file: "packages/workbench/settings.js", symbol: "const { projectOpening, viewProcess, projectTabs, focusInd, fullRule, cardArrange, toastStyle, noticeCenterStyle } = declaration.settings.choices;" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/settings-controls.test.mjs", id: "every setting form of the common scope is drawn with its one control" },
+    ],
     expected: "The setting cardArrange is a choice of resize and even, drawn as a select box whose options are the declared choices.",
     levels: ["unit"],
   },
@@ -3843,7 +3871,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/compositor.js", symbol: "held(validated.placements.map(({ id }) => id));" },
       { file: "packages/workbench/index.html", symbol: "held: (surfaceIds) => { hostHeld = surfaceIds; }," },
       { file: "packages/workbench-mygo/src/sidecar_sessions.go", symbol: "func (s *Shell) afterRetains(then func()) {" },
-      { file: "packages/workbench-mygo/src/library.go", symbol: "later(s, \"core.library.remove\"" },
+      { file: "packages/workbench-mygo/src/home.go", symbol: "later(s, \"core.home.remove\"" },
       { file: "e2e/view-surfaces.test.mjs", symbol: "the layout probe views ${probeViews.join(\", \")} did not all attach their document region" },
     ],
     tests: [
@@ -3881,8 +3909,8 @@ const FEATURE_LINKS = [
   {
     id: "F734",
     implementation: [
-      { file: "e2e/projects.test.mjs", symbol: "const projectMode = await control(child, \"core.settings-modal.set\", \"mode\");" },
-      { file: "e2e/projects.test.mjs", symbol: "await press(child, \"core.settings-modal.set\", \"sidebarWidth\", String(globalWidth));" },
+      { file: "e2e/projects.test.mjs", symbol: "await press(child, \"core.settings-tab.choice\", \"mode\", \"light\");" },
+      { file: "e2e/projects.test.mjs", symbol: "await press(child, \"core.settings-tab.set\", \"sidebarWidth\", \"240\");" },
     ],
     tests: [
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
@@ -4159,11 +4187,11 @@ const FEATURE_LINKS = [
   {
     id: "F721",
     implementation: [
-      { file: "packages/workbench-mygo/src/settings_draw.go", symbol: "ui.Text(c, row.value).NoWrap().FontSize(s.textBody()).TextColor(s.palette.Fg)" },
+      { file: "packages/workbench-mygo/src/settings_draw.go", symbol: "ui.Text(c, row.name).FontSize(s.textControl()).TextColor(s.palette.Fg)" },
     ],
     tests: [
-      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestAnOrderRowShowsTheNameOfItsValueAndTheFirstRowTheNameOfTheSetting" },
-      { file: "packages/workbench/test/settings-controls.test.mjs", id: "every setting form is drawn with its one control" },
+      { file: "packages/workbench-mygo/tests/design_match_test.go", id: "TestTheButtonsOfAnOrderRowStandAfterTheNameOfItsValueAtTheBodySize" },
+      { file: "packages/workbench/test/settings-controls.test.mjs", id: "the sidebar order is one row per side with ↑ and ↓ that write the whole order" },
     ],
     expected: "Each order row shows the name of its value beside its buttons and the first row the name of the setting, in both workbenches, and the tests read the drawn names.",
     levels: ["unit"],
@@ -4174,11 +4202,12 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/settings_store.go", symbol: "func (s *SettingsStore) Source(key string) string {" },
       { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *Shell) controlScope(key string) string {" },
       { file: "packages/workbench/settings.js", symbol: "export const sourceScope = (key) =>" },
-      { file: "packages/workbench/settings-ui.js", symbol: "const scopeOf = (key) =>" },
+      { file: "packages/workbench/settings.js", symbol: "export const sourceScope = (key) =>" },
     ],
     tests: [
       { file: "packages/workbench-mygo/tests/settings_scope_test.go", id: "TestAControlChangesTheValueThatItShowsInTheScopeThatTheValueComesFrom" },
-      { file: "packages/workbench/test/settings-control-scope.test.mjs", id: "a control of a setting changes the value that it shows in the scope that the value comes from" },
+      { file: "packages/workbench/test/settings-control-scope.test.mjs", id: "the common scope shows the common value with the project chip, and writes the common scope" },
+      { file: "packages/workbench/test/settings-control-scope.test.mjs", id: "the project scope marks an override with its badge and a reset control, and the reset removes the project value" },
     ],
     expected: "The window chrome switches, the fold control and every control of the common tab show the applied value and write the scope that it comes from, the common tab marks a project value, and only the project tab adds or removes one.",
     levels: ["unit"],
@@ -5878,7 +5907,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (e *ShownErrors) Show(where, text, detail string) {" },
       { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func SectionHeights(sections []SidebarSection, metrics SidebarMetrics, room float32) []float32 {" },
       { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func SidebarSeats(frame SidebarFrame) []SidebarSeat {" },
-      { file: "packages/workbench-mygo/src/plugin_screen.go", symbol: "func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors, look PluginLook) {" },
+      { file: "packages/workbench-mygo/src/settings_plugin_pages.go", symbol: "func (s *Shell) buildPluginTab(b *settingsBuilder) error {" },
       { file: "packages/workbench-mygo/src/debug_screen.go", symbol: "func DrawDebugView(c *ui.Context, binder *Binder, view DebugView, shown *ShownErrors) ui.Element {" },
       { file: "packages/workbench-mygo/src/debug_state.go", symbol: "func ParseDebugState(file, text string, truncated bool) (DebugState, error) {" },
     ],
@@ -5886,7 +5915,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestTheErrorToastShowsAndDismissesThroughTheWorkbench" },
       { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestAListSidebarDrawsItsHeadersAndFoldsASection" },
       { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestTheSeatOfASectionIsItsBody" },
-      { file: "packages/workbench-mygo/tests/plugin_screen_test.go", id: "TestTheActionsOfACardFollowThePlugin" },
+      { file: "packages/workbench-mygo/tests/settings_plugin_pages_test.go", id: "TestTheActionsOfThePluginPageFollowThePlugin" },
       { file: "packages/workbench-mygo/tests/debug_view_test.go", id: "TestTheDebugViewListsEachFileWithItsActions" },
       { file: "packages/workbench-mygo/tests/debug_view_test.go", id: "TestTheTimelineHasItsRowsAndTheirButtons" },
     ],
@@ -6279,7 +6308,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/plugin-api/test/removed-members.test.mjs", id: "the exposes member dom is refused as removed, and exposes.element declares an exposed element" },
       { file: "packages/plugin-api/test/exposure-check.test.mjs", id: "a name registered with expose.element is an element name and must be declared" },
-      { file: "packages/workbench/test/workbench-statuses.test.mjs", id: "core.window.workbench, core.workbench.error and core.workbench.audit describe the workbench and the page names are refused" },
+      { file: "packages/workbench/test/workbench-statuses.test.mjs", id: "core.window.workbench, core.toasts and core.workbench.audit describe the workbench and the page names are refused" },
       { file: "packages/host/go/src/exposure_status_test.go", id: "TestRelayedViewRegistrationRefusalsRecordNothing" },
       { file: "packages/host/go/tests/exposure_test.go", id: "TestHostHitDeclaresTheWorkbenchDocumentAndNativeKinds" },
       { file: "packages/host/rust/tests/exposure_test.rs", id: "a_registration_kind_is_status_command_or_element" },
@@ -7248,12 +7277,12 @@ const FEATURE_LINKS = [
   {
     id: "F548",
     implementation: [
-      { file: "packages/workbench/core-exposure.js", symbol: "settingsScreen ??= await import(\"./settings-ui.js\");" },
+      { file: "packages/workbench/core-exposure.js", symbol: "const settingsUi = async () => {" },
       { file: "packages/workbench/core-exposure.js", symbol: "debugScreen ??= await import(\"./debug-ui.js\");" },
     ],
     tests: [
-      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "the first window of a main page reads no module of the settings modal or the debug view" },
-      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "a screen that never loaded answers its status as closed, and its first command loads it" },
+      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "the first window of a main page reads no module of the settings tab or the debug view" },
+      { file: "packages/workbench/test/page-start-imports.test.mjs", id: "a settings tab that never loaded answers its status as absent, and its first command loads it" },
     ],
     expected: "The first window reads no module of the settings modal or the debug view, and each screen loads at its first use.",
     levels: ["unit"],
@@ -8132,7 +8161,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/surface-remount-composition.test.mjs", id: "a disposing surface leaves the tabs with attached regions before its exposure disposal ends" },
       { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a region query of a view that a running place leaves out waits for the place and asks no region of a released view" },
       { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a region query of a view waits for a failed place that left the view out and then asks its regions" },
-      { file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" },
+      { file: "e2e/home.test.mjs", id: "the project home names a missing project folder and removes the project" },
     ],
     expected: "A region query of a surface that a disposal or a running place closes asks no closed region, and a failed place leaves the regions to the query.",
     levels: ["unit", "application"],
@@ -9073,8 +9102,12 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-209",
-    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: "export async function installCoreExposure(" }],
-    tests: [{ file: "packages/workbench/test/library-search-focus.test.mjs", id: "the declared cmd+k command targets the shown library page and rejects a hidden library" }],
+    implementation: [
+      { file: "packages/workbench/core-exposure.js", symbol: "export async function installCoreExposure(" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/home.test.mjs", id: "the declared cmd+k command focuses the project home search field and rejects a shown workspace" },
+    ],
     expected: "The parameterless library search focus command and declared shortcut select the current projects/plugins search field and explicitly reject a hidden library.",
     levels: ["unit"],
   },
@@ -9153,7 +9186,7 @@ const FEATURE_LINKS = [
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
       { file: "e2e/projects.test.mjs", id: "a saved project window mounts its active view on first open and reopen" },
       { file: "e2e/projects.test.mjs", id: "a saved layout naming a plugin that is not loaded opens with a placeholder card" },
-      { file: "e2e/projects.test.mjs", id: "the first project opened from the library replies and replaces the library in the same window" },
+      { file: "e2e/projects.test.mjs", id: "the first project opened from the project home replies and replaces the project home in the same window" },
       { file: "e2e/projects.test.mjs", id: "a window that holds no open project reports no project" },
       { file: "e2e/projects.test.mjs", id: "a covered window keeps its document visible and completes presentation commands" },
     ],
@@ -9171,7 +9204,7 @@ const FEATURE_LINKS = [
       { file: "e2e/projects.test.mjs", id: "project windows persist files, inherit settings, and isolate native state" },
       { file: "e2e/projects.test.mjs", id: "a saved project window mounts its active view on first open and reopen" },
       { file: "e2e/projects.test.mjs", id: "a saved layout naming a plugin that is not loaded opens with a placeholder card" },
-      { file: "e2e/projects.test.mjs", id: "the first project opened from the library replies and replaces the library in the same window" },
+      { file: "e2e/projects.test.mjs", id: "the first project opened from the project home replies and replaces the project home in the same window" },
       { file: "e2e/projects.test.mjs", id: "a window that holds no open project reports no project" },
       { file: "e2e/projects.test.mjs", id: "a covered window keeps its document visible and completes presentation commands" },
     ],
@@ -9812,7 +9845,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/tauriv2/src/host.rs", symbol: "on_menu_event" },
     ],
     tests: [
-      { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
+      { file: "e2e/home.test.mjs", id: "the project home creates and opens projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
     expected: "AppKit window creation and activation run on the event-loop thread, the bounded Tauri basic-operation matrix remains observable, and normal shutdown removes the owned endpoint and lock.",
@@ -9940,9 +9973,8 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
-      { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
       { file: "e2e/document-region.test.mjs", id: "documents report the host theme for existing, new, and reloaded documents" },
-      { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
+      { file: "e2e/home.test.mjs", id: "the project home creates and opens projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
     expected: "The rebuilt Tauri application starts, accepts prompt and native input, exposes working controls and scoped surfaces, completes first-run project opening, rejects a second owner, prevents undeclared surface placement, and removes its endpoint and lock on normal shutdown.",
@@ -9957,7 +9989,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/commands.test.mjs", id: "card, tab, and menu commands change the grid" },
       { file: "e2e/document-region.test.mjs", id: "documents report the host theme for existing, new, and reloaded documents" },
-      { file: "e2e/library.test.mjs", id: "library windows create and open projects in place" },
+      { file: "e2e/home.test.mjs", id: "the project home creates and opens projects in place" },
       { file: "e2e/normal-shutdown.mjs", id: "normal-shutdown" },
     ],
     expected: "The rebuilt application starts, performs the existing basic operations through declared commands and native input, and shuts down without leaving its endpoint or owned lock; broader Wails parity and composition/reflow are checked by separate feature entries.",
@@ -11326,7 +11358,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/settings-ui.js", symbol: "settings scroll position is not a number" },
     ],
     tests: [
-      { file: "packages/workbench/test/settings-scroll.test.mjs", id: "a negative scroll position of the settings modal is kept as reported and a value that is not a number is refused" },
+      { file: "packages/workbench/test/settings-scroll.test.mjs", id: "a negative scroll position is kept as reported and a value that is not a number is refused" },
     ],
     expected: "The settings modal keeps a negative scroll position that the native modal reports and refuses a value that is not a number.",
     levels: ["unit"],
@@ -12024,7 +12056,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F208",
-    implementation: [{ file: "packages/workbench/exposure.json", symbol: "\"name\": \"core.library.choose-folder\"" }],
+    implementation: [{ file: "packages/workbench/exposure.json", symbol: "\"name\": \"core.home.choose-folder\"" }],
     tests: [{ file: "packages/workbench/test/dialog-command-timeout.test.mjs", id: "every declared command that shows a dialog is listed with its host call" }],
     expected: "Each declared command that shows a system dialog or save panel declares no time limit: the answer of the dialog ends it.",
     levels: ["unit"],
@@ -13017,7 +13049,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "the surfaces of every layout are listed with their project root, and removing a project retains the rest" },
-      { file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" },
+      { file: "e2e/home.test.mjs", id: "the project home names a missing project folder and removes the project" },
     ],
     expected: "Removing a project disposes the surface modules of its tabs before it ends their sidecar sessions.",
     levels: ["unit", "application"],
@@ -13103,7 +13135,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "a project removed from the registry by another window ends in the window that shows it as closing its tab does" },
-      { file: "e2e/library.test.mjs", id: "the library names a missing project folder and removes the project" },
+      { file: "e2e/home.test.mjs", id: "the project home names a missing project folder and removes the project" },
     ],
     expected: "Removing a project ends it in every window that shows it as closing its tab does.",
     levels: ["unit", "application"],
@@ -13274,11 +13306,10 @@ const FEATURE_LINKS = [
   {
     id: "F66.1",
     implementation: [
-      { file: "packages/workbench/library.js", symbol: "function place(parent, nodes)" },
+      { file: "packages/workbench/home.js", symbol: "const kept = rows.get(project.id);" },
     ],
     tests: [
-      { file: "packages/workbench/test/library-redraw.test.mjs", id: "a library render keeps the controls of unchanged project cards in the document" },
-      { file: "packages/workbench/test/library-redraw.test.mjs", id: "a plugin page render keeps the controls of unchanged plugin cards in the document" },
+      { file: "packages/workbench/test/home.test.mjs", id: "a project home render keeps the controls of unchanged project rows in the document" },
     ],
     expected: "A library render keeps the cards and controls whose values did not change in the document.",
     levels: ["unit"],
@@ -13299,11 +13330,11 @@ const FEATURE_LINKS = [
   {
     id: "F66",
     implementation: [
-      { file: "packages/workbench/library.js", symbol: "function place(parent, nodes)" },
+      { file: "packages/workbench/home.js", symbol: "const kept = rows.get(project.id);" },
       { file: "packages/workbench/overlay-content.js", symbol: "export function updateContent" },
     ],
     tests: [
-      { file: "packages/workbench/test/library-redraw.test.mjs", id: "a library render keeps the controls of unchanged project cards in the document" },
+      { file: "packages/workbench/test/home.test.mjs", id: "a project home render keeps the controls of unchanged project rows in the document" },
       { file: "packages/workbench/test/overlay-content.test.mjs", id: "an update keeps the controls of the dialog in the document and applies the changed values" },
     ],
     expected: "No redraw of core takes an unchanged control out of the document.",
@@ -13327,7 +13358,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/page-layout.js", symbol: "async empty(show)" },
     ],
     tests: [
-      { file: "packages/workbench/test/projects-switch.test.mjs", id: "browsing shows the library in the draw that empties the plane, not where a later host reply resolves" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "browsing shows the project home in the draw that empties the plane, not where a later host reply resolves" },
     ],
     expected: "The switch to the library shows the library screen in the prepared draw that empties the plane, before the observation round.",
     levels: ["unit", "application"],
@@ -13605,7 +13636,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/window-sidebar-restoration.test.mjs", id: "a stored layout in an earlier form is refused with what it found" },
-      { file: "packages/workbench/test/library-preview.test.mjs", id: "a library preview of a layout in an earlier form names projects.json and what it found" },
       { file: "packages/workbench/test/settings.test.mjs", id: "settings stored in an earlier form are refused with the file that holds them and are not written" },
     ],
     expected: "A stored layout or settings file in an earlier form fails with an error that names its file, and nothing is converted or written.",
@@ -13707,7 +13737,7 @@ const FEATURE_LINKS = [
   {
     id: "F45",
     implementation: [
-      { file: "packages/workbench/shown-errors.js", symbol: "shown.dataset.error = where;" },
+      { file: "packages/workbench/shown-errors.js", symbol: "store.show({ kind: \"error\", title, text: body, origin: origin === \"\" ? null : origin, detail, where, logText: text });" },
     ],
     tests: [
       { file: "packages/workbench/test/error-display.test.mjs", id: "only the error display path marks an element as an error" },
@@ -13855,8 +13885,8 @@ const FEATURE_LINKS = [
   
   {
     id: "F9",
-    implementation: [{ file: "e2e/library.test.mjs", symbol: "restoration connection" }],
-    tests: [{ file: "e2e/library.test.mjs", id: "library windows create and open projects in place" }],
+    implementation: [{ file: "e2e/home.test.mjs", symbol: "restoration connection" }],
+    tests: [{ file: "e2e/home.test.mjs", id: "the project home creates and opens projects in place" }],
     expected: "Rebuilt Tauri and Wails library returns report connection, document, raster, and first-presentation phases with explicit failure preservation.",
     levels: ["application"],
   },
@@ -14130,8 +14160,6 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "e2e/modal.test.mjs", id: "add and split menus are transparent and have no backdrop" },
-      { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
-      { file: "e2e/modal.test.mjs", id: "moving settings and resizing the parent preserves its native coverage" },
     ],
     expected: "Both rebuilt hosts preserve the existing transparent picker and semi-transparent settings modal contract through focus, dismissal, movement, resize, reload, and deferred geometry verification.",
     levels: ["native", "application"],
@@ -14139,7 +14167,7 @@ const FEATURE_LINKS = [
   {
     id: "F10.1",
     implementation: [{ file: "packages/host/rust/src/modals.rs", symbol: "pub fn show" }],
-    tests: [{ file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" }],
+    tests: [],
     expected: "Tauri picker and settings modals preserve transparent picker paint, semi-transparent settings coverage, input blocking, focus, resize, and cleanup.",
     levels: ["application"],
   },
@@ -14155,7 +14183,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/host/rust/src/modals.rs", symbol: "pub fn hide" }],
     tests: [
       { file: "e2e/modal.test.mjs", id: "add and split menus are transparent and have no backdrop" },
-      { file: "e2e/modal.test.mjs", id: "settings blocks background input and closes only through its close button" },
     ],
     expected: "A replacement native modal retains child-WebView focus; both rebuilt hosts preserve transparent picker paint, the settings scrim and blur, input blocking, dismissal, focus return, stale ordering, reload, movement, and resize.",
     levels: ["native", "application"],
@@ -14168,7 +14195,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/verify.js", symbol: "placementPending" },
     ],
     tests: [
-      { file: "e2e/modal.test.mjs", id: "moving settings and resizing the parent preserves its native coverage" },
       { file: "packages/workbench/test/compositor.test.mjs", id: "a layout published before drawing waits for the host's placement answer" },
     ],
     expected: "The rebuilt Wails host completes the full modal lifecycle and the verifier explicitly defers V7/V10/R geometry decisions until the native placement answer is seated.",
@@ -15042,13 +15068,13 @@ const FEATURE_LINKS = [
     id: "F328",
     implementation: [
       { file: "packages/workbench/plugin-operations.js", symbol: "const selected = entry?.versions.filter((item) => rangeContains(item.engines.soksak, state.core))" },
-      { file: "packages/workbench/library.js", symbol: "에 맞는 버전 없음" },
+      { file: "packages/workbench/settings-plugins.js", symbol: "에 맞는 버전 없음" },
       { file: "packages/host/go/src/plugins.go", symbol: "state, err := sok.ReadPluginsState(p.configDir, p.core)" },
       { file: "packages/host/rust/src/plugins.rs", symbol: "plugins::read_plugins_state(&self.config_dir, &self.core)" },
     ],
     tests: [
       { file: "packages/workbench/test/plugin-operations.test.mjs", id: "the latest version of a row is the newest version whose range contains the running core, and a plugin without one is incompatible" },
-      { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
+      { file: "packages/workbench/test/settings-plugins-state.test.mjs", id: "an incompatible plugin shows that no version fits the running core, and a catalog description line is a named element" },
       { file: "packages/host/go/tests/plugins_test.go", id: "TestPluginsStateReportsTheRegistryAndTheInstallation" },
       { file: "packages/host/rust/tests/plugins_test.rs", id: "plugins_state_reports_the_registry_and_the_installation" },
     ],
@@ -15194,7 +15220,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/plane.js", symbol: "export function adopt(kept, space)" },
     ],
     tests: [
-      { file: "packages/workbench/test/plane-sidebar-space.test.mjs", id: "a sidebar draws the section surface ids of the space of the held layout while the project state shows the library" },
+      { file: "packages/workbench/test/plane-sidebar-space.test.mjs", id: "a sidebar draws the section surface ids of the space of the held layout while the project state shows the project home" },
     ],
     expected: "The sidebars that the plane draws take the space of the held layout, also while the project state shows the library.",
     levels: ["unit"],
@@ -15584,12 +15610,12 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) endUndeclaredReplacement(" },
       { file: "packages/host/rust/src/sidecars.rs", symbol: "fn end_undeclared_replacement<" },
-      { file: "packages/workbench/library.js", symbol: "const declared = item.installed !== null;" },
+      { file: "packages/workbench/settings-plugins.js", symbol: "const declared = item.installed !== null;" },
     ],
     tests: [
       { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestAServiceOfAnUndeclaredSidecarIsEnded" },
       { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "a_service_of_an_undeclared_sidecar_is_ended" },
-      { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
+      { file: "packages/workbench/test/settings-plugins-state.test.mjs", id: "an outdated service shows its versions and its action, and a service of an undeclared sidecar is ended" },
     ],
     expected: "A running persistent service whose sidecar is no longer declared is reported with a null installed version, its replacement ends it without a start and tells its surfaces the undeclared error, and the plugin screen shows it as 선언 없음 with the action that ends it.",
     levels: ["native", "unit"],
@@ -15605,7 +15631,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/go/tests/workspace_test.go", id: "TestARefusedProjectSettingsFileIsReportedAtItsProject" },
       { file: "packages/host/rust/tests/workspace_test.rs", id: "a_refused_project_settings_file_is_reported_at_its_project" },
-      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a project whose settings file the host refused is not opened, and the start shows the library with the error" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "a project whose settings file the host refused is not opened, and the start shows the project home with the error" },
       { file: "packages/workbench/test/settings.test.mjs", id: "a settings file of the shown project that the host refuses is reported and the applied settings stay" },
     ],
     expected: "A refused project settings file is reported at its project in the snapshot of both hosts, and the page does not open that project while the other projects and the page start.",
@@ -15702,7 +15728,7 @@ const FEATURE_LINKS = [
       { file: "e2e/card-panel-checks.mjs", symbol: "export function panelSurfaceRect(" },
       { file: "packages/workbench-mygo/src/keyboard.go", symbol: "func (s *Shell) followCommand(" },
       { file: "packages/workbench-mygo/src/view_calls.go", symbol: "func (s *Shell) recordViewCall(" },
-      { file: "packages/workbench-mygo/src/library.go", symbol: "later(s, \"core.library.open\"" },
+      { file: "packages/workbench-mygo/src/home.go", symbol: "later(s, \"core.home.open\"" },
       { file: "packages/workbench-mygo/src/plane_verify.go", symbol: "func (s *Shell) seatRecord(record *VerifyRecord, answer any, declared bool) error {" },
       { file: "e2e/input-probe.mjs", symbol: "export async function readyRasterProbe(" },
       { file: "packages/workbench-mygo/src/shell_statuses.go", symbol: "plane := layout.Rect{X: origin.X, Y: origin.Y, W: s.plane.Width(), H: s.plane.Height()}" },
@@ -15735,9 +15761,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/shell_exposure.go", symbol: "func (s *Shell) traceRegistration(phase, surface string, names []string, fields map[string]any) {" },
       { file: "packages/workbench-mygo/src/focus.go", symbol: "func (f *Focus) writeTransition() {" },
       { file: "packages/workbench-mygo/src/app_tabs.go", symbol: "func (f shellSurfaces) Keeps(tab string) []string {" },
-      { file: "e2e/library-preview.mjs", symbol: "export function startPreviewPanes(grid, preview) {" },
       { file: "packages/workbench-mygo/src/shell_project.go", symbol: "func (s *Shell) removalAsked(data []any) {" },
-      { file: "packages/workbench-mygo/src/library.go", symbol: "func (s *Shell) performLibrary(action func(done func(error)), ended func()) {" },
+      { file: "packages/workbench-mygo/src/home.go", symbol: "func (s *Shell) performHome(action func(done func(error)), ended func()) {" },
       { file: "scripts/fixture-registry.mjs", symbol: "export async function fixtureRegistry({ sok, signal, root, versions, ...unknown }) {" },
       { file: "packages/workbench-mygo/src/app.go", symbol: "func (s *Shell) applyPlugins(done func(reloaded bool, err error)) {" },
       { file: "packages/workbench-mygo/src/requests.go", symbol: "func (q *Requests) Answered(mark int, then func()) {" },
@@ -15751,13 +15776,11 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/host.js", symbol: "if (deferredViews.length) surfaceModules.holdCompositionDeclarations(deferredViews, scheduled);" },
       { file: "packages/workbench-mygo/src/shell_exposure.go", symbol: "func (s *Shell) closeRegistrations(surface string) {" },
       { file: "packages/workbench-mygo/src/picker.go", symbol: "ui.Row(c).Grow(1).Justify(ui.End).AlignItems(ui.Center).PaddingStart(metrics.noteGap)" },
-      { file: "packages/workbench/settings-ui.js", symbol: "title.className = \"text-field\";" },
-      { file: "packages/workbench/library.js", symbol: "line.dataset.expose = 'core.library.plugins.contribution';" },
-      { file: "packages/workbench-mygo/src/plugin_screen.go", symbol: "func drawPluginContributions(c *ui.Context, binder *Binder, page PluginPage, row PluginRow, shown *ShownErrors, look PluginLook) {" },
+      { file: "packages/workbench/settings-controls.js", symbol: "const el = element(\"input\", `text-field${mono ? \" text-field--mono\" : \"\"}`);" },
+      { file: "packages/workbench/settings-plugins.js", symbol: "el.dataset.expose = \"core.settings-tab.plugins.contribution\";" },
+      { file: "packages/workbench-mygo/src/settings_plugin_pages.go", symbol: "func (s *Shell) contributionRows(b *settingsBuilder, plugin string) ([]settingsRow, error) {" },
       { file: "packages/workbench/verify.js", symbol: "const hasPlace = (s) => s.visible !== false || (s.declared.w > 0 && s.declared.h > 0);" },
       { file: "packages/workbench-mygo/src/verify.go", symbol: "if !surface.Visible && (surface.Declared.W == 0 || surface.Declared.H == 0) {" },
-      { file: "packages/workbench-mygo/src/chrome.go", symbol: "if s.appUpdates.Status().Available != nil {" },
-      { file: "packages/workbench-mygo/src/shell_plugins.go", symbol: "plugins := s.library.page == pluginsPage" },
       { file: "packages/workbench-mygo/src/shell.go", symbol: "func (record *projectRecord) take(members map[string]any) error {" },
       { file: "packages/workbench-mygo/src/project_data.go", symbol: "func (s *Shell) takeStored(project *projectRecord, read projectRecord) (projectRecord, error) {" },
       { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func invalidSetting(err error) error {" },
@@ -15808,13 +15831,12 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/picker.go", symbol: "func (s *Shell) tabOf(id string) (layout.Tab, error) {" },
       { file: "packages/workbench-mygo/src/shell_plugins.go", symbol: "s.appUpdates.Refresh(func() { answer(err) })" },
       { file: "packages/workbench-mygo/src/view_calls.go", symbol: "func (s *Shell) statusesAfterFrame() {" },
-      { file: "packages/workbench-mygo/src/library_page.go", symbol: "func (s *Shell) readPreviews() error {" },
       { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func HideSidebar(c *ui.Context, binder *Binder, frame SidebarFrame, seat seatDrawer) {" },
       { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func absentSection(c *ui.Context, binder *Binder, frame SidebarFrame, section SidebarSection) ui.Element {" },
       { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "body := func(c *ui.Context, place SidebarSeat) {" },
       { file: "packages/workbench-mygo/src/sidebar_screen.go", symbol: "func absentDivider(c *ui.Context, binder *Binder, frame SidebarFrame, section SidebarSection) {" },
       { file: "native/darwin/src/window_reveal.m", symbol: "static void keepFrame(NSWindow *window, BOOL wasVisible, NSRect given) {" },
-      { file: "packages/workbench-mygo/src/settings_draw.go", symbol: "func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl, pane settingsPane) {" },
+      { file: "packages/workbench-mygo/src/settings_draw.go", symbol: "func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl, pane settingsPane, width float32) {" },
       { file: "packages/workbench-mygo/src/surfaces.go", symbol: "\"titlebar\": s.surfaces.row" },
       { file: "packages/workbench-mygo/src/shell.go", symbol: "func (s *Shell) adopt(value any, chrome windowChrome) error {" },
       { file: "packages/host/go/src/windows.go", symbol: "func (s *Surfaces) startWorkbenchTitlebar(common Record, shown bool) error {" },
@@ -15904,10 +15926,10 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/input_key_time_test.m", id: "the named key Enter carries the uptime of its injection" },
       { file: "native/darwin/tests/input_key_time_test.m", id: "the key with a stated text a carries the uptime of its injection" },
       { file: "packages/host/mygo/tests/framework_test.go", id: "TestAWindowGoesOnTheScreenWithTheFirstScreenOfItsWorkbench" },
-      { file: "packages/workbench-mygo/tests/app_test.go", id: "TestAStartAtTheLibraryShowsItsFirstScreenBeforeTheWindowIsReady" },
+      { file: "packages/workbench-mygo/tests/app_test.go", id: "TestAStartAtTheHomeShowsItsFirstScreenBeforeTheWindowIsReady" },
       { file: "packages/workbench-mygo/tests/shell_statuses_test.go", id: "TestFullscreenCoversThePlaneAndKeepsTheLayout" },
       { file: "e2e/test/fixture.test.mjs", id: "the sidebar sets of the configuration take the sections of the layout probe set of their layout and keep their ids" },
-      { file: "e2e/test/fixture.test.mjs", id: "the settings dialog is shown when the modal web view of a main page shows it, and on the mygo host when core.modal names it" },
+      { file: "e2e/test/fixture.test.mjs", id: "the settings tab is shown while the status core.settings-tab is not null" },
       { file: "e2e/test/fixture.test.mjs", id: "a plugin change waits for the new start in the event log, reads the workbench only when the page is ready again and waits until that start is complete" },
       { file: "packages/workbench-mygo/tests/shell_sidebars_test.go", id: "TestAProjectWithAnUnknownSectionInItsSetsDoesNotOpen" },
       { file: "packages/workbench-mygo/tests/fixture_test.go", id: "TestTheTraceRecordsAFocusedCardWhileItIsOn" },
@@ -15922,21 +15944,19 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/document_plugin_test.m", id: "a plugin document whose load has not committed has no message channel, although the web view reports its address" },
       { file: "packages/workbench-mygo/tests/trace_test.go", id: "TestTheTraceRecordsTheRegistrationsOfASurfaceAndItsClose" },
       { file: "packages/workbench-mygo/tests/trace_test.go", id: "TestTheTraceRecordsNoRegistrationWhileItIsOff" },
-      { file: "e2e/test/library-preview.test.mjs", id: "the start panes stand by the geometry of the grid, whichever card holds the focus" },
-      { file: "e2e/test/library-preview.test.mjs", id: "a start layout without two content cards in one column is refused" },
-      { file: "packages/workbench-mygo/tests/library_test.go", id: "TestTheWindowOfAProjectAnswersItsRemoval" },
-      { file: "packages/workbench-mygo/tests/library_test.go", id: "TestAFailedOpenOfTheLibraryShowsADismissibleToast" },
+      { file: "packages/workbench-mygo/tests/home_test.go", id: "TestTheHomeRemovalAnswersAfterTheHostRemovesTheProject" },
+      { file: "packages/workbench-mygo/tests/home_test.go", id: "TestAFailedOpenFromTheHomeShowsADismissibleToast" },
       { file: "scripts/test/fixture-registry.test.mjs", id: "a fixture registry is a new folder that the fixture registry build writes under the signal, and a failed build removes it" },
       { file: "scripts/test/fixture-registry.test.mjs", id: "a failed fixture registry build whose folder cannot be removed rejects with both failures" },
       { file: "packages/workbench-mygo/tests/view_call_records_test.go", id: "TestACallInFlightWhenItsSurfaceClosesGetsNoReply" },
-      { file: "packages/workbench-mygo/tests/library_test.go", id: "TestTheProjectListSelectsTheProjectPage" },
+      { file: "packages/workbench-mygo/tests/home_test.go", id: "TestAPressOnAHomeRowOpensItsProject" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestAPluginChangeAsksAboutAModifiedTab" },
       { file: "packages/workbench-mygo/tests/app_test.go", id: "TestAPluginChangeStartsAfterTheReplyOfARunningCommand" },
       { file: "packages/workbench-mygo/tests/operations_test.go", id: "TestASettingsCommandAnswersAfterTheWrite" },
       { file: "packages/workbench-mygo/tests/shell_tabs_test.go", id: "TestAStoreChangeGivesTheStoredLayoutOfAProjectThatTheWindowDoesNotHold" },
       { file: "native/darwin/tests/surface_container_test.m", id: "a hit on the workbench of a window without a main web view is the workbench" },
       { file: "native/darwin/tests/surface_container_test.m", id: "a hit on the view that holds the surface hosts is not the workbench" },
-      { file: "packages/workbench-mygo/tests/library_test.go", id: "TestAProjectThatAnotherWindowRemovedLeavesTheWindow" },
+      { file: "packages/workbench-mygo/tests/home_test.go", id: "TestAProjectThatAnotherWindowRemovedLeavesTheWindow" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestAWindowWhoseProjectAnotherWindowRemovedClosesWithoutAQuestion" },
       { file: "packages/host/mygo/tests/presentation_test.go", id: "TestE2EAWindowMovedBeforeItsFirstScreenKeepsItsFrame" },
       { file: "packages/host/mygo/tests/platform/darwin/system/view_surface_test.go", id: "TestE2EAReloadRequestStartsTheWorkbenchAgain" },
@@ -15951,15 +15971,14 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/recording-covered.test.mjs", id: "the stop of a recording ends its hold of the covered drawing, also when the stop fails" },
       { file: "packages/workbench-mygo/tests/view_exposure_test.go", id: "TestTheRegistrationsOfAViewEndWithItsProcess" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestTheMarkOfAMenuItemStandsAGapAndTheNoteGapAfterItsName" },
-      { file: "packages/workbench/test/settings-controls.test.mjs", id: "every setting form is drawn with its one control" },
-      { file: "packages/workbench/test/library-plugins.test.mjs", id: "the plugin page of the library lists each plugin with its description, versions, sidecars and actions" },
-      { file: "packages/workbench-mygo/tests/plugin_screen_test.go", id: "TestTheDescriptionAndContributionLinesOfACardAreNamedElements" },
+      { file: "packages/workbench/test/settings-controls.test.mjs", id: "every setting form of the common scope is drawn with its one control" },
+      { file: "packages/workbench/test/settings-controls.test.mjs", id: "the sets page draws the set name as a text field that fills its row" },
+      { file: "packages/workbench/test/settings-plugins.test.mjs", id: "the plugin page draws the description of the plugin as a named line" },
+      { file: "packages/workbench-mygo/tests/settings_plugin_pages_test.go", id: "TestThePluginPageShowsOneLineForEachContribution" },
       { file: "packages/workbench/test/verify-empty-declaration.test.mjs", id: "an invisible declaration without an area passes V7a wherever its empty slot stands" },
       { file: "packages/workbench/test/verify-empty-declaration.test.mjs", id: "a declaration with an area that is one point off its slot fails V7a" },
       { file: "packages/workbench-mygo/tests/verify_test.go", id: "TestVerifyComparesNoPlaceOfAnEmptyInvisibleDeclaration" },
-      { file: "packages/workbench-mygo/tests/app_update_test.go", id: "TestTheUpdateControlCountsTheApplicationUpdate" },
-      { file: "packages/workbench-mygo/tests/plugin_operations_test.go", id: "TestEachLibraryPageReportsOnlyItsOwnCards" },
-      { file: "packages/workbench-mygo/tests/rename_test.go", id: "TestCoreProjectsReportsTheChangeOfAProjectCommand" },
+      { file: "packages/workbench-mygo/tests/home_test.go", id: "TestAPinIsReportedByCoreProjectsOnceTheStoreHoldsIt" },
       { file: "packages/workbench-mygo/tests/shell_tabs_test.go", id: "TestAStoreChangeAddsAProjectThatAnotherWindowStored" },
       { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestARefusedSettingsChangeIsInvalidParams" },
       { file: "e2e/test/debug-timeline-files.test.mjs", id: "the channel other is the rows of the files that are not debug files, their generations included, by process" },
@@ -15976,7 +15995,7 @@ const FEATURE_LINKS = [
       { file: "e2e/window-occlusion.test.mjs", id: "a covered window is occluded and hides the document of its tab" },
       { file: "native/darwin/tests/input_source_test.m", id: "an inactive application's key responder with an input context selects globally and completes once" },
       { file: "packages/workbench-mygo/tests/view_exposure_test.go", id: "TestAViewCreatedAgainPlacesAboveTheRevisionsOfItsSurface" },
-      { file: "packages/workbench-mygo/tests/plugin_screen_test.go", id: "TestADescriptionBreaksAtTheSpaceBeforeAWordWithAPoint" },
+      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestKoreanTextBreaksAtTheSpaces" },
       { file: "packages/client/test/client.test.mjs", id: "a predicate that answers anything but true or false ends the watch with an error and unwatches" },
       { file: "native/darwin/tests/document_hidden_keyboard_release_test.m", id: "a document that closes while its hidden surface notes it as the keyboard owner is released" },
       { file: "native/darwin/tests/document_hidden_keyboard_release_test.m", id: "a document that holds the keyboard and closes on a shown surface is released" },
@@ -16007,7 +16026,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestTheDrawnSidebarsOfAnOpenedProjectAreStoredBeforeAFlush" },
       { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestAResizedWindowSavesItsGeometryAfterTheLastResize" },
       { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestARemovedProjectStoresThePlaneOfTheActiveProject" },
-      { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestTheFlushOfTheLibraryTakesNoWorkspaceCall" },
+      { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestTheFlushOfTheHomeTakesNoWorkspaceCall" },
       { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestAFlushOfStoredProjectsTakesNoWorkspaceCall" },
       { file: "packages/workbench-mygo/tests/shell_events_test.go", id: "TestAFlushOfTheProjectsAnswersAStoreThatFailed" },
       { file: "packages/workbench-mygo/tests/shell_sidebars_test.go", id: "TestTheGridReportsTheStatusLineOfAWindowSidebar" },
@@ -16050,11 +16069,10 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/tab_drag_test.go", id: "TestATabCommandRefusesATabThatNoCardHolds" },
       { file: "packages/workbench-mygo/tests/app_update_test.go", id: "TestTheRegistryCommandAnswersAfterTheFrameThatShowsTheApplicationUpdate" },
       { file: "native/darwin/tests/webview_geometry_test.m", id: "the view web view keeps the fractional height of its surface and its last device pixel row" },
-      { file: "packages/workbench-mygo/tests/library_test.go", id: "TestTheLibraryAnswersWithThePanesOfTheFrameThatShowsIt" },
       { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestASeatStandsOnItsBodyInsideTheInsetsOfTheSet" },
       { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestAFoldedSidebarKeepsItsSectionsWithoutAPlace" },
       { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestTheSectionOfAnUnselectedTabStaysWithoutAPlace" },
-      { file: "packages/workbench-mygo/tests/library_test.go", id: "TestAScrolledLibraryGivesThePanesWhereTheCardLaysThemOut" },
+      { file: "packages/workbench-mygo/tests/home_test.go", id: "TestTheHomeListScrollsAndItsKeyHintStays" },
       { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestAListHasADividerBeforeEachSectionAfterTheFirst" },
       { file: "native/darwin/tests/window_show_test.m", id: "the window showed with the frame" },
       { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestASelectWithALongChoiceKeepsTheWidthOfItsColumn" },
@@ -16064,13 +16082,13 @@ const FEATURE_LINKS = [
       { file: "packages/host/mygo/src/workbench_test.go", id: "TestAStartTellsTheHostWhetherTheWindowShowsAFrame" },
       { file: "packages/workbench-mygo/tests/card_sidebars_test.go", id: "TestTheSurfaceStatusNamesTheErrorOfAStoppedView" },
       { file: "packages/window-check/test/drag-covered.test.mjs", id: "a drag inside a held covered drawing leaves the drawing on" },
-      { file: "e2e/test/fixture.test.mjs", id: "the settings dialog is closed when the main page has no modal web view, and on the mygo host when core.modal is empty" },
+      { file: "e2e/test/fixture.test.mjs", id: "the settings tab is closed when the status core.settings-tab is null" },
       { file: "packages/host/go/src/exposure_settled_test.go", id: "TestThePresentedWindowWaitsForThePlacementThatItsWorkbenchHolds" },
       { file: "packages/host/go/src/exposure_settled_test.go", id: "TestThePresentedWindowFailsWithItsLastPlacement" },
       { file: "packages/host/rust/src/exposure_settled_test.rs", id: "the_presented_window_waits_for_the_placement_that_its_workbench_holds" },
       { file: "packages/host/rust/src/exposure_settled_test.rs", id: "the_presented_window_fails_with_its_last_placement" },
       { file: "packages/workbench/test/layout-failure-lines.test.mjs", id: "the last placement answers after the layout that waited behind the running layout" },
-      { file: "packages/workbench/test/workbench-statuses.test.mjs", id: "core.window.workbench, core.workbench.error and core.workbench.audit describe the workbench and the page names are refused" },
+      { file: "packages/workbench/test/workbench-statuses.test.mjs", id: "core.window.workbench, core.toasts and core.workbench.audit describe the workbench and the page names are refused" },
       { file: "packages/workbench-mygo/tests/diagnostics_drag_test.go", id: "TestTheLastPlacementOfADragIsThePlacementAfterTheOneThatRuns" },
       { file: "packages/workbench-mygo/tests/diagnostics_drag_test.go", id: "TestAFailedLastPlacementAnswersItsFailure" },
       { file: "packages/window-check/test/failure.test.mjs", id: "a failure of several errors names the message of each, because a test report shows only the message of the failure" },
@@ -16114,7 +16132,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/platform/darwin/capture_layout_test.rs", id: "a_native_layout_record_with_an_unknown_commit_path_fails" },
       { file: "packages/host/rust/tests/recording_test.rs", id: "a_layout_trace_keeps_the_stages_of_each_transaction" },
       { file: "packages/workbench-mygo/tests/card_sidebars_test.go", id: "TestTheStatusOfASidebarNamesTheRectOfItsSet" },
-      { file: "packages/workbench-mygo/tests/settings_store_test.go", id: "TestTheLibraryShowsTheCommonSettings" },
+      { file: "packages/workbench-mygo/tests/settings_store_test.go", id: "TestTheHomeShowsTheCommonSettings" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestTheStatusRowShowsTheErrorOfAStoppedView" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestThePickThatClosesTheWindowAnswersBeforeTheClose" },
     ],
@@ -16309,7 +16327,7 @@ const FEATURE_LINKS = [
   {
     id: "F424",
     implementation: [{ file: "scripts/check-app-tests.mjs", symbol: "a skipped test; assert its precondition" }],
-    tests: [{ file: "e2e/library.test.mjs", id: "raster source card not found" }],
+    tests: [{ file: "e2e/home.test.mjs", id: "raster source card not found" }],
     expected: "A window check whose precondition fails reports a failure.",
     levels: ["application"],
   },
@@ -17484,7 +17502,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F239-192",
-    implementation: [{ file: "packages/workbench/projects.js", symbol: "await inTurn(emptyToLibrary);" }],
+    implementation: [{ file: "packages/workbench/projects.js", symbol: "await inTurn(emptyToHome);" }],
     tests: [{ file: "packages/workbench/test/projects-switch.test.mjs", id: "an activation received while a removed project is clearing waits for the clear" }],
     expected: "Registry-removal clearing finishes before a later project activation loads its layout.",
     levels: ["unit"],
@@ -18988,12 +19006,47 @@ const REMOVED_COMPLETIONS = new Set(["F1128-1", "F1128-2", "F1128-3", "F1128-6",
   "F239-47-15", "F239-47-16", "F239-47-18", "F239-47-20", "F239-47-26", "F239-47-27", "F239-47-29", "F239-47-31", "F239-47-35",
   "F239-60", "F428", "F239-141", "F212.14-5-32", "F239-152", "F919", "F920", "F924"]);
 
+// A completed capability that a later checklist item removed is recorded by a follow-up under it, which names the remover and the
+// docs/spec section that replaces the capability (docs/operations/examples.md#closure-forms):
+// `  - [-] <ID>-<n> — Closed: removed by <REMOVER>: <what the spec does instead, with its docs/spec section>`.
+// The follow-up exempts its item from the feature-link requirement. A link that the item keeps for a surviving part still resolves.
+const REMOVAL_FOLLOW_UP = /^(\s*)- \[-\] (\S+) — Closed: removed by (\S+): (.+)$/;
+const CHECKLIST_ITEM = /^(\s*)- \[(.)\] (\S+) —/;
+
+function removalFollowUps(lines) {
+  const items = [];
+  lines.forEach((line, index) => {
+    const item = CHECKLIST_ITEM.exec(line);
+    if (item && !REMOVAL_FOLLOW_UP.test(line)) items.push({ index, indent: item[1].length, state: item[2], id: item[3] });
+  });
+  const errors = [];
+  const removed = new Set();
+  lines.forEach((line, index) => {
+    const follow = REMOVAL_FOLLOW_UP.exec(line);
+    if (!follow) return;
+    const [, indentText, followId, remover, text] = follow;
+    const parentId = followId.replace(/-\d+$/, "");
+    let parent = null;
+    for (const entry of items) if (entry.index < index && entry.indent < indentText.length) parent = entry;
+    if (parent === null || parent.id !== parentId) errors.push(`${followId}: removal follow-up is not under its parent ${parentId}`);
+    else if (parent.state !== "o") errors.push(`${followId}: removal follow-up is not under a completed item`);
+    else if (!items.some((entry) => entry.id === remover)) errors.push(`${followId}: removal names no checklist item: ${remover}`);
+    else if (!/docs\/spec\/\S+\.md#[\w-]+/.test(text)) errors.push(`${followId}: removal names no spec section`);
+    else removed.add(parent.id);
+  });
+  return { errors, removed };
+}
+
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));
+  const { errors, removed } = removalFollowUps(checklistSource.split("\n"));
   const completed = [...checklistSource.matchAll(/^- \[o\] ([A-Z][A-Z0-9.-]*) —/gm)].map((match) => match[1]);
-  return completed
-    .filter((id) => !NON_CAPABILITY_COMPLETIONS.has(id) && !MOVED_COMPLETIONS.has(id) && !REMOVED_COMPLETIONS.has(id) && !linked.has(id))
-    .map((id) => `${id}: completed capability has no feature link`);
+  return [
+    ...errors,
+    ...completed
+      .filter((id) => !NON_CAPABILITY_COMPLETIONS.has(id) && !MOVED_COMPLETIONS.has(id) && !REMOVED_COMPLETIONS.has(id) && !removed.has(id) && !linked.has(id))
+      .map((id) => `${id}: completed capability has no feature link`),
+  ];
 }
 
 /** The case ids of the table of one section of docs/spec/host-contract.md, or none when the section is missing. */

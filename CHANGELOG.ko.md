@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F715-3: 테스트 링크 검사가 F715-2의 라이브러리·설정 링크를 현재 홈, 설정, e2e 테스트로 연결하고, 프로젝트 홈에 패널 규칙이 없어 라이브러리 패널 항목을 제거한다.
 - F1107: test는 main page가 status를 등록한 두 surface 중 지정한 surface로 읽기를 보내고, view가 지정한 surface의 읽기에 답함을 고정한다. CLI와 host는 지정한 surface를 넘긴다.
 - F1220-1: page log와 performance case는 거절된 batch의 손실을 다음 batch에 기록하고, test는 자기 지점에서 flush한다. logging specification은 그 손실의 이유를 적는다(Red: F1220 뒤 page log test 9개와 performance test 1개 실패).
 - F999: layout이 보이게 한 surface는 Go와 Rust host에서 layout 뒤에 image region의 drawing 상태를 supplier에 보내, 재시작 뒤 보인 terminal이 입력 없이 그려진다(Red: surface를 보여도 region에 그리는 drawing 상태를 보내지 않았다).
