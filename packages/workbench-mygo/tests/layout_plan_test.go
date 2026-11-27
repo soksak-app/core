@@ -136,10 +136,11 @@ func TestAPlanOfACountAnswersTheMostEvenGridAndChangesNothing(t *testing.T) {
 	if !plan.Feasible || plan.Reason != nil || plan.Needed != nil || plan.Proposal != nil {
 		t.Fatalf("the plan is %+v", plan)
 	}
-	if *plan.Plane != (plannedSize{782, 710}) || *plan.Minimum != (plannedSize{96, 96}) {
+	// The plane stands above the status bar of the window (docs/spec/external-sidebars.md#status-bar), so its height is the window height less statusbar-h.
+	if *plan.Plane != (plannedSize{782, 710 - float64(statusBarHeight(t))}) || *plan.Minimum != (plannedSize{96, 96}) {
 		t.Fatalf("the plane is %v and the minimum %v", *plan.Plane, *plan.Minimum)
 	}
-	// Of the grids of 1 to 10 rows, three rows of 4, 3 and 3 cards are nearest to a square in a plane of 782 × 710.
+	// Of the grids of 1 to 10 rows, three rows of 4, 3 and 3 cards are nearest to a square in a plane of 782 × (710 less statusbar-h).
 	if got := rowSizes(plan.Cards); !slices.Equal(got, []int{4, 3, 3}) {
 		t.Fatalf("the rows hold %v cards", got)
 	}

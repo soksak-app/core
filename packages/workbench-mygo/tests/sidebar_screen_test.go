@@ -354,10 +354,12 @@ func TestTheSeatOfASectionIsItsBody(t *testing.T) {
 		return node
 	}
 	first, second := seat("spc-1/left/fieldprobe.tree").Bounds, seat("spc-1/left/git.log").Bounds
-	if first.Y != 32 || first.H != 100 || first.W != 240 {
+	// The body of a section starts below the head row of the window sidebar (foot-h) and the 32-point header of the section (head-h).
+	head := headRow(t)
+	if first.Y != head+32 || first.H != 100 || first.W != 240 {
 		t.Fatalf("the seat of the first section is %+v", first)
 	}
-	if second.Y != 164 || second.H != 214 {
+	if second.Y != head+164 || second.H != 214 {
 		t.Fatalf("the seat of the fill section is %+v", second)
 	}
 }
