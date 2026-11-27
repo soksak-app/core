@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1236-1: layout 테스트 fixture가 테스트 environment의 왼쪽 창 사이드바 플러그인 fieldprobe를 설치하고, notice 테스트의 environment가 새 space의 grid를 선언해서, F1231-1 이후 실패하던 mygo 테스트 6개가 다시 통과한다.
 - F1217-17-3: mygo host에서 편집 중인 세트의 섹션 추가… select는 세트가 모든 등록 섹션을 가지면 누를 수 없다.
 - F1217-18-2: mygo 제목 줄이 설정 탭에서도 벨을 다른 화면과 같이 보인다.
 - F1235: packages/workbench 테스트의 test 이름을 영어로 바꾸고, 기능 연결이 바뀐 이름을 가리키게 했다.

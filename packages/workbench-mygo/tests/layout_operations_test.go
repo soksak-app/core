@@ -21,14 +21,18 @@ import (
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
-// layoutPlugins are the plugins of the layout cases: notes takes the tab params path and line and saves, and plain takes no params.
+// layoutPlugins are the plugins of the layout cases: notes takes the tab params path and line and saves, plain takes no params, and
+// fieldprobe holds the sections of the left window sidebar of the test environment, so no warning of a missing plugin stands above the cards.
 const layoutPlugins = `{"plugins": [
 	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "notes", "name": "노트", "description": "notes", "mark": "n", "icon": "<path d=\"M1 1h14\"/>",
 		"surface": {"composition": {"kind": "view", "page": "ui/index.html"}, "save": "notes.save",
 			"params": {"type": "object", "properties": {"path": {"type": "string"}, "line": {"type": "number"}}}},
 		"exposes": {"commands": [{"name": "notes.save", "description": "saves", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}]}}},
 	{"id": "plain", "package": "@scope/plugin-plain", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "plain", "name": "Plain", "description": "plain", "mark": "p", "icon": "<path d=\"M1 1h14\"/>",
-		"surface": {"composition": {"kind": "view", "page": "ui/plain.html"}}}}
+		"surface": {"composition": {"kind": "view", "page": "ui/plain.html"}}}},
+	{"id": "fieldprobe", "package": "f", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "fieldprobe", "name": "파일", "description": "fieldprobe", "sections": [
+		{"id": "fieldprobe.tree", "name": "파일 트리", "composition": {"kind": "view", "page": "ui/tree.html"}, "height": "fill"},
+		{"id": "fieldprobe.bookmarks", "name": "북마크", "composition": {"kind": "view", "page": "ui/bookmarks.html"}, "height": 160}]}}
 ]}`
 
 // paramTab is a stored tab of plugin with the stored params, which are absent for nil.

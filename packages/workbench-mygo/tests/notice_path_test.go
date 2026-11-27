@@ -141,9 +141,10 @@ func keyedCount(nodes []ui.ElementNode, name string) int {
 }
 
 // noticeShell opens the layout fixture with the common settings of the test and shows one error per text.
-// noSidebarsEnvironment is the environment of the notice tests, which have no sidebar set. A sidebar set that names a plugin which is not
-// loaded shows the warning of that plugin as a notice (docs/spec/plugins.md#missing-plugins), so such a set would add a toast to each test.
-const noSidebarsEnvironment = `{"sidebars":{"sets":[],"links":[]}}`
+// noSidebarsEnvironment is the environment of the notice tests, which have no sidebar set, and whose new space is one empty card, the
+// grid that environment.json requires (docs/spec/plugins.md#environmentjson). A sidebar set that names a plugin which is not loaded shows the
+// warning of that plugin as a notice (docs/spec/plugins.md#missing-plugins), so such a set would add a toast to each test.
+const noSidebarsEnvironment = `{"workspace":{"focus":"main","grid":{"root":{"card":"main","tabs":[]}}},"sidebars":{"sets":[],"links":[]}}`
 
 // noSidebarShell is layoutShell with the environment of the notice tests (noSidebarsEnvironment).
 func noSidebarShell(t *testing.T, spaces ...map[string]any) *tabShell {
