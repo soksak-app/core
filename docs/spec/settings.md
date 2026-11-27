@@ -124,18 +124,27 @@ Group `테마`, description `테마가 색과 형태의 기본값을 정하고, 
 | Label | Control | Choices | Default | Scope |
 | --- | --- | --- | --- | --- |
 | `테마` | Swatches | The ten themes `midnight`, `nord`, `solar`, `forest`, `ember`, `slate`, `mist`, `grape`, `sand` and `paper`; each swatch shows the theme colors and its name | `midnight` | common and project |
-| `모드` | Select | `어두움` (`dark`), `밝음` (`light`), `시스템 따름` (`system`, the appearance of the system) | `어두움` | common and project |
+| `모드` | Segment | `어두움` (`dark`), `밝음` (`light`) | `어두움` | common and project |
 
 Group `형태`, description `테마가 준 값에서 시작한다.`
 
 | Label | Control | Range | Default | Scope |
 | --- | --- | --- | --- | --- |
-| `통로` (description `카드 사이 간격. 0이면 카드가 선 하나를 공유한다.`) | Slider with unit `px` | 0–32 | 12 | common and project |
-| `모서리` (description `카드 모서리의 둥글기.`) | Slider with unit `px` | 0–20 | 10 | common and project |
-| `폰트` | Select | `시스템 고정폭` (`mono-system`), `JetBrains Mono` (`mono-jet`), `D2Coding` (`mono-d2`), `시스템 기본` (`sans-system`) | `시스템 고정폭` (`mono-system`) | common and project |
-| `글자 크기` | Number input with unit `px` | 10–20 | 13 | common and project |
+| `통로` (description `카드 사이 간격. 0이면 카드가 선 하나를 공유한다.`) | Slider with unit `px` | 0–48 | the theme value | common and project |
+| `모서리` (description `카드 모서리의 둥글기.`) | Slider with unit `px` | 0–24 | the theme value | common and project |
+| `폰트` | Select | `시스템 고정폭` (`mono-system`), `SF Mono / Menlo` (`mono-sf`), `JetBrains Mono` (`mono-jet`), `시스템 비례` (`sans-system`), `Inter` (`sans-inter`) | the theme value | common and project |
+| `글자 크기` | Stepper `− value +` with unit `px` | 10–18 | the theme value | common and project |
+| `textSize` | Select of the text size steps | 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3 | 1 | common only |
 
-The page has no group `표시` and no text size row: the design does not show the focus indicator, the window rule, the dimming of unfocused areas or the text size steps.
+Group `표시`:
+
+| Label | Control | Choices | Default | Scope |
+| --- | --- | --- | --- | --- |
+| `포커스 표시` | Segment | `border`, `corner` | `border` | common and project |
+| `경계선` | Segment | `under`, `over`, `none` | `under` | common and project |
+| `포커스 밖 흐리게` | Switch | on, off | off | common and project |
+
+The choices of `focusInd` and `fullRule` are shown by their values, because the page declares no label for them.
 
 ### 작업 공간
 
