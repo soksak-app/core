@@ -25,7 +25,7 @@ const views = new WeakMap();
 
 /** Returns the error display of a document: the notices of the page and the view that draws them into the document. */
 export function errorToasts(document) {
-  if (!views.has(document)) views.set(document, createErrorDisplay(document));
+  if (!views.has(document)) views.set(document, createErrorDisplay(document, notificationStore()));
   return views.get(document);
 }
 
@@ -37,10 +37,15 @@ function titleAndText(text) {
   return { title: title === "" ? "error" : title, text: line.slice(TITLE_MAX, TITLE_MAX + TEXT_MAX) };
 }
 
-function createErrorDisplay(document) {
-  const store = notificationStore();
+/**
+ * Creates the error display of document over store, the notice store its errors are shown and recorded through. errorToasts passes the
+ * page store; a test passes a store that runs on its own clock (tab-reports.js createPageNotices).
+ */
+export function createErrorDisplay(document, store) {
   const view = mountNoticeView(document, store);
   return {
+    /** Redraws the notices of document; the store's onChange calls it when a notice changes. */
+    redraw: () => view.redraw(),
     /** Shows the failure of a named origin until that origin changes or recovers. An empty origin is an occurrence of its own. */
     show(reason, detail = "", origin = "", where = "workbench") {
       const text = String(reason);

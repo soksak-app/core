@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F795-13: 오류 occurrence 테스트가 timer 대체 없이 page clock 위에서 오류 표시 경로를 실행한다.
 - F999-1: Rust 호스트는 layout 뒤 surface의 드로잉 상태를 보내며, apply 수준 테스트로 이를 고정하고 중복된 visibility spawn을 제거합니다.
 - F1161: Go 호스트는 outdated 서비스의 sessions가 세는 surface 목록을 보고한다
 - F1161: Rust 호스트는 outdated 서비스의 sessions가 세는 surface 목록을 보고한다

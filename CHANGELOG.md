@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F795-13: The error-occurrences test runs its toasts on the page clock through the error display, with no timer replacement and no stand-in name.
 - F999-1: The Rust host sends the drawing states of a shown surface after its layout, pinned by an apply-level test; the redundant visibility spawn is removed.
 - F1161: The Go host reports the surfaces that the sessions of an outdated service count
 - F1161: The Rust host reports the surfaces that the sessions of an outdated service count

@@ -1,13 +1,14 @@
 // The occurrences of an error shown as toasts: equal text from two origins shares one toast, each recovery leaves the other origin's error
-// open, and a dismissed occurrence reopens after its origin recovers. The store keeps its timers on the clock of the page (test/runtime/page-clock.js),
-// so the remaining time moves only by `clock.advance`, not by the run time of the test.
+// open, and a dismissed occurrence reopens after its origin recovers. The error display runs on a notice store of the page clock
+// (test/runtime/page-clock.js), so the remaining time moves only by `clock.advance`, not by the run time of the test.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { installExposure } from "../exposure.js";
-import { createNotices } from "../notices.js";
-import { mountNoticeView } from "../notice-view.js";
+import { createErrorDisplay } from "../shown-errors.js";
+import { beginSettings, onSettingsChange } from "../settings.js";
+import { createPageNotices } from "../tab-reports.js";
 import { createPageClock } from "./runtime/page-clock.js";
 
 installExposure(JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")));
@@ -16,10 +17,10 @@ function fixture(t) {
   const dom = new JSDOM("<body></body>");
   t.after(() => dom.window.close());
   const { document } = dom.window;
+  // The settings install their values on the global document of the page.
+  Object.assign(globalThis, { window: dom.window, document });
+  beginSettings({ common: {}, projects: [] }, null);
   const clock = createPageClock();
-  // The common settings of the page, read by the store; dismissal changes them and tells the store, as a settings snapshot does.
-  const settingValues = { autoDismissProblemToasts: false, problemToastDismissSeconds: 5, quietToasts: false, noticeCenterStyle: "popover" };
-  const records = [];
   const view = {
     setTimeout: (callback, ms) => {
       const timer = { cancelled: false };
@@ -28,28 +29,23 @@ function fixture(t) {
     },
     clearTimeout: (timer) => { timer.cancelled = true; },
   };
-  // The view draws the notices again when the store changes, as the page draws them through its change notification.
-  let ui = null;
-  const store = createNotices({
-    settings: (key) => settingValues[key],
+  const records = [];
+  let display = null;
+  const store = createPageNotices({
     view,
-    log: (level, line) => { if (level === "error") records.push(line); },
-    onChange: () => ui.redraw(),
     now: clock.now,
+    record: (level, line) => { if (level === "error") records.push(line); },
+    onChange: () => display?.redraw(),
   });
-  ui = mountNoticeView(document, store);
-  // An error shown by the workbench: the text is the title, the detail is kept in the record, and the origin names the place that failed.
-  const show = (reason, detail = "", origin = "", where = "workbench") => {
-    store.show({ kind: "error", title: reason, text: "", origin: origin === "" ? null : origin, detail, where, logText: reason });
-  };
+  // The store follows the common settings as the page store does (tab-reports.js notificationStore).
+  t.after(onSettingsChange(() => store.settingsChanged()));
+  display = createErrorDisplay(document, store);
   const dismissal = (auto, seconds) => {
-    settingValues.autoDismissProblemToasts = auto;
-    settingValues.problemToastDismissSeconds = seconds;
-    store.settingsChanged();
+    beginSettings({ common: { autoDismissProblemToasts: auto, problemToastDismissSeconds: seconds }, projects: [] }, null);
   };
   return {
-    document, clock, dismissal, show, clear: (origin) => store.withdrawOrigin(origin), dismiss: (text) => store.closeMessage(text),
-    place: ui.place, text: (origin) => store.textOf(origin),
+    document, clock, store, dismissal,
+    show: display.show, clear: display.withdraw, dismiss: display.dismiss, place: display.place, text: display.text,
     open: () => [...document.querySelectorAll("#toasts > .toast")].map((toast) => toast.querySelector(".toast__title").textContent),
     records: () => records,
   };
@@ -162,4 +158,14 @@ test("toasts default to manual stacking and live settings replace or cancel thei
   clock.advance(5000);
   assert.deepEqual(display.open(), ["earlier", "later"], "the newest toast is first");
   assert.deepEqual(display.records(), ["workbench: earlier", "workbench: later", "workbench: later", "workbench: earlier"]);
+});
+
+test("an error text longer than the title shows its first 120 characters as the title and keeps the whole text in the record", (t) => {
+  const display = fixture(t);
+  const long = `${"a".repeat(100)}${"b".repeat(40)}`;
+  display.show(long, "", "layout");
+  const [toast] = display.store.toasts();
+  assert.equal(toast.title, `${"a".repeat(100)}${"b".repeat(20)}`, "the title is the first 120 characters of the text");
+  assert.equal(display.store.notice(toast.id).text, "b".repeat(20), "the text is the rest of the line");
+  assert.deepEqual(display.records(), [`workbench: ${long}`], "the application log keeps the text as it was reported");
 });

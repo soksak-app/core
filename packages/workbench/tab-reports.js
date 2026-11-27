@@ -62,10 +62,19 @@ function notify() {
   for (const listener of toastListeners) listener();
 }
 
-const noticeStore = createNotices({
-  settings: (key) => settingValue(key),
+/**
+ * Creates a notice store (notices.js) of the page. view supplies setTimeout and clearTimeout, now reads the instant, record(level, line)
+ * takes each application log record and onChange runs after each change. The page store passes globalThis, Date.now, the host log and
+ * notify; a test passes its own clock and its own sinks, and the error display (shown-errors.js) runs on either store.
+ */
+export function createPageNotices({ view, now, record, onChange }) {
+  return createNotices({ settings: (key) => settingValue(key), view, now, log: record, onChange });
+}
+
+const noticeStore = createPageNotices({
   view: globalThis,
-  log: (level, line) => (level === "error" ? report(line) : log(line)),
+  now: () => Date.now(),
+  record: (level, line) => (level === "error" ? report(line) : log(line)),
   onChange: () => notify(),
 });
 
