@@ -210,3 +210,14 @@ test("the declared cmd+k command focuses the project home search field and rejec
   await settled();
   await assert.rejects(registry.run(shortcut.command, {}), /the project home is not shown/);
 });
+
+// A project that was never opened has no last-opened time, so its row shows no day rather than the first day of the epoch.
+test("a project that was never opened shows no last-opened day", async () => {
+  const never = project("n", "never", {});
+  delete never.lastOpened;
+  const { root, home } = mount([never]);
+  await settled();
+  home.render();
+  const meta = root.querySelector(".home-row__meta");
+  assert.equal(meta.textContent, "스페이스 1", "the row shows a day for a project that was never opened");
+});

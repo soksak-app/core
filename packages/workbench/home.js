@@ -81,6 +81,7 @@ export function createHome(root) {
   let checkCount = 0;
   let foldersFor = null;
 
+  // default: an error value without a message is shown as the value itself.
   const fail = (reason) => errors.show(String(reason.message ?? reason), '', 'home', 'home');
   async function perform(work) {
     if (pending) return;
@@ -120,6 +121,7 @@ export function createHome(root) {
   /** One row. The row presses open the project; its buttons run their own commands. */
   function rowNode(project, group) {
     const open = projects.isOpen(project.id);
+    // default: a folder without a recorded error has no error.
     const folderError = folders.get(project.root) ?? null;
     const isConfirming = confirming === project.id;
     const row = element('div', 'home-row');
@@ -143,6 +145,7 @@ export function createHome(root) {
       return row;
     }
     mark(row, 'core.home.open', { project: project.id });
+    // default: a title without a character has an empty mark.
     const letter = element('span', 'home-row__mark', [...project.title][0] ?? '');
     letter.setAttribute('aria-hidden', 'true');
     const main = element('div', 'home-row__main');
@@ -158,7 +161,9 @@ export function createHome(root) {
       hideError(document, `home project ${project.root}`);
     }
     const meta = element('p', 'home-row__meta', `스페이스 ${project.spaces.length}`);
-    meta.append(document.createElement('br'), document.createTextNode(dayLabel(project.lastOpened ?? 0, Date.now())));
+    // default: a project that was never opened has no last-opened time, so its row shows no day.
+    const day = project.lastOpened === undefined || project.lastOpened === null ? '' : dayLabel(project.lastOpened, Date.now());
+    meta.append(document.createElement('br'), document.createTextNode(day));
     const pin = element('button', 'home-row__pin act'); pin.type = 'button'; pin.dataset.expose = 'core.home.pin';
     pin.innerHTML = icon('star');
     pin.title = project.pinned ? '고정 풀기' : '위에 고정';
@@ -218,6 +223,7 @@ export function createHome(root) {
   function place(parent, nodes) {
     const keep = new Set(nodes);
     for (const child of [...parent.children]) if (!keep.has(child)) child.remove();
+    // default: a node after the last child of the parent is inserted last.
     nodes.forEach((node, index) => { if (parent.children[index] !== node) parent.insertBefore(node, parent.children[index] ?? null); });
   }
 
@@ -314,6 +320,7 @@ export function createHome(root) {
       render();
     },
     escape() { if (search.value !== '') actions.search(''); },
+    // default: opening without an id opens the selected row.
     open: (id) => { const target = id ?? selected; if (target === null) throw new Error('there is no row to open'); return perform(() => projects.activate(target)); },
     confirm(id, answer) {
       if (!['ask', 'no', 'yes'].includes(answer)) throw new Error(`unknown answer ${answer}`);
@@ -327,6 +334,7 @@ export function createHome(root) {
     openForm(mode, parent) {
       if (mode === 'create' && !windows.createsFolders) throw new Error('this application cannot create folders');
       if (mode !== 'create' && mode !== 'open') throw new Error(`unknown form mode ${mode}`);
+      // default: a form without a parent has no parent folder.
       formMode = mode; formPath = parent ?? null; form.hidden = false; form.dataset.mode = '';
       errors.withdraw('home');
       render();
