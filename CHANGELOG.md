@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-7: The timeline cases record the overlay updates that the host sends after the queued update change.
 - F1217-16: Comments, test titles and check expectations name the settings tab, not a settings window.
 - F1190-3: The restart test of a restored tab whose owned session ended also reads the drawn toast of the tab.
 - F1217-12-9: The notice target fixture gives its tabs titles, which the notice target carries as its label.

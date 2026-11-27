@@ -54,17 +54,7 @@
       "example": "soksak-timeline-20261001T000000Z.txt",
       "source": "page"
     },
-    "update-5": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-5": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-6": {
       "type": "object",
       "example": {},
       "source": "page"
@@ -713,17 +703,6 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-5"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
         "name": "debugFollow",
         "payload": {
           "following": false
@@ -749,17 +728,6 @@
           "w": 1024,
           "h": 768
         }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-6"
-      }
-    },
-    {
-      "reply": {
-        "result": null
       }
     },
     {

@@ -39,11 +39,6 @@
       "example": {},
       "source": "page"
     },
-    "update-4": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-4": {
       "type": "object",
       "example": {},
@@ -308,17 +303,6 @@
         "payload": {
           "following": false
         }
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-4"
       }
     },
     {

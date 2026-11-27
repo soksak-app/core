@@ -99,11 +99,6 @@
       "type": "integer",
       "example": 5000000789
     },
-    "update-6": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "ts-us": {
       "type": "integer",
       "example": 1791000000000456,
@@ -140,11 +135,6 @@
       "source": "page"
     },
     "place-6": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-7": {
       "type": "object",
       "example": {},
       "source": "page"
@@ -32591,17 +32581,6 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-6"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
         "name": "log",
         "payload": {
           "action": "batch",
@@ -32651,17 +32630,6 @@
           "w": 1024,
           "h": 768
         }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-7"
-      }
-    },
-    {
-      "reply": {
-        "result": null
       }
     },
     {

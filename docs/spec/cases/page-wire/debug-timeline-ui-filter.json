@@ -59,11 +59,6 @@
       "example": {},
       "source": "page"
     },
-    "update-6": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "ts-us": {
       "type": "integer",
       "example": 1791000000000456,
@@ -552,17 +547,6 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-6"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
         "name": "log",
         "payload": {
           "action": "clock"
@@ -696,10 +680,8 @@
     },
     {
       "call": {
-        "name": "debugFollow",
-        "payload": {
-          "following": false
-        }
+        "name": "overlayUpdate",
+        "payload": "$update-7"
       }
     },
     {
@@ -709,8 +691,10 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-7"
+        "name": "debugFollow",
+        "payload": {
+          "following": false
+        }
       }
     },
     {

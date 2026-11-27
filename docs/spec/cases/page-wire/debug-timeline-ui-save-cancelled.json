@@ -74,17 +74,7 @@
       "example": {},
       "source": "page"
     },
-    "update-7": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-7": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-8": {
       "type": "object",
       "example": {},
       "source": "page"
@@ -95,11 +85,6 @@
       "source": "page"
     },
     "place-toast-1": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-toast-2": {
       "type": "object",
       "example": {},
       "source": "page"
@@ -509,18 +494,13 @@
     },
     {
       "call": {
-        "name": "overlayPlace",
-        "payload": "$place-4"
+        "name": "overlayUpdate",
+        "payload": "$update-5"
       }
     },
     {
       "reply": {
-        "result": {
-          "x": 0,
-          "y": 0,
-          "w": 1024,
-          "h": 768
-        }
+        "result": null
       }
     },
     {
@@ -538,13 +518,18 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-5"
+        "name": "overlayPlace",
+        "payload": "$place-4"
       }
     },
     {
       "reply": {
-        "result": null
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
       }
     },
     {
@@ -565,17 +550,6 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-7"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
         "name": "overlayPlace",
         "payload": "$place-7"
       }
@@ -588,17 +562,6 @@
           "w": 1024,
           "h": 768
         }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-8"
-      }
-    },
-    {
-      "reply": {
-        "result": null
       }
     },
     {
@@ -631,17 +594,6 @@
           "w": 1024,
           "h": 768
         }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-toast-2"
-      }
-    },
-    {
-      "reply": {
-        "result": null
       }
     },
     {
