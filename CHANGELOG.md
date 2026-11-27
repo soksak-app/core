@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-16: The debug view comment names no settings modal.
 - F1217-7: A card header keeps its border width, so the drawn slot of a card shorter than its header follows the declared place.
 - F1190-3: A mygo restart with a restored tab whose owned session ended records that tab's error once in the log and sends no session request to the tab.
 - F1161: mygo shows an outdated surface's card notice when its plane is shown, on the card that holds the tab

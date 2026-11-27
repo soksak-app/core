@@ -1,6 +1,6 @@
 // The debug view (docs/spec/debug.md).
 //
-// A [data-native-modal] dialog like the settings modal: the host draws a copy of this element, so listeners on its
+// A [data-native-modal] dialog: the host draws a copy of this element, so listeners on its
 // controls do not run there. Every control has data-key and points to its command with data-command, and answer()
 // runs the command of the control that answered.
 import { standIn } from "./compositor.js";
