@@ -127,6 +127,7 @@ test("the plan prepares, starts the three applications, checks and quits them in
     ["cleanup", "quit wailsv3"],
     ["cleanup", "quit tauriv2"],
     ["cleanup", "quit mygo"],
+    ["cleanup", "persistent services end"],
     ["cleanup", "remaining processes"],
   ]);
   for (const item of plan.filter((entry) => entry.kind === "run")) assert.equal(item.env.SOKSAK_CONFIG_ROOT, configRoot, item.name);
@@ -210,25 +211,110 @@ test("a quit step quits through the platform operation of its platform and fails
   assert.deepEqual(player.requests, [], "a platform without the quit operation sends no request");
 });
 
-test("a quit step whose application handle already exited ends the processes of the run that its failed quit left running", { timeout: 30000 }, async (t) => {
-  const configDir = mkdtempSync(join(tmpdir(), "soksak-replacement-"));
-  t.after(() => rmSync(configDir, { recursive: true, force: true }));
+test("a quit whose connection names a replacement waits for the end of the process that answers it, not for the handle", { timeout: 30000 }, async (t) => {
+  if (process.platform !== "darwin") t.skip("the process table of this platform is not implemented here");
+  const configDir = workspace(t);
+  // The handle ended before the quit, as a relaunched host does; the replacement answers the connection of the quit.
+  const handle = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" });
+  await once(handle, "exit");
+  // The replacement writes endpoint.json at its start, and its quit takes 300 ms to close, so an end that does not wait for it is visible.
+  const replacement = spawn(process.execPath, ["-e", `
+    const fs = require("node:fs"), path = require("node:path");
+    const dir = process.argv[1];
+    fs.writeFileSync(path.join(dir, "endpoint.json"), JSON.stringify({ pid: process.pid, application: "replacement" }));
+    process.on("SIGTERM", () => setTimeout(() => { fs.rmSync(path.join(dir, "endpoint.json"), { force: true }); process.exit(0); }, 300));
+    setInterval(() => {}, 1000);
+  `, configDir], { stdio: "ignore" });
+  t.after(() => replacement.kill("SIGKILL"));
+  await once(replacement, "spawn");
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const quitting = { endpoint: { pid: replacement.pid }, request: async (method) => {
+    if (method === "status.get") return MENUS;
+    if (method === "command.run") { replacement.kill("SIGTERM"); return null; }
+    throw new Error(`unexpected request ${method}`);
+  }, close() {} };
+  let exitedBeforeReturn = false;
+  replacement.once("exit", () => { exitedBeforeReturn = true; });
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir }],
+    { write: () => {}, children: new Map([["app", handle]]), connectClient: async () => quitting, quitLimitMs: QUIT_TEST_LIMIT_MS * 10 });
+  assert.deepEqual(failures, [], JSON.stringify(failures));
+  assert.equal(exitedBeforeReturn, true, `the quit passed before the process ${replacement.pid} that answered it ended`);
+});
+
+test("a quit step whose application handle exited follows the replacement that process.lock names and quits it normally", { timeout: 30000 }, async (t) => {
+  if (process.platform !== "darwin") t.skip("the process table of this platform is not implemented here");
+  const configDir = workspace(t);
   // The handle of the start step names a process that ended, as after a host relaunch that replaced it.
   const handle = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" });
   await once(handle, "exit");
-  // The replacement runs with the configuration directory of the run in its arguments, and no endpoint of that directory answers.
-  const replacement = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", configDir], { stdio: "ignore" });
+  // The replacement writes the declared records of its host after the first quit attempt, as a restarted host does: process.lock holds
+  // its pid, endpoint.json names it, and a quit request ends it (the normal close removes both records).
+  const replacement = spawn(process.execPath, ["-e", `
+    const fs = require("node:fs"), path = require("node:path");
+    const dir = process.argv[1];
+    const remove = () => { fs.rmSync(path.join(dir, "endpoint.json"), { force: true }); fs.rmSync(path.join(dir, "process.lock"), { force: true }); };
+    process.on("SIGTERM", () => { remove(); process.exit(0); });
+    setTimeout(() => {
+      fs.writeFileSync(path.join(dir, "process.lock"), JSON.stringify({ pid: process.pid, boot: "replacement" }));
+      fs.writeFileSync(path.join(dir, "endpoint.json"), JSON.stringify({ pid: process.pid, application: "replacement" }));
+    }, 400);
+    setInterval(() => {}, 1000);
+  `, configDir], { stdio: "ignore" });
   t.after(() => replacement.kill("SIGKILL"));
   await once(replacement, "spawn");
-  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: process.platform, by: "key", app: "app",
-    configDir }], { write: () => {}, children: new Map([["app", handle]]) });
-  assert.equal(failures.length, 1, `the failed quit is reported once: ${JSON.stringify(failures)}`);
-  assert.match(failures[0], /^quit app: /);
-  // The exit of a process that the run ended arrives as an event after the signal, so the wait is bounded by the test limit.
-  const end = await Promise.race([once(replacement, "exit").then(([code, signal]) => ({ code, signal })),
-    new Promise((resolve) => setTimeout(() => resolve(null), 10000))]);
-  assert.ok(end !== null && end.signal === "SIGKILL", `the replacement process ${replacement.pid} of the run still runs after the failed quit: ${JSON.stringify(replacement.exitCode ?? replacement.signalCode)}`);
-  assert.match(failures[0], new RegExp(`SIGKILL: ${replacement.pid}`), `the failure names the ended process: ${failures[0]}`);
+  // The connection of the quit reads the endpoint file of the configuration directory, as connect does, and a quit request that reaches
+  // the replacement's endpoint sends the signal that the replacement answers with its normal close.
+  const quitting = { endpoint: { pid: replacement.pid }, request: async (method) => {
+    if (method === "status.get") return MENUS;
+    if (method === "command.run") { replacement.kill("SIGTERM"); return null; }
+    throw new Error(`unexpected request ${method}`);
+  }, close() {} };
+  const connectClient = async ({ configDir: dir }) => {
+    if (!existsSync(join(dir, "endpoint.json"))) throw new Error(`${dir}/endpoint.json does not exist; the application is not running`);
+    return quitting;
+  };
+  const { lines, write } = recorder();
+  // The exit of the replacement is listened for before the quit, because the replacement can end during the run.
+  const ended = once(replacement, "exit").then(([code, signal]) => ({ code, signal }));
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir }],
+    { write, children: new Map([["app", handle]]), connectClient, quitLimitMs: QUIT_TEST_LIMIT_MS * 10 });
+  const end = await Promise.race([ended, new Promise((resolve) => setTimeout(() => resolve(null), 10000))]);
+  // The replacement closes normally on the quit request: its exit code is 0, and its close removes the declared records.
+  assert.ok(end !== null && end.code === 0 && end.signal === null, `the replacement ${replacement.pid} named by process.lock was not quit normally: ${JSON.stringify(end)}`);
+  assert.equal(existsSync(join(configDir, "process.lock")), false, "the normal close of the replacement removes process.lock");
+  assert.equal(failures.length, 1, `the replaced application is reported once: ${JSON.stringify(failures)}`);
+  assert.match(failures[0], new RegExp(`^quit app: .*endpoint\\.json does not exist.*${replacement.pid} named by process\\.lock quit normally$`));
+  assert.ok(lines.some((line) => line.includes(`${replacement.pid}`)), lines.join("\n"));
+});
+
+test("a run ends the persistent services of its applications before its process audit, and names a service that does not end", { timeout: 30000 }, async (t) => {
+  if (process.platform !== "darwin") t.skip("the process table of this platform is not implemented here");
+  const configRoot = workspace(t);
+  const services = join(configRoot, "soksak-check-app", "services");
+  const directory = join(services, "sok-stub");
+  mkdirSync(directory, { recursive: true });
+  // A service exits when its folder is removed (docs/spec/persistent-services.md); the child polls its folder for that removal.
+  const service = spawn(process.execPath, ["-e", `const fs = require("node:fs"); const dir = process.argv[1];
+    const timer = setInterval(() => { if (!fs.existsSync(dir)) { clearInterval(timer); process.exit(0); } }, 50);`, directory], { stdio: "ignore" });
+  await once(service, "spawn");
+  // The exit of the service is listened for before the run, because the service exits during the step.
+  const serviceEnded = once(service, "exit");
+  const steps = [{ name: "persistent services end", phase: "cleanup", kind: "services", directories: [services], platform: "darwin" },
+    { name: "remaining processes", phase: "cleanup", kind: "remaining", paths: [configRoot], platform: "darwin" }];
+  const failures = await runPlan(steps, { write: () => {} });
+  assert.deepEqual(failures, [], `the services of the run did not end before the audit: ${JSON.stringify(failures)}`);
+  assert.equal(existsSync(services), false, "the services folder of the run is removed");
+  await serviceEnded;
+
+  // A service that stays after its folder is removed fails the step and names its pid; the test ends it.
+  mkdirSync(directory, { recursive: true });
+  const stuck = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", directory], { stdio: "ignore" });
+  t.after(() => stuck.kill("SIGKILL"));
+  await once(stuck, "spawn");
+  const stuckFailures = await runPlan([{ name: "persistent services end", phase: "cleanup", kind: "services", directories: [services], platform: "darwin" }],
+    { write: () => {}, serviceLimitMs: 1000 });
+  assert.equal(stuckFailures.length, 1, JSON.stringify(stuckFailures));
+  assert.match(stuckFailures[0], new RegExp(`^persistent services end: .*${stuck.pid}`));
 });
 
 test("a native step and a remaining step fail with the named error on a platform without the operation, and are not skipped", { timeout: 10000 }, async () => {
@@ -350,20 +436,23 @@ test("quit deadline covers connection and closes a client that arrives after exp
 
 test("quit deadline closes a pending RPC and runs the remaining quit and process audit", { timeout: 10000 }, async (t) => {
   const firstDir = workspace(t), nextDir = workspace(t);
+  // The started applications are processes that ended, so their ends are read from their wait status.
+  const exitedChild = async () => { const child = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" }); await once(child, "exit"); return child; };
+  const firstChild = await exitedChild(), nextChild = await exitedChild();
   let release, entered;
   const requested = new Promise((resolve) => { entered = resolve; });
   let firstClosed = 0, nextClosed = 0;
-  const first = { request: async (method) => {
+  const first = { endpoint: { pid: firstChild.pid }, request: async (method) => {
     if (method === "status.get") return MENUS;
     entered(); return new Promise((resolve) => { release = resolve; });
   }, close() { firstClosed++; } };
-  const next = { request: async (method) => method === "status.get" ? MENUS : null, close() { nextClosed++; } };
+  const next = { endpoint: { pid: nextChild.pid }, request: async (method) => method === "status.get" ? MENUS : null, close() { nextClosed++; } };
   const { lines, write } = recorder();
   const item = (app, configDir) => ({ name: `quit ${app}`, phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app, configDir });
   const listed = [];
   const processes = async ({ platform }) => { listed.push(platform); return []; };
   const pending = runPlan([item("first", firstDir), item("next", nextDir), { name: "remaining processes", phase: "cleanup", kind: "remaining", paths: [], platform: "darwin" }],
-    { write, children: new Map([["first", { exitCode: 0, signalCode: null }], ["next", { exitCode: 0, signalCode: null }]]), connectClient: async ({ configDir }) => configDir === firstDir ? first : next,
+    { write, children: new Map([["first", firstChild], ["next", nextChild]]), connectClient: async ({ configDir }) => configDir === firstDir ? first : next,
       processes, quitLimitMs: QUIT_TEST_LIMIT_MS });
   t.after(async () => { release(null); await pending; });
   await requested;
@@ -375,9 +464,7 @@ test("quit deadline closes a pending RPC and runs the remaining quit and process
   assert.equal(nextClosed, 1);
   assert.ok(lines.some((line) => line.startsWith("passed quit next")), lines.join("\n"));
   assert.ok(lines.some((line) => line.startsWith("passed remaining processes")), lines.join("\n"));
-  // The handle of this step exited, so the failed quit reads the process list once for the processes of the run (a relaunch replaces
-  // the process of the handle), and the remaining step reads it after that.
-  assert.deepEqual(listed, ["darwin", "darwin"]);
+  assert.deepEqual(listed, ["darwin"]);
 });
 
 /** A started application that exits with status 0 on SIGTERM, as a host ends after its quit, once it handles the signal. */
@@ -391,7 +478,7 @@ async function quittingApplication(t) {
 
 test("a quit step by the menu selects the Quit item that host.menu lists and passes when the application exits with status 0", { timeout: 10000 }, async (t) => {
   const app = await quittingApplication(t);
-  const player = await startCasePlayer("scripts-quit-menu");
+  const player = await startCasePlayer("scripts-quit-menu", { pid: app.pid });
   t.after(() => player.close());
   // The application ends after the reply to host.menu.select, as the Quit item ends it.
   player.events.on("request", (message) => { if (message.method === "command.run") app.kill("SIGTERM"); });
@@ -405,7 +492,7 @@ test("a quit step by the menu selects the Quit item that host.menu lists and pas
 
 test("a quit step by the key sends Command+Q down and up to the window and passes when the application exits with status 0", { timeout: 10000 }, async (t) => {
   const app = await quittingApplication(t);
-  const player = await startCasePlayer("scripts-quit-key");
+  const player = await startCasePlayer("scripts-quit-key", { pid: app.pid });
   t.after(() => player.close());
   // The application ends after the reply to the key up, as the quit of Command+Q ends it.
   player.events.on("request", (message) => { if (message.method === "input.key" && message.params.phase === "up") app.kill("SIGTERM"); });
@@ -418,7 +505,7 @@ test("a quit step by the key sends Command+Q down and up to the window and passe
 
 test("a quit step fails when the application ends with another status than 0 after its Quit item", { timeout: 10000 }, async (t) => {
   const app = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
-  const player = await startCasePlayer("scripts-quit-menu");
+  const player = await startCasePlayer("scripts-quit-menu", { pid: app.pid });
   t.after(() => player.close());
   player.events.on("request", (message) => { if (message.method === "command.run") app.kill("SIGTERM"); });
   const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir: player.configDir }],
@@ -439,16 +526,17 @@ test("a quit step ends when the process that holds the configuration lock exits,
   // diagnostics.host.relaunch replaces the started application with a new process, which owns process.lock (docs/spec/endpoint.md).
   const started = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
   await new Promise((resolve) => started.once("exit", resolve));
-  const player = await startCasePlayer("scripts-quit-menu");
+  const holder = spawn(process.execPath, ["-e", "process.stdout.write('held'); setTimeout(() => {}, 400)"], { stdio: ["ignore", "pipe", "ignore"] });
+  t.after(() => holder.kill());
+  const holderExit = new Promise((resolve) => holder.once("exit", resolve));
+  await new Promise((resolve) => holder.stdout.once("data", resolve));
+  // The endpoint names the holder, the process that answers the quit.
+  const player = await startCasePlayer("scripts-quit-menu", { pid: holder.pid });
   t.after(() => player.close());
   // The lock release wait of the platform is replaced by one that returns when the holder exits, as the kernel wakes the wait of the
   // platform when the owner of the lock exits (scripts/test/platform/darwin/end-to-end.test.mjs checks the wait of macOS).
   const lock = join(player.configDir, "process.lock");
   copyFileSync(fileURLToPath(new URL("./fixtures/test-app/empty", import.meta.url)), lock);
-  const holder = spawn(process.execPath, ["-e", "process.stdout.write('held'); setTimeout(() => {}, 400)"], { stdio: ["ignore", "pipe", "ignore"] });
-  t.after(() => holder.kill());
-  const holderExit = new Promise((resolve) => holder.once("exit", resolve));
-  await new Promise((resolve) => holder.stdout.once("data", resolve));
   const waits = [];
   const lockRelease = async (path, seconds, { platform }) => { waits.push([path, seconds, platform]); await holderExit; return true; };
   const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir: player.configDir }],

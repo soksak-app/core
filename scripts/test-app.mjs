@@ -13,7 +13,7 @@
 // first. Each step prints `running`, then `passed` or `failed` with its elapsed time, or `skipped` with the failed step that skipped it.
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, openSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -27,6 +27,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const APPS = ['wailsv3', 'tauriv2', 'mygo'];
 /** The limit of a start step: the time that an application has to write endpoint.json. */
 const START_LIMIT_MS = 60_000;
+/** The limit of a services step: the time that a persistent service has to exit after its folder is removed. */
+const SERVICE_END_LIMIT_MS = 30_000;
 /** The limit of a quit step: the time that an application has to exit after its quit item or its quit key. */
 const QUIT_LIMIT_MS = 60_000;
 
@@ -126,6 +128,9 @@ export async function e2ePlan({ root, configRoot, script, native, only, platform
       name: `quit ${app}`, phase: 'cleanup', kind: 'quit', by: index === APPS.length - 1 ? 'key' : 'menu', app, configDir: configDir(configRoot, app),
       platform,
     })),
+    // A persistent service exits when its folder is removed (docs/spec/persistent-services.md), and a quit keeps the services, so the run
+    // removes them before its audit of the processes.
+    { name: 'persistent services end', phase: 'cleanup', kind: 'services', directories: APPS.map((app) => join(configDir(configRoot, app), 'services')), platform },
     { name: 'remaining processes', phase: 'cleanup', kind: 'remaining', paths: [configRoot, ...APPS.map((app) => located.get(app))], platform },
   ];
 }
@@ -217,56 +222,105 @@ async function startApplication(item, children) {
  * passes QUIT_LIMIT_MS, and a test passes its own limit so that the expiry is observed without a fake clock. A quit that fails while
  * the started process still runs ends that process with SIGKILL and waits for its exit, because a process that a check started ends
  * when the check ends; the step still fails, and its failure names that end. A host that relaunches itself replaces its process: the
- * old process ends, so the handle names a process that already ended, and the replacement holds the configuration directory of the
- * run without a handle. A failed quit whose handle already ended therefore ends every other process that holds that directory with
- * SIGKILL, and its failure names each one (`processes` reads the process list of the platform).
+ * handle then names a process that already ended. The owner that process.lock names is the replacement, so the quit follows it: the
+ * replacement is quit normally, as the handle would be, and the step fails with the reason of the first quit and the replacement's pid.
+ * A replacement that does not quit is ended with SIGKILL, and the failure names it.
  */
 export async function quitApplication(item, children, since, write, connectClient = connect, lockRelease = waitForLockRelease,
   limitMs = QUIT_LIMIT_MS, processes = listProcesses) {
   if (typeof limitMs !== 'number' || !Number.isFinite(limitMs) || limitMs <= 0) throw new Error(`quitApplication needs a limit of more than 0 ms, not ${limitMs}`);
   const child = children.get(item.app);
   try {
-    await quitNormally(item, child, since, write, connectClient, lockRelease, limitMs);
+    await quitNormally(item, (pid) => (pid === child.pid ? exited(child) : processEnding(pid, processes, item.platform, limitMs)),
+      since, write, connectClient, lockRelease, limitMs);
   } catch (error) {
     if (child.exitCode === null && child.signalCode === null) {
       child.kill('SIGKILL');
       await exited(child);
       throw new Error(`${error.message}; the application still ran and was ended with SIGKILL`);
     }
-    let replaced;
-    try { replaced = await endRunProcesses(item, processes, limitMs); }
-    catch (sweepError) { throw new Error(`${error.message}; the processes of the run could not be ended: ${sweepError.message}`); }
-    if (replaced.length === 0) throw error;
-    throw new Error(`${error.message}; processes of the run that the handle did not name ended with SIGKILL: ${replaced.join(', ')}`);
+    // The application ended with its own status: that status is the result of the quit that it received.
+    if (error.exitStatus === true) throw error;
+    await followReplacement(item, child, error, { write, connectClient, lockRelease, since, limitMs, processes });
   }
 }
 
 /**
- * Ends with SIGKILL each process of the platform list whose executable or arguments name the configuration directory of `item`, which
- * only this run uses (the configuration root holds one directory per run), and returns their identifiers. The end of a process that is
- * not a child of this run has no exit event, so the wait reads the process list until none of them is listed, bounded by `limitMs`.
+ * Follows the replacement of a handle that already ended. The owner pid of `<config-dir>/process.lock` is read with the folder watch
+ * (docs/spec/endpoint.md), once the owner differs from the handle and endpoint.json exists; the wait is bounded by `limitMs`. The
+ * owner is quit as the application is quit, and its end is read from the process table, because it is not a child of this run. The
+ * step always fails with the reason of the first quit: a replacement that quit normally is named, and one that did not is ended with
+ * SIGKILL and named, so no end of a replacement is silent.
  */
-async function endRunProcesses(item, processes, limitMs) {
+async function followReplacement(item, handle, failure, { write, connectClient, lockRelease, since, limitMs, processes }) {
   const { configDir } = item;
-  if (typeof configDir !== 'string' || configDir.length === 0) throw new Error(`quit ${item.app} has no configuration directory to end its processes by`);
-  const holds = ({ pid, executable, arguments: line }) => pid !== process.pid
-    && ((executable !== null && executable.includes(configDir)) || line.includes(configDir));
-  const found = (await processes({ platform: item.platform })).filter(holds).map(({ pid }) => pid);
-  for (const pid of found) {
-    try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+  if (typeof configDir !== 'string' || configDir.length === 0) throw new Error(`${failure.message}; quit ${item.app} has no configuration directory to follow`);
+  const owner = await replacementOwner(configDir, handle.pid, limitMs, processes, item.platform);
+  if (owner === null) throw new Error(`${failure.message}; process.lock of ${configDir} named no running replacement within ${limitMs / 1000}s`);
+  write(`following the replacement ${owner.pid} of ${item.app} that process.lock names`);
+  try {
+    await quitNormally(item, (pid) => processEnding(pid, processes, item.platform, limitMs), since, write, connectClient, lockRelease, limitMs);
+  } catch (quitError) {
+    let killed = false;
+    try { process.kill(owner.pid, 'SIGKILL'); killed = true; }
+    catch (killError) { if (killError.code !== 'ESRCH') throw killError; }
+    throw new Error(`${failure.message}; the replacement ${owner.pid} named by process.lock did not quit (${quitError.message})` +
+      (killed ? ` and was ended with SIGKILL` : ` and had already ended`));
   }
-  if (found.length === 0) return found;
+  throw new Error(`${failure.message}; the replacement ${owner.pid} named by process.lock quit normally`);
+}
+
+/**
+ * The owner that `<config-dir>/process.lock` names once it differs from `handlePid`, endpoint.json exists and the owner is listed as
+ * running, or null when `limitMs` expires first. The folder watch is the event source of the file, and the wait ends by the signal of
+ * its limit.
+ */
+async function replacementOwner(configDir, handlePid, limitMs, processes, platform) {
+  const lock = join(configDir, 'process.lock');
+  const endpoint = join(configDir, 'endpoint.json');
+  const aborted = new AbortController();
+  const timer = setTimeout(() => aborted.abort(), limitMs);
+  let pid;
+  try {
+    pid = await untilFolderState(configDir, () => {
+      if (!existsSync(lock) || !existsSync(endpoint)) return undefined;
+      const text = readFileSync(lock, 'utf8').trim();
+      if (text === '') return undefined;
+      const record = JSON.parse(text);
+      if (!Number.isInteger(record?.pid) || record.pid <= 0) throw new Error(`${lock} names no owning pid: ${text}`);
+      return record.pid === handlePid ? undefined : record.pid;
+    }, { signal: aborted.signal });
+  } catch (error) {
+    if (aborted.signal.aborted) return null;
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+  const listed = (await processes({ platform })).some((row) => row.pid === pid);
+  if (!listed) throw new Error(`${join(configDir, 'process.lock')} names pid ${pid}, which is not running`);
+  return { pid };
+}
+
+/**
+ * The end of a process that is not a child of this run: its absence from the process table (docs/spec/verification.md#process-table).
+ * A process table has no wait status for it, so the end reads the table until the pid is absent, bounded by `limitMs`.
+ */
+async function processEnding(pid, processes, platform, limitMs) {
   const bound = Date.now() + limitMs;
   for (;;) {
-    // The process list is the event source of a process that this run does not wait on as a child, so the wait reads it again.
-    const listed = (await processes({ platform: item.platform })).filter(holds).map(({ pid }) => pid);
-    if (listed.length === 0) return found;
-    if (Date.now() >= bound) throw new Error(`the processes ${listed.join(', ')} of ${configDir} did not end in ${limitMs / 1000}s after SIGKILL`);
+    const listed = (await processes({ platform })).some((row) => row.pid === pid);
+    if (!listed) return { code: 0, signal: null };
+    if (Date.now() >= bound) throw new Error(`process ${pid} did not end in ${limitMs / 1000}s`);
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
 
-async function quitNormally(item, child, since, write, connectClient, lockRelease, limitMs) {
+/** The failure of a quit whose application ended with its own exit status: that status is the result of the quit, so no replacement is followed. */
+function exitStatusError(message) {
+  return Object.assign(new Error(message), { exitStatus: true });
+}
+
+async function quitNormally(item, ending, since, write, connectClient, lockRelease, limitMs) {
   let client;
   let expired = false;
   const bound = limit(limitMs, `the normal quit did not complete in ${limitMs / 1000}s`);
@@ -282,19 +336,23 @@ async function quitNormally(item, child, since, write, connectClient, lockReleas
           throw new Error('the normal quit deadline expired before connection');
         }
         client = connected;
+        // The process that answers this connection is the one that the quit reaches, so its end is the end of the quit: the handle
+        // of the start step is not necessarily that process (a relaunched host answers from its replacement).
+        const target = connected.endpoint?.pid;
+        if (!Number.isInteger(target) || target <= 0) throw new Error(`the connection to ${item.configDir} names no process of ${item.app}`);
         const selected = await requestQuit(connected, item.by, { platform: item.platform });
         if (expired) throw new Error('the normal quit deadline expired before its response');
         connected.close();
         client = undefined;
-        const end = await exited(child);
+        const end = await ending(target);
         if (end.code !== 0) {
           const ended = `the application ended with ${describeExit(end)}`;
           // A platform without crash reports names that operation in the failure, which keeps the exit status.
           let reports;
           try { reports = await crashReports(item.app, since, { platform: item.platform }); }
-          catch (error) { throw new Error(`${ended}; ${error.message}`); }
+          catch (error) { throw exitStatusError(`${ended}; ${error.message}`); }
           for (const { report, fault } of reports) write(`crash ${report}: ${JSON.stringify(fault)}`);
-          throw new Error(ended);
+          throw exitStatusError(ended);
         }
         return selected;
       })(),
@@ -328,6 +386,31 @@ async function checkRemaining(item, processes) {
   if (found.length > 0) throw new Error(`${found.length} processes remain: ${found.join('; ')}`);
 }
 
+/**
+ * Removes the services folders of the run and waits until no process of the platform list names one of them. A service that stays
+ * after its folder is removed is named by its pid in the failure of the step; the step does not end it.
+ */
+async function endServices(item, processes, limitMs) {
+  const removed = [];
+  for (const directory of item.directories) {
+    if (!existsSync(directory)) continue;
+    rmSync(directory, { recursive: true });
+    removed.push(directory);
+  }
+  if (removed.length === 0) return;
+  const named = ({ executable, arguments: line }) => removed.some((directory) => (executable !== null && executable.includes(directory)) || line.includes(directory));
+  const bound = Date.now() + limitMs;
+  for (;;) {
+    const running = (await processes({ platform: item.platform })).filter(named);
+    if (running.length === 0) return;
+    if (Date.now() >= bound) {
+      throw new Error(`the persistent services did not exit in ${limitMs / 1000}s after their folders were removed: ${running.map(({ pid }) => pid).join(', ')}`);
+    }
+    // A service exits by itself after its folder is removed, and the process table is the only record of its exit: a service of this run is not a child, so no wait status exists for it.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 /** Runs the native end-to-end tests of the platform; an interrupt of the run ends them and rejects with Interrupted. */
 async function runNative(item, interrupted) {
   try {
@@ -347,7 +430,7 @@ async function runNative(item, interrupted) {
  * `quitLimitMs` is the limit of each quit step (QUIT_LIMIT_MS by default); a test passes a shorter limit.
  */
 export async function runPlan(steps, { write, children = new Map(), interrupted, outcome = () => {}, connectClient = connect,
-  lockRelease = waitForLockRelease, processes = listProcesses, quitLimitMs = QUIT_LIMIT_MS }) {
+  lockRelease = waitForLockRelease, processes = listProcesses, quitLimitMs = QUIT_LIMIT_MS, serviceLimitMs = SERVICE_END_LIMIT_MS }) {
   const failures = [];
   const since = Date.now();
   let stopped = null;
@@ -376,6 +459,7 @@ export async function runPlan(steps, { write, children = new Map(), interrupted,
       else if (item.kind === 'start') await startApplication(item, children);
       else if (item.kind === 'quit') await quitApplication(item, children, since, write, connectClient, lockRelease, quitLimitMs, processes);
       else if (item.kind === 'native') await runNative(item, item.phase === 'cleanup' ? undefined : interrupted);
+      else if (item.kind === 'services') await endServices(item, processes, serviceLimitMs);
       else if (item.kind === 'remaining') await checkRemaining(item, processes);
       else throw new Error(`unknown step kind ${JSON.stringify(item.kind)}`);
       if (interrupted?.aborted && item.phase !== 'cleanup') throw interruptedBy(interrupted);
