@@ -175,7 +175,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("GPUI environment declaration", "declaration", ["apps/gpuikit/environment.json"], ["apps/gpuikit/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/program_run_test.rs", "packages/host/rust/src/sidecars_sessions_test.rs", "packages/host/rust/src/view_reload_test.rs", "packages/host/rust/src/view_sidecar_answer_test.rs", "packages/host/rust/src/window_sidecar_answer_test.rs", "packages/host/rust/src/endpoint_response_test.rs", "packages/host/rust/src/event_log_native_test.rs", "packages/host/rust/src/stall_watch_test.rs", "packages/host/rust/src/quit_owner_test.rs", "packages/host/rust/src/sidecars_environment_test.rs", "packages/host/rust/src/platform/darwin/peer_process_test.rs", "packages/host/rust/src/sidecar_root_admission_test.rs", "packages/host/rust/src/view_sidecar_cids_test.rs", "packages/host/rust/src/view_sidecar_enqueue_test.rs", "packages/host/rust/src/view_sidecar_project_test.rs", "packages/host/rust/src/view_sidecar_send_test.rs", "packages/host/rust/src/window_sidecar_admission_test.rs", "packages/host/rust/src/exposure_menu_executor_test.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/capture_layout_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/page_end_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/page_start_record_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_input_person_test.rs", "packages/host/rust/src/diagnostics_input_source_test.rs", "packages/host/rust/src/diagnostics_new_window_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/window_activation_observation_test.rs", "packages/host/rust/src/window_pageless_processes_test.rs", "packages/host/rust/src/window_cursor_test.rs", "packages/host/rust/src/window_sheet_test.rs", "packages/host/rust/src/dialog_test.rs", "packages/host/rust/src/window_order_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/platform/darwin/input_test.rs", "packages/host/rust/src/platform/darwin/child_process_test.rs", "packages/host/rust/src/platform/darwin/login_shell_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/debug_follow_notices_test.rs", "packages/host/rust/src/account_run_test.rs", "packages/host/rust/src/plugin_data_notice_test.rs", "packages/host/rust/src/plugins_request_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs", "packages/host/rust/src/installed_reads_test.rs", "packages/host/rust/src/routine/async_runtime_test.rs", "packages/host/rust/src/platform/windows/devtools_input_test.rs", "packages/host/rust/src/platform/windows/show_test.rs", "packages/host/rust/src/platform/windows/mouse_watch_test.rs", "packages/host/rust/src/platform/windows/ui_queue_test.rs", "packages/host/rust/src/platform/windows/process_failure_test.rs", "packages/host/rust/src/sidecars_stop_test.rs", "packages/host/rust/src/windows_removal_end_test.rs", "packages/host/rust/src/windows_ends_test.rs", "packages/host/rust/src/exposure_fullscreen_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/tests/fixtures/plugin-surface/**/*.html", "packages/host/rust/src/program_run_test.rs", "packages/host/rust/src/sidecars_sessions_test.rs", "packages/host/rust/src/view_reload_test.rs", "packages/host/rust/src/view_sidecar_answer_test.rs", "packages/host/rust/src/window_sidecar_answer_test.rs", "packages/host/rust/src/endpoint_response_test.rs", "packages/host/rust/src/event_log_native_test.rs", "packages/host/rust/src/stall_watch_test.rs", "packages/host/rust/src/quit_owner_test.rs", "packages/host/rust/src/sidecars_environment_test.rs", "packages/host/rust/src/platform/darwin/peer_process_test.rs", "packages/host/rust/src/sidecar_root_admission_test.rs", "packages/host/rust/src/view_sidecar_cids_test.rs", "packages/host/rust/src/view_sidecar_enqueue_test.rs", "packages/host/rust/src/view_sidecar_project_test.rs", "packages/host/rust/src/view_sidecar_send_test.rs", "packages/host/rust/src/window_sidecar_admission_test.rs", "packages/host/rust/src/exposure_menu_executor_test.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/capture_layout_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/page_end_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/page_start_record_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_input_person_test.rs", "packages/host/rust/src/diagnostics_input_source_test.rs", "packages/host/rust/src/diagnostics_new_window_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/window_activation_observation_test.rs", "packages/host/rust/src/window_pageless_processes_test.rs", "packages/host/rust/src/window_cursor_test.rs", "packages/host/rust/src/window_sheet_test.rs", "packages/host/rust/src/dialog_test.rs", "packages/host/rust/src/window_order_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/platform/darwin/input_test.rs", "packages/host/rust/src/platform/darwin/child_process_test.rs", "packages/host/rust/src/platform/darwin/login_shell_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/debug_follow_notices_test.rs", "packages/host/rust/src/account_run_test.rs", "packages/host/rust/src/plugin_data_notice_test.rs", "packages/host/rust/src/plugins_request_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs", "packages/host/rust/src/installed_reads_test.rs", "packages/host/rust/src/routine/async_runtime_test.rs", "packages/host/rust/src/platform/windows/devtools_input_test.rs", "packages/host/rust/src/platform/windows/show_test.rs", "packages/host/rust/src/platform/windows/mouse_watch_test.rs", "packages/host/rust/src/platform/windows/ui_queue_test.rs", "packages/host/rust/src/platform/windows/process_failure_test.rs", "packages/host/rust/src/sidecars_stop_test.rs", "packages/host/rust/src/windows_removal_end_test.rs", "packages/host/rust/src/windows_ends_test.rs", "packages/host/rust/src/exposure_fullscreen_test.rs"], { testExtensions: new Set([".rs", ".json", ".html"]) }),
   lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs", "packages/host/tauriv2/tests/fixtures/window-race/Cargo.toml", "packages/host/tauriv2/tests/fixtures/window-race/tauri.conf.json", "packages/host/tauriv2/tests/fixtures/window-race/frontend/index.html", "packages/host/tauriv2/tests/fixtures/window-race/icons/icon.png"], { testExtensions: new Set([".rs", ".toml", ".json", ".html", ".png"]) }),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html", "e2e/fixtures/sidecars/*/sidecar.json", "e2e/fixtures/sidecars/*/build.rs", "e2e/fixtures/sidecars/*/src/*.rs", "e2e/fixtures/sidecars/*/tests/*.rs"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
@@ -602,7 +602,7 @@ const FEATURE_LINKS = [
     id: "F1215-5",
     implementation: [
       { file: "packages/workbench-mygo/src/accounts.go", symbol: "func (s *Shell) registerAccounts() {" },
-      { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *Shell) buildAccounts(b *settingsBuilder, plugin *LoadedPlugin, declared *accountsDeclaration) {" },
+      { file: "packages/workbench-mygo/src/settings_tab_view.go", symbol: "func (s *Shell) buildAccounts(b *settingsBuilder, plugin *LoadedPlugin, declared *accountsDeclaration) {" },
     ],
     tests: [
       { file: "packages/workbench-mygo/tests/accounts_test.go", id: "TestThePluginPageReadsTheAccountsAndDrawsTheirRows" },
@@ -1605,7 +1605,7 @@ const FEATURE_LINKS = [
   {
     id: "F1031-1",
     implementation: [
-      { file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.error.dismiss"' },
+      { file: "packages/workbench/core-exposure.js", symbol: 'registry.command("core.notices.close"' },
     ],
     tests: [
       { file: "packages/workbench/test/core-exposure-memory-saver.test.mjs", id: "installCoreExposure refuses a page without its memory saver and installs the entries of a page that gives it" },
@@ -1616,7 +1616,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F1031-2",
-    implementation: [{ file: "packages/workbench/core-exposure.js", symbol: 'throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "core.error.dismiss names no open toast")' }],
+    implementation: [{ file: "packages/workbench/notices.js", symbol: 'throw new RangeError(`notice ${id} is not shown`);' }],
     tests: [
       { file: "packages/workbench/test/workbench-statuses.test.mjs", id: "core.window.workbench, core.toasts and core.workbench.audit describe the workbench and the page names are refused" },
       { file: "packages/workbench/test/layout-verify-state.test.mjs", id: "a presentation after a failed presentation withdraws the toast of that failure" },
@@ -1690,7 +1690,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (s *Shell) drawErrorToasts(" },
     ],
     tests: [
-      { file: "packages/workbench/test/error-display.test.mjs", id: "the toast floats as a centered compact card in the window and dialog" },
+      { file: "packages/workbench/test/error-display.test.mjs", id: "the toast stack floats under the bell at the right of the window and of a dialog" },
       { file: "packages/workbench/test/error-occurrences.test.mjs", id: "a toast expires after four seconds across repaint and movement into a dialog" },
       { file: "packages/workbench-mygo/tests/split_test.go", id: "TestAnErrorToastKeepsTheCardBoundsOfTheWindow" },
       { file: "packages/workbench-mygo/tests/errors_screen_test.go", id: "TestAnErrorToastExpiresWithoutRestartingForModalOrRepaint" },
@@ -1851,8 +1851,8 @@ const FEATURE_LINKS = [
   {
     id: "F1026",
     implementation: [
-      { file: "packages/workbench/shown-errors.js", symbol: "function toast(document, text, where, id) {" },
-      { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (e *ShownErrors) DismissToast(text string) bool {" },
+      { file: "packages/workbench/shown-errors.js", symbol: "export function errorToasts(document) {" },
+      { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (e *ShownErrors) CloseNotice(id string) bool {" },
     ],
     tests: [
       { file: "packages/workbench/test/page-error-display.test.mjs", id: "the errors of the workbench show as toasts and each closes on its own" },
@@ -2636,7 +2636,7 @@ const FEATURE_LINKS = [
     id: "F937-4",
     implementation: [
       { file: "packages/workbench/settings.js", symbol: "const pageTheme = () => ({ scheme: settings.mode, tokens: themeTokens() });" },
-      { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *SettingsStore) pageTheme() (map[string]any, error) {" },
+      { file: "packages/workbench-mygo/src/settings_tab_view.go", symbol: "func (s *SettingsStore) pageTheme() (map[string]any, error) {" },
     ],
     tests: [
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestTheThemeOfTheViewsCarriesTheCardBackground" },
@@ -4200,7 +4200,7 @@ const FEATURE_LINKS = [
     id: "F720",
     implementation: [
       { file: "packages/workbench-mygo/src/settings_store.go", symbol: "func (s *SettingsStore) Source(key string) string {" },
-      { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *Shell) controlScope(key string) string {" },
+      { file: "packages/workbench-mygo/src/settings_tab_view.go", symbol: "func (s *Shell) controlScope(key string) string {" },
       { file: "packages/workbench/settings.js", symbol: "export const sourceScope = (key) =>" },
       { file: "packages/workbench/settings.js", symbol: "export const sourceScope = (key) =>" },
     ],
@@ -4582,8 +4582,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/go.mod", symbol: "replace github.com/egoist/mygo => github.com/min-0-max/mygo" },
     ],
     tests: [
-      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestAFocusedSwitchHasTheOutlineOfThePage" },
-      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestKoreanTextBreaksAtTheSpaces" },
+      { file: "packages/workbench-mygo/tests/settings_tab_view_test.go", id: "TestAFocusedSwitchHasTheOutlineOfThePage" },
+      { file: "packages/workbench-mygo/tests/settings_tab_view_test.go", id: "TestKoreanTextBreaksAtTheSpaces" },
       { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestAQuestionBreaksAtTheSpaces" },
     ],
     expected: "The checks that read many points of one frame read one image of that frame from the pinned mygo fork.",
@@ -5123,7 +5123,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "scripts/node-tests.mjs", symbol: "export function discoverNodeTests" }, { file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface" }],
     tests: [
       { file: "scripts/test/node-tests.test.mjs", id: "discovered Node evidence: empty module" },
-      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a remounted view sends a higher composition revision in the same document" },
+      { file: "packages/workbench/test/surface-view-path-remounted-revision.test.mjs", id: "a remounted view sends a higher composition revision in the same document" },
     ],
     expected: "Empty entrypoints are removed without weakening nonempty executed-test evidence, and retained surface behavior is exercised by actual owning cases, including remount revision monotonicity.",
     levels: ["unit"],
@@ -5142,14 +5142,14 @@ const FEATURE_LINKS = [
     id: "F660",
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function mountSurface" }, { file: "packages/workbench/host.js", symbol: "export function onSurfacePrepared(listener) {" }],
     tests: [
-      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "keep busy of a view protects its tab until an unload dispose, and keep modified follows the modified report" },
-      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "an unload dispose keeps the tab reports of a view except its error, and a close forgets them" },
-      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a title report of a declaring view writes the label cache, and a removed title removes it" },
-      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a tab state write that a view sent before its dispose and that runs after it is not answered and stores nothing" },
-      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a sidecar send of a view waits for a failed place that leaves the view out, and a place that releases the view sends none" },
-      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a mount of a view waits for a pending dispose of the same tab and creates a new surface" },
-      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "each view mount reports its end to the mount listeners, with the error of a failed mount" },
-      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a view mount that a dispose ends before its authorization resolves null and declares no composition" },
+      { file: "packages/workbench/test/surface-view-path-keep.test.mjs", id: "keep busy of a view protects its tab until an unload dispose, and keep modified follows the modified report" },
+      { file: "packages/workbench/test/surface-view-path-report-disposal.test.mjs", id: "an unload dispose keeps the tab reports of a view except its error, and a close forgets them" },
+      { file: "packages/workbench/test/surface-view-path-label-cache.test.mjs", id: "a title report of a declaring view writes the label cache, and a removed title removes it" },
+      { file: "packages/workbench/test/surface-view-path-state-disposed.test.mjs", id: "a tab state write that a view sent before its dispose and that runs after it is not answered and stores nothing" },
+      { file: "packages/workbench/test/surface-view-path-place-sidecar.test.mjs", id: "a sidecar send of a view waits for a failed place that leaves the view out, and a place that releases the view sends none" },
+      { file: "packages/workbench/test/surface-view-path-remount-pending-dispose.test.mjs", id: "a mount of a view waits for a pending dispose of the same tab and creates a new surface" },
+      { file: "packages/workbench/test/surface-view-path-mount-end.test.mjs", id: "each view mount reports its end to the mount listeners, with the error of a failed mount" },
+      { file: "packages/workbench/test/surface-view-path-dispose-before-authorization.test.mjs", id: "a view mount that a dispose ends before its authorization resolves null and declares no composition" },
       { file: "packages/workbench/test/surface-view-tab-state.test.mjs", id: "a view call of a surface with surface.unload waits for the tab state store to open" },
       { file: "packages/workbench/test/surface-remount-composition.test.mjs", id: "disposing a mount releases resolved listeners before pending registration settles" },
       { file: "packages/workbench/test/host-chrome.test.mjs", id: "a view preparation notifies its prepared listeners, presents each ticket once, and a rejected stage is not reused" },
@@ -5484,7 +5484,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/measure-trace.test.mjs", id: "applying a trace state changes each setting through core.settings.change and resolves when the policy file holds its policy" },
       { file: "scripts/test/measure-object-counts.test.mjs", id: "a window of the mygo host reads the host footprint and the runtime figures in every repetition and no page process" },
       { file: "scripts/test/measure-object-counts.test.mjs", id: "the divider drag splits a card, drags the boundary of the split through diagnostics.drag and closes the split" },
-      { file: "scripts/test/measure-object-counts.test.mjs", id: "the menu and the settings window open and close through their declared commands and wait for their statuses" },
+      { file: "scripts/test/measure-object-counts.test.mjs", id: "the menu and the settings tab open and close through their declared commands and wait for their statuses" },
       { file: "scripts/test/measure-object-counts.test.mjs", id: "every count of every object member of the reply outside runtime, documents and sessions is a count of the measurement" },
       { file: "scripts/test/measure-host-allocations.test.mjs", id: "the host is the process of the release bundle of the mygo host that has the --config-dir of the application, and the trace state is set" },
       { file: "scripts/test/measure-host-calls.test.mjs", id: "a window whose host.window reports pageProcess null fails before any request with the error of the mygo host" },
@@ -5857,7 +5857,6 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/go/src/modals_workbench_test.go", id: "TestAWorkbenchStartingEndsItsPredecessorsDialogBackground" },
       { file: "packages/host/go/src/modals_workbench_test.go", id: "TestEndingAWorkbenchDialogPreservesACurrentNativeDialogBackground" },
-      { file: "e2e/modal.test.mjs", id: "${app.name}: reloading under settings leaves successor raster images and documents unblurred" },
     ],
     expected: "Reload retires the previous workbench dialog background claim while preserving an independent current native dialog; successor images and documents are unblurred when no effective dialog remains.",
     levels: ["unit", "application"],
@@ -6924,7 +6923,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/shell.go", symbol: "\t\troot.Blur(s.dialogBlur()).Cache()" },
     ],
     tests: [
-      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestScrollingTheSettingsCardRedrawsTheCardAlone" },
+      { file: "packages/workbench-mygo/tests/settings_tab_view_test.go", id: "TestScrollingTheSettingsTabRedrawsOnlyTheTabContent" },
     ],
     expected: "A frame of an open dialog redraws the dialog and not the blurred workbench behind it.",
     levels: ["unit"],
@@ -8159,8 +8158,8 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/surface-remount-composition.test.mjs", id: "a disposing surface leaves the tabs with attached regions before its exposure disposal ends" },
-      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a region query of a view that a running place leaves out waits for the place and asks no region of a released view" },
-      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a region query of a view waits for a failed place that left the view out and then asks its regions" },
+      { file: "packages/workbench/test/surface-view-path-place-regions.test.mjs", id: "a region query of a view that a running place leaves out waits for the place and asks no region of a released view" },
+      { file: "packages/workbench/test/surface-view-path-failed-place-regions.test.mjs", id: "a region query of a view waits for a failed place that left the view out and then asks its regions" },
       { file: "e2e/home.test.mjs", id: "the project home names a missing project folder and removes the project" },
     ],
     expected: "A region query of a surface that a disposal or a running place closes asks no closed region, and a failed place leaves the regions to the query.",
@@ -15751,7 +15750,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/input_inject.m", symbol: "static bool stampNow(CGEventRef event) {" },
       { file: "packages/workbench-mygo/src/settings_store.go", symbol: "func (s *SettingsStore) Check(" },
       { file: "packages/workbench-mygo/src/events.go", symbol: "func (e *Events) Trace(" },
-      { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *Shell) switchTrace(" },
+      { file: "packages/workbench-mygo/src/settings_tab_view.go", symbol: "func (s *Shell) switchTrace(" },
       { file: "packages/workbench-mygo/src/modified_tabs.go", symbol: "func (s *Shell) saveTab(" },
       { file: "e2e/input-probe.mjs", symbol: "export async function pressInKeyWindow(s, point) {" },
       { file: "packages/workbench-mygo/src/transcript.go", symbol: "func (t *Transcript) Record(name string, argument, value any, failure error) {" },
@@ -15766,7 +15765,7 @@ const FEATURE_LINKS = [
       { file: "scripts/fixture-registry.mjs", symbol: "export async function fixtureRegistry({ sok, signal, root, versions, ...unknown }) {" },
       { file: "packages/workbench-mygo/src/app.go", symbol: "func (s *Shell) applyPlugins(done func(reloaded bool, err error)) {" },
       { file: "packages/workbench-mygo/src/requests.go", symbol: "func (q *Requests) Answered(mark int, then func()) {" },
-      { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *Shell) afterSettingsWrites(from int, done func(err error)) {" },
+      { file: "packages/workbench-mygo/src/settings_tab_view.go", symbol: "func (s *Shell) afterSettingsWrites(from int, done func(err error)) {" },
       { file: "packages/workbench-mygo/src/project_data.go", symbol: "func (s *Shell) compareData(value any) error {" },
       { file: "scripts/platform/darwin/end-to-end.mjs", symbol: "if (error.code !== WINDOW_GONE && !client.closed) throw error;" },
       { file: "native/darwin/src/input_source.m", symbol: "- (BOOL)hasActiveTextClient {" },
@@ -15783,7 +15782,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/verify.go", symbol: "if !surface.Visible && (surface.Declared.W == 0 || surface.Declared.H == 0) {" },
       { file: "packages/workbench-mygo/src/shell.go", symbol: "func (record *projectRecord) take(members map[string]any) error {" },
       { file: "packages/workbench-mygo/src/project_data.go", symbol: "func (s *Shell) takeStored(project *projectRecord, read projectRecord) (projectRecord, error) {" },
-      { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func invalidSetting(err error) error {" },
+      { file: "packages/workbench-mygo/src/settings_tab_view.go", symbol: "func invalidSetting(err error) error {" },
       { file: "e2e/debug-timeline-files.mjs", symbol: "export function expectedTimeline(seqs, start, tail, pageRows) {" },
       { file: "packages/workbench-mygo/src/shell_debug.go", symbol: "Start map[string]int64 `json:\"start\"`" },
       { file: "packages/workbench-mygo/src/cards.go", symbol: "color = s.palette.Focus" },
@@ -15980,7 +15979,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/verify_test.go", id: "TestVerifyComparesNoPlaceOfAnEmptyInvisibleDeclaration" },
       { file: "packages/workbench-mygo/tests/home_test.go", id: "TestAPinIsReportedByCoreProjectsOnceTheStoreHoldsIt" },
       { file: "packages/workbench-mygo/tests/shell_tabs_test.go", id: "TestAStoreChangeAddsAProjectThatAnotherWindowStored" },
-      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestARefusedSettingsChangeIsInvalidParams" },
+      { file: "packages/workbench-mygo/tests/settings_tab_view_test.go", id: "TestARefusedSettingsChangeIsInvalidParams" },
       { file: "e2e/test/debug-timeline-files.test.mjs", id: "the channel other is the rows of the files that are not debug files, their generations included, by process" },
       { file: "e2e/test/debug-timeline-files.test.mjs", id: "the appended rows are the rows after the start up to the tail, and the first page is the newest page up to the start" },
       { file: "e2e/test/debug-timeline-files.test.mjs", id: "a tail before the start of a process is refused" },
@@ -15995,7 +15994,7 @@ const FEATURE_LINKS = [
       { file: "e2e/window-occlusion.test.mjs", id: "a covered window is occluded and hides the document of its tab" },
       { file: "native/darwin/tests/input_source_test.m", id: "an inactive application's key responder with an input context selects globally and completes once" },
       { file: "packages/workbench-mygo/tests/view_exposure_test.go", id: "TestAViewCreatedAgainPlacesAboveTheRevisionsOfItsSurface" },
-      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestKoreanTextBreaksAtTheSpaces" },
+      { file: "packages/workbench-mygo/tests/settings_tab_view_test.go", id: "TestKoreanTextBreaksAtTheSpaces" },
       { file: "packages/client/test/client.test.mjs", id: "a predicate that answers anything but true or false ends the watch with an error and unwatches" },
       { file: "native/darwin/tests/document_hidden_keyboard_release_test.m", id: "a document that closes while its hidden surface notes it as the keyboard owner is released" },
       { file: "native/darwin/tests/document_hidden_keyboard_release_test.m", id: "a document that holds the keyboard and closes on a shown surface is released" },
@@ -16075,7 +16074,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/home_test.go", id: "TestTheHomeListScrollsAndItsKeyHintStays" },
       { file: "packages/workbench-mygo/tests/sidebar_screen_test.go", id: "TestAListHasADividerBeforeEachSectionAfterTheFirst" },
       { file: "native/darwin/tests/window_show_test.m", id: "the window showed with the frame" },
-      { file: "packages/workbench-mygo/tests/settings_modal_test.go", id: "TestASelectWithALongChoiceKeepsTheWidthOfItsColumn" },
+      { file: "packages/workbench-mygo/tests/settings_tab_view_test.go", id: "TestASelectWithALongChoiceKeepsTheWidthOfItsColumn" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAPlacementAtTheAnswerGivesTheFirstRowItsFrameDrew" },
       { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestTheFirstScreenGivesItsRowToAWindowWithAnotherTitleBar" },
       { file: "packages/host/go/src/surface_elements_test.go", id: "TestAWindowWithoutAMainPageStartsWithoutThePageTitleBar" },
@@ -17123,7 +17122,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F923-2",
-    implementation: [{ file: "packages/workbench-mygo/src/settings_modal.go", symbol: "s.plane.SetGap(palette.PlaneGap())" }],
+    implementation: [{ file: "packages/workbench-mygo/src/settings_tab_view.go", symbol: "s.plane.SetGap(palette.PlaneGap())" }],
     tests: [{ file: "packages/workbench-mygo/tests/gap_test.go", id: "TestGapChangeSetsPlaneGap" }],
     expected: "A change of the gap setting reaches the plane of the shown space of the mygo host at once.",
     levels: ["unit"],
@@ -17296,7 +17295,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/platform/darwin/document.rs", symbol: "struct EndedReceiver(Rc<dyn Fn() + Send>);" },
     ],
     tests: [
-      { file: "packages/workbench/test/surface-view-path.test.mjs", id: "a replacement view registers its command once in its own source generation" },
+      { file: "packages/workbench/test/surface-view-path-restarted-command.test.mjs", id: "a replacement view registers its command once in its own source generation" },
       { file: "packages/host/rust/src/platform/darwin/document_test.rs", id: "callback_lifetime_ended_survives_document_retirement" },
       { file: "e2e/view-restart.test.mjs", id: "a view restores state, stops after four failures and reopens after unload" },
     ],
@@ -17306,7 +17305,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-157",
     implementation: [{ file: "packages/workbench/surface-modules.js", symbol: "export function placeSurfaces(" }],
-    tests: [{ file: "packages/workbench/test/surface-view-path.test.mjs", id: "a later retained mount waits for the preceding placement release" }],
+    tests: [{ file: "packages/workbench/test/surface-view-path-retained-placement-order.test.mjs", id: "a later retained mount waits for the preceding placement release" }],
     expected: "A retained mount starts only after the preceding placement finishes its release and survives that release.",
     levels: ["unit"],
   },

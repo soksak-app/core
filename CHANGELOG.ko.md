@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F715-3: 테스트 링크 검사가 오류 toast, surface view path, 설정 탭, fixture 페이지의 남은 링크를 현재 심볼과 테스트로 연결하고, 제목이 없어진 F699 e2e 링크를 제거한다.
 - F1217-11-6: 카드 알림은 탭 표시를 바꾸지 않고, 탭의 나중 알림은 남아 있던 시스템 알림을 제거합니다.
 - F1217-6: mygo 시작과 업데이트 테스트가 시작 시 알림 저장소 읽기와 설치됨 페이지의 애플리케이션 업데이트 읽기를 명시한다.
 - F1217-12-5: 알림 센터 머리가 닫기 control을 그리며, 이 control은 core.notices.toggle을 실행하는 element core.notices.toggle이다. 이 element는 workbench exposure와 mygo 사본에 선언된다.
