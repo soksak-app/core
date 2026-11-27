@@ -3,6 +3,7 @@
 // The Go host matches the same inputs with the same rule (settings_search.go).
 
 /** Whether a text contains the lower-case needle, ignoring case. */
+// default: a text that is absent, such as the description of a row without one, matches no needle.
 export const containsNeedle = (text, needle) => String(text ?? "").toLowerCase().includes(needle);
 
 /**

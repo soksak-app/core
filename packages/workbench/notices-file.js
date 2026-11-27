@@ -11,6 +11,7 @@ let stopWriter = null;
 export function endNoticesWriter() {
   const stop = stopWriter;
   stopWriter = null;
+  // default: no writer is registered when none stopped, so there is nothing to stop.
   stop?.();
 }
 const FORMAT = 2;

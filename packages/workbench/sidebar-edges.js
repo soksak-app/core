@@ -29,7 +29,7 @@ export function createSidebarEdges(container, { appliedPatch, links, value }) {
       for (const edge of edges) {
         const side = edge.dataset.side;
         const choice = links().some((link) => link.place === side || link.place === `window-${side}`);
-        edge.hidden = hidden || value(side) || !choice;
+        edge.hidden = [hidden, value(side), !choice].some(Boolean);
       }
     },
   };

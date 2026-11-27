@@ -67,7 +67,7 @@ function themeRow() {
 export function settingRow(def) {
   const { key, label, form, unit = "", description = null, depends = null } = def;
   const parentOff = depends !== null && shownValue(depends) === false;
-  const disabled = !editable(key) || parentOff;
+  const disabled = !editable(key) ? true : parentOff;
   const labels = form === "choice" ? labelsOf(key) : null;
   let control;
   if (form === "choice") control = choice(key, choicesOf(key), shownValue(key), { disabled });

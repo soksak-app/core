@@ -381,8 +381,8 @@ async function initialiseWindow(storage, unloadOf) {
   store = storage;
   configureData({
     sidecar: windowSidecar,
-    // default: the data of a project that stored no plugin data is empty.
     data: {
+      // default: a project without a record or without plugin data has no data of the plugin.
       get: (id, plugin) => projects.find((p) => p.id === id)?.plugins?.[plugin] ?? {},
       set: setPluginData,
       plugin: {
