@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3: The timeline cases record the toast markup of the show and list change.
 - F1217: A main-thread test target run without a test filter exits with an error that names the declared runner, instead of running two scenarios in one process.
 - F1217: A main-thread test target run without a test filter runs each test in its own process, as the declared runner does.
 - F1216: The plugin-api package declares the plugin-categories case in specFiles.
