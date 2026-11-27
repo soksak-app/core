@@ -1040,9 +1040,17 @@ func checkAccounts(where string, manifest map[string]any) error {
 			return fmt.Errorf("%s program %s must take two pattern arguments", at, name)
 		}
 	}
-	// A missing data declaration is refused with the same text as a data key of another form (validateManifest of the reader).
-	data, _ := manifest["data"].(map[string]any)
-	key, ok := data["accounts"].(map[string]any)
+	// checkData refuses a data member that is present and not an object before this check, so the check here refuses it
+	// the same way; an absent data member has no accounts key and takes the refusal below.
+	var dataObject map[string]any
+	if raw, present := manifest["data"]; present {
+		object, ok := raw.(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s: data must be an object", where)
+		}
+		dataObject = object
+	}
+	key, ok := dataObject["accounts"].(map[string]any)
 	defaults, list := key["default"].([]any)
 	if !ok || key["scope"] != "plugin" || !list || len(defaults) != 0 {
 		return fmt.Errorf("%s requires the data key accounts with the scope plugin and the default []", at)

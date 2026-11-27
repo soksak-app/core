@@ -10764,6 +10764,82 @@
       ]
     },
     {
+      "id": "accounts.data-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "programs": {
+          "account-status": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-login": {
+            "program": "plugin:bin/account.mjs",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          },
+          "account-logout": {
+            "program": "node",
+            "args": [
+              {
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              {
+                "pattern": "^/.+$"
+              }
+            ]
+          }
+        },
+        "accounts": {
+          "kinds": [
+            {
+              "value": "claude",
+              "label": "Claude"
+            },
+            {
+              "value": "codex",
+              "label": "Codex"
+            }
+          ],
+          "programs": {
+            "status": "account-status",
+            "login": "account-login",
+            "logout": "account-logout"
+          }
+        },
+        "data": "x"
+      },
+      "accepted": false,
+      "error": "plugin probe: data must be an object",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html",
+        "bin/account.mjs"
+      ]
+    },
+    {
       "id": "categories.accepts-terminal",
       "manifest": {
         "id": "probe",
