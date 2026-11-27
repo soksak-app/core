@@ -7,6 +7,9 @@ import { selectPageWire } from "@soksak/runtime";
 // selects its own case (docs/spec/cases/page-wire/README.md). The promise of setImmediate ends after the calls that the page started
 // in the current task have reached the wire.
 const sent = () => new Promise((resolve) => setImmediate(resolve));
+// The registry is page state with no unregister, so the probe plugin of the fullscreen cases registers once for the file.
+const { registerPlugin } = await import("../registry.js");
+registerPlugin({ id: "fullscreen-probe", surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) });
 
 test("a layout published before drawing waits for the host's placement answer", async () => {
   const wire = selectPageWire("compositor-placement-wait");
@@ -95,8 +98,6 @@ test("a surface in a hidden fullscreen sibling stays mounted and becomes invisib
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
-  const { registerPlugin } = await import("../registry.js");
-  registerPlugin({ id: "fullscreen-probe", surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) });
   const slot = document.querySelector("[data-native-surface]");
   const compositor = await import("../compositor.js?fullscreen-sibling");
   const { surfaces } = await import("../host.js");
@@ -142,8 +143,6 @@ test("a hidden tab selected after a restart publishes its surface visible", asyn
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
-  const { registerPlugin } = await import("../registry.js");
-  registerPlugin({ id: "fullscreen-probe", surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) });
   const slot = document.querySelector("[data-native-surface]");
   // A restart starts a new compositor over the page of the restarted view, so the module is loaded again.
   const compositor = await import("../compositor.js?restarted-hidden-select");
