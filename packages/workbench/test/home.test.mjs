@@ -297,3 +297,23 @@ test("an empty address is refused before any clone starts, and no clone is reque
   assert.deepEqual(requests, [], "a clone started for an empty address");
   assert.ok(document.body.textContent.includes("the address is empty"), "the refusal is shown through the error display");
 });
+
+test("the import form shows each output line of git while the clone runs", async () => {
+  // The host sends the output lines of the clone to the call; the form shows them until the clone answers.
+  const { windows } = await import("@soksak/runtime");
+  let release;
+  windows.cloneProject = (request, onLine) => {
+    onLine("Cloning into '" + request.target + "'...");
+    return new Promise((resolve) => { release = () => resolve({ root: request.target }); });
+  };
+  const { root, home } = mount([project("a", "alpha")]);
+  await settled();
+  home.render();
+  home.actions.openForm("import");
+  root.querySelector('input[name="address"]').value = "https://example.com/acme/widget.git";
+  const pending = home.actions.submitForm();
+  await settled();
+  assert.ok(document.body.textContent.includes("Cloning into '~/Projects/widget'..."), "the form shows the output line of git");
+  release();
+  await pending;
+});

@@ -1,11 +1,14 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -51,7 +54,7 @@ func cloneRequest(t *testing.T, address, target string) json.RawMessage {
 func TestProjectCloneClonesTheAddressIntoTheTarget(t *testing.T) {
 	address := bareRepository(t)
 	target := filepath.Join(t.TempDir(), "widget")
-	folder, err := (&Host{}).ProjectClone(cloneRequest(t, address, target))
+	folder, err := (&Host{}).ProjectClone(context.Background(), cloneRequest(t, address, target))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +74,7 @@ func TestProjectCloneRefusesAnExistingTargetAndKeepsIt(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(target, "keep.txt"), []byte("kept"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := (&Host{}).ProjectClone(cloneRequest(t, address, target))
+	_, err := (&Host{}).ProjectClone(context.Background(), cloneRequest(t, address, target))
 	if err == nil || !strings.Contains(err.Error(), target+" already exists") {
 		t.Fatalf("ProjectClone error %v, want %s already exists", err, target)
 	}
@@ -83,7 +86,7 @@ func TestProjectCloneRefusesAnExistingTargetAndKeepsIt(t *testing.T) {
 // A failed clone leaves no target folder, and the refusal names the git failure.
 func TestProjectCloneFailureLeavesNoTargetFolder(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "widget")
-	_, err := (&Host{}).ProjectClone(cloneRequest(t, filepath.Join(t.TempDir(), "missing.git"), target))
+	_, err := (&Host{}).ProjectClone(context.Background(), cloneRequest(t, filepath.Join(t.TempDir(), "missing.git"), target))
 	if err == nil {
 		t.Fatal("a clone of a missing repository succeeded")
 	}
@@ -99,8 +102,43 @@ func TestProjectCloneRefusesAParentThatIsNoFolder(t *testing.T) {
 	if err := os.WriteFile(file, []byte("x"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := (&Host{}).ProjectClone(cloneRequest(t, address, filepath.Join(file, "widget")))
+	_, err := (&Host{}).ProjectClone(context.Background(), cloneRequest(t, address, filepath.Join(file, "widget")))
 	if err == nil || !strings.Contains(err.Error(), file+" is not a folder") {
 		t.Fatalf("ProjectClone error %v, want %s is not a folder", err, file)
+	}
+}
+
+// cloneWindow is the window of a call; it records the lines of the project-clone events.
+type cloneWindow struct {
+	Frontend
+	mu    sync.Mutex
+	lines []string
+}
+
+func (w *cloneWindow) Emit(name string, data ...any) {
+	if name != "project-clone" || len(data) != 1 {
+		return
+	}
+	event, ok := data[0].(map[string]string)
+	if !ok {
+		return
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lines = append(w.lines, event["line"])
+}
+
+// The clone sends each line of its output to the window of the call as a project-clone event.
+func TestProjectCloneSendsEachOutputLineToTheWindowOfTheCall(t *testing.T) {
+	address := bareRepository(t)
+	target := filepath.Join(t.TempDir(), "widget")
+	window := &cloneWindow{}
+	if _, err := (&Host{}).ProjectClone(WithFrontend(context.Background(), window), cloneRequest(t, address, target)); err != nil {
+		t.Fatal(err)
+	}
+	window.mu.Lock()
+	defer window.mu.Unlock()
+	if !slices.ContainsFunc(window.lines, func(line string) bool { return strings.HasPrefix(line, "Cloning into") }) {
+		t.Fatalf("the window received %q, want the output of git", window.lines)
 	}
 }

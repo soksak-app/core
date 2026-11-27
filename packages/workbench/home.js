@@ -261,6 +261,10 @@ export function createHome(root) {
     return `${String(value('projectsFolder')).replace(/\/+$/, '')}/${name}`;
   }
 
+  /** The output lines of the clone that the form shows, and the output area of the import form that receives them. */
+  let cloneOutput = null;
+  function showCloneLine(line) { if (cloneOutput) cloneOutput.textContent += `${line}\n`; }
+
   /** The import form: one address field, the target shown under it, and the submit that clones the address (docs/spec/projects.md#project-folder). */
   function renderImport() {
     const fields = element('form', 'home-form__fields');
@@ -270,9 +274,10 @@ export function createHome(root) {
     mark(input, 'core.home.form.set', { field: 'address' }); input.dataset.live = '';
     label.append(input); fields.append(label);
     const target = element('div', 'home-form__target');
+    cloneOutput = element('pre', 'home-form__output');
     const show = () => { try { target.textContent = importTarget(input.value); } catch { target.textContent = '—'; } };
     input.addEventListener('input', show); show();
-    fields.append(target);
+    fields.append(target, cloneOutput);
     const actions = element('div', 'home-form__actions');
     const cancel = element('button', 'ui-button', '취소'); cancel.type = 'button'; cancel.dataset.expose = 'core.home.form.cancel';
     mark(cancel, 'core.home.form.cancel');
@@ -399,7 +404,8 @@ export function createHome(root) {
         if (formMode === 'import') {
           // The address is refused before the clone starts; the host refuses an existing target and a failed clone with its own text.
           const address = formField('address').value.trim();
-          target = (await windows.cloneProject({ address, target: importTarget(address) })).root;
+          cloneOutput.textContent = '';
+          target = (await windows.cloneProject({ address, target: importTarget(address) }, showCloneLine)).root;
         } else {
           target = formField('parent').value.trim();
           if (formMode === 'create') target = (await windows.createFolder({ parent: target, name: formField('name').value.trim() })).root;

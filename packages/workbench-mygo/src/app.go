@@ -388,6 +388,8 @@ func (s *Shell) event(name string, data []any) {
 		s.setupOperations.Event()
 	case "project-close-request":
 		s.closeWindowAsked()
+	case "project-clone":
+		s.cloneLine(data)
 	case "project-remove-request":
 		s.removalAsked(data)
 	case "menu-command":

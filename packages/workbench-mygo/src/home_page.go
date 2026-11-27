@@ -105,6 +105,9 @@ func (s *Shell) drawHomeForm(c *ui.Context) {
 			}
 			ui.Text(c, "대상 폴더").LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Muted)
 			ui.Text(c, target).SingleLine().FontSize(s.textControl()).TextColor(s.palette.Fg)
+			for _, line := range s.home.cloneLines {
+				ui.Text(c, line).SingleLine().FontSize(s.textControl()).TextColor(s.palette.Muted)
+			}
 			ui.Row(c).FillWidth().Gap(m.space2).Justify(ui.End).Children(func() {
 				s.uiButton(c, s.binder.Press(c, "core.home.form.cancel", "core.home.form.cancel", "", nil), "취소", false)
 				s.uiButton(c, s.binder.Press(c, "core.home.form.submit", "core.home.form.submit", "", nil), "가져오기", true)

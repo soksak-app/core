@@ -95,3 +95,16 @@ func submitRefused(f *shellFixture) {
 	f.pending.drain(f.t)
 	f.tester.Frame()
 }
+
+// The form of the import shows each output line of git that the host sends while the clone runs.
+func TestTheImportFormShowsTheCloneOutputLines(t *testing.T) {
+	f := newShell(t, &storedHost{common: map[string]any{"projectsFolder": "~/Work"}})
+	f.settle()
+	f.run("core.home.form.open", map[string]string{"mode": "import"})
+	f.run("core.home.form.set", map[string]string{"field": "address", "value": "https://example.com/acme/widget.git"})
+	f.shell.Event("project-clone", []any{map[string]string{"line": "Cloning into '~/Work/widget'..."}})
+	f.settle()
+	if !f.tester.HasText("Cloning into '~/Work/widget'...") {
+		t.Fatalf("the form does not show the output line of git; texts %q", f.tester.Texts())
+	}
+}

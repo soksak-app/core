@@ -19,8 +19,9 @@ type homeState struct {
 	selected, confirm string
 	formMode          string // create, open, or "" while the form is closed.
 	name, parent      string
-	// address is the repository address of the import form.
-	address string
+	// address is the repository address of the import form, and cloneLines the output lines of git that the clone sent.
+	address    string
+	cloneLines []string
 	// folderErrors holds the reason of each project folder that cannot be read, checks the latest check of each root, and foldersFor the
 	// roots that were last checked.
 	folderErrors map[string]string
@@ -403,6 +404,18 @@ func (s *Shell) importTarget(address string) (string, error) {
 	return strings.TrimSuffix(folder, "/") + "/" + name, nil
 }
 
+// cloneLine adds an output line of git to the import form. The host sends one project-clone event for each line while the clone runs.
+func (s *Shell) cloneLine(data []any) {
+	body, err := eventBody[struct {
+		Line string `json:"line"`
+	}]("project-clone", data)
+	if err != nil {
+		s.fail(err)
+		return
+	}
+	s.home.cloneLines = append(s.home.cloneLines, body.Line)
+}
+
 // submitForm opens the folder of the form: a new folder in create mode, a clone in import mode, an existing folder otherwise.
 func (s *Shell) submitForm() error {
 	if s.home.formMode == "" {
@@ -415,6 +428,7 @@ func (s *Shell) submitForm() error {
 			return nil
 		}
 		address := strings.TrimSpace(s.home.address)
+		s.home.cloneLines = nil
 		s.performHome(func(done func(error)) {
 			s.calls.Call("projectClone", map[string]string{"address": address, "target": target}, func(value any, err error) {
 				if err != nil {

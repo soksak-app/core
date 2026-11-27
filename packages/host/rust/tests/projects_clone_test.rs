@@ -52,8 +52,12 @@ fn clone_writes_the_repository_into_the_target() {
     let address = bare_repository(dir.path());
     let home = dir.path().join("home");
     fs::create_dir_all(home.join("Work")).unwrap();
-    let folder =
-        clone_repository(request(address.to_str().unwrap(), "~/Work/widget"), &home).unwrap();
+    let folder = clone_repository(
+        request(address.to_str().unwrap(), "~/Work/widget"),
+        &home,
+        &mut |_| Ok(()),
+    )
+    .unwrap();
     assert_eq!(
         fs::read_to_string(home.join("Work/widget/README.md")).unwrap(),
         "widget\n"
@@ -72,6 +76,7 @@ fn clone_refuses_an_existing_target_and_keeps_it() {
     let err = clone_repository(
         request(address.to_str().unwrap(), target.to_str().unwrap()),
         dir.path(),
+        &mut |_| Ok(()),
     )
     .unwrap_err();
     assert!(err.contains("already exists"), "error was {err}");
@@ -86,6 +91,7 @@ fn a_failed_clone_leaves_no_target_folder() {
     let err = clone_repository(
         request(missing.to_str().unwrap(), target.to_str().unwrap()),
         dir.path(),
+        &mut |_| Ok(()),
     )
     .unwrap_err();
     assert!(!err.is_empty());
@@ -96,17 +102,44 @@ fn a_failed_clone_leaves_no_target_folder() {
 }
 
 #[test]
+fn clone_reports_each_output_line_to_the_progress_callback() {
+    let dir = tempfile::tempdir().unwrap();
+    let address = bare_repository(dir.path());
+    let target = dir.path().join("widget");
+    let mut lines = Vec::new();
+    clone_repository(
+        request(address.to_str().unwrap(), target.to_str().unwrap()),
+        dir.path(),
+        &mut |line: &str| {
+            lines.push(line.to_string());
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert!(
+        lines.iter().any(|line| line.starts_with("Cloning into")),
+        "the callback received {lines:?}, want the output of git"
+    );
+}
+
+#[test]
 fn an_empty_address_and_a_dash_address_are_refused_before_a_clone() {
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("widget");
     assert_eq!(
-        clone_repository(request("  ", target.to_str().unwrap()), dir.path()).unwrap_err(),
+        clone_repository(
+            request("  ", target.to_str().unwrap()),
+            dir.path(),
+            &mut |_| Ok(())
+        )
+        .unwrap_err(),
         "the address is empty"
     );
     assert_eq!(
         clone_repository(
             request("--upload-pack=x", target.to_str().unwrap()),
-            dir.path()
+            dir.path(),
+            &mut |_| Ok(()),
         )
         .unwrap_err(),
         "the address starts with -"

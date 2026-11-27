@@ -30,7 +30,7 @@ func hostCalls(h *host.Host) map[string]HostCall {
 		"windowNew":                run(h.WindowNew),
 		"folderChoose":             readOf(h.FolderChoose),
 		"projectCreate":            request(h.ProjectCreate),
-		"projectClone":             request(h.ProjectClone),
+		"projectClone":             answerOf(h.ProjectClone),
 		"projectFolder":            request(h.ProjectFolder),
 		"projectOpen":              answerOf(h.ProjectOpen),
 		"projectShown":             doneOf(h.ProjectShown),

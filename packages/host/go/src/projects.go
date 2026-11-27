@@ -3,10 +3,13 @@
 package host
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -408,7 +411,7 @@ type CloneProject struct {
 // ProjectClone clones the address into the target folder, which must not exist, and returns the target folder. The clone runs the
 // git program with the address after --, so an address that starts with - is read as an address and never as an option. A failed
 // clone removes the target folder that it created, and the error carries the output of git.
-func (h *Host) ProjectClone(reqJSON json.RawMessage) (ProjectFolder, error) {
+func (h *Host) ProjectClone(ctx context.Context, reqJSON json.RawMessage) (ProjectFolder, error) {
 	req, err := argument[CloneProject]("request", reqJSON)
 	if err != nil {
 		return ProjectFolder{}, err
@@ -432,19 +435,59 @@ func (h *Host) ProjectClone(reqJSON json.RawMessage) (ProjectFolder, error) {
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return ProjectFolder{}, err
 	}
+	window, hasWindow := frontendOf(ctx)
+	// The output of git is read through one pipe, so each line reaches the window in the order that git wrote it.
+	reader, writer := io.Pipe()
 	cmd := exec.Command("git", "clone", "--", address, target)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
+	cmd.Stdout = writer
+	cmd.Stderr = writer
+	if err := cmd.Start(); err != nil {
+		writer.Close()
+		reader.Close()
 		var notFound *exec.Error
 		if errors.As(err, &notFound) {
 			return ProjectFolder{}, fmt.Errorf("git is not installed or not on PATH")
 		}
+		return ProjectFolder{}, err
+	}
+	var output strings.Builder
+	read := make(chan struct{})
+	go func() {
+		defer close(read)
+		scanner := bufio.NewScanner(reader)
+		scanner.Split(splitCloneLines)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			output.WriteString(line + "\n")
+			if hasWindow {
+				window.Emit("project-clone", map[string]string{"line": line})
+			}
+		}
+	}()
+	waitErr := cmd.Wait()
+	writer.Close()
+	<-read
+	if waitErr != nil {
 		if _, statErr := os.Lstat(target); statErr == nil {
 			if removeErr := os.RemoveAll(target); removeErr != nil {
 				return ProjectFolder{}, fmt.Errorf("%s remains after the failed clone: %w", target, removeErr)
 			}
 		}
-		return ProjectFolder{}, fmt.Errorf("%s", strings.TrimSpace(string(output)))
+		return ProjectFolder{}, fmt.Errorf("%s", strings.TrimSpace(output.String()))
 	}
 	return ResolveProjectFolder(target)
+}
+
+// splitCloneLines ends a line at a line feed or a carriage return, because git rewrites its progress line with carriage returns.
+func splitCloneLines(data []byte, atEOF bool) (int, []byte, error) {
+	if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
+		return i + 1, data[:i], nil
+	}
+	if atEOF && len(data) > 0 {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
 }

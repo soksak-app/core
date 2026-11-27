@@ -9,7 +9,11 @@ export function hostWindows(host) {
     createsFolders: true,
     /** Provides the Git repository import: the host clones the address into the target folder and answers the target's identity. */
     clonesRepositories: true,
-    cloneProject: (request) => host.call("projectClone", request),
+    /** Clones a Git repository. onLine receives each output line of git while the clone runs; the subscription ends with the call. */
+    cloneProject: async (request, onLine) => {
+      const off = await host.on("project-clone", ({ line }) => onLine(line));
+      try { return await host.call("projectClone", request); } finally { if (typeof off === "function") off(); }
+    },
     newWindow: (cids) => host.call("windowNew", undefined, { cids }),
     onActivate: (fn) => host.on("project-activate", fn),
     onCloseRequest: (fn) => host.on("project-close-request", fn),

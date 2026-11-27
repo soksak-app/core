@@ -279,10 +279,10 @@ async fn project_create(app: AppHandle, request: Argument<CreateProject>) -> Res
 
 /// Clones a Git repository into the target folder, which must not exist, and returns the target folder.
 #[tauri::command]
-async fn project_clone(app: AppHandle, request: Argument<CloneProject>) -> Result<Folder, String> {
+async fn project_clone(app: AppHandle, window: Window, request: Argument<CloneProject>) -> Result<Folder, String> {
     let Argument(request) = request;
     blocking(move || {
-        projects::project_clone(&app, request)
+        projects::project_clone(&app, &window, request)
     })
     .await
 }
