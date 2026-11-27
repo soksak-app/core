@@ -109,6 +109,8 @@ hide or remove the original DOM. Keep that DOM measurable with
 it moves or changes size and `overlay.update(el)` when its content changes.
 An update whose copy equals the copy that the host last received for the
 shown modal sends nothing, so two callers of one change send one update.
+The copy is read when the update is sent, so a change made while an update
+waits is sent by that update.
 JavaScript listeners and form properties are not serialized; use attributes
 such as `checked`, `selected` and `value` for the copied initial state.
 

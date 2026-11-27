@@ -103,7 +103,7 @@ adopted 스타일시트는 제외한다. 내용 갱신에도 같은 규칙을 �
 않는다. 원본이 배치를 담당한다면 `visibility: hidden`으로 측정 가능하게 유지한다.
 위치나 크기가 바뀌면 `overlay.place(el, rect)`, 내용이 바뀌면 `overlay.update(el)`을
 호출한다. 보이는 modal에 대해 host가 마지막으로 받은 복사본과 같은 복사본의 update는
-보내지 않으므로, 한 변경을 두 호출자가 알려도 update는 하나만 나간다. JavaScript 리스너와 폼 프로퍼티는 직렬화되지 않는다. 복사할 초기 상태는
+보내지 않으므로, 한 변경을 두 호출자가 알려도 update는 하나만 나간다. 복사본은 update를 보낼 때 읽으므로, 기다리는 동안 생긴 변경은 그 update가 보낸다. JavaScript 리스너와 폼 프로퍼티는 직렬화되지 않는다. 복사할 초기 상태는
 `checked`, `selected`, `value` 등의 속성에 적는다.
 
 [`workbench/card.js`](../../packages/workbench/card.js)가 `data-key` 클릭과 `data-set` 변경을
