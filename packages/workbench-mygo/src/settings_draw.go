@@ -15,13 +15,15 @@ import (
 
 // settingsPane is what the card measures from its metrics.
 type settingsPane struct {
-	navW, navGap, navPadY, navPadX, navItemPadY, navItemPadX, navMarkInset, navMarkW, navMarkR float32
-	headH, headGap, headPadStart, headPadEnd                                                   float32
-	shadowY, shadowBlur, shadowAlpha                                                           float32
-	controlW, rowH, gap, indent                                                                float32
-	segGap, segPad, segButtonPadY, segButtonPadX                                               float32
-	scopeGap, scopePadY, scopePadX, scopeMark, nameGap, captionGap, lineHeight, tracking       float32
-	paneTop, paneX, paneBottom, rowGap, fieldPadY, buttonPadX, fieldPadX, arrowInset           float32
+	// The menu takes the lengths of the menu of the settings design (docs/spec/settings.md#menu).
+	menuW, menuGap, menuPadY, menuPadX, menuItemH, menuItemPadStart                      float32
+	menuIcon, searchIconX, searchPadStart, searchPadEnd                                  float32
+	headH, headGap, headPadStart, headPadEnd                                             float32
+	shadowY, shadowBlur, shadowAlpha                                                     float32
+	controlW, rowH, gap, indent                                                          float32
+	segGap, segPad, segButtonPadY, segButtonPadX                                         float32
+	scopeGap, scopePadY, scopePadX, scopeMark, nameGap, captionGap, lineHeight, tracking float32
+	paneTop, paneX, paneBottom, rowGap, fieldPadY, buttonPadX, fieldPadX, arrowInset     float32
 	// fieldH is the height of an input and a select, and buttonSmH the height of a small button (docs/spec/settings.md#controls).
 	fieldH, buttonSmH                                                               float32
 	swatchMinW, gridGap, gridMargin, swatchGap, swatchPad, boxH, boxBorder          float32
@@ -35,9 +37,9 @@ func (s *Shell) readSettingsPane() settingsPane {
 		return float32(s.options.Declared.ChromeNumber(name, "px"))
 	}
 	return settingsPane{
-		navW: metric("set-nav-w"), navGap: metric("set-nav-gap"), navPadY: metric("set-nav-pad-y"), navPadX: metric("set-nav-pad-x"),
-		navItemPadY: metric("set-nav-item-pad-y"), navItemPadX: metric("set-nav-item-pad-x"),
-		navMarkInset: metric("set-nav-mark-inset"), navMarkW: metric("set-nav-mark-w"), navMarkR: metric("set-nav-mark-r"),
+		menuW: metric("set-menu-w"), menuGap: metric("set-menu-gap"), menuPadY: metric("set-menu-pad-y"), menuPadX: metric("set-menu-pad-x"),
+		menuItemH: metric("set-menu-item-h"), menuItemPadStart: metric("set-menu-item-pad-start"), menuIcon: metric("set-menu-icon"),
+		searchIconX: metric("set-search-icon-x"), searchPadStart: metric("set-search-pad-start"), searchPadEnd: metric("set-search-pad-end"),
 		headH: metric("set-card-head-h"), headGap: metric("set-card-head-gap"), headPadStart: metric("set-card-head-pad-start"), headPadEnd: metric("set-card-head-pad-end"),
 		shadowY: metric("set-card-shadow-y"), shadowBlur: metric("set-card-shadow-blur"), shadowAlpha: metric("set-card-shadow-alpha"),
 		controlW: metric("set-control-w"), rowH: metric("set-row-h"), gap: metric("set-group-gap"),
@@ -129,7 +131,7 @@ func (s *Shell) drawSettingsTab(c *ui.Context, rect ui.Rect) {
 	tab.Absolute().Left(rect.X).Top(rect.Y).Size(rect.W, rect.H).Background(s.palette.Card).Clip().Row().Children(func() {
 		s.drawSettingsMenu(c, model, pane)
 		ui.Column(c).FillWidth().Children(func() {
-			width := rect.W - pane.navW
+			width := rect.W - pane.menuW
 			foot := s.settingsFootHeight(pane)
 			s.drawSettingsHead(c, model, width, pane)
 			s.drawSettingsBody(c, model, width, rect.H-s.settingsHeadHeight(pane)-foot, pane)
@@ -202,54 +204,92 @@ func (s *Shell) drawSettingsHead(c *ui.Context, model *settingsModel, width floa
 	})
 }
 
-// drawSettingsMenu draws the menu at the left of the tab: the pages Settings and Plugins, each as a button of its page.
+// drawSettingsMenu draws the menu at the left of the tab as the menu of the settings design: the search field on top, the group 설정 with
+// the core pages, the group 플러그인 with the list pages, and the group of the plugins with settings (docs/spec/settings.md#menu).
 func (s *Shell) drawSettingsMenu(c *ui.Context, model *settingsModel, pane settingsPane) {
-	ui.Column(c).Width(pane.navW).Gap(pane.navGap).Padding(pane.navPadY, pane.navPadX).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).Children(func() {
-		s.drawSearchControl(c, model.find)
-		plugins := false
+	ui.Column(c).Width(pane.menuW).Shrink(0).FillHeight().Justify(ui.Start).Gap(pane.menuGap).Padding(pane.menuPadY, pane.menuPadX).
+		BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Rule).Children(func() {
+		s.drawMenuSearch(c, model.find, pane)
+		group := ""
 		for _, control := range model.nav {
-			// The group of the plugin items has its title before its first item (docs/spec/settings.md#menu).
-			if control.pluginItem && !plugins {
-				plugins = true
-				ui.Text(c, "설정이 있는 플러그인").FontSize(s.textCaption()).TextColor(s.palette.Muted)
+			if control.menuGroup != group {
+				group = control.menuGroup
+				s.drawMenuLabel(c, group, pane)
 			}
 			s.drawSettingsNavItem(c, control, pane)
 		}
 	})
 }
 
-// drawSettingsNavItem draws a section of the window, the .set-nav of packages/workbench/app.css: the shown section has a mark on its left.
+// drawMenuLabel draws the label of a group of the menu, the .set-menu__label of packages/workbench/settings.css.
+func (s *Shell) drawMenuLabel(c *ui.Context, label string, pane settingsPane) {
+	m := s.metrics
+	ui.Text(c, label).Bold().FontSize(s.textSmall()).TextColor(s.palette.Muted).
+		Padding(m.space3, pane.menuItemPadStart, m.space1, pane.menuItemPadStart)
+}
+
+// drawMenuSearch draws the search field of the menu, the .set-search of packages/workbench/settings.css: the field height, the search
+// icon inside its start and the text after the icon.
+func (s *Shell) drawMenuSearch(c *ui.Context, control *SettingsControl, pane settingsPane) {
+	value := *control.Value
+	ui.Box(c).FillWidth().Height(pane.fieldH).Shrink(0).Children(func() {
+		s.binder.Control(c, control.Name, control.Command.Name, control.item())
+		field := s.binder.Bound(ui.TextInputBase(c, &value), control.Name).Label(control.item()).Placeholder(control.Label)
+		field.FillWidth().Height(pane.fieldH).Padding(0, pane.searchPadEnd, 0, pane.searchPadStart).Radius(s.radiusSmall()).
+			Border(s.palette.BorderWidth, s.palette.Edge).Background(s.palette.Card).TextColor(s.palette.Fg).PlaceholderColor(s.palette.Muted).
+			FontSize(s.textControl())
+		if field.Changed() {
+			s.runControl(control, value)
+		}
+		if value != "" && field.Shortcut(0, ui.KeyEscape) {
+			s.runControl(control, "")
+		}
+		top := (pane.fieldH - pane.menuIcon) / 2
+		ui.Icon(c, s.designIcon("search")).Absolute().Left(pane.searchIconX).Top(top).Size(pane.menuIcon, pane.menuIcon).TextColor(s.palette.Muted)
+	})
+}
+
+// designIcon is the declared settings icon of name on the 16 viewBox with the stroke of the settings design, the designIcon of
+// packages/workbench/icons.js.
+func (s *Shell) designIcon(name string) *ui.SVG {
+	return s.declaredIcon("0 0 16 16", `fill="none" stroke="currentColor" stroke-width="1.6"`, s.options.Declared.Icons[name])
+}
+
+// drawSettingsNavItem draws an item of the menu, the .set-button--nav of packages/workbench/settings.css: its icon, its name, and its
+// badge, count or dot at the end; the shown page is bold on the selection color.
 func (s *Shell) drawSettingsNavItem(c *ui.Context, control *SettingsControl, pane settingsPane) {
+	m := s.metrics
 	on := control.On != nil && *control.On
 	button := s.binder.Press(c, control.Name, control.Command.Name, control.item(), control.Command.Params)
-	button.FillWidth().Padding(pane.navItemPadY, pane.navItemPadX).Radius(s.radiusSmall()).Row().Justify(ui.Start).AlignItems(ui.Center).Label(control.Label)
+	button.FillWidth().Height(pane.menuItemH).Shrink(0).Padding(0, m.space2, 0, pane.menuItemPadStart).Gap(m.space2).Radius(s.radiusSmall()).
+		Row().Justify(ui.Start).AlignItems(ui.Center).Label(control.Label)
 	color := s.palette.Muted
 	if button.Hovered() {
 		color = s.palette.Fg
-		button.Background(faded(s.palette.Fg, s.metrics.insetMix))
+		button.Background(faded(s.palette.Fg, m.insetMix))
 	}
 	if on {
 		color = s.palette.Fg
-		button.Background(faded(s.palette.Fg, s.metrics.chipSelMix))
+		button.Background(faded(s.palette.Rail, m.chipOnMix))
 	}
 	button.Children(func() {
+		ui.Icon(c, s.designIcon(control.menuIcon)).Size(pane.menuIcon, pane.menuIcon).Shrink(0).TextColor(color)
+		label := ui.Text(c, control.Label).FontSize(s.textControl()).TextColor(color).NoWrap()
 		if on {
-			ui.Box(c).Absolute().Left(0).Top(pane.navMarkInset).Bottom(pane.navMarkInset).Width(pane.navMarkW).Radius(pane.navMarkR).Background(s.palette.Rail)
+			label.Bold()
 		}
-		if control.pluginItem {
-			// The chevron comes before the name of a plugin item (docs/spec/settings.md#menu).
-			ui.Icon(c, chevronRight).Size(s.textControl(), s.textControl())
-		}
-		ui.Text(c, control.Label).FontSize(s.textControl()).TextColor(color)
-		if control.pluginItem {
-			ui.Box(c).Grow(1)
-		}
+		ui.Box(c).Grow(1)
 		if control.dot {
 			// The dot of an enabled plugin uses the accent color, as .set-dot of packages/workbench/settings.css does; it stands at the end.
-			ui.Box(c).Size(pane.navMarkW, pane.navMarkW).Radius(pane.navMarkR).Background(s.palette.Rail)
+			ui.Box(c).Size(m.space2, m.space2).Radius(m.space2 / 2).Background(s.palette.Rail)
 		}
 		if control.Badge != "" {
-			ui.Text(c, control.Badge).FontSize(s.textCaption()).TextColor(s.palette.Muted)
+			// A count is plain text, and a badge has the color of its tone (docs/spec/settings.md#menu).
+			badge := s.palette.Muted
+			if control.tone != "" {
+				badge = s.badgeColor(control.tone)
+			}
+			ui.Text(c, control.Badge).NoWrap().FontSize(s.textCaption()).TextColor(badge)
 		}
 	})
 }

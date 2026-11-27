@@ -99,6 +99,9 @@ type SettingsControl struct {
 	small bool
 	// pluginItem says that the item is a plugin of the group Plugins with settings (docs/spec/settings.md#menu).
 	pluginItem bool
+	// menuGroup is the label of the group of the menu that holds the item, and menuIcon the declared design icon at its start
+	// (docs/spec/settings.md#menu).
+	menuGroup, menuIcon string
 	// dot says that the item of the menu shows the dot of an enabled plugin (docs/spec/settings.md#menu).
 	dot bool
 	// Badge is the Off badge of a disabled plugin item of the menu (docs/spec/settings.md#menu).
@@ -322,6 +325,45 @@ func valueText(value any) string {
 	return fmt.Sprint(value)
 }
 
+// menuBadges sets the badge or the count at the end of the menu items: the warn count of the setup parts that are not ok on 에이전트 연동,
+// the warn count of the plugins with a problem, else the acc count of the plugins with an update, else the count of the installed plugins
+// on 설치됨, and the catalog count on 찾아보기 (docs/spec/settings.md#menu).
+func (s *Shell) menuBadges(items []*SettingsControl) error {
+	rows := s.pluginRowsOf(s.pluginOperations.Status())
+	entries, err := s.installedEntries(rows)
+	if err != nil {
+		return err
+	}
+	counts := map[string]int{}
+	for _, entry := range entries {
+		for _, name := range []string{"updates", "problems"} {
+			if installedMatches(entry, name) {
+				counts[name]++
+			}
+		}
+	}
+	for _, item := range items {
+		switch *item.Key {
+		case "nav:agents":
+			if warn := countSetupWarnings(s.setupOperations.Parts()); warn > 0 {
+				item.Badge, item.tone = strconv.Itoa(warn), "warn"
+			}
+		case "nav:installed":
+			switch {
+			case counts["problems"] > 0:
+				item.Badge, item.tone = strconv.Itoa(counts["problems"]), "warn"
+			case counts["updates"] > 0:
+				item.Badge, item.tone = strconv.Itoa(counts["updates"]), "acc"
+			default:
+				item.Badge = strconv.Itoa(len(entries))
+			}
+		case "nav:browse":
+			item.Badge = strconv.Itoa(len(rows))
+		}
+	}
+	return nil
+}
+
 // settingsBuild builds the card of the current state and the current values.
 func (s *Shell) settingsBuild() (*settingsModel, error) {
 	w := &s.settingsTab
@@ -333,19 +375,33 @@ func (s *Shell) settingsBuild() (*settingsModel, error) {
 	model := &settingsModel{labels: map[string]string{}}
 	b := &settingsBuilder{model: model, counts: map[string]int{}, descriptions: declaredDescriptions(s.settings.Catalog.Rows)}
 	model.close = b.add(SettingsControl{Name: "core.settings-tab.close", Key: text("close"), Label: "닫는다", Command: settingCommand("core.settings.close", nil), kind: controlButton})
-	// The menu lists the pages of Settings and Plugins; the plugin page is opened by a plugin item.
+	// The menu lists the pages of the groups 설정 and 플러그인, each with its declared icon, and the plugins with settings
+	// (docs/spec/settings.md#menu).
+	icons := map[string]string{"installed": "settings-installed", "browse": "search"}
+	for _, page := range s.settings.Catalog.Rows.Pages {
+		icons[page.ID] = page.Icon
+	}
 	for _, page := range settingsPages[:len(settingsPages)-1] {
-		model.nav = append(model.nav, b.pressedButton("nav:"+page[0], "core.settings-tab.nav", page[1], "core.settings-tab.nav",
-			map[string]any{"page": page[0]}, page[0] == w.page))
+		item := b.pressedButton("nav:"+page[0], "core.settings-tab.nav", page[1], "core.settings-tab.nav",
+			map[string]any{"page": page[0]}, page[0] == w.page)
+		item.menuGroup, item.menuIcon = "설정", icons[page[0]]
+		if slices.Contains([]string{"installed", "browse"}, page[0]) {
+			item.menuGroup = "플러그인"
+		}
+		model.nav = append(model.nav, item)
+	}
+	if err := s.menuBadges(model.nav); err != nil {
+		return nil, err
 	}
 	// The installed plugins follow the pages in the group of their plugin items, by id (docs/spec/settings.md#menu).
 	for _, plugin := range s.pluginMenuItems() {
 		item := b.pressedButton("plugin:"+plugin.ID, "core.settings-tab.plugin-item", plugin.Name, "core.settings-tab.plugin",
 			map[string]any{"plugin": plugin.ID}, w.page == "plugin" && w.chosen == plugin.ID)
 		item.pluginItem = true
+		item.menuGroup, item.menuIcon = "설정이 있는 플러그인", "chevron"
 		item.dot = plugin.Installed.Enabled
 		if !plugin.Installed.Enabled {
-			item.Badge = "꺼짐"
+			item.Badge, item.tone = "꺼짐", "neutral"
 		}
 		model.nav = append(model.nav, item)
 	}

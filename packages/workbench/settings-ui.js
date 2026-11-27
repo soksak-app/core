@@ -9,7 +9,7 @@
 // The event of the tab is the publication of its state: onSettingsTabFront calls fn(front) when the tab opens, closes or comes to the front,
 // and the status core.settings-tab changes with it.
 import { registry } from "./exposure.js";
-import { icon } from "./icons.js";
+import { designIcon } from "./icons.js";
 import { commandOf, delegate, mark, run } from "./commands.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import { ALL_ROWS, GROUPS, PAGES, choicesOf } from "./settings-rows.js";
@@ -196,9 +196,10 @@ function paneContent() {
   throw new Error(`unknown settings page ${state.page}`);
 }
 
-/** The menu item of a core or list page, with its badge. */
-function navItem(page, label, badgeEl, selected) {
+/** The menu item of a core or list page: its icon, its name and its badge or count at the end (docs/spec/settings.md#menu). */
+function navItem(page, label, iconName, badgeEl, selected) {
   const item = button(label, { expose: "core.settings-tab.nav", command: "core.settings-tab.nav", params: { page }, key: `nav:${page}`, on: selected, variant: "nav" });
+  item.insertAdjacentHTML("afterbegin", designIcon(iconName));
   if (badgeEl) item.append(badgeEl);
   return item;
 }
@@ -213,6 +214,9 @@ function agentsBadge() {
 function menuEl() {
   const nav = element("nav", "set-menu");
   nav.setAttribute("aria-label", "설정 메뉴");
+  // The search field holds the search icon at its start (docs/spec/settings.md#menu).
+  const field = element("div", "set-search");
+  field.innerHTML = designIcon("search");
   const search = element("input", "text-field set-find");
   search.type = "search";
   search.placeholder = "설정 찾기";
@@ -220,21 +224,22 @@ function menuEl() {
   search.dataset.expose = "core.settings-tab.find";
   search.dataset.live = "";
   mark(search, "core.settings-tab.find", {}, "query");
-  nav.append(search);
+  field.append(search);
+  nav.append(field);
   const searching = state.find !== "";
   const core = element("div", "set-menu__group");
   core.append(element("p", "set-menu__label", "설정"));
   for (const page of PAGES) {
     const badgeEl = page.id === "agents" ? agentsBadge() : null;
-    core.append(navItem(page.id, page.name, badgeEl, !searching && state.page === page.id));
+    core.append(navItem(page.id, page.name, page.icon, badgeEl, !searching && state.page === page.id));
   }
   nav.append(core);
   const plugins = element("div", "set-menu__group");
   plugins.append(element("p", "set-menu__label", "플러그인"));
   const inst = installedBadge();
-  plugins.append(navItem("installed", "설치됨", inst.tone ? badge(inst.text, inst.tone, { title: inst.title }) : element("span", "set-count", inst.text), !searching && state.page === "installed"));
+  plugins.append(navItem("installed", "설치됨", "settings-installed", inst.tone ? badge(inst.text, inst.tone, { title: inst.title }) : element("span", "set-count", inst.text), !searching && state.page === "installed"));
   const catalog = pluginOperations.status().plugins.length;
-  plugins.append(navItem("browse", "찾아보기", element("span", "set-count", String(catalog)), !searching && state.page === "browse"));
+  plugins.append(navItem("browse", "찾아보기", "search", element("span", "set-count", String(catalog)), !searching && state.page === "browse"));
   nav.append(plugins);
   const items = pluginMenuItems();
   if (items.length) {
@@ -246,7 +251,7 @@ function menuEl() {
         on: !searching && state.page === "plugin" && state.plugin === row.id, variant: "nav",
       });
       // The chevron comes before the name; an enabled plugin shows the dot at the end, a disabled one the badge 꺼짐 (docs/spec/settings.md#menu).
-      item.insertAdjacentHTML("afterbegin", icon("chevron-right"));
+      item.insertAdjacentHTML("afterbegin", designIcon("chevron"));
       if (row.installed.enabled) {
         const dot = element("span", "set-dot");
         dot.title = "사용 중";

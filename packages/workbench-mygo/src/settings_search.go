@@ -13,6 +13,8 @@ type declaredRows struct {
 		ID          string `json:"id"`
 		Name        string `json:"name"`
 		Description string `json:"description"`
+		// Icon is the declared design icon of the item of the page in the menu (docs/spec/settings.md#menu).
+		Icon string `json:"icon"`
 	} `json:"pages"`
 	Labels map[string]map[string]string `json:"labels"`
 	Groups map[string][]declaredGroup   `json:"groups"`

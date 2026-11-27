@@ -20,6 +20,8 @@ The settings tab has one menu, one page at a time and one content pane. While th
 
 The menu stands at the left of the tab. Its top holds the search field.
 
+The menu follows the menu of the settings design: it is 204 points wide and starts at the top of the tab with the padding 10 by 8; the search field is the field height (28) with the search icon at its start; a group label is bold small muted text; an item is 30 points high, with the declared icon of its page at its start (a plugin item has a chevron), its name, and its badge, count or dot at the end; the item of the shown page is bold on the selection color. No two elements of the menu overlap.
+
 | Element | Text | Command |
 | --- | --- | --- |
 | Search field | placeholder `설정 찾기` | `core.settings-tab.find {query}` |

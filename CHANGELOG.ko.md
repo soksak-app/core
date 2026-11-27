@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1239-7: 설정 메뉴는 설정 design의 메뉴를 따른다. 검색 icon, group label, 항목 icon과 count가 있다. web과 mygo 모두.
 - F1250-4: 선언된 설정 page는 section과 item을 컴포넌트 세트로 풀며, 알 수 없는 컴포넌트는 이름과 함께 page를 거부한다.
 - F1245-3: workbench 기본값 8곳에 따르는 명세 줄을 인용한 이유를 적고, 이전 집합 기본값 하나를 명시적 분기로 바꾼다.
 - F1256: packages/workbench/workbench.json의 Go, Rust, mygo 호스트 복사본이 원본과 다시 같습니다(#F1256).

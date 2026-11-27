@@ -4,7 +4,7 @@
 /* The container of the tab (index.html #settingsTab) holds the menu and the content beside it (docs/spec/settings.md#menu). */
 .settings-tab {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr);
+  grid-template-columns: var(--set-menu-w) minmax(0, 1fr);
   height: var(--fill);
   min-height: 0;
   background: var(--bg);
@@ -12,25 +12,99 @@
   font-size: var(--text-control);
 }
 
+/* The menu takes the .c-nav, .c-nav-h, .c-nav-i and .c-search rules of the settings design, on the tokens of the workbench
+   (docs/spec/settings.md#menu). */
 .set-menu {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  justify-content: flex-start;
+  gap: var(--set-menu-gap);
   min-height: 0;
   overflow: auto;
-  padding: var(--space-4);
+  padding-top: var(--set-menu-pad-y);
+  padding-right: var(--set-menu-pad-x);
+  padding-bottom: var(--set-menu-pad-y);
+  padding-left: var(--set-menu-pad-x);
   border-right: var(--bw) solid var(--rule);
 }
 
 .set-menu__group {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--set-menu-gap);
 }
 
 .set-menu__label {
+  margin: 0;
+  padding-top: var(--space-3);
+  padding-right: var(--set-menu-item-pad-start);
+  padding-bottom: var(--space-1);
+  padding-left: var(--set-menu-item-pad-start);
   color: var(--muted);
-  font-size: var(--text-caption);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.set-menu svg {
+  flex: none;
+  width: var(--set-menu-icon);
+  height: var(--set-menu-icon);
+}
+
+.set-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
+.set-search > svg {
+  position: absolute;
+  left: var(--set-search-icon-x);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.set-search > .set-find {
+  box-sizing: border-box;
+  height: var(--field-h);
+  padding-left: var(--set-search-pad-start);
+  padding-right: var(--set-search-pad-end);
+}
+
+.set-button--nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: none;
+  gap: var(--space-2);
+  width: var(--fill);
+  height: var(--set-menu-item-h);
+  padding-top: 0;
+  padding-right: var(--space-2);
+  padding-bottom: 0;
+  padding-left: var(--set-menu-item-pad-start);
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--muted);
+  text-align: left;
+  font-size: var(--text-control);
+}
+
+.set-button--nav:hover {
+  background: color-mix(in srgb, var(--fg) var(--inset-mix), transparent);
+  color: var(--fg);
+}
+
+.set-button--nav[data-on="true"] {
+  background: var(--chip-on);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.set-button--nav > :not(svg) {
+  margin-left: auto;
 }
 
 .set-main {

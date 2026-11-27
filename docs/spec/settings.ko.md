@@ -20,6 +20,8 @@
 
 메뉴는 탭의 왼쪽에 있다. 메뉴의 위쪽에는 검색칸이 있다.
 
+메뉴는 설정 design의 메뉴를 따른다. 폭은 204 point이고 탭의 맨 위에서 padding 10 × 8로 시작한다. 검색칸은 field 높이(28)이고 시작 쪽에 검색 icon이 있다. group label은 굵은 작은 muted 글자다. 항목은 30 point 높이이고, 시작 쪽에 page의 선언된 icon(plugin 항목은 chevron), 이름, 끝에 badge, count 또는 dot이 있다. 보이는 page의 항목은 선택 색 위에 굵게 표시된다. 메뉴의 어떤 두 element도 겹치지 않는다.
+
 | 요소 | 텍스트 | 명령 |
 | --- | --- | --- |
 | 검색칸 | placeholder `설정 찾기` | `core.settings-tab.find {query}` |

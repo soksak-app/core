@@ -545,9 +545,17 @@
     ]
   },
   "icons": {
+    "settings-look": "<circle cx=\"8\" cy=\"8\" r=\"6\"/><circle cx=\"5.5\" cy=\"6.5\" r=\".7\"/><circle cx=\"8.5\" cy=\"5\" r=\".7\"/><circle cx=\"10.8\" cy=\"7.5\" r=\".7\"/>",
+    "settings-workspace": "<rect x=\"2\" y=\"2.5\" width=\"12\" height=\"11\" rx=\"1.5\"/><path d=\"M6 2.5v11\"/>",
+    "settings-sets": "<rect x=\"2\" y=\"2.5\" width=\"12\" height=\"11\" rx=\"1.5\"/><path d=\"M2 6h12M2 9.5h12\"/>",
+    "settings-behavior": "<path d=\"M3 4h10M3 8h10M3 12h10\"/><circle cx=\"6\" cy=\"4\" r=\"1.4\"/><circle cx=\"10\" cy=\"8\" r=\"1.4\"/><circle cx=\"5\" cy=\"12\" r=\"1.4\"/>",
+    "settings-agents": "<rect x=\"3\" y=\"5\" width=\"10\" height=\"8\" rx=\"2\"/><path d=\"M8 2.5V5M6 9h.01M10 9h.01\"/>",
+    "settings-diag": "<rect x=\"5\" y=\"4.5\" width=\"6\" height=\"9\" rx=\"3\"/><path d=\"M2.5 8.5H5M11 8.5h2.5M3 4.5l2 1.5M13 4.5l-2 1.5M3 12.5l2-1M13 12.5l-2-1\"/>",
+    "settings-installed": "<path d=\"M3 5h3a1.5 1.5 0 1 1 3 0h3v3a1.5 1.5 0 1 1 0 3v3H3z\"/>",
+    "search": "<circle cx=\"7\" cy=\"7\" r=\"4.5\"/><path d=\"M10.5 10.5L14 14\"/>",
+    "chevron": "<path d=\"M6 4l4 4-4 4\"/>",
     "control-select-arrows": "<path d=\"M.75 3.75l3-3 3 3M.75 6.25l3 3 3-3\"/>",
     "card-add": "<path d=\"M8 3v10M3 8h10\"/>",
-    "badge-warn": "<path d=\"M8 2.2l6.2 11H1.8z\"/><path d=\"M8 6.5v3M8 11.3v.01\"/>",
     "card-split-x": "<rect class=\"half\" x=\"2\" y=\"3\" width=\"6\" height=\"10\" rx=\"1.5\"/><rect x=\"2\" y=\"3\" width=\"12\" height=\"10\" rx=\"2\"/><path d=\"M8 3v10\"/>",
     "card-split-y": "<rect class=\"half\" x=\"3\" y=\"2\" width=\"10\" height=\"6\" rx=\"1.5\"/><rect x=\"3\" y=\"2\" width=\"10\" height=\"12\" rx=\"2\"/><path d=\"M3 8h10\"/>",
     "card-expand": "<path d=\"M6 2H2v4M10 2h4v4M2 10v4h4M14 10v4h-4\"/>",
@@ -636,6 +644,16 @@
   },
   "chrome": {
     "set-control-w": "260px",
+    "set-menu-w": "204px",
+    "set-menu-pad-y": "10px",
+    "set-menu-pad-x": "8px",
+    "set-menu-gap": "1px",
+    "set-menu-item-h": "30px",
+    "set-menu-item-pad-start": "10px",
+    "set-menu-icon": "16px",
+    "set-search-icon-x": "9px",
+    "set-search-pad-start": "30px",
+    "set-search-pad-end": "44px",
     "divider": "6px",
     "text-control-at-base": "12",
     "text-base": "13",
@@ -697,8 +715,6 @@
     "bar-tab-root-pad": "8px",
     "bar-tab-root-w": "180px",
     "bar-tab-root-h": "26px",
-    "project-chip-h": "24px",
-    "project-chip-pad": "10px",
     "act-w": "24px",
     "act-h": "22px",
     "act-icon": "16px",
@@ -896,32 +912,38 @@
       {
         "id": "look",
         "name": "모양",
-        "description": "테마와 모드, 카드의 간격·모서리·글꼴."
+        "description": "테마와 모드, 카드의 간격·모서리·글꼴.",
+        "icon": "settings-look"
       },
       {
         "id": "workspace",
         "name": "작업 공간",
-        "description": "프로젝트 창, 탭 위치, 사이드바 배치와 크기."
+        "description": "프로젝트 창, 탭 위치, 사이드바 배치와 크기.",
+        "icon": "settings-workspace"
       },
       {
         "id": "sets",
         "name": "사이드바 세트",
-        "description": "사이드바에 보여 줄 섹션 묶음. 어느 변에 놓을지는 작업 공간과 플러그인에서 고른다."
+        "description": "사이드바에 보여 줄 섹션 묶음. 어느 변에 놓을지는 작업 공간과 플러그인에서 고른다.",
+        "icon": "settings-sets"
       },
       {
         "id": "behavior",
         "name": "동작",
-        "description": "언어, 메모리, 알림."
+        "description": "언어, 메모리, 알림.",
+        "icon": "settings-behavior"
       },
       {
         "id": "agents",
         "name": "에이전트 연동",
-        "description": "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목."
+        "description": "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.",
+        "icon": "settings-agents"
       },
       {
         "id": "diag",
         "name": "진단",
-        "description": "문제를 추적할 때만 켠다."
+        "description": "문제를 추적할 때만 켠다.",
+        "icon": "settings-diag"
       }
     ],
     "labels": {
@@ -1004,7 +1026,7 @@
             },
             {
               "key": "textSize",
-              "label": "글자 크기 단계",
+              "label": "textSize",
               "form": "choice",
               "scope": "common"
             }

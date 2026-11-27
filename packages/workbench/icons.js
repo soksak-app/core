@@ -44,10 +44,11 @@ export function icon(name) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
 }
 
-/** The badge icon of that name at 16 points, drawn with the stroke of the badges of the design (docs/spec/settings.md#controls). */
-export function badgeIcon(name) {
+/** The declared settings icon of that name on the 16 viewBox, drawn with the stroke of the settings design: the icons of the badges and of
+ * the menu (docs/spec/settings.md#controls, docs/spec/settings.md#menu). */
+export function designIcon(name) {
   const body = declaredIcons[name];
-  if (!body) throw new Error(`unknown badge icon: ${name}`);
+  if (!body) throw new Error(`unknown design icon: ${name}`);
   return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 }
 

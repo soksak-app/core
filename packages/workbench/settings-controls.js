@@ -2,7 +2,7 @@
 // command through the shared binder (commands.js), and every control and every reset, chip and badge of a row follows the scope rule
 // (docs/spec/settings.md#scope-of-a-control).
 import { mark } from "./commands.js";
-import { badgeIcon, icon } from "./icons.js";
+import { designIcon, icon } from "./icons.js";
 import { isOverridden, commonOnly, projectSelected, projectTitle, state, writeScope } from "./settings-state.js";
 import { scopedValue } from "./settings.js";
 
@@ -45,7 +45,7 @@ export function iconButton(name, title, { expose, command, params = {}, key = nu
 /** A status badge: ok, warn, err, acc or neutral, which is the tone of the token of the badge, with the icon of its name when one is given (docs/spec/settings.md#controls). */
 export function badge(text, tone = "neutral", { title = null, expose = "core.settings-tab.badge", key = null, iconName = null } = {}) {
   const el = element("span", `set-badge set-badge--${tone}`, text);
-  if (iconName !== null) el.insertAdjacentHTML("afterbegin", badgeIcon(iconName));
+  if (iconName !== null) el.insertAdjacentHTML("afterbegin", designIcon(iconName));
   el.dataset.expose = expose;
   if (key !== null) el.dataset.key = key;
   if (title !== null) el.title = title;
@@ -159,9 +159,6 @@ export function slider(key, [min, max], now, { unit = "", command = "core.settin
 /** A stepper − value + of an integer range, with its unit inside (docs/spec/settings.md#controls). */
 export function stepper(key, [min, max], now, { unit = "", command = "core.settings.change", scope = writeScope(), disabled = false } = {}) {
   const wrap = element("span", "set-step");
-  // The box of the stepper is one exposed element of the value and its buttons (docs/spec/settings.md#controls).
-  wrap.dataset.expose = "core.settings-tab.stepper";
-  wrap.dataset.key = key;
   const down = button("−", { expose: "core.settings-tab.step", command, params: { key, value: now - 1, scope }, key, disabled: disabled || now <= min, variant: "icon", title: "줄이기" });
   const out = element("output", "set-step__value", `${now}${unit}`);
   const up = button("+", { expose: "core.settings-tab.step", command, params: { key, value: now + 1, scope }, key, disabled: disabled || now >= max, variant: "icon", title: "늘리기" });
