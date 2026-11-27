@@ -131,6 +131,8 @@ Group `테마`, description `테마가 색과 형태의 기본값을 정하고, 
 | `테마` | Swatches | The ten themes `midnight`, `nord`, `solar`, `forest`, `ember`, `slate`, `mist`, `grape`, `sand` and `paper`; each swatch shows the theme colors and its name | `midnight` | common and project |
 | `모드` | Segment | `어두움` (`dark`), `밝음` (`light`) | `어두움` | common and project |
 
+The status tokens `ok` and `warn` take the values of the design file `settings-36 11.html`, lines 592 to 594, for each mode: dark `ok` `#4cc38a` and `warn` `#f0a33a`, light `ok` `#17784c` and `warn` `#9e5000`. Every theme declares both tokens for both modes with these values in `workbench.json`. The settings set them on the root with the other colors, and the success and warning notice icons draw them.
+
 Group `형태`, description `테마가 준 값에서 시작한다.`
 
 | Label | Control | Range | Default | Scope |

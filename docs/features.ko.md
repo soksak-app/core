@@ -294,7 +294,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
     - [ ] F1217-17-14 — 사이드바 세트 편집기, 빈 이름: 이름 칸 아래의 `이름이 필요하다.` 줄을 두 host 모두 보이지 않는다. 저장소가 빈 이름을 거부하기 때문이다(S:impl, 두 host). 열림: 빈 이름이면 줄을 보이고, 저장의 거부는 그대로 두며, 두 host를 덮는 Red 시험을 둔다.
     - [ ] F1217-17-15 — 사이드바 세트, 버튼 새 세트: 명세는 더하기 아이콘을 정하고 두 host 모두 그리지 않는다(S:impl, 두 host). 열림: 선언된 아이콘의 더하기를 두 host 모두에 그린다.
     - [ ] F1217-17-16 — 사이드바 세트 편집기, select 섹션 추가…: 각 항목은 플러그인 id를 힌트로 보여야 한다(S:impl). web host는 `이름 · plugin id`를 보이고 mygo host는 이름만 보인다. 열림: mygo host에 힌트를 보인다.
-  - [~] F1217-12 — P0, F1217-10 다음: mygo host가 같은 알림을 같은 글로 보인다. 남은 일: F1217-12-8, theme마다 값이 주어질 때까지 보류.
+  - [o] F1217-12 — P0, F1217-10 다음: mygo host가 같은 알림을 같은 글로 보인다. 모든 하위 항목이 닫혔다.
     - [o] F1217-12-1 — mygo에서 알림 경로가 오류 토스트를 대신한다. 토스트를 보이던 모든 오류는 오류 notice를 만들고, notice는 kind와 title로 합쳐지며, 세 모양의 토스트가 정해진 시간 동안 보이고, `core.toasts`와 `core.notices.close {id}`가 `core.workbench.error`와 `core.error.dismiss`를 대신한다.
     - [o] F1217-12-2 — 모든 화면의 제목줄 종과, 거르기·묶음·지우기·읽음을 가진 팝오버와 서랍의 notice center. 기록은 configuration directory의 `notices.json`에 둔다.
     - [o] F1217-12-3 — content footer의 카드 status line과 카드마다의 `core.grid` `notice`, view 호출 `tab.notify`, `tab.progress`, `tab.done`.
@@ -302,7 +302,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
     - [o] F1217-12-5 — 열린 notice center가 닫기 control, element `core.notices.toggle`을 그린다.
     - [o] F1217-12-6 — filter segment 옆 조용히 switch가 두 page에서 `core.settings.set {patch: {quietToasts}, scope: "common"}`을 실행한다.
     - [o] F1217-12-7 — ⚙ 버튼이 동작 page의 알림 group에서 settings tab을 연다: `rows.groups`의 각 group에 `id`가 있고, `core.settings-tab.nav`가 선택 인자 `group`을 받으며 없는 id는 -32602로 거절한다.
-    - [!] F1217-12-8 — 성공과 경고 icon이 모든 theme의 token `ok`, `warn`을 쓴다. 보류: token은 theme마다 값이 필요하다. 원인: 디자인은 dark 값만 주고, light 값은 디자인 결정이다. 재시도 조건: theme마다 값이 주어진다.
+    - [o] F1217-12-8 — 성공과 경고 icon이 모든 theme과 모드의 token `ok`, `warn`을 쓴다. 값은 디자인 파일 `settings-36 11.html`의 592행부터 594행까지에서 온다. Red: Go `TestNoticeKindColorDrawsTheOkAndWarnTokens`(packages/workbench-mygo/src)는 성공과 경고 icon이 muted 색을 쓰는 것을 보았고, 웹 `theme-mode-tokens.test.mjs`(packages/workbench/test)는 어떤 theme에도 `ok`, `warn`이 없는 것을 보았다. Green: 두 테스트가 통과한다. workbench.json 네 사본에 두 모드의 토큰이 선언되었고, 웹 설정이 이를 루트에 설정하며, app.css가 밝은 값을 가지고, mygo palette가 이를 읽는다.
     - [o] F1217-12-9 — 카드 notice의 source chip이 notice를 낸 tab의 label을 보여 주고 entry에 남긴다; `notices.json`은 format 2가 된다.
     - [o] F1217-12-10 — Escape가 열린 notice center를 닫는다(center가 열린 동안 shortcut 행 Escape → `core.notices.toggle`).
   - [o] F1217-13 — P0, F1217-10 다음: `@soksak/plugin-api`가 page에 카드 알림 호출을 주고, 이 호출이 `tab.notify`를 대신한다. `tab.notify`를 부르는 plugin은 각자의 체크리스트에서 옮긴다.

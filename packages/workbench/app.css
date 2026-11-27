@@ -52,6 +52,9 @@
   --sp-grip:color-mix(in srgb,var(--muted) var(--sp-grip-mix),transparent);
   --sp-grip-active:var(--focus);
 }
+
+/* The light values of the status tokens, for a document that is opened alone. The settings set them with the other colors. */
+:root[data-mode=light]{--ok:#17784c;--warn:#9e5000}
 *{box-sizing:border-box}
 /* The plane takes the remaining space. In the document flow, the position of the plane would move whenever an
    element above it grows, and the native surface would not receive that change. Here only the size changes,

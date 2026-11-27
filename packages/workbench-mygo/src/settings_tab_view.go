@@ -1226,7 +1226,7 @@ func (s *SettingsStore) Palette() (Palette, error) {
 	radius, _ := s.Value("radius").(float64) // silent: the settings store checks the type of the value.
 	gap, _ := s.Value("gap").(float64)       // silent: the settings store checks the type of the value.
 	return Palette{Bg: color("bg"), Card: color("card"), Fg: color("fg"), Muted: color("muted"), Edge: color("edge"), Rule: color("rule"), Rail: color("rail"),
-		Focus: color("focus"), No: color("no"), Radius: float32(radius), Gap: float32(gap), BorderWidth: float32(border)}, nil
+		Focus: color("focus"), No: color("no"), Ok: color("ok"), Warn: color("warn"), Radius: float32(radius), Gap: float32(gap), BorderWidth: float32(border)}, nil
 }
 
 // settingsParam is the parameter of a change of the settings.

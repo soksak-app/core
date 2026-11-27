@@ -338,6 +338,10 @@ func (s *Shell) noticeKindColor(kind string) ui.Color {
 	switch kind {
 	case "error":
 		return s.palette.No
+	case "success":
+		return s.palette.Ok
+	case "warning":
+		return s.palette.Warn
 	case "info", "progress":
 		return s.palette.Focus
 	}
