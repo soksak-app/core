@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-9-1-1: The host contract defines the plugin folder count case for the Wails and Tauri hosts, which declare it in their tests.
 - F1263: The git clone of the import form runs with `--progress`, so the progress lines of git reach the form in both hosts.
 - F1250-1: The declaration components take the review props: the Badge tones, the Button variant and size, the stepper Number, the editable Slider value, the Search shortcut and the Chip remove.
 - F1235: The test names of the e2e tests are English, and the feature links name them.
