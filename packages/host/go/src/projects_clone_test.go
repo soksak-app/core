@@ -142,3 +142,24 @@ func TestProjectCloneSendsEachOutputLineToTheWindowOfTheCall(t *testing.T) {
 		t.Fatalf("the window received %q, want the output of git", window.lines)
 	}
 }
+
+// A clone from a file address streams the progress lines of git to the window of the call, not only its first line.
+func TestProjectCloneStreamsTheProgressLinesOfGit(t *testing.T) {
+	address := "file://" + bareRepository(t)
+	target := filepath.Join(t.TempDir(), "widget")
+	window := &cloneWindow{}
+	if _, err := (&Host{}).ProjectClone(WithFrontend(context.Background(), window), cloneRequest(t, address, target)); err != nil {
+		t.Fatal(err)
+	}
+	window.mu.Lock()
+	defer window.mu.Unlock()
+	progress := 0
+	for _, line := range window.lines {
+		if strings.Contains(line, "objects") {
+			progress++
+		}
+	}
+	if progress == 0 {
+		t.Fatalf("the window received %q, want the progress lines of git", window.lines)
+	}
+}

@@ -438,7 +438,7 @@ func (h *Host) ProjectClone(ctx context.Context, reqJSON json.RawMessage) (Proje
 	window, hasWindow := frontendOf(ctx)
 	// The output of git is read through one pipe, so each line reaches the window in the order that git wrote it.
 	reader, writer := io.Pipe()
-	cmd := exec.Command("git", "clone", "--", address, target)
+	cmd := exec.Command("git", "clone", "--progress", "--", address, target)
 	cmd.Stdout = writer
 	cmd.Stderr = writer
 	if err := cmd.Start(); err != nil {

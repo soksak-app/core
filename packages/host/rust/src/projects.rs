@@ -161,6 +161,7 @@ pub fn clone_repository(
     let mut command = std::process::Command::new("git");
     command
         .arg("clone")
+        .arg("--progress")
         .arg("--")
         .arg(address)
         .arg(&target)

@@ -146,3 +146,24 @@ fn an_empty_address_and_a_dash_address_are_refused_before_a_clone() {
     );
     assert!(!target.exists());
 }
+
+#[test]
+fn clone_streams_the_progress_lines_of_git() {
+    let dir = tempfile::tempdir().unwrap();
+    let address = format!("file://{}", bare_repository(dir.path()).display());
+    let target = dir.path().join("widget");
+    let mut lines = Vec::new();
+    clone_repository(
+        request(&address, target.to_str().unwrap()),
+        dir.path(),
+        &mut |line: &str| {
+            lines.push(line.to_string());
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert!(
+        lines.iter().any(|line| line.contains("objects")),
+        "the callback received {lines:?}, want the progress lines of git"
+    );
+}
