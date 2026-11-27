@@ -135,6 +135,9 @@ struct LogIndexStop(std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>);
 /// The stop of the watch of the main thread, which waits for its running sample (docs/spec/logging.md, stalls).
 struct StallWatchStop(std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>);
 
+/// The watch of the plugins folder that counts its folders, which ends with the application (docs/spec/installation.md#plugin-folders).
+struct PluginFolderWatch(std::sync::Mutex<Option<Box<dyn FnOnce() + Send>>>);
+
 /// The watch of the policy file of the event log, which ends with the application.
 struct LogPolicyStop(std::sync::Mutex<Option<log_policy::LogPolicyWatch>>);
 
@@ -509,6 +512,12 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
         }),
         Box::new(move |change| windows::notify_plugins(&handle, change)),
     )?);
+    // The watch of the plugins folder notifies the windows of each change of its folder count (docs/spec/installation.md#plugin-folders).
+    let counting = app.clone();
+    let folder_watch = app.state::<plugins::Plugins>().watch_folders(std::sync::Arc::new(
+        move |folders| windows::notify_folders(&counting, plugins::FoldersChanged { folders }),
+    ))?;
+    app.manage(PluginFolderWatch(std::sync::Mutex::new(Some(folder_watch))));
     // The setup operations use the sok of the application bundle, next to the executable
     // (docs/spec/cli.md#agents-in-the-application).
     let executable = std::env::current_exe()

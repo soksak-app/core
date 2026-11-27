@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-9-1: host가 plugin folder 수를 세고 바뀔 때마다 plugins-folders-changed로 알린다.
 - F1250: 체크리스트에 검증기, 읽기 경로와 남은 선언 단위를 기록한다.
 - F1239: F1239-5를 다시 완료로 표시한다. F1239-4는 F1239-7의 일부로, F1239-8은 F1250으로 옮겨 닫는다.
 - F1248: 기능 증거 표가 Rust surface fixture의 sidecar OS key를 platform audit 시험에 연결한다.

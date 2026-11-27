@@ -840,6 +840,16 @@ pub(crate) fn notify_setup(app: &AppHandle) {
     }
 }
 
+/// Sends plugins-folders-changed with the folder count to all windows; it does not restart a window
+/// (docs/spec/installation.md#plugin-folders).
+pub(crate) fn notify_folders(app: &AppHandle, change: crate::plugins::FoldersChanged) {
+    for window in app.windows().values() {
+        if let Err(error) = emit_window(window, "plugins-folders-changed", change.clone()) {
+            log_error("plugins-folders-changed", error);
+        }
+    }
+}
+
 /// Sends plugins-changed to all windows.
 pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
     // The enable of a plugin clears the sidecar stops of its manifest in one step, as a surface open does.

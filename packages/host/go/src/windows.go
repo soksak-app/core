@@ -175,6 +175,10 @@ func newHost(directory string, quit *Quit) (*Host, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The watch runs for the life of the process, so its context is not canceled (docs/spec/installation.md#plugin-folders).
+	if err := plugins.WatchFolders(context.Background(), h.notifyFolders); err != nil {
+		return nil, err
+	}
 	h.plugins = plugins
 	return h, nil
 }

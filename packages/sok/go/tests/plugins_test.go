@@ -428,7 +428,7 @@ func stateJSON(t *testing.T, config string) string {
 // contract: cli.plugin.state-reads-registry-and-installed
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
-	if text := stateJSON(t, config); text != `{"core":"`+sok.CoreVersion+`","registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null,"held":[]}` {
+	if text := stateJSON(t, config); text != `{"core":"`+sok.CoreVersion+`","registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"folders":0,"firstRun":true,"starter":null,"held":[]}` {
 		t.Fatalf("state without a registry = %s", text)
 	}
 	index := pluginVersions(t, "0.2.0")
@@ -478,7 +478,7 @@ func TestPluginsStateReadsAndRejectsInvalidStarterJob(t *testing.T) {
 	if err := os.WriteFile(path, []byte(job), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	want := `{"core":"` + sok.CoreVersion + `","registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]},"held":[]}`
+	want := `{"core":"` + sok.CoreVersion + `","registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"folders":0,"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]},"held":[]}`
 	if got := stateJSON(t, config); got != want {
 		t.Fatalf("state with a pending starter job = %s, want %s", got, want)
 	}

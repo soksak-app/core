@@ -168,6 +168,8 @@ type PluginsState struct {
 	Registry  *string         `json:"registry"`
 	Index     any             `json:"index"`
 	Installed *InstalledState `json:"installed"`
+	// Folders is the number of directories directly in plugins/ (docs/spec/installation.md#plugin-folders).
+	Folders int `json:"folders"`
 	// FirstRun is true when plugins/installed.json does not exist. The application then installs the starter pack.
 	FirstRun bool        `json:"firstRun"`
 	Starter  *StarterJob `json:"starter"`
@@ -233,6 +235,26 @@ type StarterJobRequest struct {
 
 // ReadPluginsState reads the registry address, the checked index and the installation state. When the index cannot be
 // read, it holds that error in the index field, and when the installation state cannot be read, it fails.
+// PluginFolders counts the directories directly in plugins/ of the configuration directory, one for each plugin id with an installed
+// folder; files are not counted, and a missing plugins/ counts zero (docs/spec/installation.md#plugin-folders).
+func PluginFolders(configDir string) (int, error) {
+	path := filepath.Join(configDir, "plugins")
+	entries, err := os.ReadDir(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fileError(path, err)
+	}
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			count++
+		}
+	}
+	return count, nil
+}
+
 func ReadPluginsState(configDir, core string) (*PluginsState, error) {
 	installed, err := ReadInstalled(configDir)
 	if err != nil {
@@ -247,7 +269,11 @@ func ReadPluginsState(configDir, core string) (*PluginsState, error) {
 	if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 		return nil, fileError(path, statErr)
 	}
-	state := &PluginsState{Core: core, Installed: installed, FirstRun: statErr != nil, Starter: starter, Held: []HeldOperation{}}
+	folders, err := PluginFolders(configDir)
+	if err != nil {
+		return nil, err
+	}
+	state := &PluginsState{Core: core, Installed: installed, Folders: folders, FirstRun: statErr != nil, Starter: starter, Held: []HeldOperation{}}
 	url, exists, err := readRegistryURL(configDir)
 	switch {
 	case err != nil:

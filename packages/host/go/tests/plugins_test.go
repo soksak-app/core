@@ -32,7 +32,7 @@ func stateText(t *testing.T, plugins *host.Plugins) string {
 func TestPluginsStateReportsTheRegistryAndTheInstallation(t *testing.T) {
 	config := t.TempDir()
 	plugins, _ := support.NewPlugins(t, config)
-	if text := stateText(t, plugins); text != `{"core":"`+sok.CoreVersion+`","registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null,"held":[]}` {
+	if text := stateText(t, plugins); text != `{"core":"`+sok.CoreVersion+`","registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"folders":0,"firstRun":true,"starter":null,"held":[]}` {
 		t.Fatalf("state without a registry %s", text)
 	}
 	index, _ := support.PluginRegistry(t)

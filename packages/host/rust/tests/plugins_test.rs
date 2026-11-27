@@ -141,7 +141,7 @@ fn plugins_state_reports_the_registry_and_the_installation() {
     assert_eq!(
         state_text(&plugins),
         format!(
-            r#"{{"core":"{}","registry":null,"index":null,"installed":{{"format":3,"plugins":{{}},"sidecars":{{}}}},"firstRun":true,"starter":null,"held":[]}}"#,
+            r#"{{"core":"{}","registry":null,"index":null,"installed":{{"format":3,"plugins":{{}},"sidecars":{{}}}},"folders":0,"firstRun":true,"starter":null,"held":[]}}"#,
             soksak_sok::version::CORE_VERSION
         )
     );

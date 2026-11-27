@@ -58,6 +58,12 @@ pub struct StarterRequest {
     pub plugins: Vec<String>,
 }
 
+/// The value of the plugins-folders-changed event (docs/spec/installation.md#plugin-folders).
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct FoldersChanged {
+    pub folders: usize,
+}
+
 /// The value of the plugins-changed event.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct Changed {
@@ -109,6 +115,30 @@ impl Plugins {
     /// The configuration folder in which plugins are installed.
     pub fn config_dir(&self) -> &Path {
         &self.config_dir
+    }
+
+    /// Watches the plugins folder and calls changed with its folder count after each change of the count
+    /// (docs/spec/installation.md#plugin-folders). The folder is created when it is missing. The result stops the watch.
+    pub fn watch_folders(
+        &self,
+        changed: Arc<dyn Fn(usize) + Send + Sync>,
+    ) -> Result<Box<dyn FnOnce() + Send>, String> {
+        let folder = self.config_dir.join("plugins");
+        std::fs::create_dir_all(&folder)
+            .map_err(|error| format!("{}: {error}", folder.display()))?;
+        let last = Mutex::new(soksak_sok::plugins::plugin_folders(&self.config_dir)?);
+        let config_dir = self.config_dir.clone();
+        let notify = Arc::new(move || match soksak_sok::plugins::plugin_folders(&config_dir) {
+            Ok(count) => {
+                let mut last = last.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+                if *last != count {
+                    *last = count;
+                    changed(count);
+                }
+            }
+            Err(error) => crate::application_log::log_error("plugin folders", error),
+        });
+        crate::platform::current()?.watch_file(&folder, notify)
     }
 
     /// Returns the registry address, the checked index, the installation state, the failures of the update at start and the

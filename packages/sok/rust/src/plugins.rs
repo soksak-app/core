@@ -140,6 +140,8 @@ pub struct PluginsState {
     pub registry: Option<String>,
     pub index: IndexState,
     pub installed: InstalledState,
+    /// The number of directories directly in plugins/ (docs/spec/installation.md#plugin-folders).
+    pub folders: usize,
     /// True when plugins/installed.json does not exist. The application installs the starter pack then.
     #[serde(rename = "firstRun")]
     pub first_run: bool,
@@ -228,8 +230,31 @@ pub enum IndexState {
 
 /// Reads the registry address, the checked index and the installation state. When the index cannot be read, the error is placed in the index
 /// field, and when the installation state cannot be read, the function fails.
+/// Counts the directories directly in plugins/ of the configuration directory, one for each plugin id with an installed folder;
+/// files are not counted, and a missing plugins/ counts zero (docs/spec/installation.md#plugin-folders).
+pub fn plugin_folders(config_dir: &Path) -> Result<usize, String> {
+    let path = config_dir.join("plugins");
+    let entries = match std::fs::read_dir(&path) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => return Err(crate::files::file_error(path.display(), &error)),
+    };
+    let mut count = 0;
+    for entry in entries {
+        let entry = entry.map_err(|error| crate::files::file_error(path.display(), &error))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|error| crate::files::file_error(entry.path().display(), &error))?;
+        if file_type.is_dir() {
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
 pub fn read_plugins_state(config_dir: &Path, core: &str) -> Result<PluginsState, String> {
     let installed = read_installed(config_dir)?;
+    let folders = plugin_folders(config_dir)?;
     let starter = read_starter_job(config_dir)?;
     let first_run = !config_dir
         .join(INSTALLED)
@@ -251,6 +276,7 @@ pub fn read_plugins_state(config_dir: &Path, core: &str) -> Result<PluginsState,
         registry,
         index,
         installed,
+        folders,
         first_run,
         starter,
         start_update: vec![],

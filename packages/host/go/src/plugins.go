@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 	"sync/atomic"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
@@ -93,6 +96,70 @@ func NewPlugins(configDir string, services func() PluginServices, apply func() e
 	}
 	return &Plugins{configDir: configDir, core: sok.CoreVersion, platform: platform, services: services, apply: apply, changed: changed,
 		held: map[string]heldEntry{}}, nil
+}
+
+// PluginFoldersChanged is the value of the plugins-folders-changed event.
+type PluginFoldersChanged struct {
+	Folders int `json:"folders"`
+}
+
+// WatchFolders creates the plugins folder of the configuration directory when it is missing, then watches it and calls changed with
+// the number of its folders after an event of the watch that changes that number (docs/spec/installation.md#plugin-folders). An
+// error of the watch is logged under the place `plugin folders`. The watch ends when ctx is done.
+func (p *Plugins) WatchFolders(ctx context.Context, changed func(int)) error {
+	dir := filepath.Join(p.configDir, "plugins")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("watch %s: %w", dir, err)
+	}
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("watch %s: %w", dir, err)
+	}
+	if err := watcher.Add(dir); err != nil {
+		if closeErr := watcher.Close(); closeErr != nil {
+			LogError("plugin folders", fmt.Errorf("watch %s: close: %w", dir, closeErr))
+		}
+		return fmt.Errorf("watch %s: %w", dir, err)
+	}
+	last, err := sok.PluginFolders(p.configDir)
+	if err != nil {
+		if closeErr := watcher.Close(); closeErr != nil {
+			LogError("plugin folders", fmt.Errorf("watch %s: close: %w", dir, closeErr))
+		}
+		return err
+	}
+	routine.Go("plugin-folders-watch", func() {
+		defer func() {
+			if err := watcher.Close(); err != nil {
+				LogError("plugin folders", fmt.Errorf("watch %s: close: %w", dir, err))
+			}
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case _, open := <-watcher.Events:
+				if !open {
+					return
+				}
+				count, err := sok.PluginFolders(p.configDir)
+				if err != nil {
+					LogError("plugin folders", err)
+					continue
+				}
+				if count != last {
+					last = count
+					changed(count)
+				}
+			case err, open := <-watcher.Errors:
+				if !open {
+					return
+				}
+				LogError("plugin folders", fmt.Errorf("watch %s: %w", dir, err))
+			}
+		}
+	})
+	return nil
 }
 
 // State returns the registry address, the index that was checked, the install state, the failures of the update at start and the
@@ -286,6 +353,20 @@ func (h *Host) notifySidecars() {
 	h.mu.Unlock()
 	for _, s := range windows {
 		s.Emit("sidecars-changed")
+	}
+}
+
+// notifyFolders sends plugins-folders-changed with the folder count to all windows; it does not restart a window
+// (docs/spec/installation.md#plugin-folders).
+func (h *Host) notifyFolders(folders int) {
+	h.mu.Lock()
+	windows := make([]*Surfaces, 0, len(h.windows))
+	for _, s := range h.windows {
+		windows = append(windows, s)
+	}
+	h.mu.Unlock()
+	for _, s := range windows {
+		s.Emit("plugins-folders-changed", PluginFoldersChanged{Folders: folders})
 	}
 }
 
