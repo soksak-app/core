@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -51,6 +52,7 @@ func init() {
 	diagnosticMethods["diagnostics.capture.start"] = diagnosticCaptureStart
 	diagnosticMethods["diagnostics.capture.stop"] = diagnosticCaptureStop
 	diagnosticMethods["diagnostics.layout.trace"] = diagnosticLayoutTrace
+	diagnosticMethods["diagnostics.motion"] = diagnosticMotion
 	diagnosticMethods["diagnostics.modal.hold"] = onModalWebViews(diagnosticModalHold)
 	diagnosticMethods["diagnostics.modal.held"] = onModalWebViews(diagnosticModalHeld)
 	diagnosticMethods["diagnostics.presentation.failure"] = diagnosticPresentationFailure
@@ -2273,4 +2275,33 @@ func processExitAnswer(pid int32, exited bool, reason string) (any, error) {
 		return nil, fmt.Errorf("process %d exit wait could not be registered", pid)
 	}
 	return nil, rpcError(codeTimeout, "process %d did not exit before %s", pid, reason)
+}
+
+// diagnosticMotion sets the reduced motion override of the window: {reduce} with true or false, or null for the platform value. Any other
+// value is refused, so that a request never sets an override that the pages do not read.
+func diagnosticMotion(e *Endpoint, c *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
+	_, s, err := diagnosticHost(e, params)
+	if err != nil {
+		return nil, err
+	}
+	var p struct {
+		Reduce json.RawMessage `json:"reduce"`
+	}
+	if err := decode(params, &p); err != nil {
+		return nil, err
+	}
+	var reduce *bool
+	switch strings.TrimSpace(string(p.Reduce)) {
+	case "true":
+		value := true
+		reduce = &value
+	case "false":
+		value := false
+		reduce = &value
+	case "null":
+	default:
+		return nil, rpcError(codeInvalidParams, "reduce must be a boolean or null")
+	}
+	s.SetReduceMotion(reduce)
+	return nil, nil
 }

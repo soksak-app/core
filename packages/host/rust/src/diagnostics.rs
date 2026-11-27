@@ -254,6 +254,12 @@ pub(crate) fn call(
             modal_hold(window.label(), on, &connection);
             Ok(Value::Null)
         }
+        "diagnostics.motion" => {
+            let reduce =
+                crate::motion::parse_reduce(params.get("reduce")).map_err(Failure::params)?;
+            crate::motion::set(window, reduce).map_err(internal)?;
+            Ok(Value::Null)
+        }
         "diagnostics.modal.held" => modal_held(window.label()),
         "diagnostics.input.source" => input_source(window, params, &connection),
         "diagnostics.input.reference" => input_reference(window, &params, &connection),

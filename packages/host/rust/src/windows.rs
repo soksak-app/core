@@ -14,6 +14,7 @@ use serde_json::Value;
 
 use crate::application_log::{log_error, log_failure};
 use crate::modals::Overlay;
+use crate::motion::CurrentMotion;
 use crate::platform::{self, Handle};
 use crate::projects::project_folder;
 use crate::shapes::Shapes;
@@ -39,6 +40,7 @@ pub struct WindowData {
     pub(crate) overlay: Overlay,
     pub(crate) shapes: Shapes,
     pub(crate) theme: CurrentTheme,
+    pub(crate) motion: CurrentMotion,
     pub(crate) views: Views,
     /// The handle of the logical SurfaceHost. It is a native host below the main WebView and not a DOM WebView.
     pub surface_hosts: Mutex<HashMap<String, Handle>>,

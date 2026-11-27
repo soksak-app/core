@@ -8,6 +8,7 @@
 - F1215: 계정 선언은 하위 항목의 근거를 체크리스트에 남기고 닫는다. 코드는 바뀌지 않았다.
 - F1231: 카드와 창 사이드바의 상태 줄이 섹션 위 줄 대신 세트 순서에서 맨 뒤인 없는 플러그인의 경고를 보이고, core.sidebars가 status와 warning을 보고한다.
 - F999: 남은 일에 raster view 재시작 check를 근거로 적고, 설치된 plugin view(terminal) 재현은 release를 기다린다고 적는다.
+- F1222-2: Go와 Rust 호스트가 창마다 동작 줄이기 재정의를 보관한다. 진단 빌드가 diagnostics.motion으로 정하고 motion 이벤트로 페이지에 전달한다.
 - F1217-7: 프로젝트 홈의 상태줄을 명세에 적는다. 프로젝트와 열린 프로젝트 수, 켜진 플러그인과 설치된 플러그인 수, core.home.back으로 작업 화면에 돌아가는 버튼, 새 창 버튼이다.
 - F999: 재시작 뒤 view가 입력 없이 현재 frame을 그리는지 e2e restart-view-draw.test.mjs가 세 application에서 확인한다.
 - F1226: quit은 연결에 응답한 process의 종료를 기다리고, 실패한 quit은 process.lock이 가리키는 교체 process를 따라가며, run은 process 점검 전에 persistent service를 제거한다.

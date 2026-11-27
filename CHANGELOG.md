@@ -8,6 +8,7 @@
 - F1215: The accounts declaration closes with the evidence of its sub-items in the checklist; no code changed.
 - F1231: The status line of each card and window sidebar shows the warning of its newest missing plugin in place of a line above its sections, and core.sidebars reports status and warning.
 - F999: The Remains name the restart check of the raster views as evidence and the terminal reproduction with installed plugin views, which waits for the releases.
+- F1222-2: The Go and Rust hosts keep a reduced motion override per window, which a diagnostic build sets with diagnostics.motion and publishes with the motion event.
 - F1217-7: The project home has a status line in the specification: the counts of projects and open projects, the enabled and installed plugins, the button back to the work screen through core.home.back, and the button for a new window.
 - F999: Views draw their current frame after a restart without input, checked by e2e restart-view-draw.test.mjs on three applications.
 - F1226: A quit waits for the process that answers its connection, a failed quit follows a replacement that process.lock names, and a run removes its persistent services before the process audit.

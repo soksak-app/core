@@ -703,6 +703,9 @@ type Surfaces struct {
 	// The theme that the main page set last. The page calls Theme after it loads.
 	theme Theme
 
+	// The reduced motion that a diagnostic build set in place of the platform value, or nil for the platform value (motion.go).
+	reduceMotion *bool
+
 	// layoutEnds is closed and replaced each time a layout transaction of the window ends by itself, by a press or key event, by
 	// its cancel or by the end of the page, so the app DOM wait of a presentation request ends with the transaction it belongs to
 	// (docs/spec/native-surfaces.md#layout-transaction).

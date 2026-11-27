@@ -707,6 +707,11 @@ func runNative(s *Surfaces, viewID uint64, call nativeCall) (any, error) {
 			return nil, err
 		}
 		return s.Theme(), nil
+	case "Motion":
+		if err := nativeArgs(call); err != nil {
+			return nil, err
+		}
+		return map[string]any{"reduce": s.ReduceMotion()}, nil
 	case "SidecarSend":
 		var body json.RawMessage
 		var cids []string

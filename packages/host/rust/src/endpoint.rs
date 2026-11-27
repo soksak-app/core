@@ -103,6 +103,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.capture.stop",
     "diagnostics.capture.still",
     "diagnostics.modal.hold",
+    "diagnostics.motion",
     "diagnostics.modal.held",
     "diagnostics.presentation.failure",
     "diagnostics.window.draw-covered",

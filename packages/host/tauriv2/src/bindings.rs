@@ -22,6 +22,7 @@ use soksak_host::images;
 use soksak_host::link;
 use soksak_host::menu;
 use soksak_host::modals::{self, OverlayRequest, PlaceRequest, RevisedContent, UpdateRequest};
+use soksak_host::motion;
 use soksak_host::projects::{self, CreateProject, Folder};
 use soksak_host::shapes::{self, ShapeRequest};
 use soksak_host::sidecars::WindowSidecars;
@@ -597,6 +598,13 @@ async fn sidecars_retain(
 #[tauri::command]
 fn theme(window: Window) -> Result<Theme, String> {
     theme::get(&window)
+}
+
+/// Returns the reduced motion override of the window: {reduce}, with null for the platform value.
+#[tauri::command]
+fn motion(window: Window) -> Result<serde_json::Value, String> {
+    let reduce = motion::get(&window)?;
+    Ok(motion::payload(reduce))
 }
 
 /// Records the current theme of a page and passes it to the other pages.
