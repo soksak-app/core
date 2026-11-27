@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1250-1: 선언 컴포넌트가 검토된 속성을 받는다: Badge 톤, Button의 variant와 size, 스테퍼 Number, 편집 가능한 Slider 값, Search의 shortcut, Chip의 remove.
 - F1235: e2e 테스트의 test 이름을 영어로 바꾸고, 기능 연결이 바뀐 이름을 가리키게 했다.
 - F1253: 벤치마크 선행 조건 항목의 남은 단계는 CI benchmark step이다.
 - F1217-17-1-2: 설정 stylesheet의 모양 preview 규칙은 literal 길이와 비율 대신 chrome metric을 읽는다.

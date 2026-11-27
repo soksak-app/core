@@ -361,6 +361,8 @@ Without a host, as in the browser application, the page has only the loaded plug
 A settings page is a JSON declaration. Core pages are declared in `packages/workbench/workbench.json`, and plugin pages in `plugin.json` under `settings`, an array of pages. A page has this form:
 
 - page: `{ "id", "label", "description", "scope"?, "sections" }`. `scope` is `"global"` when the page belongs to the computer and not to a project; the page then shows the badge `전역 전용`.
+
+The page head grows with its content, with the padding of the design head (16 points above, 24 at the sides, 14 below); it has no fixed height.
 - section: `{ "id", "label", "description"?, "items" }`. The section label and its description are the boundary label between groups.
 - item: `{ "component", "label", "description"?, "key" | "source", "default"?, "values"?, "min"?, "max"?, "step"?, "unit"?, "dependsOn"?, "validate"?, "command"?, "commands"? }`.
 
@@ -381,20 +383,30 @@ The settings tab draws each item with the component that its declaration names. 
 | Component | Props | Limits | Command |
 | --- | --- | --- | --- |
 | Toggle | `key` or `source`, `command` | a boolean value | `core.settings.change {key, value, scope}`, or `command` when `source` is set |
-| Segmented | `key`, `values` | two or three values, in the declared order | `core.settings.change {key, value, scope}` |
+| Segmented | `key`, `values`, `icons`? (a map from a value to a declared icon name) | two or three values, in the declared order | `core.settings.change {key, value, scope}` |
 | Select | `key`, `values` or `category` | four or more values, one option per value in the declared order; a `category` select lists the loaded and enabled plugins of the category by name ([plugin categories](plugins.md#plugin-categories)) | `core.settings.change {key, value, scope}` |
-| Text | `key`, `kind` (`text` or `address`), `maxLength`? | one line; stores its value on Enter and on blur; an `address` is empty or an `http` or `https` address of at most 2048 characters | `core.settings.change {key, value, scope}` |
-| Number | `key`, `min`, `max`, `step`?, `unit`? | an integer from `min` to `max` | `core.settings.change {key, value, scope}` |
-| Slider | `key`, `min`, `max`, `step`, `unit` | all four required; `min` is below `max`; the value and the unit show beside the slider, and a drag runs the command once at the release | `core.settings.change {key, value, scope}` |
-| Search | `command` | one line; runs `command` with the typed text | the item `command` |
-| Badge | `source` | `tone` is one of `ok`, `warn`, `acc` or `neutral`; a state badge is never `err` | none |
-| Chip | `values` or `source`, `command` | one chip per value | the item `command` |
+| Text | `key`, `kind` (`text` or `address`), `maxLength`?, `placeholder`? | one line; stores its value on Enter and on blur; an `address` is empty or an `http` or `https` address of at most 2048 characters | `core.settings.change {key, value, scope}` |
+| Number | `key`, `min`, `max`, `step`?, `unit`? | a stepper `− value unit +` in one 28-point box; an integer from `min` to `max` | `core.settings.change {key, value, scope}` |
+| Slider | `key`, `min`, `max`, `step`, `unit` | all four required; `min` is below `max`; the value is an editable number box with the unit inside it, and a drag runs the command once at the release; typing in the box runs the same command | `core.settings.change {key, value, scope}` |
+| Search | `command`, `placeholder`?, `shortcut`? (a key of `shortcuts.json` whose command focuses the field; the hint shows only when it is declared) | one line; runs `command` with the typed text | the item `command` |
+| Badge | `source` | `tone` is one of `ok`, `warn`, `err`, `acc` or `neutral`; the state badges of the setup parts (`설치됨`, `다름`, `없음`) are never `err`, by the validation rules | none |
+| Chip | `values` or `source`, `command`, `remove`? | one chip per value; `remove` runs its command with the value of the chip for the × | the item `command` |
 | Order | `key` | the four sides, each once | `core.settings.change {key, value, scope}` with the whole new list |
 | Theme | `key` | a theme of the catalog | `core.settings.theme {name, scope}` |
-| Button | `command`, `label`, `variant` (`sm` or `primary`), `disabled`? | the variant sets the height (see the sizes below) | the item `command` |
+| Button | `label`, `command`, `variant` (`primary`, `secondary`, `ghost` or `danger`; default `secondary`), `size` (`md`, 28 points, or `sm`, 24 points), `icon`? (a declared icon name), `disabled`? | an icon-only button has `icon` and no visible label; its `label` is its title | the item `command` |
 | Status | `source`, `commands` | rows from the status of `source`; each row names its action by a declared command | the commands named by the rows |
+| PluginHead | `source`, `commands` | the plugin page head: the back link, the title, the description, and the `사용` row; grows with its content | the commands named by the rows |
+| PluginRow | `source`, `commands` | one plugin row fed by one plugin of the catalog | the commands named by the row |
+| InstalledList | `source`, `commands` | the installed plugins, one `PluginRow` each | the commands named by the rows |
+| BrowseHead | `source`, `commands` | the catalog head: the search and the category chips | the commands named by the head |
+| BrowseRow | `source`, `commands` | one row of the catalog | the commands named by the row |
+| LookPreview | `source` | the two sample cards of the 모양 page, drawn with the applied theme | none |
+| SetList | `source`, `commands` | the sets with their layout and their links | the commands named by the rows |
+| SetEditor | `source`, `commands` | the editor of one set: the name, the layout segment and the section chips | the commands named by the rows |
 
 The layout of every row follows the rule table of the design file: a control is 28 points high, a small button 24 points, a row is at least 36 points high, and a row is a grid of the label with its description, and the scope chip, and the control in a column of 260 points. A wide control takes the full row. A Status row shows its badge in a column of 78 points, its title over its path, and its action at the end.
+
+The components that take the full row are `Theme`, `LookPreview`, `Order`, `Status`, `PluginHead`, `InstalledList`, `BrowseHead`, `BrowseRow`, `SetList` and `SetEditor`. Every other component sits in the 260-point control column, and no item has a `wide` field.
 
 The set editor uses the same controls: 이름 is a text field, 배치 a segment, the sections chips with × each, and `섹션 추가…` a select box. The buttons (`편집`, `삭제`, `새 세트`, `완료`, `찾아보기`, `설치`, `업데이트` and the rest) run actions and are not setting controls. The ▲ ▼ of a side row are the control of its order. The chips of the scope control select the scope and are not settings. A setting that has no control in this table, such as `sets`, `diagnostics.performance` and `diagnostics.log`, changes through its own command or through the settings file.
 

@@ -361,6 +361,8 @@ host가 없는 browser 애플리케이션에서는 페이지가 불러온 플러
 설정 페이지는 JSON 선언이다. 핵심 페이지는 `packages/workbench/workbench.json`에, 플러그인 페이지는 `plugin.json`의 `settings`에 선언한다. `settings`는 페이지의 배열이다. 페이지의 형식은 다음과 같다.
 
 - 페이지: `{ "id", "label", "description", "scope"?, "sections" }`. `scope`가 `"global"`이면 페이지는 프로젝트가 아니라 컴퓨터의 것이며 `전역 전용` 배지를 보인다.
+
+페이지 머리는 내용에 맞춰 자란다. 디자인 머리의 여백(위 16, 옆 24, 아래 14 point)을 쓰며, 고정 높이를 갖지 않는다.
 - 섹션: `{ "id", "label", "description"?, "items" }`. 섹션의 라벨과 설명이 묶음 사이의 경계 라벨이다.
 - 항목: `{ "component", "label", "description"?, "key" | "source", "default"?, "values"?, "min"?, "max"?, "step"?, "unit"?, "dependsOn"?, "validate"?, "command"?, "commands"? }`.
 
@@ -381,20 +383,30 @@ host가 없는 browser 애플리케이션에서는 페이지가 불러온 플러
 | 컴포넌트 | 속성 | 한계 | 명령 |
 | --- | --- | --- | --- |
 | Toggle | `key` 또는 `source`, `command` | 불리언 값 | `core.settings.change {key, value, scope}`, `source`가 있으면 `command` |
-| Segmented | `key`, `values` | 선언 순서의 두 개 또는 세 개 값 | `core.settings.change {key, value, scope}` |
+| Segmented | `key`, `values`, `icons`?(값마다 선언된 아이콘 이름을 가진 맵) | 선언 순서의 두 개 또는 세 개 값 | `core.settings.change {key, value, scope}` |
 | Select | `key`, `values` 또는 `category` | 네 개 이상 값, 선언 순서대로 값마다 한 옵션. `category` 셀렉트는 그 범주의 로드되고 켜진 플러그인을 이름으로 나열한다([플러그인 범주](plugins.ko.md#plugin-categories)) | `core.settings.change {key, value, scope}` |
-| Text | `key`, `kind`(`text` 또는 `address`), `maxLength`? | 한 줄. Enter와 blur에서 값을 저장한다. `address`는 빈 값이거나 최대 2048자의 `http` 또는 `https` 주소다 | `core.settings.change {key, value, scope}` |
-| Number | `key`, `min`, `max`, `step`?, `unit`? | `min`부터 `max`까지의 정수 | `core.settings.change {key, value, scope}` |
-| Slider | `key`, `min`, `max`, `step`, `unit` | 네 가지 모두 필수. `min`은 `max`보다 작다. 값과 단위를 슬라이더 옆에 보이며, 드래그는 놓을 때 명령을 한 번 실행한다 | `core.settings.change {key, value, scope}` |
-| Search | `command` | 한 줄. 입력한 글과 함께 `command`를 실행한다 | 항목의 `command` |
-| Badge | `source` | `tone`은 `ok`, `warn`, `acc`, `neutral` 중 하나다. 상태 배지는 `err`가 아니다 | 없음 |
-| Chip | `values` 또는 `source`, `command` | 값마다 칩 하나 | 항목의 `command` |
+| Text | `key`, `kind`(`text` 또는 `address`), `maxLength`?, `placeholder`? | 한 줄. Enter와 blur에서 값을 저장한다. `address`는 빈 값이거나 최대 2048자의 `http` 또는 `https` 주소다 | `core.settings.change {key, value, scope}` |
+| Number | `key`, `min`, `max`, `step`?, `unit`? | 28 point 상자 하나에 든 스테퍼 `− 값 단위 +`. `min`부터 `max`까지의 정수 | `core.settings.change {key, value, scope}` |
+| Slider | `key`, `min`, `max`, `step`, `unit` | 네 가지 모두 필수. `min`은 `max`보다 작다. 값은 단위를 안에 둔 편집 가능한 숫자 상자이며, 드래그는 놓을 때 명령을 한 번 실행한다. 상자에 입력하면 같은 명령을 실행한다 | `core.settings.change {key, value, scope}` |
+| Search | `command`, `placeholder`?, `shortcut`?(필드에 초점을 두는 명령을 가진 `shortcuts.json`의 키. 선언된 경우에만 힌트를 보인다) | 한 줄. 입력한 글과 함께 `command`를 실행한다 | 항목의 `command` |
+| Badge | `source` | `tone`은 `ok`, `warn`, `err`, `acc`, `neutral` 중 하나다. 설정 part의 상태 배지(`설치됨`, `다름`, `없음`)는 검증 규칙에 따라 `err`가 아니다 | 없음 |
+| Chip | `values` 또는 `source`, `command`, `remove`? | 값마다 칩 하나. `remove`는 × 를 위해 칩의 값과 함께 그 명령을 실행한다 | 항목의 `command` |
 | Order | `key` | 네 방향, 각각 한 번 | 전체 새 목록과 함께 `core.settings.change {key, value, scope}` |
 | Theme | `key` | 카탈로그의 테마 | `core.settings.theme {name, scope}` |
-| Button | `command`, `label`, `variant`(`sm` 또는 `primary`), `disabled`? | variant가 높이를 정한다(아래 크기) | 항목의 `command` |
+| Button | `label`, `command`, `variant`(`primary`, `secondary`, `ghost`, `danger` 중 하나. 기본값 `secondary`), `size`(`md` 28 point 또는 `sm` 24 point), `icon`?(선언된 아이콘 이름), `disabled`? | 아이콘만 있는 버튼은 `icon`을 가지며 보이는 라벨이 없다. 그 `label`은 제목이다 | 항목의 `command` |
 | Status | `source`, `commands` | `source` 상태에서 온 행. 각 행은 선언된 명령으로 동작을 이름 붙인다 | 행이 이름 붙인 명령 |
+| PluginHead | `source`, `commands` | 플러그인 페이지 머리: 뒤로 가기 링크, 제목, 설명, `사용` 행. 내용에 맞춰 자란다 | 행이 이름 붙인 명령 |
+| PluginRow | `source`, `commands` | 카탈로그의 플러그인 하나가 채우는 플러그인 행 | 행이 이름 붙인 명령 |
+| InstalledList | `source`, `commands` | 설치된 플러그인 목록. 플러그인마다 `PluginRow` 하나 | 행이 이름 붙인 명령 |
+| BrowseHead | `source`, `commands` | 카탈로그 머리: 검색과 분류 칩 | 머리가 이름 붙인 명령 |
+| BrowseRow | `source`, `commands` | 카탈로그의 행 하나 | 행이 이름 붙인 명령 |
+| LookPreview | `source` | 모양 페이지의 샘플 카드 두 개. 적용된 테마로 그린다 | 없음 |
+| SetList | `source`, `commands` | 레이아웃과 연결을 가진 세트 목록 | 행이 이름 붙인 명령 |
+| SetEditor | `source`, `commands` | 세트 하나의 편집기: 이름, 배치 세그먼트, 섹션 칩 | 행이 이름 붙인 명령 |
 
 모든 행의 배치는 디자인 파일의 규칙 표를 따른다. 컨트롤은 28 point, 작은 버튼은 24 point 높이, 행은 최소 36 point 높이이며, 행은 라벨과 설명, 범위 칩, 컨트롤을 260 point 열의 격자로 둔다. 넓은 컨트롤은 행 전체를 차지한다. Status 행은 배지를 78 point 열에 보이고, 제목을 경로 위에, 동작을 끝에 둔다.
+
+전체 행을 쓰는 컴포넌트는 `Theme`, `LookPreview`, `Order`, `Status`, `PluginHead`, `InstalledList`, `BrowseHead`, `BrowseRow`, `SetList`, `SetEditor`다. 나머지 컴포넌트는 260 point 컨트롤 열에 놓이며, 항목에는 `wide` 필드가 없다.
 
 세트 편집기도 같은 컨트롤을 쓴다. 이름은 글자 입력, 배치는 세그먼트, 섹션 행은 셀렉트와 ▲ ▼ −다. 버튼(`편집`, `삭제`, `새 세트`, `완료`, `+ 섹션 추가`, `목록`, `찾아보기`, `설치`, `업데이트` 등)은 동작을 실행하며 설정 컨트롤이 아니다. 변 행의 ▲ ▼는 순서의 컨트롤이다. 범위 컨트롤의 칩은 범위를 고르며 설정이 아니다. `sets`, `diagnostics.performance`, `diagnostics.log`처럼 이 표에 컨트롤이 없는 설정은 자기 명령이나 설정 파일로 바꾼다.
 

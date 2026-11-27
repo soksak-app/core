@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1250-1: The declaration components take the review props: the Badge tones, the Button variant and size, the stepper Number, the editable Slider value, the Search shortcut and the Chip remove.
 - F1235: The test names of the e2e tests are English, and the feature links name them.
 - F1253: The remaining step of the benchmark precondition item is the CI benchmark step.
 - F1217-17-1-2: The look preview rules of the settings stylesheet read chrome metrics instead of literal lengths and ratios.
