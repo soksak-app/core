@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-9-1-1: 플러그인 폴더 수 case는 gpuikit 호스트도 이 case를 선언한 Rust library test를 실행하므로 scope를 all로 한다.
 - F1278: plugin 폴더 개수 사례가 범위 칸에 host를 이름 대어, 계약 파서가 읽고 gpuikit 검사가 실행된다.
 - F1264-3: Go와 Rust 호스트가 `documentBoxes`를 native 상자 조회에 바인딩하고, 명세의 거부 문구를 쓴다.
 - F1107-6: mygo workbench는 surface를 지정한 status 읽기를 workbench.status.read로 기록한다.
