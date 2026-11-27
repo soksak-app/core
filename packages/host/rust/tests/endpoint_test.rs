@@ -484,6 +484,8 @@ const SCRIPTED: &[&str] = &[
     "reply-after-peer-close",
     "role-identity",
     "round-trip-page-params",
+    "status-get-named-surface",
+    "status-get-unregistered-surface",
     "surface-window",
     "surface-window-in-no-window",
     "target-params-order",
@@ -911,70 +913,20 @@ fn endpoint_file_is_written_only_after_the_first_window_exists() {
 
 // contract: endpoint.rpc.page-params-omit-window
 #[test]
-fn status_get_forwards_its_named_surface_without_the_window() {
-    let config = folder::Folder::new();
-    let page = CasePage::new(
-        &[],
-        vec![exchange(
-            "status.get",
-            json!({"name": "probe.lines", "surface": "tab-b"}),
-            json!({"screen": "tab-b"}),
-        )],
+fn scripted_status_get_named_surface() {
+    endpoint_case::play(
+        "scripted_status_get_named_surface",
+        "status-get-named-surface",
     );
-    let endpoint = Endpoint::start(
-        &config.path().join("sockets"),
-        config.path(),
-        "test-named-surface",
-        page.clone(),
-    )
-    .unwrap();
-    page.add_window("main");
-    endpoint.publish("main").unwrap();
-    let mut connection = open(&endpoint);
-    let reply = request(
-        &mut connection,
-        1,
-        "status.get",
-        json!({"window": "main", "name": "probe.lines", "surface": "tab-b"}),
-    );
-    assert_eq!(reply["result"], json!({"screen": "tab-b"}), "{reply}");
-    assert_eq!(page.finish(), Vec::<String>::new());
-    endpoint.stop();
 }
 
 // contract: endpoint.rpc.page-params-omit-window
 #[test]
-fn status_get_of_an_unregistered_surface_is_refused_with_its_code() {
-    let config = folder::Folder::new();
-    let page = CasePage::new(
-        &[],
-        vec![refused_exchange(
-            "status.get",
-            json!({"name": "probe.lines", "surface": "tab-c"}),
-            1002,
-            "not registered",
-        )],
+fn scripted_status_get_unregistered_surface() {
+    endpoint_case::play(
+        "scripted_status_get_unregistered_surface",
+        "status-get-unregistered-surface",
     );
-    let endpoint = Endpoint::start(
-        &config.path().join("sockets"),
-        config.path(),
-        "test-unregistered-surface",
-        page.clone(),
-    )
-    .unwrap();
-    page.add_window("main");
-    endpoint.publish("main").unwrap();
-    let mut connection = open(&endpoint);
-    let reply = request(
-        &mut connection,
-        1,
-        "status.get",
-        json!({"window": "main", "name": "probe.lines", "surface": "tab-c"}),
-    );
-    assert_eq!(reply["error"]["code"], 1002, "{reply}");
-    assert_eq!(reply["error"]["message"], "not registered", "{reply}");
-    assert_eq!(page.finish(), Vec::<String>::new());
-    endpoint.stop();
 }
 
 // contract: diagnostics.objects.counts-host-objects
