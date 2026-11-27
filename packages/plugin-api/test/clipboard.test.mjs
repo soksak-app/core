@@ -25,7 +25,7 @@ test("typed clipboard reads distinguish absent values from typed values and tran
   await assert.rejects(failing.read("text"), /permission denied/);
 });
 
-test("PNG persistence is an explicit plugin capability and returns an inert shell argument", async () => {
+test("PNG persistence is an explicit clipboard capability and returns an inert shell argument", async () => {
   const calls = [];
   const clipboard = createClipboardBridge(async (name, payload) => {
     calls.push([name, payload]);

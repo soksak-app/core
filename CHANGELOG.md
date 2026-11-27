@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1224: The clipboard test names its grant a clipboard capability, which is a grant and not a plugin category.
 - F1225: The Tauri gen output is build output: git no longer tracks apps/tauriv2/gen, which tauri-build recreates on each build.
 - F1217-7: The settings menu lists each loaded plugin with settings or accounts as core.settings-tab.plugin-item, under the group 설정이 있는 플러그인.
 - F1217-7: Each row of the installed plugins page is the element core.settings-tab.plugin-row, with the plugin id as its item.
