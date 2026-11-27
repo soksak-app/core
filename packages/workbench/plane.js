@@ -10,7 +10,7 @@ import { effectiveTextScope, keepCardScope, nextTextSize, notifyTextSize, setSur
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
 import { alignPlane, gridScale } from "./device-grid.js";
 import { CHROME, gripMetrics, placeFocusMark } from "./chrome-metrics.js";
-import { activeTab, appendTab, cardTextSize, removeTab, settleActiveTab, tabDescription, tabsOf } from "./card-data.js";
+import { activeTab, appendTab, cardTextSize, noticeTargetIn, removeTab, settleActiveTab, tabDescription, tabsOf } from "./card-data.js";
 import { fitHead } from "./head-fit.js";
 import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
 import { sectionSurfaceShown } from "./section-surfaces.js";
@@ -2058,11 +2058,7 @@ function build(kept) {
 // The card that holds a tab id, for the notices of the tab (docs/spec/notifications.md#card-status-line).
 setCardOfTab((id) => grid?.cards.find((card) => tabsOf(card).some((tab) => tab.id === id))?.id ?? null);
 // The card, tab and plugin of a tab id, for the card notices of an outdated service on its surface (docs/spec/persistent-services.md#updates).
-setTargetOfTab((id) => {
-  const card = grid?.cards.find((candidate) => tabsOf(candidate).some((tab) => tab.id === id));
-  const tab = card ? tabsOf(card).find((candidate) => candidate.id === id) : undefined;
-  return tab ? { card: card.id, tab: tab.id, plugin: tab.plugin } : null;
-});
+setTargetOfTab((id) => noticeTargetIn(grid?.cards ?? [], id));
 // A visible tab means the active tab of the focused card. No notification is kept for that tab.
 setVisibleTab((id) => {
   const card = grid?.card(focusedId);
