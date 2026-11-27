@@ -27,6 +27,8 @@ const (
 // ShownErrors records the error of an origin when it appears and holds the error notices that the window displays.
 type ShownErrors struct {
 	report      func(line string)
+	// focusOf returns the card that has the focus; a card sidebar's notice shows no toast while that card has the focus.
+	focusOf     func() string
 	occurrences map[errorOrigin]string
 	// toasts holds the shown notices, oldest first. An occurrence whose title matches a shown notice merges into it.
 	toasts []*errorToast
@@ -79,6 +81,8 @@ type errorToast struct {
 	progress *float64
 	// closed is set when the toast is closed: the record stays an entry of the center.
 	closed bool
+	// quiet is a notice that shows no toast, which is a card sidebar's notice while its card has the focus; its status line still shows it.
+	quiet bool
 	// origin is the origin that shows the notice through NotifyFrom, "" for a notice without one.
 	origin string
 }
@@ -185,6 +189,20 @@ func (e *ShownErrors) CloseNotice(id string) bool {
 	}
 	e.closeToast(at)
 	return true
+}
+
+// SetFocusSource sets the function that returns the card that has the focus (docs/spec/notifications.md#sidebar-notice).
+func (e *ShownErrors) SetFocusSource(focusOf func() string) {
+	e.focusOf = focusOf
+}
+
+// quietFor reports whether a new notice of source shows no toast: a card sidebar's notice while its card has the focus, which keeps the entry
+// and the status line of the sidebar.
+func (e *ShownErrors) quietFor(source NoticeSource) bool {
+	if source.Kind != "sidebar" || source.Card == "" || e.focusOf == nil {
+		return false
+	}
+	return source.Card == e.focusOf()
 }
 
 func (e *ShownErrors) closeToast(at int) {
@@ -626,6 +644,10 @@ func (e *ShownErrors) WithdrawNotice(id string) bool {
 func (s *Shell) toastActions(toast *errorToast) []NoticeAction {
 	actions := append([]NoticeAction{}, toast.actions...)
 	if toast.source.Kind == "card" && toast.source.Card != s.focused && (toast.kind == "warning" || toast.kind == "error") {
+		actions = append(actions, NoticeAction{Label: "카드로 가기", Command: "core.card.focus", Params: map[string]any{"card": toast.source.Card}})
+	}
+	// A card sidebar's notice names its card, and a window sidebar has none (docs/spec/notifications.md#sidebar-notice).
+	if toast.source.Kind == "sidebar" && toast.source.Card != "" && toast.source.Card != s.focused && (toast.kind == "warning" || toast.kind == "error") {
 		actions = append(actions, NoticeAction{Label: "카드로 가기", Command: "core.card.focus", Params: map[string]any{"card": toast.source.Card}})
 	}
 	// An error toast offers the details action, which runs core.notices.show to open the center at the notice (docs/spec/notifications.md#toasts).

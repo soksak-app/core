@@ -19,7 +19,7 @@ const noticeTimeoutMs = 4000
 
 // shownToasts returns the records that are shown, oldest first.
 func (e *ShownErrors) shownToasts() []*errorToast {
-	return slices.DeleteFunc(slices.Clone(e.toasts), func(toast *errorToast) bool { return toast.closed })
+	return slices.DeleteFunc(slices.Clone(e.toasts), func(toast *errorToast) bool { return toast.closed || toast.quiet })
 }
 
 // recordOf returns the record with id, closed or not, or nil.
@@ -76,16 +76,20 @@ func (e *ShownErrors) Notify(fields noticeFields, source NoticeSource) string {
 	e.seq++
 	toast := &errorToast{id: fmt.Sprintf("notice-%d", e.seq), kind: fields.Kind, title: fields.Title, text: fields.Text, count: 1,
 		origins: map[errorOrigin]struct{}{}, source: source, actions: actionsOf(fields), at: e.now()}
+	toast.quiet = e.quietFor(source)
 	e.toasts = append(e.toasts, toast)
 	e.scheduleNotice(toast)
 	return toast.id
 }
 
-// noticeCardOf returns the card that a notice belongs to, or "" for an app notice. A card notice merges only within its card
-// (docs/spec/notifications.md#notices).
+// noticeCardOf returns the card that a notice belongs to, or "" for an app notice. A card notice merges only within its card, and a sidebar
+// notice only within its sidebar (docs/spec/notifications.md#notices).
 func noticeCardOf(source NoticeSource) string {
-	if source.Kind == "card" {
+	switch source.Kind {
+	case "card":
 		return source.Card
+	case "sidebar":
+		return "sidebar:" + source.Sidebar
 	}
 	return ""
 }

@@ -14,7 +14,7 @@ Notice는 다음 필드를 가진 기록이다.
 | `kind` | `success`, `info`, `warning`, `error` 또는 `progress` |
 | `title` | 제어 문자가 없는 1자부터 120자까지의 글 |
 | `text` | 제어 문자가 없는 0자부터 1024자까지의 글 |
-| `source` | `{kind: "card", card, tab, plugin}`, `{kind: "plugin", plugin}`, `{kind: "settings"}` 또는 `{kind: "core"}` |
+| `source` | `{kind: "card", card, tab, plugin}`, `{kind: "sidebar", sidebar, card, plugin}`, `{kind: "plugin", plugin}`, `{kind: "settings"}` 또는 `{kind: "core"}` |
 | `actions` | 선언된 명령의 `{label, command, params}`를 최대 둘까지. label은 1자부터 24자까지 |
 | `progress` | `progress`일 때 0부터 1까지의 수, 양을 모르면 `null`. 다른 kind에는 없다 |
 | `at` | 가장 최근 발생 시각, 오프셋이 붙은 ISO 8601 |
@@ -31,8 +31,8 @@ Notice는 다음 필드를 가진 기록이다.
 
 | 자리 | Notice | 위치 | 유지 시간 |
 | --- | --- | --- | --- |
-| 카드 status line | 그 카드의 notice | 그 카드의 content footer | `success`와 `info`는 6초. `warning`과 `error`는 사용자가 닫을 때까지. `progress`는 끝날 때까지 |
-| Toast | card가 아닌 source의 notice, 그리고 focus가 없는 card의 `warning`과 `error` notice | 종 아래, 창의 오른쪽 | `success`와 `info`는 4초. `warning`과 `error`는 사용자가 닫을 때까지, 또는 오류·경고 자동 닫힘의 지연 뒤. `progress`는 끝날 때까지 |
+| 카드 status line | 그 카드의 notice, 그리고 sidebar의 notice는 그 sidebar의 상태줄에 | 그 카드의 content footer, 또는 sidebar의 상태줄 | `success`와 `info`는 6초. `warning`과 `error`는 사용자가 닫을 때까지. `progress`는 끝날 때까지 |
+| Toast | card가 아닌 source의 notice, focus가 없는 card의 `warning`과 `error` notice, [sidebar notice](#sidebar-notice)의 `warning` | 종 아래, 창의 오른쪽 | `success`와 `info`는 4초. `warning`과 `error`는 사용자가 닫을 때까지, 또는 오류·경고 자동 닫힘의 지연 뒤. `progress`는 끝날 때까지 |
 | 알림 센터 | 모든 notice | 종을 눌러 연다 | `error`는 사용자가 지울 때까지. 나머지 kind는 `at` 뒤 7일 |
 
 Focus를 가진 card의 notice는 그 card의 status line에만 보인다. Focus가 없는 card의 `warning`이나 `error` notice는 status line에 보이고, `카드로 가기` action과 함께 toast에도 보인다. 이 action은 `core.card.focus {card}`를 실행한다. Card에 focus를 두면 그 card의 notice가 모두 읽음이 된다.
@@ -44,6 +44,10 @@ Toast나 status line의 notice를 닫으면 그 자리에서 빠지고 알림 �
 ## 카드 상태줄
 
 Card의 content footer([탭 알림](plugins.ko.md#탭-알림))는 그 card의 어느 tab이든 가장 최근의 닫히지 않은 notice를 보인다. 닫히지 않은 notice가 없으면 활성 tab의 footer 글을 보인다. Notice 줄은 `● <title> · <text> · [<action>] · ×`로 읽힌다. 점은 kind의 아이콘이다. 줄은 첫 action만 보인다. Notice가 활성 tab이 아닌 tab에서 왔으면 title 앞에 tab 이름이 붙는다. `warning`이나 `error` 줄은 배경을 그 kind의 옅은 tone으로 칠한다. 이 줄은 parameter `card`를 가진 element `core.card.notice`이고, 닫기 control은 `core.notices.close {id}`를 실행한다. `core.grid`는 각 card마다 `notice`(보이는 notice의 `id`, `kind`, `title`, 없으면 `null`)를 `status`(보이는 footer 글, notice가 보이는 동안은 `null`)와 함께 보고한다.
+
+## Sidebar notice
+
+Sidebar notice(source `sidebar`)는 그 sidebar의 상태줄에 card 상태줄과 같은 형태로 보이며, 닫기 컨트롤은 `core.notices.close`를 실행한다. 같은 sidebar의 보이는 notice하고만 합쳐진다. `card`는 card sidebar의 카드이고, 창 사이드바에서는 null이다. 창 사이드바에는 focus가 없으므로 그 `warning` notice는 토스트로 보이고, card sidebar의 notice는 그 카드에 focus가 없는 동안만 토스트로 보이며, `card`가 null이 아니면 그 토스트는 `카드로 가기`를 가진다. 철회되면 상태줄과 토스트에서 빠지고 알림 센터는 항목을 유지한다.
 
 ## 토스트
 

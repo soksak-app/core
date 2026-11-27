@@ -136,7 +136,7 @@ func TestAWithdrawnErrorIsWrittenAgainWhenItIsShownAgain(t *testing.T) {
 }
 
 func TestTheErrorToastShowsAndDismissesThroughTheWorkbench(t *testing.T) {
-	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f := noSidebarShell(t, oneCard(tab("tab-aaaaaa", "plain")))
 	const failure = "the first screen failed"
 	f.shell.StartFailed(errors.New(failure))
 	want := []shownRecord{{"workbench", failure}}
@@ -173,7 +173,7 @@ func TestApplicationToastMovesIntoTheActiveNativeModal(t *testing.T) {
 		{"debug", "core.debug.open", "core.debug.close", "core.debug.scrim"},
 	} {
 		t.Run(modal.name, func(t *testing.T) {
-			f, _ := surfaceShell(t)
+			f, _ := surfaceShellWithoutSidebars(t)
 			const failure = "the application could not finish the operation"
 			f.shell.StartFailed(errors.New(failure))
 			want := []shownRecord{{"workbench", failure}}
@@ -232,7 +232,7 @@ func assertOnlyToastClose(t *testing.T, f noticeSource, text string) ui.ElementN
 }
 
 func TestAnErrorToastExpiresWithoutRestartingForModalOrRepaint(t *testing.T) {
-	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f := noSidebarShell(t, oneCard(tab("tab-aaaaaa", "plain")))
 	f.shellFixture.run("core.settings.set", map[string]any{"scope": "common", "patch": map[string]any{
 		"autoDismissProblemToasts": true, "problemToastDismissSeconds": 4,
 	}})
@@ -278,7 +278,7 @@ func TestAnErrorToastExpiresWithoutRestartingForModalOrRepaint(t *testing.T) {
 }
 
 func TestAClosedToastDeadlineDoesNotExpireANewerEqualToast(t *testing.T) {
-	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f := noSidebarShell(t, oneCard(tab("tab-aaaaaa", "plain")))
 	f.shellFixture.run("core.settings.set", map[string]any{"scope": "common", "patch": map[string]any{
 		"autoDismissProblemToasts": true, "problemToastDismissSeconds": 4,
 	}})
@@ -308,7 +308,7 @@ func TestAClosedToastDeadlineDoesNotExpireANewerEqualToast(t *testing.T) {
 }
 
 func TestErrorToastDismissalDefaultsToManualAndClosesOnlyTheSelectedToast(t *testing.T) {
-	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f := noSidebarShell(t, oneCard(tab("tab-aaaaaa", "plain")))
 	const first, second = "the first operation did not finish", "the second operation did not finish"
 	f.shell.StartFailed(errors.New(first))
 	f.shell.StartFailed(errors.New(second))
@@ -330,7 +330,7 @@ func TestErrorToastDismissalDefaultsToManualAndClosesOnlyTheSelectedToast(t *tes
 }
 
 func TestErrorToastSettingsApplyNewDeadlinesAndCancelOpenToasts(t *testing.T) {
-	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f := noSidebarShell(t, oneCard(tab("tab-aaaaaa", "plain")))
 	change := func(key string, value any) {
 		t.Helper()
 		f.shellFixture.run("core.settings.change", map[string]any{"key": key, "scope": "common", "value": value})
@@ -375,7 +375,7 @@ func TestErrorToastSettingsApplyNewDeadlinesAndCancelOpenToasts(t *testing.T) {
 // The automatic dismissal that the common settings file holds applies from the start of the window, before any settings
 // change (docs/spec/settings.md).
 func TestStoredErrorToastDismissalAppliesFromTheStart(t *testing.T) {
-	f := newTabShell(t, &storedHost{installed: layoutPlugins, projects: []map[string]any{gridProject(oneCard(tab("tab-aaaaaa", "plain")))},
+	f := newTabShell(t, &storedHost{installed: layoutPlugins, environment: []byte(noSidebarsEnvironment), projects: []map[string]any{gridProject(oneCard(tab("tab-aaaaaa", "plain")))},
 		common: map[string]any{"autoDismissProblemToasts": true, "problemToastDismissSeconds": 3}})
 	f.open(t)
 	const failure = "the operation could not finish"

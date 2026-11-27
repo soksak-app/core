@@ -6,8 +6,9 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// The sections of a set whose plugin is not loaded (docs/spec/plugins.md#missing-plugins). The sidebar draws none of them. Its status line
-// shows the warning of its newest missing plugin with the button of the state of that plugin, and in a tab layout a dimmed tab for each.
+// The sections of a set whose plugin is not loaded (docs/spec/plugins.md#missing-plugins). The sidebar draws none of them. The warning of each
+// missing plugin is a notice whose source is the sidebar (missingNotices), and the status line shows the newest notice of the sidebar; in a tab
+// layout a dimmed tab is drawn for each missing section.
 
 // MissingSection is a section of a set whose plugin is not loaded. Plugin is the id before the first `.` of the section.
 type MissingSection struct {
@@ -30,38 +31,17 @@ type MissingAction struct {
 	Params  map[string]any
 }
 
-// MissingLine is the line of one plugin that the sets have missing sections of. Count is the number of such sections in the frame.
+// MissingLine is the warning of one plugin that the sets have missing sections of. Count is the number of such sections in the frame. Title
+// names the plugin, and Text states its state and the count of its sections.
 type MissingLine struct {
 	Plugin string
 	Count  int
+	Title  string
 	Text   string
 	Action *MissingAction
 }
 
-// MissingWarning is the warning that a status line shows: the line of the newest plugin of the frame, which is the last one in set order,
-// and the count of the other plugins that have a line.
-type MissingWarning struct {
-	Line   MissingLine
-	Others int
-}
-
-// Shown returns the text of the status line: the text of the line, and ` +<n> more` when other plugins are missing too.
-func (w MissingWarning) Shown() string {
-	if w.Others == 0 {
-		return w.Line.Text
-	}
-	return fmt.Sprintf("%s +%d개 더", w.Line.Text, w.Others)
-}
-
-// newestWarning returns the warning of the lines, which are in set order, or nil when no plugin has a line.
-func newestWarning(lines []MissingLine) *MissingWarning {
-	if len(lines) == 0 {
-		return nil
-	}
-	return &MissingWarning{Line: lines[len(lines)-1], Others: len(lines) - 1}
-}
-
-// MissingLines returns one line for each plugin of the missing sections of the frame, in the order of their first section, with the number of
+// MissingLines returns one warning for each plugin of the missing sections of the frame, in the order of their first section, with the number of
 // its sections. plugin returns the state of a plugin id; nil reports every plugin as absent from the catalog and the installed plugins. A plugin
 // in a state without a remedy (reload, unread, host) has no line, and its plugin page names the state.
 func MissingLines(frame SidebarFrame, plugin func(id string) PluginLine) []MissingLine {
@@ -109,22 +89,21 @@ func hasMissingLine(state string) bool {
 	return false
 }
 
-// missingLine builds the line of a plugin with the text and the button of its state (docs/spec/plugins.md#missing-plugins).
+// missingLine builds the warning of a plugin with the title, the text and the button of its state (docs/spec/plugins.md#missing-plugins).
 func missingLine(id string, state PluginLine, count int) MissingLine {
-	line := MissingLine{Plugin: id, Count: count}
+	line := MissingLine{Plugin: id, Count: count, Title: fmt.Sprintf("%s(%s)", state.Name, id)}
 	params := map[string]any{"plugin": id}
-	name := fmt.Sprintf("%s(%s)", state.Name, id)
 	switch state.State {
 	case "":
-		line.Text = fmt.Sprintf("%s 플러그인이 없어 섹션 %d개를 못 보여 준다.", name, count)
+		line.Text = fmt.Sprintf("플러그인이 없어 섹션 %d개를 못 보여 준다.", count)
 	case "available":
-		line.Text = fmt.Sprintf("%s 플러그인이 없어 섹션 %d개를 못 보여 준다.", name, count)
+		line.Text = fmt.Sprintf("플러그인이 없어 섹션 %d개를 못 보여 준다.", count)
 		line.Action = &MissingAction{Label: state.Name + " 설치", Command: "core.plugins.install", Params: params}
 	case "disabled":
-		line.Text = fmt.Sprintf("%s 플러그인이 꺼져 있어 섹션 %d개를 못 보여 준다.", name, count)
+		line.Text = fmt.Sprintf("플러그인이 꺼져 있어 섹션 %d개를 못 보여 준다.", count)
 		line.Action = &MissingAction{Label: "켜기", Command: "core.plugins.enable", Params: params}
 	case "refused", "requires":
-		line.Text = fmt.Sprintf("%s 플러그인을 불러오지 못해 섹션 %d개를 못 보여 준다.", name, count)
+		line.Text = fmt.Sprintf("플러그인을 불러오지 못해 섹션 %d개를 못 보여 준다.", count)
 		line.Action = &MissingAction{Label: "설치됨 보기", Command: "core.plugins.browse", Params: map[string]any{}}
 	default:
 		panic(fmt.Sprintf("missing line of plugin %s in state %q, which has no line", id, state.State))
@@ -132,21 +111,59 @@ func missingLine(id string, state PluginLine, count int) MissingLine {
 	return line
 }
 
-// drawWarning draws the warning of a status line: the dot, the text in the warning tone and the button of the state of the plugin when it has
-// one. The line is the element core.sidebar.missing of the plugin, and its label is the whole text.
-func drawWarning(c *ui.Context, binder *Binder, warning MissingWarning, metrics SidebarMetrics) {
-	theme := c.Theme()
-	line := warning.Line
-	ui.Row(binder.Name(c, "core.sidebar.missing", line.Plugin)).Grow(1).Shrink(1).MinWidth(0).Height(metrics.FootH).AlignItems(ui.Center).
-		Gap(metrics.StatusGap).Role(ui.RoleGroup).Label(warning.Shown()).Children(func() {
-		ui.Text(c, "●").SingleLine().FontSize(metrics.StatusText).TextColor(metrics.Warn)
-		ui.Text(c, warning.Shown()).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Grow(1).FontSize(metrics.StatusText).TextColor(metrics.Warn)
+// missingNotices shows the warning of each missing plugin of a sidebar as a notice whose source is the sidebar, and withdraws the notice of
+// a plugin that no longer has a warning (docs/spec/plugins.md#missing-plugins). The notice of a plugin is shown under its origin, so a
+// redraw of the same plugin keeps one notice.
+type missingNotices struct {
+	store *ShownErrors
+	// shown holds the notice ids of each sidebar by origin.
+	shown map[string]map[string]string
+}
+
+// missingOrigin is the origin of the warning of a plugin in a sidebar (docs/spec/notifications.md#sidebar-notice).
+func missingOrigin(sidebar, plugin string) string {
+	return "missing-plugin:" + sidebar + ":" + plugin
+}
+
+// reconcile shows the warning of each line of the sidebar and withdraws the notice of each origin of the sidebar that has no line now. The
+// card of a window sidebar is empty.
+func (m *missingNotices) reconcile(sidebar, card string, lines []MissingLine) {
+	next := make(map[string]string, len(lines))
+	for _, line := range lines {
+		origin := missingOrigin(sidebar, line.Plugin)
+		fields := noticeFields{Kind: "warning", Title: line.Title, Text: line.Text}
 		if line.Action != nil {
-			action := line.Action
-			binder.Press(c, "core.sidebar.missing", action.Command, line.Plugin, action.Params).Role(ui.RoleButton).Children(func() {
-				ui.Text(c, action.Label).NoWrap().FontSize(metrics.StatusText).TextColor(theme.Text)
-			})
+			action := NoticeAction{Label: line.Action.Label, Command: line.Action.Command, Params: line.Action.Params}
+			fields.Action = &action
 		}
+		next[origin] = m.store.NotifyFrom(origin, fields, NoticeSource{Kind: "sidebar", Card: card, Sidebar: sidebar, Plugin: line.Plugin})
+	}
+	for origin, id := range m.shown[sidebar] {
+		if _, ok := next[origin]; !ok {
+			m.store.WithdrawNotice(id)
+		}
+	}
+	m.shown[sidebar] = next
+}
+
+// drawSidebarNotice draws the notice of a sidebar in its status line: the title and the text, the first action and the close control, as the
+// card notice line draws them (docs/spec/notifications.md#sidebar-notice).
+func drawSidebarNotice(c *ui.Context, binder *Binder, notice *errorToast, metrics SidebarMetrics) {
+	theme := c.Theme()
+	label := notice.title
+	if notice.text != "" {
+		label += " · " + notice.text
+	}
+	ui.Text(c, "●").SingleLine().FontSize(metrics.StatusText).TextColor(metrics.Warn)
+	ui.Text(c, label).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Grow(1).FontSize(metrics.StatusText).TextColor(metrics.Warn)
+	if len(notice.actions) > 0 && binder.Declares(notice.actions[0].Command) {
+		action := notice.actions[0]
+		binder.Press(c, "core.notices.action", action.Command, notice.id, action.Params).Role(ui.RoleButton).Children(func() {
+			ui.Text(c, action.Label).NoWrap().FontSize(metrics.StatusText).TextColor(theme.Text)
+		})
+	}
+	binder.Press(c, "core.notices.close", "core.notices.close", notice.id, map[string]any{"id": notice.id}).Role(ui.RoleButton).Label("닫기").Children(func() {
+		ui.Text(c, "×").NoWrap().FontSize(metrics.StatusText).TextColor(theme.Text)
 	})
 }
 

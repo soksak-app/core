@@ -12,7 +12,7 @@ const LINE_MS = 6000;
 const CENTER_MS = 7 * 24 * 60 * 60 * 1000;
 const FILTERS = Object.freeze(["all", "problems", "progress"]);
 const GROUP_PATTERN = /^(today|yesterday|\d{4}-\d{2}-\d{2})$/;
-const SOURCE_KINDS = Object.freeze(["card", "plugin", "settings", "core"]);
+const SOURCE_KINDS = Object.freeze(["card", "sidebar", "plugin", "settings", "core"]);
 
 // The local day of a time as YYYY-MM-DD.
 export function dayOf(ms) {
@@ -93,6 +93,7 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
   const wantsToast = (kind, source) => {
     if (open) return false;
     if (settings("quietToasts") && kind !== "error") return false;
+    if (source.kind === "sidebar") return (source.card === null || source.card !== focusedCard) && (kind === "warning" || kind === "error");
     if (source.kind !== "card") return true;
     // A card notice shows as a toast only while its card does not have the focus, and only for a warning or an error.
     return source.card !== focusedCard && (kind === "warning" || kind === "error");
@@ -131,6 +132,7 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
   const titleOf = (notice) => (notice.count > 1 ? `${notice.base} ×${notice.count}` : notice.base);
   const where = (source) => {
     if (source.kind === "card") return `card ${source.card}`;
+    if (source.kind === "sidebar") return `sidebar ${source.sidebar}`;
     if (source.kind === "plugin") return `plugin ${source.plugin}`;
     if (source.kind === "settings") return "settings";
     return "workbench";
@@ -176,7 +178,7 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
       if (prior && prior.kind === kind && prior.base === title && prior.message === message) return prior.id;
     }
     // A card notice merges only within its card; an app notice has no card and merges with app notices of the same kind and title.
-    const cardOf = (src) => (src.kind === "card" ? src.card : null);
+    const cardOf = (src) => (src.kind === "card" ? `card:${src.card}` : src.kind === "sidebar" ? `sidebar:${src.sidebar}` : null);
     const shown = kind === "progress" ? null : notices.find((n) => n.kind === kind && n.base === title && cardOf(n.source) === cardOf(source) && (n.toast !== null || n.line !== null));
     // A redraw of a shown notice with the same message and no origin is the same occurrence: it adds no count and writes no log line.
     if (shown && origin === null && shown.message === message) return shown.id;
@@ -202,7 +204,7 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
     if (origin !== null) own(origin, notice);
     notices.push(notice);
     if (wantsToast(kind, source)) slotFor(notice, "toast", toastMs(kind));
-    if (source.kind === "card") slotFor(notice, "line", lineMs(kind));
+    if (source.kind === "card" || source.kind === "sidebar") slotFor(notice, "line", lineMs(kind));
     // default: an error without log text is logged with its text (docs/spec/notifications.md, error: where: text).
     logOccurrence(notice, detail, logPlace, logText ?? text);
     changed();
@@ -437,6 +439,15 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
       return found;
     },
 
+    /** The notice of the status line of a sidebar: the newest shown notice whose source is the sidebar, or null. */
+    sidebarLineOf(sidebar) {
+      let found = null;
+      for (const notice of notices) {
+        if (notice.line !== null && notice.source.kind === "sidebar" && notice.source.sidebar === sidebar && (found === null || notice.seq > found.seq)) found = notice;
+      }
+      return found;
+    },
+
     /** The shown toasts in order, newest first, for core.toasts. */
     toasts() {
       return notices.filter((n) => n.toast !== null).sort((a, b) => b.seq - a.seq).map((n) => ({
@@ -484,6 +495,10 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
       if (!n) return [];
       const extra = [];
       if (n.source.kind === "card" && n.source.card !== focusedCard && (n.kind === "warning" || n.kind === "error")) {
+        extra.push({ label: "카드로 가기", command: "core.card.focus", params: { card: n.source.card } });
+      }
+      // A card sidebar's notice goes to its card; a window sidebar has no card to focus (docs/spec/notifications.md#sidebar-notice).
+      if (n.source.kind === "sidebar" && n.source.card !== null && n.source.card !== focusedCard && (n.kind === "warning" || n.kind === "error")) {
         extra.push({ label: "카드로 가기", command: "core.card.focus", params: { card: n.source.card } });
       }
       // An error toast offers 자세히, which opens the center at the notice (docs/spec/notifications.md#toasts).

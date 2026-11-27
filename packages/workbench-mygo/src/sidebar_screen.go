@@ -128,8 +128,8 @@ type SidebarFrame struct {
 	Tab string
 	// Missing lists the sections of the set whose plugin is not loaded, in set order (docs/spec/plugins.md#missing-plugins).
 	Missing []MissingSection
-	// Warning is the warning of the status line: the newest missing plugin of the set, or nil when no plugin has a line.
-	Warning *MissingWarning
+	// Notice is the newest notice of the sidebar, which its status line shows in place of Status, or nil when the sidebar has none.
+	Notice *errorToast
 	// Order lists the section ids of the set in set order, the loaded and the missing ones, which the tabs keep.
 	Order []string
 	// Side is `left` or `right` for a window sidebar and empty for a card sidebar.
@@ -633,18 +633,18 @@ func statusName(frame SidebarFrame) string {
 	return "core.card.sidebar.status"
 }
 
-// drawSidebarStatus draws the status line at the bottom of a sidebar. It shows the warning of the frame when it has one, and otherwise
+// drawSidebarStatus draws the status line at the bottom of a sidebar. It shows the notice of the frame when it has one, and otherwise
 // the status text of the frame (docs/spec/external-sidebars.md#sidebar-head-and-edge).
 func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics) {
 	theme := c.Theme()
 	label := frame.Status
-	if frame.Warning != nil {
-		label = frame.Warning.Shown()
+	if frame.Notice != nil {
+		label = frame.Notice.title
 	}
 	ui.Row(binder.Name(c, statusName(frame), frame.Sidebar)).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(metrics.StatusGap).PaddingX(metrics.StatusPad).
 		BorderWidth(metrics.BorderWidth, 0, 0, 0).BorderColor(theme.Border).Role(ui.RoleStatus).Label(label).Children(func() {
-		if frame.Warning != nil {
-			drawWarning(c, binder, *frame.Warning, metrics)
+		if frame.Notice != nil {
+			drawSidebarNotice(c, binder, frame.Notice, metrics)
 			return
 		}
 		ui.Text(c, frame.Status).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Grow(1).FontSize(metrics.StatusText).TextColor(theme.TextMuted)

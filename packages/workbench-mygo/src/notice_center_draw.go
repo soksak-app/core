@@ -269,6 +269,18 @@ func (e *ShownErrors) cardNotice(card string) *errorToast {
 	return nil
 }
 
+// sidebarNotice returns the newest unclosed notice of a sidebar, which its status line shows, or nil when the sidebar has none
+// (docs/spec/notifications.md#sidebar-notice).
+func (e *ShownErrors) sidebarNotice(sidebar string) *errorToast {
+	e.ExpireNotices()
+	for i := len(e.toasts) - 1; i >= 0; i-- {
+		if toast := e.toasts[i]; !toast.closed && toast.source.Kind == "sidebar" && toast.source.Sidebar == sidebar {
+			return toast
+		}
+	}
+	return nil
+}
+
 // noticeGlyphName is the key of the declared icon of a notice kind. The kinds are a closed set, so a kind without a declared icon is an error.
 func noticeGlyphName(kind string, icons map[string]string) (string, error) {
 	name := "notice-" + kind

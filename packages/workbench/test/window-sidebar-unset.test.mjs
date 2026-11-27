@@ -79,7 +79,7 @@ test("core.sidebars reports a window sidebar that shows no set with its rectangl
     assert.ok(reported, `core.sidebars omits the drawn top sidebar: ${JSON.stringify(sidebarsState())}`);
     assert.deepEqual(reported, {
       sidebar: "top", set: null, layout: null, orientation: "horizontal", tab: null, card: null, surface: null, placement: "window",
-      plugin: null, side: "top", rect: { x: 10, y: 20, w: 120, h: 300 }, status: "위 창 사이드바", warning: null, sections: [],
+      plugin: null, side: "top", rect: { x: 10, y: 20, w: 120, h: 300 }, status: "위 창 사이드바", notice: null, sections: [],
     });
     const { sidebarChoices } = await import("../sidebar-sections.js");
     assert.equal(Object.hasOwn(sidebarChoices(), "top"), false, "the report of a sidebar without a set made a choice that the space stores");

@@ -22,6 +22,8 @@ type NoticeSource struct {
 	// Label is the title of the tab when the entry was added; the source chip shows it for a card entry.
 	Label  string `json:"label,omitempty"`
 	Plugin string `json:"plugin,omitempty"`
+	// Sidebar is the sidebar of a sidebar notice: `left`, `right` or `<card>:<side>` (docs/spec/notifications.md#sidebar-notice).
+	Sidebar string `json:"sidebar,omitempty"`
 }
 
 // NoticeAction is an action of a notice: a label and a declared command with its params.

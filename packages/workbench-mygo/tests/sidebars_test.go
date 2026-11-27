@@ -32,6 +32,7 @@ const sidebarsInstalled = `{"plugins":[
 type sidebarsFixture struct {
 	sidebars *workbench.Sidebars
 	registry *workbench.Registry
+	notices  *workbench.ShownErrors
 	changes  int
 	seats    []workbench.SidebarSeat
 }
@@ -42,10 +43,10 @@ func newSidebars(t *testing.T, environment, installed string) *sidebarsFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture := &sidebarsFixture{registry: workbench.NewRegistry(declared)}
+	fixture := &sidebarsFixture{registry: workbench.NewRegistry(declared), notices: workbench.NewShownErrors(func(string) {})}
 	binder := workbench.NewBinder(fixture.registry, func(command string, err error) { t.Errorf("%s: %v", command, err) })
 	fixture.sidebars, err = workbench.NewSidebars(workbench.SidebarsOptions{Look: func() (float32, float32) { return 1, 10 }, Declared: declared, Registry: fixture.registry, Binder: binder,
-		Environment: []byte(environment), Installed: []byte(installed), Changed: func() { fixture.changes++ },
+		Environment: []byte(environment), Installed: []byte(installed), Notices: fixture.notices, Changed: func() { fixture.changes++ },
 		Seat: func(_ *ui.Context, seat workbench.SidebarSeat) { fixture.seats = append(fixture.seats, seat) }})
 	if err != nil {
 		t.Fatal(err)
@@ -383,11 +384,11 @@ func TestTheMissingLineNamesThePluginAndItsRemedy(t *testing.T) {
 	cases := []struct {
 		name, state, text, label, command string
 	}{
-		{"고", "available", "고(gone) 플러그인이 없어 섹션 1개를 못 보여 준다.", "고 설치", "core.plugins.install"},
-		{"gone", "", "gone(gone) 플러그인이 없어 섹션 1개를 못 보여 준다.", "", ""},
-		{"고", "disabled", "고(gone) 플러그인이 꺼져 있어 섹션 1개를 못 보여 준다.", "켜기", "core.plugins.enable"},
-		{"고", "refused", "고(gone) 플러그인을 불러오지 못해 섹션 1개를 못 보여 준다.", "설치됨 보기", "core.plugins.browse"},
-		{"고", "requires", "고(gone) 플러그인을 불러오지 못해 섹션 1개를 못 보여 준다.", "설치됨 보기", "core.plugins.browse"},
+		{"고", "available", "플러그인이 없어 섹션 1개를 못 보여 준다.", "고 설치", "core.plugins.install"},
+		{"gone", "", "플러그인이 없어 섹션 1개를 못 보여 준다.", "", ""},
+		{"고", "disabled", "플러그인이 꺼져 있어 섹션 1개를 못 보여 준다.", "켜기", "core.plugins.enable"},
+		{"고", "refused", "플러그인을 불러오지 못해 섹션 1개를 못 보여 준다.", "설치됨 보기", "core.plugins.browse"},
+		{"고", "requires", "플러그인을 불러오지 못해 섹션 1개를 못 보여 준다.", "설치됨 보기", "core.plugins.browse"},
 	}
 	for _, c := range cases {
 		lines := workbench.MissingLines(frame, func(id string) workbench.PluginLine {
@@ -459,8 +460,7 @@ func TestDrawingASidebarShowsTheLineOfAMissingPlugin(t *testing.T) {
 	if failed != nil {
 		t.Fatal(failed)
 	}
-	element(t, tt, "core.sidebar.missing", "gone")
-	if !tt.HasText("gone(gone) 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+	if !tt.HasText("gone(gone) · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
 		t.Fatalf("the sidebar shows %q", tt.Texts())
 	}
 }

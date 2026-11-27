@@ -36,7 +36,7 @@ func shownToasts(t *testing.T, f *shellFixture) []toastStatus {
 // An error that the application shows is an error notice of core.toasts, with its id, kind, title and count; with the automatic
 // dismissal off it has no remaining time (docs/spec/notifications.md#toasts).
 func TestAnErrorIsAnErrorNoticeOnCoreToasts(t *testing.T) {
-	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f := noSidebarShell(t, oneCard(tab("tab-aaaaaa", "plain")))
 	const failure = "the first screen failed"
 	f.shell.StartFailed(errors.New(failure))
 	toasts := shownToasts(t, f.shellFixture)
@@ -47,7 +47,7 @@ func TestAnErrorIsAnErrorNoticeOnCoreToasts(t *testing.T) {
 
 // Closing a toast by its id removes it; an id that no shown notice has is refused (docs/spec/notifications.md#commands-and-statuses).
 func TestCloseNoticeClosesTheToastByItsId(t *testing.T) {
-	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f := noSidebarShell(t, oneCard(tab("tab-aaaaaa", "plain")))
 	const failure = "the first screen failed"
 	f.shell.StartFailed(errors.New(failure))
 	f.shownRecords()
@@ -141,9 +141,21 @@ func keyedCount(nodes []ui.ElementNode, name string) int {
 }
 
 // noticeShell opens the layout fixture with the common settings of the test and shows one error per text.
+// noSidebarsEnvironment is the environment of the notice tests, which have no sidebar set. A sidebar set that names a plugin which is not
+// loaded shows the warning of that plugin as a notice (docs/spec/plugins.md#missing-plugins), so such a set would add a toast to each test.
+const noSidebarsEnvironment = `{"sidebars":{"sets":[],"links":[]}}`
+
+// noSidebarShell is layoutShell with the environment of the notice tests (noSidebarsEnvironment).
+func noSidebarShell(t *testing.T, spaces ...map[string]any) *tabShell {
+	t.Helper()
+	f := newTabShell(t, &storedHost{installed: layoutPlugins, environment: []byte(noSidebarsEnvironment), projects: []map[string]any{gridProject(spaces...)}})
+	f.open(t)
+	return f
+}
+
 func noticeShell(t *testing.T, common map[string]any, texts ...string) *tabShell {
 	t.Helper()
-	f := newTabShell(t, &storedHost{installed: layoutPlugins, projects: []map[string]any{gridProject(oneCard(tab("tab-aaaaaa", "plain")))}, common: common})
+	f := newTabShell(t, &storedHost{installed: layoutPlugins, environment: []byte(noSidebarsEnvironment), projects: []map[string]any{gridProject(oneCard(tab("tab-aaaaaa", "plain")))}, common: common})
 	f.open(t)
 	for _, text := range texts {
 		f.shell.StartFailed(errors.New(text))

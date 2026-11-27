@@ -608,6 +608,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.registry.Follow(s.followCommand)
 	s.registry.Watch(s.watchLayout)
 	s.errors = NewShownErrors(s.events.Error)
+	s.errors.SetFocusSource(func() string { return s.focused })
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.pressFailed(err) })
 	s.pointer = NewPointerSequence(options.Elements, func() { s.options.Invalidate() }, s.fail)
 	s.pointer.released = s.keyboardPressed
@@ -667,7 +668,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 		Look:        func() (float32, float32) { return s.palette.BorderWidth, s.textCaption() },
 		Environment: options.Environment, Installed: installed, Changed: s.settle, Seat: s.drawSectionSeat,
 		Progress: s.sectionProgress, Rail: func() ui.Color { return s.palette.Rail }, Warn: func() ui.Color { return s.palette.Focus },
-		Plugin: s.missingPluginLine})
+		Plugin: s.missingPluginLine, Notices: s.errors})
 	if err != nil {
 		return nil, err
 	}

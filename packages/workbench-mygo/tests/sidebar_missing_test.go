@@ -9,21 +9,18 @@ import (
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
-// The window sidebar of a set with a section of a plugin that is not loaded draws the line of that plugin: the element
-// core.sidebar.missing of the plugin, with its text (docs/spec/plugins.md#missing-plugins).
+// The window sidebar of a set with a section of a plugin that is not loaded shows the warning of that plugin as its notice, with the title
+// and the text (docs/spec/plugins.md#missing-plugins).
 func TestTheMissingSectionOfAWindowSidebarShowsItsLine(t *testing.T) {
 	f := newTabShell(t, &storedHost{installed: sidebarsInstalled, environment: []byte(sidebarsEnvironment),
 		projects: []map[string]any{gridProject(oneCard(tab("tab-aaaaaa", "plain")))}})
 	f.open(t)
-	if _, ok := exposedNode(f.tester.ElementTree(), "core.sidebar.missing", "gone"); !ok {
-		t.Fatal("no line of the plugin gone")
-	}
-	if !f.tester.HasText("gone(gone) 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+	if !f.tester.HasText("gone(gone) · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
 		t.Fatalf("the sidebar shows %q", f.tester.Texts())
 	}
 }
 
-// The warning line of a window sidebar stands in its status line at the bottom, and no line stands above its sections
+// The warning of a window sidebar is a notice in its status line at the bottom, and no line stands above its sections
 // (docs/spec/external-sidebars.md#sidebar-head-and-edge, docs/spec/plugins.md#missing-plugins).
 func TestTheMissingLineOfAWindowSidebarStandsInItsStatusLine(t *testing.T) {
 	f := newSidebars(t, sidebarsEnvironment, sidebarsInstalled)
@@ -40,15 +37,12 @@ func TestTheMissingLineOfAWindowSidebarStandsInItsStatusLine(t *testing.T) {
 	if failed != nil {
 		t.Fatal(failed)
 	}
-	status := element(t, tt, "core.sidebar.status", "left")
-	if _, ok := exposedNode(status.Children, "core.sidebar.missing", "gone"); !ok {
-		t.Fatalf("the status line of the sidebar has no line of the plugin gone; the texts are %q", tt.Texts())
-	}
+	element(t, tt, "core.sidebar.status", "left")
 	set := element(t, tt, "core.sidebar", "left")
 	if _, ok := exposedNode(set.Children, "core.sidebar.missing", "gone"); ok {
 		t.Fatal("a warning line stands above the sections of the sidebar")
 	}
-	if !tt.HasText("gone(gone) 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+	if !tt.HasText("gone(gone) · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
 		t.Fatalf("the sidebar shows %q", tt.Texts())
 	}
 }
@@ -58,7 +52,7 @@ func TestTheMissingLineOfAWindowSidebarStandsInItsStatusLine(t *testing.T) {
 func TestTheMissingLineCountsEverySectionOfAPlugin(t *testing.T) {
 	frame := workbench.SidebarFrame{Missing: []workbench.MissingSection{{ID: "gone.a", Plugin: "gone"}, {ID: "gone.b", Plugin: "gone"}}}
 	lines := workbench.MissingLines(frame, func(string) workbench.PluginLine { return workbench.PluginLine{Name: "고", State: "available"} })
-	if len(lines) != 1 || lines[0].Count != 2 || lines[0].Text != "고(gone) 플러그인이 없어 섹션 2개를 못 보여 준다." {
+	if len(lines) != 1 || lines[0].Count != 2 || lines[0].Title != "고(gone)" || lines[0].Text != "플러그인이 없어 섹션 2개를 못 보여 준다." {
 		t.Fatalf("the lines are %+v", lines)
 	}
 	lines = workbench.MissingLines(frame, func(string) workbench.PluginLine { return workbench.PluginLine{Name: "고", State: "reload"} })

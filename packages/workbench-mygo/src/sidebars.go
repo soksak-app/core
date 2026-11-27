@@ -86,6 +86,8 @@ type SidebarsOptions struct {
 	Plugin func(id string) PluginLine
 	// Warn returns the color of a warning line.
 	Warn func() ui.Color
+	// Notices is the notice store that holds the warning of each missing plugin of a sidebar (docs/spec/notifications.md#sidebar-notice).
+	Notices *ShownErrors
 	// Changed runs after a command changed a choice, so the space stores it and a frame shows it.
 	Changed func()
 	// Seat draws what stands on the seat of a section, whose box is in window coordinates. Without it a seat stays empty.
@@ -132,6 +134,8 @@ type Sidebars struct {
 	choices  map[string]*SidebarChoice
 	drags    map[string]*SectionDrag
 	drawn    []*drawnSidebar
+	// missing shows the warning of each missing plugin as a notice of the sidebar (sidebar_missing.go).
+	missing *missingNotices
 }
 
 // NewSidebars returns the sidebars of a window, with their commands and their status in the registry.
@@ -148,8 +152,12 @@ func NewSidebars(options SidebarsOptions) (*Sidebars, error) {
 	if !ok {
 		return nil, errors.New("the chrome metric divider has no number")
 	}
+	// A warning of a missing plugin is a notice, so the sidebars need the store that shows it (docs/spec/notifications.md#sidebar-notice).
+	if options.Notices == nil {
+		return nil, errors.New("the sidebars need the notice store of the missing-plugin warnings")
+	}
 	s := &Sidebars{options: options, metrics: metrics, divider: divider, sections: map[string]section{}, plugins: map[string]bool{},
-		choices: map[string]*SidebarChoice{}, drags: map[string]*SectionDrag{}}
+		choices: map[string]*SidebarChoice{}, drags: map[string]*SectionDrag{}, missing: &missingNotices{store: options.Notices, shown: map[string]map[string]string{}}}
 	for _, plugin := range installed {
 		s.plugins[plugin.ID] = true
 		for _, declared := range plugin.Manifest.Sections {
@@ -586,7 +594,13 @@ func (s *Sidebars) fill(frame *SidebarFrame, set *SidebarSet) {
 		}
 		frame.Sections = append(frame.Sections, drawn)
 	}
-	frame.Warning = newestWarning(MissingLines(*frame, s.options.Plugin))
+	// The card of a card sidebar is the part of its key before the colon, and a window sidebar has no card.
+	card, _, _ := strings.Cut(frame.Sidebar, ":")
+	if !strings.Contains(frame.Sidebar, ":") {
+		card = ""
+	}
+	s.missing.reconcile(frame.Sidebar, card, MissingLines(*frame, s.options.Plugin))
+	frame.Notice = s.options.Notices.sidebarNotice(frame.Sidebar)
 	if set.Layout != "tabs" {
 		return
 	}
@@ -847,16 +861,16 @@ type sidebarStatus struct {
 	Plugin      *string         `json:"plugin"`
 	Side        *string         `json:"side"`
 	Rect        sidebarRect     `json:"rect"`
-	Status      string          `json:"status"`
-	Warning     *warningStatus  `json:"warning"`
+	Status      *string         `json:"status"`
+	Notice      *noticeStatus   `json:"notice"`
 	Sections    []sectionStatus `json:"sections"`
 }
 
-// warningStatus is the warning of a status line in core.sidebars: the plugin, its text and the count of the other missing plugins.
-type warningStatus struct {
-	Plugin string `json:"plugin"`
-	Text   string `json:"text"`
-	Others int    `json:"others"`
+// noticeStatus is the notice of a status line in core.sidebars: its id, kind and title (docs/spec/notifications.md#sidebar-notice).
+type noticeStatus struct {
+	ID    string `json:"id"`
+	Kind  string `json:"kind"`
+	Title string `json:"title"`
 }
 
 // nullable is nil for the empty text.
@@ -891,14 +905,15 @@ func (s *Sidebars) status() []sidebarStatus {
 		if frame.Side == "" {
 			placement, plugin = "card", nil // The context of a card sidebar has no plugin and no side of a window sidebar.
 		}
-		status, warning := frame.Status, (*warningStatus)(nil)
-		if frame.Warning != nil {
-			status = frame.Warning.Shown()
-			warning = &warningStatus{Plugin: frame.Warning.Line.Plugin, Text: frame.Warning.Line.Text, Others: frame.Warning.Others}
+		// The status text is null while a notice shows (docs/spec/external-sidebars.md#override-context-and-rail-border).
+		status, notice := &frame.Status, (*noticeStatus)(nil)
+		if frame.Notice != nil {
+			status = nil
+			notice = &noticeStatus{ID: frame.Notice.id, Kind: frame.Notice.kind, Title: frame.Notice.title}
 		}
 		sidebars = append(sidebars, sidebarStatus{Sidebar: frame.Sidebar, Set: drawn.set, Layout: nullable(frame.Layout), Orientation: frame.Orientation,
 			Tab: nullable(frame.Tab), Card: nullable(drawn.owner.Card), Surface: surface, Placement: placement, Plugin: plugin,
-			Side: nullable(frame.Side), Rect: sidebarRect{drawn.rect.X, drawn.rect.Y, drawn.rect.W, drawn.rect.H}, Status: status, Warning: warning, Sections: sections})
+			Side: nullable(frame.Side), Rect: sidebarRect{drawn.rect.X, drawn.rect.Y, drawn.rect.W, drawn.rect.H}, Status: status, Notice: notice, Sections: sections})
 	}
 	return sidebars
 }

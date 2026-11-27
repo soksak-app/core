@@ -377,7 +377,23 @@ func surfaceShellOf(t testing.TB, document string) (*shellFixture, *surfaceHost)
 	return surfaceShellOn(t, document, stored), stored
 }
 
-// surfaceShellOn is surfaceShellOf over the host stored.
+// surfaceShellWithoutSidebars is surfaceShell with the environment of the notice tests (noSidebarsEnvironment): a sidebar of a plugin that
+// is not loaded shows its warning as a toast, which the error tests do not count.
+func surfaceShellWithoutSidebars(t *testing.T) (*shellFixture, *surfaceHost) {
+	t.Helper()
+	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}, storedHost: storedHost{environment: []byte(noSidebarsEnvironment)}}
+	return surfaceShellOn(t, installedDocument, stored), stored
+}
+
+// surfaceEnvironment is the environment that a surface shell reads: the one that the host stores, or the test environment.
+func surfaceEnvironment(t testing.TB, stored *surfaceHost) []byte {
+	if stored.environment != nil {
+		return stored.environment
+	}
+	return environment(t)
+}
+
+// surfaceShellOn is surfaceShellOf over the host stored; the environment is the one stored by the host, or the test environment when it has none.
 func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFixture {
 	t.Helper()
 	// A window has a backing scale, and the verification of each frame reads it.
@@ -397,7 +413,7 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 		FirstScreen: func() {},
 		Declared:    declared,
 		Calls:       workbench.NewCalls(stored.surfaceTable(), f.pending.post),
-		Environment: environment(t),
+		Environment: surfaceEnvironment(t, stored),
 		Installed:   []byte(document),
 		Invalidate:  func() { f.frames++ },
 		Post:        f.pending.post,
@@ -1287,7 +1303,7 @@ func TestALayoutFaultFailsOnlyTheNextDraw(t *testing.T) {
 
 // The placement after a fault succeeds, so the banner withdraws the failure of the placement, and the record of the failure stays.
 func TestARecoveredPlacementWithdrawsItsError(t *testing.T) {
-	f, _ := surfaceShell(t)
+	f, _ := surfaceShellWithoutSidebars(t)
 	f.shell.Registry().Reply("diagnostics.layout.fail", json.RawMessage(`{}`), nil, func(any, error) {})
 	f.settle()
 	f.tester.SetSize(1160, 800)
@@ -1324,7 +1340,7 @@ func TestAFaultOfTheSameLinesIsWithdrawnByTheNextPlacement(t *testing.T) {
 
 // A placement that keeps failing keeps its error, and the first that succeeds withdraws it.
 func TestAPlacementThatKeepsFailingKeepsItsError(t *testing.T) {
-	f, stored := surfaceShell(t)
+	f, stored := surfaceShellWithoutSidebars(t)
 	stored.presentFailure = errors.New("the host refused the placement")
 	f.tester.SetSize(1160, 800)
 	f.shownErrors()
@@ -1818,7 +1834,7 @@ func TestTheErrorOfTheActiveTabIsRecordedWhenItAppears(t *testing.T) {
 
 // Closing a tab withdraws the errors that name it, so no toast shows the state of a tab that is gone (docs/spec/exposure.md#error-presentation).
 func TestClosingATabWithdrawsItsErrors(t *testing.T) {
-	f, stored := surfaceShell(t)
+	f, stored := surfaceShellWithoutSidebars(t)
 	surface := terminalSurface(t, stored)
 	viewCallShowing(t, f, stored, surface, "tab.error", "late")
 	if got := f.workbenchError(); got != `"late"` {
