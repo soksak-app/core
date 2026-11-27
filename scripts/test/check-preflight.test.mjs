@@ -41,3 +41,8 @@ test("the preflight passes the revision range to check-commits, as the pre-push 
   const line = result.stdout.split("\n").find((text) => text.startsWith("target check-commits"));
   assert.equal(line, "target check-commits RANGE=origin/main..HEAD", "check-commits gets the range of check-push");
 });
+
+test("the preflight lists the lockfile rejection that every CI job runs through make", () => {
+  const targets = preflightTargets();
+  assert.ok(targets.includes("check-lockfiles"), "check-lockfiles is listed");
+});

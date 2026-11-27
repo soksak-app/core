@@ -47,7 +47,7 @@ jobs:
           if-no-files-found: ignore
       - name: Reject lockfile changes
         if: always()
-        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+        run: make -C core check-lockfiles
 
   macos-wailsv3:
     runs-on: macos-15
@@ -92,7 +92,7 @@ jobs:
         run: make -C core check-go-format
       - name: Reject lockfile changes
         if: always()
-        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+        run: make -C core check-lockfiles
 
   macos-tauriv2:
     runs-on: macos-15
@@ -133,7 +133,7 @@ jobs:
         run: make -C core check-rust-format check-rust-clippy
       - name: Reject lockfile changes
         if: always()
-        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+        run: make -C core check-lockfiles
 
   macos-mygo:
     runs-on: macos-15
@@ -172,7 +172,7 @@ jobs:
         run: make -C core test-mygo
       - name: Reject lockfile changes
         if: always()
-        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+        run: make -C core check-lockfiles
 
   macos-gpuikit:
     runs-on: macos-15
@@ -207,7 +207,7 @@ jobs:
         run: make -C core test-gpuikit
       - name: Reject lockfile changes
         if: always()
-        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+        run: make -C core check-lockfiles
 
   build-native:
     runs-on: macos-15
@@ -256,7 +256,7 @@ jobs:
           if-no-files-found: warn
       - name: Reject lockfile changes
         if: always()
-        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+        run: make -C core check-lockfiles
 
   equivalence:
     # The system tests of the scripts compile the Icon Composer source of the application icon; the actool of Xcode 26.3 on macOS 15
@@ -325,7 +325,7 @@ jobs:
         run: node core/scripts/node-tests.mjs --only scripts/
       - name: Reject lockfile changes
         if: always()
-        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+        run: make -C core check-lockfiles
 
   linux-node:
     runs-on: ubuntu-26.04-arm
@@ -366,7 +366,7 @@ jobs:
         run: make -C core test-headless-owners
       - name: Reject lockfile changes
         if: always()
-        run: git -C core diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+        run: make -C core check-lockfiles
 
   required:
     if: always()

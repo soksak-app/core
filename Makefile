@@ -713,6 +713,11 @@ check-go-format:
 	  if [ -n "$$unformatted" ]; then echo "Go files not in gofmt format:" >&2; echo "$$unformatted" >&2; exit 1; fi; \
 	  echo "Go format check passed: $$(echo $$files | wc -w | tr -d ' ') files"
 
+# Rejects a change of a lockfile or a Go module checksum file against the index. Every CI job that installs dependencies runs it,
+# so a change made by the install of a job is refused, and check-preflight lists it.
+check-lockfiles:
+	@git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
+
 # Checks every package and test of the Rust workspace in the diagnostic build and the default build without clippy warnings.
 # generate_context! of sok-tauriv2 reads the staged frontend (frontendDist), so the check stages it first, as test-native does.
 check-rust-clippy: check-cargo build-native copy-frontend-tauriv2

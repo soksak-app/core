@@ -1,6 +1,8 @@
 // Runs, before a push, every static check that the CI jobs of linux-node, equivalence and the host jobs run through make.
 // The list is read from the job steps of .github/workflows/ci.yml, and a target is static when its Makefile rule has no
 // prerequisite that builds, copies or packs an artifact. The targets run in CI order and the run stops at the first failure.
+// The lockfile rejection of the CI jobs is the make target check-lockfiles, so it is listed with the other static targets. The node
+// test steps and check-breaks are tests that each unit runs for its own scope, so the preflight lists none of them.
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
