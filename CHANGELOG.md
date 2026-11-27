@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1281: The clone, clone event and notification identifier tests name contract rows that the host contract defines, and the Rust host runs the clone cases and the parent refusal.
 - F1283: The English settings spec names its sections in English, so the anchors that the code refers to resolve.
 - F1280: The native host callback test and the hosts specification state 42 base callbacks, which the header declares, so the build-native check passes.
 - F1279: The failure table of the diagnostics has a row for each error record of the plugin folder watch and the document boxes, so the failure table check passes.

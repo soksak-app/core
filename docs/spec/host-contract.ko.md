@@ -142,6 +142,7 @@ fn invalid_json_closes_connection() {
 | `links.open.rejects-other-schemes` | 다른 스킴의 URL, 해석되지 않는 URL, 8192자보다 긴 URL은 거부한다. | all |
 | `notifications.request.accepts-tab-notices` | 제어 문자 없이 1–256자인 표면과 제목, 1–1024자인 본문의 알림을 받아들이며, 제거에는 표면만 필요하다. | all |
 | `notifications.request.rejects-invalid-fields` | 비었거나 너무 길거나 제어 문자가 있는 표면, 제목, 본문은 그 필드를 적은 오류로 거부한다. | all |
+| `notifications.identifier.window-and-surface` | notification의 identifier는 window 이름과 surface의 JSON list이며, 눌린 notification은 그 list를 돌려준다. | all |
 | `notifications.event.records-each-event-and-failure` | host가 해석하는 알림 센터의 사건마다 `type`, 상태의 `authorization`, 알림의 `window`와 `surface`를 가진 event `host.notification.event`가 있고, 실패(읽을 수 없거나 알 수 없는 종류의 사건, 창과 표면이 없는 알림, 닫힌 창, 알림 센터가 알린 실패)마다 장소 `notification`의 `error` 기록이 있다. Go 시험은 전체 경로를, Rust 시험은 이벤트를 읽는 부분까지를 다룬다. 창 조회에는 application handle이 필요하기 때문이다. | all |
 | `diagnostics.input-reference.declared` | Diagnostic endpoint는 같은 window의 input reference method를 선언한다. | all |
 | `diagnostics.input-person.declared` | 진단 build는 `diagnostics.input.person`을 선언한다. | all |
@@ -616,6 +617,8 @@ fn invalid_json_closes_connection() {
 | `platform.windows.show.position-change-keeps-the-front` | foreground 밖에서 창을 보이는 위치 변경에는 활성화 안 함과 z-order 유지를 더해 앞 창이 앞에 남는다. foreground 안의 show와 아무것도 보이지 않는 변경은 요청한 그대로 둔다. | tauriv2 only: tao는 host가 고쳐 쓰는 위치 변경으로 창을 보이고, Go host들은 host의 show로 창을 보인다 |
 | `platform.windows.page-process.failure-kind-decides-the-page` | WebView2의 browser process나 render process가 끝나면 page가 끝나고, 다른 종류의 process 실패는 page를 유지한다. | all |
 | `log.application.start-replaces-standard-error` | 애플리케이션 로그를 시작하면 실행의 첫 줄을 쓰고 그 파일을 프로세스와 그 프로세스가 시작하는 자식의 표준 오류로 만든다. | all |
+| `logging.clone-events` | clone은 `host.clone.start` event, 출력 줄마다 `host.clone.line` event, 상태와 target을 적은 `host.clone.end` event를 기록하며, 어떤 event도 주소를 저장하지 않는다. | all |
+| `logging.clone-events-default-policy` | diagnostic build의 기본 정책은 clone의 start, line, end event를 저장하며, event class table은 이것들을 lifecycle로 선언한다. | all |
 | `log.error.line-form` | 헬퍼로 쓴 호스트 오류는 애플리케이션 로그의 기록 `<time> error host <where>: <text>`다. | all |
 | `log.transcript.line-reaches-the-application-log` | 창의 진단 기록 줄은 `info host transcript <window>: <line>`으로도 쓰고, Wails host는 진단 기록이 싣는 오류를 `error host <operation> <window>: <error>`로도 써서, 진단 기록을 요청한 연결이 없어도 그 줄이 남는다. | all |
 | `log.page.clock-anchor-passes-default-policy` | Writer는 기본 lifecycle/error 정책에서 view page의 `page.log.clock`과 workbench의 `workbench.log.clock` 시각 metadata를 저장하고 일반 lifecycle/info event는 계속 거부한다. | all |
@@ -1233,6 +1236,12 @@ fn invalid_json_closes_connection() {
 | `project.open.staged-until-shown` | project owner는 project를 여는 동안 staged 상태로 남고, workbench가 표시된 project를 알린 뒤에만 commit된다. | all |
 | `project.open.other-owner-is-shown-without-activation` | 다른 창이 가진 project를 열면 응용의 활성화를 요청하지 않은 채 그 창을 보인다. | all |
 | `project.open.front-is-recorded` | project owner의 창을 보이게 하면 event `host.project.front`를 level `info`로 저장한다. 필드는 `window`, `project`, `key`(보이게 한 뒤 그 창이 key window인지)와 `app_active`(응용이 활성 상태인지, 그 상태를 읽지 못하면 null)다. | all |
+| `projects.clone.clones-the-address-into-the-target` | 주소의 clone은 repository를 target folder에 쓰고, 그 folder를 identity와 함께 돌려준다. | all |
+| `projects.clone.refuses-an-existing-target-and-keeps-it` | 이미 있는 target은 clone을 시작하기 전에 그 이름을 적은 오류로 거부하며, 내용은 그대로 남는다. | all |
+| `projects.clone.failed-clone-leaves-no-target-folder` | 실패한 clone은 target folder를 남기지 않으며, 거부 오류는 git 실패를 적는다. | all |
+| `projects.clone.refuses-a-parent-that-is-no-folder` | parent가 folder가 아닌 target은 clone을 시작하기 전에 그 parent를 적은 오류로 거부하며, target folder를 만들지 않는다. | all |
+| `projects.clone.sends-each-output-line-to-the-window-of-the-call` | clone의 출력 줄마다 project-clone event를 호출한 window에 보낸다. | all |
+| `projects.clone.streams-the-progress-lines-of-git` | 파일 주소의 clone은 git의 진행 줄을 첫 줄만이 아니라 전부 호출한 window에 흘려 보낸다. | all |
 | `projects.open.geometry-failure-closes-before-reservation` | 새 project window의 geometry 설정이 실패하면 host는 owner reservation을 추가하기 전에 그 window를 닫고 다른 project 상태는 유지한다. | tauriv2 only: Tauri window geometry operation은 오류 결과를 반환한다 |
 | `project.shown-commits-after-page-ready` | workbench가 선택한 project를 알린 뒤 host가 해당 project를 commit한다. 게시되는 값은 commit된 상태를 반영하며, project 없음 선택은 그 상태를 지운다. | all |
 | `projects.shown.requires-project-field` | Project-shown 요청에는 `project` member가 필요하다. 명시적 `null`은 표시 project를 지우며, member를 생략하면 상태 변경 전에 거부한다. | all |

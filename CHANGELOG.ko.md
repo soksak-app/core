@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1281: clone, clone event, notification identifier 테스트가 host 계약에 정의된 행을 가리키며, Rust host가 clone 사례와 parent 거부 사례를 실행한다.
 - F1283: 영어 설정 spec의 절 제목을 영어로 바꿔, 코드가 가리키는 anchor가 resolve된다.
 - F1280: native host callback 테스트와 hosts 명세가 header가 선언하는 기본 callback 42개를 적어, build-native 검사가 통과한다.
 - F1279: 진단 실패 표가 plugin 폴더 감시와 문서 box의 오류 기록마다 행을 가져, 실패 표 검사가 통과한다.

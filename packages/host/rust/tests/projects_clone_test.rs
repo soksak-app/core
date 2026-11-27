@@ -46,6 +46,7 @@ fn request(address: &str, target: &str) -> CloneProject {
     serde_json::from_value(serde_json::json!({ "address": address, "target": target })).unwrap()
 }
 
+// contract: projects.clone.clones-the-address-into-the-target
 #[test]
 fn clone_writes_the_repository_into_the_target() {
     let dir = tempfile::tempdir().unwrap();
@@ -66,6 +67,7 @@ fn clone_writes_the_repository_into_the_target() {
     assert!(!folder.identity.is_empty());
 }
 
+// contract: projects.clone.refuses-an-existing-target-and-keeps-it
 #[test]
 fn clone_refuses_an_existing_target_and_keeps_it() {
     let dir = tempfile::tempdir().unwrap();
@@ -83,6 +85,7 @@ fn clone_refuses_an_existing_target_and_keeps_it() {
     assert_eq!(fs::read_to_string(target.join("keep.txt")).unwrap(), "kept");
 }
 
+// contract: projects.clone.failed-clone-leaves-no-target-folder
 #[test]
 fn a_failed_clone_leaves_no_target_folder() {
     let dir = tempfile::tempdir().unwrap();
@@ -101,6 +104,7 @@ fn a_failed_clone_leaves_no_target_folder() {
     );
 }
 
+// contract: projects.clone.sends-each-output-line-to-the-window-of-the-call
 #[test]
 fn clone_reports_each_output_line_to_the_progress_callback() {
     let dir = tempfile::tempdir().unwrap();
@@ -147,6 +151,7 @@ fn an_empty_address_and_a_dash_address_are_refused_before_a_clone() {
     assert!(!target.exists());
 }
 
+// contract: projects.clone.streams-the-progress-lines-of-git
 #[test]
 fn clone_streams_the_progress_lines_of_git() {
     let dir = tempfile::tempdir().unwrap();
@@ -166,4 +171,23 @@ fn clone_streams_the_progress_lines_of_git() {
         lines.iter().any(|line| line.contains("objects")),
         "the callback received {lines:?}, want the progress lines of git"
     );
+}
+
+// A parent of the target that is not a folder is refused before any clone starts, and no target folder is created.
+// contract: projects.clone.refuses-a-parent-that-is-no-folder
+#[test]
+fn clone_refuses_a_parent_that_is_no_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let address = bare_repository(dir.path());
+    let file = dir.path().join("file");
+    fs::write(&file, "x").unwrap();
+    let target = file.join("widget");
+    let err = clone_repository(
+        request(address.to_str().unwrap(), target.to_str().unwrap()),
+        dir.path(),
+        &mut |_| Ok(()),
+    )
+    .unwrap_err();
+    assert_eq!(err, format!("{} is not a folder", file.display()));
+    assert!(!target.exists());
 }

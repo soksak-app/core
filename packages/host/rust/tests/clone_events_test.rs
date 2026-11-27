@@ -42,6 +42,7 @@ fn request(address: &str, target: &str) -> CloneProject {
     serde_json::from_value(serde_json::json!({ "address": address, "target": target })).unwrap()
 }
 
+// contract: logging.clone-events
 #[test]
 fn clone_records_its_start_lines_and_end_as_events() {
     let dir = tempfile::tempdir().unwrap();

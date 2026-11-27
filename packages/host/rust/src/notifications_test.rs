@@ -34,3 +34,12 @@ fn a_poisoned_permission_state_is_read_by_the_page() {
         read.error
     );
 }
+
+// contract: notifications.identifier.window-and-surface
+#[test]
+fn the_notification_identifier_is_the_window_and_surface() {
+    assert_eq!(
+        super::identifier("main", "tab-\"1"),
+        r#"["main","tab-\"1"]"#
+    );
+}

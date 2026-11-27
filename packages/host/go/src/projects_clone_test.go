@@ -51,6 +51,7 @@ func cloneRequest(t *testing.T, address, target string) json.RawMessage {
 }
 
 // The clone writes the repository into the target and returns the identity of the target folder.
+// contract: projects.clone.clones-the-address-into-the-target
 func TestProjectCloneClonesTheAddressIntoTheTarget(t *testing.T) {
 	address := bareRepository(t)
 	target := filepath.Join(t.TempDir(), "widget")
@@ -68,6 +69,7 @@ func TestProjectCloneClonesTheAddressIntoTheTarget(t *testing.T) {
 }
 
 // An existing target is refused before any clone starts, and its content stays.
+// contract: projects.clone.refuses-an-existing-target-and-keeps-it
 func TestProjectCloneRefusesAnExistingTargetAndKeepsIt(t *testing.T) {
 	address := bareRepository(t)
 	target := t.TempDir()
@@ -84,6 +86,7 @@ func TestProjectCloneRefusesAnExistingTargetAndKeepsIt(t *testing.T) {
 }
 
 // A failed clone leaves no target folder, and the refusal names the git failure.
+// contract: projects.clone.failed-clone-leaves-no-target-folder
 func TestProjectCloneFailureLeavesNoTargetFolder(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "widget")
 	_, err := (&Host{}).ProjectClone(context.Background(), cloneRequest(t, filepath.Join(t.TempDir(), "missing.git"), target))
@@ -96,6 +99,7 @@ func TestProjectCloneFailureLeavesNoTargetFolder(t *testing.T) {
 }
 
 // A parent of the target that is not a folder is refused before any clone starts.
+// contract: projects.clone.refuses-a-parent-that-is-no-folder
 func TestProjectCloneRefusesAParentThatIsNoFolder(t *testing.T) {
 	address := bareRepository(t)
 	file := filepath.Join(t.TempDir(), "file")
@@ -129,6 +133,7 @@ func (w *cloneWindow) Emit(name string, data ...any) {
 }
 
 // The clone sends each line of its output to the window of the call as a project-clone event.
+// contract: projects.clone.sends-each-output-line-to-the-window-of-the-call
 func TestProjectCloneSendsEachOutputLineToTheWindowOfTheCall(t *testing.T) {
 	address := bareRepository(t)
 	target := filepath.Join(t.TempDir(), "widget")
@@ -144,6 +149,7 @@ func TestProjectCloneSendsEachOutputLineToTheWindowOfTheCall(t *testing.T) {
 }
 
 // A clone from a file address streams the progress lines of git to the window of the call, not only its first line.
+// contract: projects.clone.streams-the-progress-lines-of-git
 func TestProjectCloneStreamsTheProgressLinesOfGit(t *testing.T) {
 	address := "file://" + bareRepository(t)
 	target := filepath.Join(t.TempDir(), "widget")
