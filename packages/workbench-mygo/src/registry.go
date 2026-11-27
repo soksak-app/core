@@ -101,6 +101,8 @@ type Registry struct {
 	parts func() (SnapshotParts, error)
 	// recorder receives every command request that ended.
 	recorder func(name string, elapsed time.Duration, failure error)
+	// surfaceRecorder receives each status read that names a surface and is answered by the workbench.
+	surfaceRecorder func(name, surface string, elapsed time.Duration)
 	// watcher observes each command from its start to its answer (Watch).
 	watcher func(name string, params json.RawMessage) func(value any, err error)
 	// follow returns the answer of one command name that starts now, which waits until the window shows what the command changed.
@@ -400,6 +402,12 @@ func (r *Registry) Record(recorder func(name string, elapsed time.Duration, fail
 	r.recorder = recorder
 }
 
+// RecordSurface installs what receives each status read that names a surface and that the workbench answers, with its name, its
+// surface and the time it took.
+func (r *Registry) RecordSurface(recorder func(name, surface string, elapsed time.Duration)) {
+	r.surfaceRecorder = recorder
+}
+
 // Watch installs what observes each command that runs: it is called with the name and the parameters when the command starts and
 // returns what is called with its answer when the command ends, for a command that answers at once and for one that answers later.
 func (r *Registry) Watch(watch func(name string, params json.RawMessage) func(value any, err error)) {
@@ -475,7 +483,12 @@ func (r *Registry) dispatch(method string, params json.RawMessage, changed Chang
 	switch method {
 	case "status.get":
 		if onSurface != nil {
-			return onSurface(surface), nil
+			started := time.Now()
+			value := onSurface(surface)
+			if r.surfaceRecorder != nil {
+				r.surfaceRecorder(*name, surface, time.Since(started))
+			}
+			return value, nil
 		}
 		return r.Read(*name)
 	case "status.watch":

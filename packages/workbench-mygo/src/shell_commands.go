@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
@@ -27,6 +28,19 @@ func command[T any](s *Shell, name string, run func(value T) (any, error)) {
 		}
 		return run(value)
 	})
+}
+
+// recordStatusRead stores the event workbench.status.read of a status read that names a surface. The session of the surface is looked
+// up only while the gate stores the event.
+func (s *Shell) recordStatusRead(name, surface string, elapsed time.Duration) {
+	if !s.events.Admits(sok.LevelDebug, "workbench.status.read") {
+		return
+	}
+	session := ""
+	if shown, ok := s.layoutShownSessions()[surface]; ok {
+		session = shown.Session
+	}
+	s.events.StatusRead(name, surface, session, elapsed)
 }
 
 // watchLayout is the watcher of the registry that records each command name with its parameters raw that changed the layout of the

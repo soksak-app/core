@@ -605,6 +605,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.calls.Observe(s.events.Clock(), s.events.Call)
 	s.exposedFocus.OnTransition(s.events.Info)
 	s.registry.Record(s.events.Command)
+	s.registry.RecordSurface(s.recordStatusRead)
 	s.registry.Follow(s.followCommand)
 	s.registry.Watch(s.watchLayout)
 	s.errors = NewShownErrors(s.events.Error)

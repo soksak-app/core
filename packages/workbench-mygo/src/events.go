@@ -312,6 +312,21 @@ func (e *Events) LayoutChange(name string, params json.RawMessage, result any, l
 	}, nil)
 }
 
+// StatusRead stores the event workbench.status.read of a status read that names a surface and that the workbench answered: the
+// surface of the request, which answers it too, and the owned session that the surface shows, or null when it shows none
+// (docs/spec/events.json). The workbench answers such a read without a failure, so the event is stored at the level debug.
+func (e *Events) StatusRead(name, surface, session string, elapsed time.Duration) {
+	e.Emit(sok.LevelDebug, "workbench.status.read", func() map[string]any {
+		fields := map[string]any{"name": name, "requested": surface, "resolved": surface, "micros": elapsed.Microseconds(), "ok": true, "code": nil}
+		if session != "" {
+			fields["session"] = session
+		} else {
+			fields["session"] = nil
+		}
+		return fields
+	}, nil)
+}
+
 // Command stores the event workbench.command of a command request that ended (docs/spec/logging.md#entrances).
 func (e *Events) Command(name string, elapsed time.Duration, failure error) {
 	level := sok.LevelDebug

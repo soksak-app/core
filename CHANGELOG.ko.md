@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1107-6: mygo workbench는 surface를 지정한 status 읽기를 workbench.status.read로 기록한다.
 - F1260: reload binding의 Go test가 Rust 짝의 이름을 가져, host 파일 감사가 둘을 짝으로 인식한다.
 - F1276: Rust host source 네 개를 rustfmt로 정렬한다.
 - F1275: 진단 motion, 위치 인자 창 거부, plugin 카테고리의 Go와 Rust test가 계약 사례를 선언하여 wailsv3 host 계약 검사가 이들을 나열하지 않는다.
