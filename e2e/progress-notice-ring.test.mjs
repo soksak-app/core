@@ -62,12 +62,21 @@ for (const app of Object.values(APPS)) {
 
       // Each still is taken at one refresh of the window, so the recording paces by the display and not by a fixed frame time.
       const recording = await s.record({ frames: RECORDED_STILLS });
-      const stopped = await recording.stop();
+      // A stop without `after` requests only the stills whose planned time has already come, so the check waits on the display clock
+      // until the stills of the recording are all planned, then stops after its first displayed time. The length of a still is the
+      // refresh of the window that the host reports, and a stop after a time beyond the last planned still fails.
+      const { refreshRate } = await s.get("host.window");
+      const gap = 1000 / refreshRate;
+      const start = (await s.presented()).displayed;
+      let displayed = start;
+      while (displayed - start < RECORDED_STILLS * gap) displayed = (await s.presented()).displayed;
+      const stopped = await recording.stop({ after: start });
       requireNoLostStills(recording.judge(), "the recording");
       const files = frames(stopped.frames);
       assert.ok(files.length >= 2, `the recording holds ${files.length} frames, fewer than 2`);
       const samples = files.map((file) => ringSamples(readFrame(file), rect));
       const turns = samples.slice(1).filter((value, index) => value !== samples[index]).length;
+      recording.keep("progress-ring", { rect, samples, reduced, turns });
       t.diagnostic(`${app.name}: ${files.length} frames, ${turns} changes of the progress ring, reduced motion ${reduced}`);
       if (reduced) {
         assert.equal(turns, 0, `the progress ring changed in ${turns} frames under reduced motion`);

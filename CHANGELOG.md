@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222-2: The progress ring check waits until the stills of its recording are all planned, so the recording holds 30 frames; a stop before the plan ended kept 3.
 - F1217-8: cmd+Backspace asks the removal of the selected row from the search field too, in both hosts.
 - F1217: The project home removes a project with a missing folder as page-wire case home-folders-remove, played by home-folders.test.mjs.
 - F1108: The window check reloads a fixture view's page with core.plugins.apply and judges its colors and contrast before and after the reload; the defect is not reproduced under this condition.
