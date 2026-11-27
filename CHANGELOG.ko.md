@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-8: 보류 항목에 편집기 찾기(editor.find.open)가 cmd+f를 쓴다는 사실을 적어, ⌘F의 소유자가 정해질 때까지 workbench는 ⌘F를 연결하지 않는다.
 - F1232-2: packages/workbench 파일 23개의 주석을 영어로 바꾸고, 설정 절 참조를 영어 spec의 ASCII anchor로 바꿨다.
 - F959-2: make 대상이 agent layout 요청마다 claude를 한 번씩 mygo에서 실행해 결과 layout을 판정한다. 첫 실행은 4개 중 1개를 충족한다.
 - F1217-7-2-2: 웹 프로젝트 홈의 생성 폼은 부모 폴더를 projectsFolder로 시작한다.
