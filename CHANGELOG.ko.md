@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F999-2: 표시된 surface의 새 generation이 입력 없이 region의 그리기 상태를 보내는지 Go와 Rust 테스트로 고정했습니다.
 - F1217-16: sidecar 세션의 소유자는 명세와 호스트에서 session owner가 아니라 소유자로 쓴다.
 - F1217-11-7: 오버레이 update 규칙은 바뀐 복사본을 한 번 보내며, 새 테스트는 같은 복사본 규칙을 고정합니다.
 - F1107: 이름 있는 surface, 등록되지 않은 surface, MCP status 도구의 창 대체 규칙의 status 읽기에 테스트를 추가한다.

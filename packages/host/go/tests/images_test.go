@@ -1646,6 +1646,29 @@ func TestSentDrawingIsTheStateLastSentToTheSupplier(t *testing.T) {
 	}
 }
 
+// A page that opens a new document of a shown surface begins a generation, and the region of the new supplier receives the drawing state of the
+// shown surface without any input, so its supplier starts to draw (docs/spec/native-surfaces.md#image-regions).
+// contract: image.drawing.sent-at-attach-and-on-change
+func TestANewGenerationOfAShownSurfaceSendsItsDrawingState(t *testing.T) {
+	images := host.NewImages()
+	key := attachedDrawingImage(t, images, "tab-1")
+	if err := images.SetVisible(key, true); err != nil {
+		t.Fatal(err)
+	}
+	images.SetSurfaceVisible(key.Surface, true)
+	images.SetOnScreen(true)
+	if got := drawingValues(sentDrawingChanges(images)); !slices.Equal(got, []string{"view=true"}) {
+		t.Fatalf("the shown surface sent %v, want view=true", got)
+	}
+	images.BeginGeneration(key.Surface)
+	if got := drawingValues(sentDrawingChanges(images)); !slices.Equal(got, []string{"view=true"}) {
+		t.Fatalf("a new generation of the shown surface sent %v, want view=true for the new supplier", got)
+	}
+	if got := drawingValues(sentDrawingChanges(images)); !slices.Equal(got, []string{}) {
+		t.Fatalf("an unchanged generation sent %v", got)
+	}
+}
+
 // contract: image.drawing.unsent-change-is-sent-again
 func TestADrawingChangeThatWasNotSentIsReturnedAgain(t *testing.T) {
 	images := host.NewImages()

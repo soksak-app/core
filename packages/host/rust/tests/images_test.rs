@@ -1774,6 +1774,33 @@ fn sent_drawing_is_the_state_last_sent_to_the_supplier() {
     );
 }
 
+// A page that opens a new document of a shown surface begins a generation, and the region of the new supplier receives the drawing state of the
+// shown surface without any input, so its supplier starts to draw (docs/spec/native-surfaces.md#image-regions).
+// contract: image.drawing.sent-at-attach-and-on-change
+#[test]
+fn a_new_generation_of_a_shown_surface_sends_its_drawing_state() {
+    let images = Images::default();
+    let key = attached_drawing_image(&images, "tab-1");
+    images.set_visible(&key, true).unwrap();
+    images.set_surface_visible(&key.0, true);
+    images.set_on_screen(true);
+    assert_eq!(
+        drawing_values(sent_drawing_changes(&images)),
+        vec!["view=true"],
+        "the shown surface"
+    );
+    images.begin_generation(&key.0);
+    assert_eq!(
+        drawing_values(sent_drawing_changes(&images)),
+        vec!["view=true"],
+        "a new generation of the shown surface sends the drawing state to the new supplier"
+    );
+    assert!(
+        sent_drawing_changes(&images).is_empty(),
+        "an unchanged generation is sent again"
+    );
+}
+
 // contract: image.drawing.unsent-change-is-sent-again
 #[test]
 fn a_drawing_change_that_was_not_sent_is_returned_again() {
