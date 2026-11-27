@@ -1978,3 +1978,24 @@ func TestTheSetLayoutSegmentsAreNamedLayoutControls(t *testing.T) {
 		t.Fatalf("found %d layout controls of set-1, want one control with the two segments", found)
 	}
 }
+
+// A stored first width outside the range from the minimum to the maximum shows its line and the button 범위 안으로 맞추기, which runs
+// core.settings.change with the width cut to the range (docs/spec/settings.md#작업-공간).
+func TestAFirstWidthOutsideTheRangeShowsItsLineAndTheFixButton(t *testing.T) {
+	h := acme()
+	h.common["sidebarMinWidth"], h.common["sidebarMaxWidth"], h.common["sidebarWidth"] = 300.0, 500.0, 200.0
+	f := newShell(t, h)
+	f.run("core.settings.open", nil)
+	// The line is an error of the tab, so the press and the draw that show it are quiet: the error display records it.
+	f.runQuiet("core.settings-tab.nav", map[string]any{"page": "workspace"})
+	if !f.has("core.settings-tab.fix", "") || !f.tester.HasText("처음 폭 200pt가 범위 300–500pt 밖이다.") {
+		t.Fatalf("the line and the fix button are not drawn: %q", f.tester.Texts())
+	}
+	f.clickQuiet("core.settings-tab.fix", "")
+	values := status[struct {
+		Values map[string]any `json:"values"`
+	}](t, f, "core.settings")
+	if values.Values["sidebarWidth"] != float64(300) {
+		t.Fatalf("the fix leaves sidebarWidth at %v, want 300", values.Values["sidebarWidth"])
+	}
+}

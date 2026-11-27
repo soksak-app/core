@@ -128,11 +128,46 @@ func (s *Shell) buildSidebarRows(b *settingsBuilder) error {
 	b.group("사이드바", "위에 있는 줄부터 자리를 잡는다. 먼저 놓인 변이 그 변의 전체 길이를 쓰고, 다음 변은 그만큼 빠진다. 끈 변도 자기 순서를 지킨다.", rows...)
 
 	widths := s.settings.Catalog.Settings.LayoutRanges
-	b.group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 저장 크기가 없는 창 사이드바가 여는 크기(위·아래 사이드바는 높이)이며 최소 폭과 최대 폭 사이여야 한다.",
+	sizeRows := []settingsRow{
 		s.row(b, "최소 폭", s.slide(b, "sidebarMinWidth", widths["sidebarMinWidth"], "pt")),
 		s.row(b, "최대 폭", s.slide(b, "sidebarMaxWidth", widths["sidebarMaxWidth"], "pt")),
-		s.row(b, "처음 폭", s.slide(b, "sidebarWidth", widths["sidebarWidth"], "pt")))
+		s.row(b, "처음 폭", s.slide(b, "sidebarWidth", widths["sidebarWidth"], "pt")),
+	}
+	sizeRows = append(sizeRows, s.sizeErrorRows(b)...)
+	b.group("사이드바 크기", "사이드바의 폭(pt). 처음 폭은 카드 안 사이드바와 저장 크기가 없는 창 사이드바가 여는 크기(위·아래 사이드바는 높이)이며 최소 폭과 최대 폭 사이여야 한다.",
+		sizeRows...)
 	return nil
+}
+
+// sizeErrorWhere is the error place of the sidebar size group (docs/spec/settings.md#작업-공간).
+const sizeErrorWhere = "settings sidebar-size"
+
+// sizeErrorRows shows the error of the sidebar size group: the minimum must be below the maximum, and the first width must lie between
+// them. A first width outside the range shows its line and the button 범위 안으로 맞추기, which runs core.settings.change with the width cut
+// to the range (docs/spec/settings.md#작업-공간). A valid group shows no error.
+func (s *Shell) sizeErrorRows(b *settingsBuilder) []settingsRow {
+	least, _ := s.value("sidebarMinWidth").(float64)
+	most, _ := s.value("sidebarMaxWidth").(float64)
+	width, _ := s.value("sidebarWidth").(float64)
+	if least >= most {
+		s.errors.Show(sizeErrorWhere, fmt.Sprintf("최소 폭(%spt)이 최대 폭(%spt)보다 작아야 한다.", valueText(least), valueText(most)), "")
+		return nil
+	}
+	if width >= least && width <= most {
+		s.errors.Hide(sizeErrorWhere)
+		return nil
+	}
+	cut := width
+	if cut < least {
+		cut = least
+	}
+	if cut > most {
+		cut = most
+	}
+	s.errors.Show(sizeErrorWhere, fmt.Sprintf("처음 폭 %spt가 범위 %s–%spt 밖이다.", valueText(width), valueText(least), valueText(most)), "")
+	fix := b.small("fix", "core.settings-tab.fix", "범위 안으로 맞추기", "core.settings.change",
+		map[string]any{"key": "sidebarWidth", "value": cut, "scope": inScope(s.settingsTab.scope)})
+	return []settingsRow{{controls: []*SettingsControl{fix}, list: true}}
 }
 
 // buildBehavior builds 동작: the language, the card arrangement, the memory saver and the error toasts.

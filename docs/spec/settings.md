@@ -193,7 +193,7 @@ The three widths keep the scope of the current contract, common and project, bec
 The group checks the effective values of the scope, because a project value can differ from the common value:
 
 - When the minimum is not less than the maximum, the group shows the line `최소 폭(<값>pt)이 최대 폭(<값>pt)보다 작아야 한다.`
-- When the first width is outside the range from the minimum to the maximum, the group shows the line `처음 폭 <값>pt가 범위 <최소>–<최대>pt 밖이다.` and the button `범위 안으로 맞추기`. The button runs `core.settings.change {key: sidebarWidth, value, scope}` with the value cut to the range.
+- When the first width is outside the range from the minimum to the maximum, the group shows the line `처음 폭 <값>pt가 범위 <최소>–<최대>pt 밖이다.` and the button `범위 안으로 맞추기`. The button (element `core.settings-tab.fix`) runs `core.settings.change {key: sidebarWidth, value, scope}` with the value cut to the range. When the minimum is not below the maximum, the group shows `최소 폭(<최소>pt)이 최대 폭(<최대>pt)보다 작아야 한다.` and no button. The line is an error of the tab and shows in the error display, and it is withdrawn when the widths are valid.
 
 ### 사이드바 세트
 
