@@ -52,6 +52,25 @@ function badgesOf(row) {
 /** The letter icon of a plugin: the first letter of its name in the accent token. */
 const letter = (name) => element("span", "plug-letter", [...name][0]);
 
+/** The sidecars of a plugin as their names and ranges, or 없음 without a sidecar (docs/spec/settings.md#plugin-page). */
+export function sidecarText(sidecars) {
+  if (sidecars.length === 0) return "없음";
+  return sidecars.map((sidecar) => (sidecar.range === null ? sidecar.name : `${sidecar.name} ${sidecar.range}`)).join(", ");
+}
+
+/** The name of a plugin in the state, which the row 필요 and its install button name; an id that the state does not list is its own name. */
+export function nameOfPlugin(id) {
+  return statusRows().find((item) => item.id === id)?.name ?? id;
+}
+
+/** The meta line of the row 사용 of a plugin page: its categories, its id, its installed version and the latest or published version, then its
+ * sidecars (docs/spec/settings.md#plugin-page). */
+export function useMetaOf(item) {
+  const categories = Object.entries(pluginCategories()).filter(([, plugins]) => plugins.some((plugin) => plugin.id === item.id)).map(([name]) => name).join(", ");
+  const version = `설치 ${item.installed.version}${hasUpdate(item) ? ` · 배포 ${item.latest}` : " · 최신"}`;
+  return [categories, item.id, version, item.sidecars.length > 0 ? `사이드카 ${sidecarText(item.sidecars)}` : ""].filter(Boolean).join(" · ");
+}
+
 /** The meta line of a plugin: its plugin categories, its key and its version (docs/spec/settings.md#plugins). A category is listed when the window loads the plugin in it. */
 function metaOf(row) {
   const version = row.installed ? `v${row.installed.version}` : row.latest ? `v${row.latest}` : "";
@@ -304,7 +323,8 @@ export function pluginPage(id) {
   body.push(infoCard(item, unit));
   if (unit && pluginAccounts(id)?.accounts) body.push(accountsGroup(unit));
   body.push(settingsGroup(unit));
-  if (unit) body.push(group("섹션", "이 플러그인이 사이드바에 제공하는 섹션.", [sectionChips(unit)]));
+  // The group of a plugin without sections is not drawn (docs/spec/settings.md#plugin-page).
+  if (unit && unit.sections.length > 0) body.push(group("섹션", "이 플러그인이 사이드바에 제공하는 섹션.", [sectionChips(unit)]));
   // The window selectors come from the loaded manifest; a plugin that is not loaded declares none, so its group does not show.
   if (unit) body.push(group("창 사이드바", "이 플러그인의 탭이 포커스 카드의 활성 탭인 동안 쓰는 창 사이드바. 세트를 고른 변만 바뀌고, 위에 있는 줄부터 자리를 잡는다.",
     [sideList({ order: `${id}.win.order`, place: (side) => `window-${side}`, plugin: id, title: "창 사이드바" })]));
@@ -341,15 +361,21 @@ function infoCard(item, unit) {
   card.append(...contributionLines(item.id));
   if (item.installed === null) {
     card.append(row({ label: "설치", control: action(item.id, "install", "설치", "core.plugins.install", { plugin: item.id }, "primary"), key: "install" }));
+    card.append(row({ label: "사이드카", description: sidecarText(item.sidecars), key: "sidecars" }));
+    // An uninstalled plugin has no loaded manifest, so 더하는 것 is the dash (docs/spec/settings.md#plugin-page).
+    card.append(row({ label: "더하는 것", description: "—", key: "contributes" }));
     return card;
   }
-  const controls = [enableSwitch(item)];
+  const controls = [];
+  if (developmentBuild(item)) controls.push(badge("개발 빌드", "warn", { title: `설치 ${item.installed.version} > 배포 ${item.latest}` }));
+  controls.push(enableSwitch(item));
   if (hasUpdate(item)) controls.push(action(item.id, "update", `${item.latest} 로 업데이트`, "core.plugins.update", { plugin: item.id }));
   const ending = heldAction(item.id);
   if (ending) controls.push(ending);
-  card.append(row({ label: "사용", description: `설치 ${item.installed.version}${hasUpdate(item) ? "" : " · 최신"}`, key: "enable", extras: controls }));
+  card.append(row({ label: "사용", description: useMetaOf(item), key: "enable", extras: controls }));
   for (const id of missingDependencies(item)) {
-    card.append(row({ label: "필요", description: `필요한 ${id} 플러그인이 설치되어 있지 않다.`, control: action(item.id, "install-dependency", `${id} 설치`, "core.plugins.install", { plugin: id }, "primary"), key: "requires" }));
+    const name = nameOfPlugin(id);
+    card.append(row({ label: "필요", description: `필요한 ${name}(${id}) 플러그인이 설치되어 있지 않다.`, control: action(item.id, "install-dependency", `${name} 설치`, "core.plugins.install", { plugin: id }, "primary"), key: "requires" }));
   }
   card.append(removal(item));
   return card;
@@ -372,7 +398,6 @@ function removal(item) {
 /** The sections of a plugin as read-only chips. */
 function sectionChips(unit) {
   const wrap = element("span", "set-chips");
-  if (unit.sections.length === 0) wrap.append(element("span", "set-caption", "이 플러그인에는 섹션이 없다."));
   for (const name of sectionNames(unit.sections)) wrap.append(element("span", "set-chip set-chip--neutral", name));
   return wrap;
 }

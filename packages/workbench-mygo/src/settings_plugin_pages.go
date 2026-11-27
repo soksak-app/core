@@ -516,25 +516,31 @@ func (s *Shell) buildPluginTab(b *settingsBuilder) error {
 	}
 	if item.Installed == nil {
 		info = append(info, settingsRow{name: "설치", controls: []*SettingsControl{s.pluginAction(b, busy, item.ID, "install", "설치", "core.plugins.install", map[string]any{"plugin": item.ID})}})
+		// An uninstalled plugin has no loaded manifest, so it adds no sections, settings or sidecar choices of its own: 더하는 것 is the dash.
+		info = append(info, settingsRow{name: "사이드카", description: sidecarText(item.Sidecars)}, settingsRow{name: "더하는 것", description: "—"})
 	} else {
-		use := settingsRow{name: "사용", description: fmt.Sprintf("설치 %s", item.Installed.Version)}
+		use := settingsRow{name: "사용", description: useMeta(s, *item)}
 		pluginUpdate, err := hasUpdate(*item)
 		if err != nil {
 			return err
 		}
-		if pluginUpdate {
-			use.description = fmt.Sprintf("설치 %s · 배포 %s", item.Installed.Version, *item.Latest)
-		} else {
-			use.description += " · 최신"
+		developing, err := developmentBuild(*item)
+		if err != nil {
+			return err
 		}
-		use.controls = []*SettingsControl{pluginSwitch(b, *item, busy)}
+		use.controls = []*SettingsControl{}
+		if developing {
+			use.controls = append(use.controls, pluginBadge(b, "개발 빌드", "warn"))
+		}
+		use.controls = append(use.controls, pluginSwitch(b, *item, busy))
 		if pluginUpdate {
 			use.controls = append(use.controls, s.pluginAction(b, busy, item.ID, "update", *item.Latest+"로 업데이트", "core.plugins.update", map[string]any{"plugin": item.ID}))
 		}
 		info = append(info, use)
 		for _, dependency := range s.missingDependencies(item.ID, rows) {
-			info = append(info, settingsRow{name: "필요", description: fmt.Sprintf("필요한 %s(%s) 플러그인이 설치되어 있지 않다.", dependency, dependency),
-				controls: []*SettingsControl{s.pluginAction(b, busy, item.ID, "install-dependency", dependency+" 설치", "core.plugins.install", map[string]any{"plugin": dependency})}})
+			name := nameOfRow(rows, dependency)
+			info = append(info, settingsRow{name: "필요", description: fmt.Sprintf("필요한 %s(%s) 플러그인이 설치되어 있지 않다.", name, dependency),
+				controls: []*SettingsControl{s.pluginAction(b, busy, item.ID, "install-dependency", name+" 설치", "core.plugins.install", map[string]any{"plugin": dependency})}})
 		}
 		info = append(info, s.removalRow(b, item.ID))
 	}
@@ -559,18 +565,15 @@ func (s *Shell) buildPluginTab(b *settingsBuilder) error {
 			ids[i] = section.ID
 		}
 		// Each section is a read-only chip with its name; a plugin without sections says so in a line.
-		var rows []settingsRow
-		if len(ids) == 0 {
-			rows = []settingsRow{{description: "이 플러그인에는 섹션이 없다."}}
-		} else {
+		// The group of a plugin without sections is not drawn (docs/spec/settings.md#plugin-page).
+		if len(ids) > 0 {
 			names := s.sectionNames(ids)
 			chips := make([]*SettingsControl, len(ids))
 			for i, id := range ids {
 				chips[i] = b.add(SettingsControl{Name: "core.settings-tab.chip", Key: text("section:" + id), Label: names[i], kind: controlChip})
 			}
-			rows = []settingsRow{{controls: chips}}
+			b.group("섹션", "이 플러그인이 사이드바에 제공하는 섹션.", settingsRow{controls: chips})
 		}
-		b.group("섹션", "이 플러그인이 사이드바에 제공하는 섹션.", rows...)
 	}
 	// The sidebar choices come from the loaded manifest, so a plugin that is not loaded has no sidebar group.
 	if unit == nil {
@@ -693,4 +696,48 @@ func (s *Shell) pluginRowsOf(status PluginsStatus) []PluginRow {
 			Installed: &PluginInstalled{Version: version, Enabled: true}, Sidecars: []PluginSidecar{}})
 	}
 	return rows
+}
+
+// sidecarText lists the sidecars of a plugin as its name and range, or 없음 without a sidecar (docs/spec/settings.md#plugin-page).
+func sidecarText(sidecars []PluginSidecar) string {
+	if len(sidecars) == 0 {
+		return "없음"
+	}
+	parts := make([]string, len(sidecars))
+	for i, sidecar := range sidecars {
+		parts[i] = sidecar.Name
+		if sidecar.Range != nil {
+			parts[i] += " " + *sidecar.Range
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// nameOfRow returns the name of the plugin row with the id, which the state lists for each plugin that the page names.
+func nameOfRow(rows []PluginRow, id string) string {
+	for _, row := range rows {
+		if row.ID == id {
+			return row.Name
+		}
+	}
+	return id
+}
+
+// useMeta is the meta line of the row 사용 of a plugin page: its category, its id, its installed version and the latest or published
+// version, then its sidecars (docs/spec/settings.md#plugin-page).
+func useMeta(s *Shell, row PluginRow) string {
+	var parts []string
+	if loaded := s.loadedPlugin(row.ID); loaded != nil && len(loaded.Categories) > 0 {
+		parts = append(parts, loaded.Categories[0])
+	}
+	parts = append(parts, row.ID, "설치 "+row.Installed.Version)
+	if update, err := hasUpdate(row); err == nil && update {
+		parts[len(parts)-1] += " · 배포 " + *row.Latest
+	} else {
+		parts[len(parts)-1] += " · 최신"
+	}
+	if len(row.Sidecars) > 0 {
+		parts = append(parts, "사이드카 "+sidecarText(row.Sidecars))
+	}
+	return strings.Join(parts, " · ")
 }
