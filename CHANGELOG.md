@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-7: The save tests of the debug view cite the Files section of the debug spec.
 - F1217-11-7: An overlay update reads the card when it is sent, so a withdrawn error toast is never sent again.
 - F1217-12-9: The web notice store writes format 2; a card entry keeps its tab label, which the source chip shows.
 - F1217-12-9: notices.json is format 2; a card entry keeps its tab label, which the source chip shows.

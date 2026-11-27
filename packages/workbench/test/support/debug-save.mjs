@@ -1,4 +1,4 @@
-// Shared helpers of the save tests of the debug view (docs/spec/debug.md#save). Each test file of debug-save-ui-*.test.mjs runs in its own
+// Shared helpers of the save tests of the debug view (docs/spec/debug.md#files). Each test file of debug-save-ui-*.test.mjs runs in its own
 // process, so the first log batch of that process takes the clock calls of its case. The modules that read the host are imported after the
 // case of the test is selected, so openSaveView imports them dynamically.
 import assert from "node:assert/strict";

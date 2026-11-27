@@ -1,4 +1,4 @@
-// A save while one writes is refused with an error, and a failure that the done event reports is shown (docs/spec/debug.md#save). The host
+// A save while one writes is refused with an error, and a failure that the done event reports is shown (docs/spec/debug.md#files). The host
 // calls and the host events of the test are the page-wire case of the test (docs/spec/cases/page-wire/README.md).
 import assert from "node:assert/strict";
 import test from "node:test";
