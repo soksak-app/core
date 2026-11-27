@@ -6,9 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
-- F1217-17-9: The settings menu lists every installed plugin with a chevron, and a disabled plugin shows the badge 꺼짐.
-- F1238-1: The event writer reports a record that the writer queue refuses on standard error, instead of dropping it silently.
-- F1238-2: The make target repeat-go-package runs a Go package in one process per run and reports each run as PASS or FAIL.
+- F1217-17-5: The agent page record is closed: the remaining row layout moved to F1250, and the six-row design, the removal button, the hook install buttons, the err tone for 없음 and the check timer are not adopted.
 - F1217-17-5: The comments and the test message of the agent badge icon name the design element and no design file.
 - F1217-18-3: The settings menu search field keeps its height, so the first menu item no longer overlaps it.
 - F1247: The shown surface drawing item records its Red and Green results and is complete.
