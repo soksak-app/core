@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1108-6: The drop band check measures only the cards that draw a head and a foot, so a window sidebar without a status line no longer fails the window check. Verification: Red of verify-drop-band-cards.test.mjs on the missing export; Green of it and of window-sidebar-place-verification.test.mjs, 5 of 5; the window check run is pending.
 - Removed the settings scroll modal case: settings-scroll.test.mjs pins its scroll clauses.
 - The workspace page-wire cases are played by a workbench test: the common settings write, the unknown project refusal and the snapshot.
 - Removed the placeholder identity case: the identity refusal is pinned by the host folder identity tests.

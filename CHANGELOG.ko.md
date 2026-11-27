@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1108-6: 드롭 구획 check가 머리와 발을 모두 그리는 카드만 재므로, status 줄이 없는 창 사이드바 때문에 window check가 실패하지 않는다. 검증: 없는 export로 verify-drop-band-cards.test.mjs가 실패했고(Red), 이 테스트와 window-sidebar-place-verification.test.mjs가 5개 중 5개 통과한다(Green). window check 실행은 남아 있다.
 - 설정 스크롤 모달 사례를 제거했다: settings-scroll.test.mjs가 스크롤 조항을 고정한다.
 - 작업 공간 페이지 와이어 사례를 워크벤치 테스트가 재생한다: 공통 설정 쓰기, 알 수 없는 프로젝트 거부, 스냅샷.
 - 자리표시 신원 사례를 제거했다: 신원 거부는 호스트 폴더 신원 테스트가 고정한다.

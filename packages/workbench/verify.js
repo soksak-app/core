@@ -9,7 +9,7 @@ import { Soksak } from "soksak";
 import { ahead, latest, placementPending, seated } from "./compositor.js";
 import { currentGrid, currentTree, dropBands, plane, presentedCardRect, railOutline, tabsOf } from "./plane.js";
 import { isPlace } from "./registry.js";
-import { expectedRailLoops, seatScale, windowSidebarsPlaced } from "./verify-checks.js";
+import { expectedRailLoops, headedAndFootedCards, seatScale, windowSidebarsPlaced } from "./verify-checks.js";
 import { cardRadius, value } from "./settings.js";
 import { gridScale } from "./device-grid.js";
 
@@ -423,7 +423,7 @@ export function verify(controls = null) {
   const row = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
   const head0 = row("--head-h"), foot0 = row("--foot-h");
   let bandOff = 0, banded = 0;
-  for (const el of plane.querySelectorAll(".card[data-card-id]")) {
+  for (const el of headedAndFootedCards(plane)) {
     const box = el.getBoundingClientRect();
     const top = el.querySelector(".chrome").getBoundingClientRect();
     const bottom = el.querySelector(".status").getBoundingClientRect();
