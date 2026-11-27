@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1232-3: comment-language 검사가 보고한 e2e test 파일 세 개의 주석을 영어로 바꿨다.
 - F1233-1: 다른 plugin이나 generation의 runtime.log는 둘 다 이름 붙인 오류로 거절된다.
 - F1217-7: 홈 상태줄 웹 Red는 createHomeStatusBar를 내보내지 않아 가져오기에서 실패한다.
 - F1234: exposure 검사의 copy 목록과 common-only key 검사가 main의 선언이 가진 copy와 key를 기대하도록 고쳐, 두 test가 통과한다.

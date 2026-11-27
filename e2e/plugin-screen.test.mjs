@@ -1,4 +1,4 @@
-// The plugin page 설치됨 of the settings tab: checks the description, the version, the sidecars, the search and the plugin actions (Plugin screen in docs/spec/installation.md).
+// The plugin page Installed of the settings tab: checks the description, the version, the sidecars, the search and the plugin actions (Plugin screen in docs/spec/installation.md).
 // The page lists the fixture plugins of the check application (scripts/fixture-registry.mjs): the raster probe uses the fixture sidecar
 // rasterprobe, the plain-view probe is the plugin that the checks disable and enable, and the save-close probe gives the modified tab.
 import assert from "node:assert/strict";
@@ -15,7 +15,7 @@ const PLUGIN = "probeplain";
 /** The fixture plugin whose tab reports itself modified and declares a save command. */
 const MODIFIED_PLUGIN = "probeclose";
 
-/** Shows the page 설치됨 of the settings tab and, when the check ends, clears the plugin search and closes the settings tab. */
+/** Shows the page Installed of the settings tab and, when the check ends, clears the plugin search and closes the settings tab. */
 async function showPlugins(s) {
   s.cleanupSteps(
     async () => {

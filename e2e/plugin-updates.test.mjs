@@ -48,7 +48,7 @@ for (const app of Object.values(APPS)) {
       "the registry with a newer version did not list an update");
     assert.deepEqual(listed.updates, [{ id: PLUGIN, installed, latest: newer }]);
 
-    // The window shows the update control with the count N while an update exists; it opens the page 설치됨 at the update list.
+    // The window shows the update control with the count N while an update exists; it opens the page Installed at the update list.
     await s.run("core.plugins.show-updates");
     await s.until("core.settings-tab", (tab) => tab?.page === "installed" && tab.filter === "updates" && tab.listed.length > 0,
       "the settings tab did not show the update list on 설치됨");

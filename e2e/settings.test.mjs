@@ -211,7 +211,7 @@ for (const app of Object.values(APPS)) {
     const saved = (want, message) => s.until("core.settings", (value) => !value.saving &&
       value.values.sets.find((item) => item.id === made.id)?.sections.join() === want.join(), message);
 
-    // The section select adds the chosen registered section and appends it to the set (docs/spec/settings.md#사이드바-세트).
+    // The section select adds the chosen registered section and appends it to the set (docs/spec/settings.md#stored-sets-and-links).
     const addControl = (await s.get("core.settings-tab")).controls.find((c) => c.name === "core.settings-tab.add");
     const registered = addControl.groups.flatMap((g) => g.values);
     assert.equal(registered.length, 5, "the layout probe and the plain view probe declare five sections");
