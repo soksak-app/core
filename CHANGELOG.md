@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1161: The workbench package files list names sidecar-outdated.js, so the staged frontend holds the module that core-exposure.js imports.
 - F715-3: The test-link check points the remaining links of the error toast, surface view path, settings tab and fixture pages at the current symbols and tests and removes the F699 e2e link whose title is gone.
 - F1217-11-6: A card notice no longer marks its tab, and a later notice of a tab removes its kept system notification.
 - F1217-6: The start and update tests of the mygo package state the notice store read at start and the installed page that reads the application update.

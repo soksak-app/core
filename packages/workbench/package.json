@@ -148,7 +148,8 @@
     "replace-file.mjs",
     "notices.js",
     "notice-view.js",
-    "notices-file.js"
+    "notices-file.js",
+    "sidecar-outdated.js"
   ],
   "exports": {
     "./activity.js": "./activity.js",
