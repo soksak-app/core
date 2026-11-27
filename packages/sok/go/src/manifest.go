@@ -1016,7 +1016,10 @@ func checkAccounts(where string, manifest map[string]any) error {
 	if !ok || len(programs) != len(roles) {
 		return fmt.Errorf("%s programs must be {status, login, logout}", at)
 	}
-	declared, _ := manifest["programs"].(map[string]any)
+	declared, ok := manifest["programs"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: accounts need a programs declaration", where)
+	}
 	for _, role := range roles {
 		name := programs[role].(string)
 		entry, ok := declared[name].(map[string]any)
@@ -1037,7 +1040,10 @@ func checkAccounts(where string, manifest map[string]any) error {
 			return fmt.Errorf("%s program %s must take two pattern arguments", at, name)
 		}
 	}
-	data, _ := manifest["data"].(map[string]any)
+	data, ok := manifest["data"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("%s: accounts need a data declaration with the key accounts", where)
+	}
 	key, ok := data["accounts"].(map[string]any)
 	defaults, list := key["default"].([]any)
 	if !ok || key["scope"] != "plugin" || !list || len(defaults) != 0 {
