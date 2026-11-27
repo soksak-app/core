@@ -173,6 +173,12 @@ pub fn clone_repository(
     })?;
     // The command keeps the write ends until it is dropped; the read ends the stream only after that.
     drop(command);
+    // The address is not stored in the events, because it can carry credentials (docs/spec/logging.md#entrances).
+    crate::event_record::emit_host(
+        crate::event_log::Level::Info,
+        "host.clone.start",
+        serde_json::json!({"target": target.display().to_string(), "pid": child.id()}),
+    );
     let mut output = String::new();
     let mut stream_error = None;
     let mut pending = Vec::new();
@@ -196,6 +202,12 @@ pub fn clone_repository(
         stream_error.get_or_insert(e);
     }
     let status = child.wait().map_err(|e| e.to_string())?;
+    // The exit code of git is absent when a signal ended it, and the event holds -1 for that case.
+    crate::event_record::emit_host(
+        crate::event_log::Level::Info,
+        "host.clone.end",
+        serde_json::json!({"target": target.display().to_string(), "pid": child.id(), "status": status.code().unwrap_or(-1)}),
+    );
     if let Some(error) = stream_error {
         remove_failed_target(&target)?;
         return Err(error);
@@ -221,6 +233,11 @@ fn emit_clone_line(
     pending.clear();
     output.push_str(&line);
     output.push('\n');
+    crate::event_record::emit_host(
+        crate::event_log::Level::Info,
+        "host.clone.line",
+        serde_json::json!({"line": line}),
+    );
     progress(&line)
 }
 

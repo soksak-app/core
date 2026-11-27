@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1262: The clone of the import form writes host.clone.start, host.clone.line and host.clone.end to the event log through the gated writer.
 - F1265: The pressed fullscreen tool test uses a fixture without sidebar sets, so the missing-plugin notice does not cover its head tools.
 - F1246: The contract audit reads the reload binding case declaration of the Rust host, so tauriv2 and gpuikit declare it.
 - F1264-2: The darwin document region measures the elements that match a selector and replies their boxes and computed style, with a fixed script.

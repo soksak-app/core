@@ -450,6 +450,8 @@ func (h *Host) ProjectClone(ctx context.Context, reqJSON json.RawMessage) (Proje
 		}
 		return ProjectFolder{}, err
 	}
+	// The address is not stored in the events, because it can carry credentials (docs/spec/logging.md#entrances).
+	EmitHost(LevelInfo, "host.clone.start", map[string]any{"target": target, "pid": cmd.Process.Pid})
 	var output strings.Builder
 	read := make(chan struct{})
 	go func() {
@@ -462,6 +464,7 @@ func (h *Host) ProjectClone(ctx context.Context, reqJSON json.RawMessage) (Proje
 				continue
 			}
 			output.WriteString(line + "\n")
+			EmitHost(LevelInfo, "host.clone.line", map[string]any{"line": line})
 			if hasWindow {
 				window.Emit("project-clone", map[string]string{"line": line})
 			}
@@ -470,6 +473,8 @@ func (h *Host) ProjectClone(ctx context.Context, reqJSON json.RawMessage) (Proje
 	waitErr := cmd.Wait()
 	writer.Close()
 	<-read
+	// cmd.ProcessState is set once Wait returns, so the exit code of git is known here; it is -1 when a signal ended git.
+	EmitHost(LevelInfo, "host.clone.end", map[string]any{"target": target, "pid": cmd.Process.Pid, "status": cmd.ProcessState.ExitCode()})
 	if waitErr != nil {
 		if _, statErr := os.Lstat(target); statErr == nil {
 			if removeErr := os.RemoveAll(target); removeErr != nil {
