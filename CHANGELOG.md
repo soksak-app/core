@@ -16,9 +16,9 @@
 - F999-5: The compositor test file registers its fullscreen probe once, so the restarted hidden-tab test runs with the other tests of the file.
 - F1222: The progress ring reads the declared spinner turn duration instead of a literal.
 - F1217-11-3: The toast list reads the declared fill token instead of a literal flex basis.
-- F1217-7: The status bar names its project, card count and theme texts as elements, so they reach the element tree.
+- F1217-7: The status bar names its project, card count and theme texts as elements, so the element tree holds them.
 - F999-7: The host Rust test files follow rustfmt, so the workspace format check of CI passes.
-- F1217-7: The home row draws its pin and remove buttons beside the open button, so their element names reach the element tree.
+- F1217-7: The home row draws its pin and remove buttons beside the open button, so the element tree holds their element names.
 - F1217-11-3: The timeline cases record the toast markup of the show and list change.
 - F1217: A main-thread test target run without a test filter exits with an error that names the declared runner, instead of running two scenarios in one process.
 - F1217: A main-thread test target run without a test filter runs each test in its own process, as the declared runner does.

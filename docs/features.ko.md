@@ -85,6 +85,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1222-1 — sok Go와 Rust의 manifest reader가 accounts의 `data` 거절과 문자열 설정의 `maxLength` 거절에 공통 case 표의 문구를 쓴다.
   - [~] F1222-2 — web과 mygo의 진행 notice 고리가 창의 display frame에 맞춰 돌고, 동작 줄이기에서 멈춘다. 남은 일: 실행 중인 창에서 도는 모습 확인.
 - [o] F1223 — P1: 거절된 view의 `runtime.status.watch`는 stop 함수의 `ready` promise를 거절의 `code`와 `message`로 거절한다 (docs/spec/native-surfaces.md).
+- [ ] F1224 — P1, follows kit KR44 and F1217-16: code, test, 기록이 kit 0.0.17의 term 목록이 거절하는 capability 대신 plugin category를 쓴다. Input: kit 0.0.17의 `sok-check docs`가 core에서 capability 243줄을 보고한다(`scripts/check-tests.mjs`, 그 test, `docs/spec/cases`, `native/darwin/tests`, sok, plugin-api, window-check, `docs/spec/hosts.md`, `docs/plans/decouple-handoff.md`). 그중 90줄은 Tauri가 만드는 `apps/tauriv2/gen/schemas`이고, capability는 Tauri 자체의 이름이다. Expected: core의 이름과 문장은 plugin category를 쓰고, Tauri가 정하는 이름은 kit 검사가 읽지 않는 선언으로 남는다.
 - [o] F795-13 — P1, F795의 일부: 오류 occurrence test가 timer 교체 없이 page clock과 `view`, `now`를 받는 page store factory 위에서 실행된다.
 - [o] F1220 — P0: Page event batcher는 거절된 batch의 event를 버린 수로 세고 곧바로 다시 보내지 않는다. 입력: 9개 event의 batch를 거절하는 page wire. 동작: page가 실패할 때마다 같은 batch를 다시 보내 process의 메모리가 바닥난다. 기대: 실패한 batch는 하나의 오류 표시 경로로 한 번 보고되고, 그 event는 다음 batch에서 버린 수로 세며, batcher는 계속 동작한다.
   - [o] F1220-1 — page log와 performance switch의 case와 test는 거절된 batch의 손실을 다음 batch에 기록한다: page writer는 다음 batch의 `workbench.log.dropped`에 개수, byte, 이유 `the host refused the batch`를 적고 즉시 다시 보내지 않으며, test는 자기 지점에서 flush한다. Test: page-log.test.mjs와 performance.test.mjs, 20개 중 20개.
@@ -153,7 +154,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1217-5 — P1: web 설정은 grid의 행 component 하나로 그리고, 값이 바뀌면 바뀐 행만 갱신한다.
   - [o] F1217-6 — P1: mygo 설정은 같은 행 component와 F1217-2의 control로 그린다.
   - [~] F1217-7 — P1: 본창과 그 tab이 디자인을 따르며, 각 element는 선언된 command에 연결된다.
-    - [~] F1217-7-1 — mygo 시작 read가 실행마다 한 순서를 지킨다: ready 보고가 theme 응답, 그다음 notice read를 기다린다. 남은 일: commit, 그리고 mygo test의 status bar, seam, sidebar fold 실패.
+    - [o] F1217-7-1 — mygo 시작 read가 실행마다 한 순서를 지킨다: ready 보고가 theme 응답, 그다음 notice read를 기다린다. `tests/app_test.go`가 시작 호출 순서를 고정하고, 시작, status bar, seam, sidebar fold의 mygo 테스트 135개가 통과한다.
   - [o] F1217-10 — P0: 알림의 명세가 갱신된 디자인을 따른다. 알림은 경로 하나이며 종류는 성공, 정보, 경고, 오류, 진행이다. 알림은 세 곳에 보인다: 카드의 상태줄(그 카드의 알림), 종 아래의 토스트(앱 알림과 포커스가 아닌 카드의 알림), 알림 센터(모든 알림). 종은 모든 화면에서 제목줄 오른쪽 끝에 읽지 않은 수와 함께 있다. 설정은 토스트 모양, 알림 센터 모양, 조용히, 오류·경고 자동 닫힘이며, plugin이 카드에 알림을 주는 호출이 있다. 기대: `docs/spec/notifications.md`가 contract를 정하고, `docs/spec/exposure.md`의 오류 표시, `docs/spec/settings.md`의 오류 토스트, `docs/spec/native-modals.md`의 토스트 overlay를 대신하며, 반대 검토의 결정과 이유를 적는다.
   - [~] F1217-11 — P0, F1217-10 다음: web host가 알림을 보인다. 종, 토스트 세 모양, 센터의 팝오버와 서랍, 카드 상태줄, 알림 group의 설정이다.
     - [~] F1217-11-1 — web notice 저장소는 토스트가 바뀔 때만 watcher에 알리고, 토스트의 debug 사본은 timer가 정하는 너비를 담지 않아, 저장소 변경이 바뀌지 않은 사본의 overlay update를 보내지 않는다.
@@ -164,7 +165,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
     - [o] F1217-11-6 — 카드 notice는 그 tab의 dot을 바꾸지 않고, tab의 다음 notice는 system이든 아니든 그 tab의 system notification을 지운다(docs/spec/plugins.md#tab-reports).
     - [~] F1217-11-7 — debug 화면, modal 오류 toast, group header, files list, published imports의 page-wire case가 notice 경로의 호출을 따른다. 남은 일: specification 단계마다 case 갱신이나 page 수정.
   - [o] F1217-15 — 명령과 카드 없는 plugin의 notice. `core.notices.add {card?, plugin?, ...}`, `core.notices.progress`, `core.notices.done`, `core.notices.read {id}`는 `tab.notify`의 경로로 실행된다. plugin API의 `page.notify`, `page.progress`, `page.done`은 source `plugin`의 notice를 준다. `core.notices`는 각 항목을 `read`와 `source`와 함께 보인다. web, mygo, plugin API.
-    - [~] F1217-16 — code, test, 기록이 kit의 term 목록이 거절하는 settings window, settings modal 대신 settings tab을 쓴다. 남은 일: session owner, project library, owned terminal과 host, sok, plugin-api의 settings window; capability는 별도 항목이다.
+    - [o] F1217-16 — code, test, 기록이 kit의 term 목록이 거절하는 settings window, settings modal 대신 settings tab을 쓴다. 다음 kit 목록(0.0.17)으로 검사하면 그 term은 하나도 나오지 않는다.
   - [~] F1217-12 — P0, F1217-10 다음: mygo host가 같은 알림을 같은 글로 보인다.
     - [o] F1217-12-1 — mygo에서 알림 경로가 오류 토스트를 대신한다. 토스트를 보이던 모든 오류는 오류 notice를 만들고, notice는 kind와 title로 합쳐지며, 세 모양의 토스트가 정해진 시간 동안 보이고, `core.toasts`와 `core.notices.close {id}`가 `core.workbench.error`와 `core.error.dismiss`를 대신한다.
     - [o] F1217-12-2 — 모든 화면의 제목줄 종과, 거르기·묶음·지우기·읽음을 가진 팝오버와 서랍의 notice center. 기록은 configuration directory의 `notices.json`에 둔다.
