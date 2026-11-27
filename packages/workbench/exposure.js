@@ -152,11 +152,6 @@ export function createRegistry({ call = null, report = null } = {}) {
   };
 
   /**
-   * Forwards a request to a surface. The request has no time limit: the reply of the surface document or the end of its peer ends
-   * it. origin is the id of the exposure-request that this document handles when it forwards, so the host ends the forward with
-   * that request; a forward that this document starts itself has none (exposureForward in docs/spec/exposure.md).
-   */
-  /**
    * Runs a status read that names a surface and stores its record, workbench.status.read: the surface that the request named, the
    * surface that answers it and the owned session that the answering surface shows. A failed read is stored at the level warn with its
    * error code; the record holds the session before the read is sent, so it names the session that the read reached.
@@ -175,6 +170,11 @@ export function createRegistry({ call = null, report = null } = {}) {
     }
   }
 
+  /**
+   * Forwards a request to a surface. The request has no time limit: the reply of the surface document or the end of its peer ends
+   * it. origin is the id of the exposure-request that this document handles when it forwards, so the host ends the forward with
+   * that request; a forward that this document starts itself has none (exposureForward in docs/spec/exposure.md).
+   */
   async function forward(surface, method, params, origin) {
     if (!call) throw new ExposureError(EXPOSURE_ERRORS.gone, `surface ${surface} has no host`);
     const request = origin === undefined ? { id: ++forwards, surface, method, params } : { id: ++forwards, origin, surface, method, params };

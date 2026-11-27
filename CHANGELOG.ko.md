@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1107-1-1: 페이지 exposure의 forward 주석을 status read 기록이 아니라 forward 위에 둔다.
 - F1217-7: 누락된 스킬 또는 MCP 설정 항목은 core.settings-tab.setup-install 고치기 또는 설치 버튼을 가지며 core.setup.install을 실행한다.
 - F1217-7: 플러그인 끝내기 동작과 플러그인 문자열 설정의 텍스트 필드를 테스트가 요소 트리에서 읽는다.
 - F1107: Go와 Rust sok가 보내는 status 읽기마다 window, 상태 이름, surface, 결과를 sok.status.read로 기록한다.
