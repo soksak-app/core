@@ -69,9 +69,12 @@ export function createPageNotices({ view, now, record, onChange }) {
   return createNotices({ settings: (key) => settingValue(key), view, now, log: record, onChange });
 }
 
+/** The clock of the page store: now() is the instant of each notice change and timer. A test replaces now with its page clock. */
+export const pageClock = { now: () => Date.now() };
+
 const noticeStore = createPageNotices({
   view: globalThis,
-  now: () => Date.now(),
+  now: () => pageClock.now(),
   record: (level, line) => (level === "error" ? report(line) : log(line)),
   onChange: () => notify(),
 });
