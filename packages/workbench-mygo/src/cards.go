@@ -204,6 +204,9 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 		edge := s.palette.CardBorder()
 		inner := max(0, float32(rect.W)-2*edge)
 		head, foot := cardRows(float32(rect.H)-2*edge, s.metrics.headH, s.metrics.footH)
+		// The header row keeps its bottom border line at any height, so the flow of the card takes at least one border width for it;
+		// the header, the body and the declared slot all take this head.
+		head = max(head, s.palette.BorderWidth)
 		s.drawHead(c, id, data, sides, inner, head)
 		body := max(0, float32(rect.H)-2*edge-head)
 		width := max(0, inner-sides.extent("left")-sides.extent("right"))

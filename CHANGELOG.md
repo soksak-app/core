@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: A card header keeps its border width, so the drawn slot of a card shorter than its header follows the declared place.
 - F1190-3: A mygo restart with a restored tab whose owned session ended records that tab's error once in the log and sends no session request to the tab.
 - F1161: mygo shows an outdated surface's card notice when its plane is shown, on the card that holds the tab
 - F1217-6: A test checks that a choice of three values is a segment and a choice of more is a select box.
