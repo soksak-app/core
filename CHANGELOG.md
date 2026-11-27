@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1256: The checklist line of this item is present in both checklist files.
 - F1239-7-1: The stepper box of F1250-4 and the workbench.json copy sync of F1256 are restored after the F1239-7 commit removed them.
 - F1217-17: The duplicate follow-up lines of F1217-17-3 are removed from the checklist; the breaks are F1217-17-3-1 to F1217-17-3-3.
 - F1239-7: The settings menu follows the menu of the settings design, with the search icon, group labels, item icons and counts, in web and mygo.
