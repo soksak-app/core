@@ -9,6 +9,7 @@
 // The event of the tab is the publication of its state: onSettingsTabFront calls fn(front) when the tab opens, closes or comes to the front,
 // and the status core.settings-tab changes with it.
 import { registry } from "./exposure.js";
+import { icon } from "./icons.js";
 import { commandOf, delegate, mark, run } from "./commands.js";
 import { EXPOSURE_ERRORS, ExposureError } from "@soksak/plugin-api";
 import { ALL_ROWS, GROUPS, PAGES, choicesOf } from "./settings-rows.js";
@@ -239,14 +240,20 @@ function menuEl() {
   if (items.length) {
     const group = element("div", "set-menu__group");
     group.append(element("p", "set-menu__label", "설정이 있는 플러그인"));
-    for (const unit of items) {
-      const item = button(unit.name, {
-        expose: "core.settings-tab.plugin-item", command: "core.settings-tab.plugin", params: { plugin: unit.id }, key: `plugin:${unit.id}`,
-        on: !searching && state.page === "plugin" && state.plugin === unit.id, variant: "nav",
+    for (const row of items) {
+      const item = button(row.name, {
+        expose: "core.settings-tab.plugin-item", command: "core.settings-tab.plugin", params: { plugin: row.id }, key: `plugin:${row.id}`,
+        on: !searching && state.page === "plugin" && state.plugin === row.id, variant: "nav",
       });
-      const dot = element("span", "set-dot");
-      dot.title = "사용 중";
-      item.prepend(dot);
+      // The chevron comes before the name; an enabled plugin shows the dot at the end, a disabled one the badge 꺼짐 (docs/spec/settings.md#menu).
+      item.insertAdjacentHTML("afterbegin", icon("chevron-right"));
+      if (row.installed.enabled) {
+        const dot = element("span", "set-dot");
+        dot.title = "사용 중";
+        item.append(dot);
+      } else {
+        item.append(badge("꺼짐", "neutral"));
+      }
       group.append(item);
     }
     nav.append(group);

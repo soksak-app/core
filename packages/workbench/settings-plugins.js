@@ -488,10 +488,12 @@ function accountRow(plugin, kinds, account) {
   return el;
 }
 
-/** The menu items of the plugins that declare settings or accounts: one for each loaded plugin, with the green dot of an enabled plugin. */
+/** The items of the group 설정이 있는 플러그인: every installed plugin by id, whether or not it declares settings (docs/spec/settings.md#menu). */
 export function pluginMenuItems() {
-  const declared = new Set(Object.values(settingDefinitions()).map((def) => def.plugin));
-  return pluginUnits()
-    .filter((unit) => declared.has(unit.id) || pluginAccounts(unit.id)?.accounts)
-    .toSorted((a, b) => a.id.localeCompare(b.id));
+  return menuItemsOf(statusRows());
+}
+
+/** The installed rows of the state, by id; a plugin that is not installed has no item. */
+export function menuItemsOf(rows) {
+  return rows.filter((row) => row.installed !== null).toSorted((a, b) => a.id.localeCompare(b.id));
 }

@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
+- F1217-17-9: The settings menu lists every installed plugin with a chevron, and a disabled plugin shows the badge 꺼짐.
 - F1238-1: The event writer reports a record that the writer queue refuses on standard error, instead of dropping it silently.
 - F1238-2: The make target repeat-go-package runs a Go package in one process per run and reports each run as PASS or FAIL.
 - F1217-17-5: The comments and the test message of the agent badge icon name the design element and no design file.

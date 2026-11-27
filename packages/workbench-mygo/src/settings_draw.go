@@ -209,7 +209,7 @@ func (s *Shell) drawSettingsMenu(c *ui.Context, model *settingsModel, pane setti
 		plugins := false
 		for _, control := range model.nav {
 			// The group of the plugin items has its title before its first item (docs/spec/settings.md#menu).
-			if control.dot && !plugins {
+			if control.pluginItem && !plugins {
 				plugins = true
 				ui.Text(c, "설정이 있는 플러그인").FontSize(s.textCaption()).TextColor(s.palette.Muted)
 			}
@@ -236,11 +236,21 @@ func (s *Shell) drawSettingsNavItem(c *ui.Context, control *SettingsControl, pan
 		if on {
 			ui.Box(c).Absolute().Left(0).Top(pane.navMarkInset).Bottom(pane.navMarkInset).Width(pane.navMarkW).Radius(pane.navMarkR).Background(s.palette.Rail)
 		}
-		if control.dot {
-			// The dot of a plugin with settings uses the accent color, as .set-dot of packages/workbench/settings.css does.
-			ui.Box(c).Size(pane.navMarkW, pane.navMarkW).Radius(pane.navMarkR).Background(s.palette.Rail)
+		if control.pluginItem {
+			// The chevron comes before the name of a plugin item (docs/spec/settings.md#menu).
+			ui.Icon(c, chevronRight).Size(s.textControl(), s.textControl())
 		}
 		ui.Text(c, control.Label).FontSize(s.textControl()).TextColor(color)
+		if control.pluginItem {
+			ui.Box(c).Grow(1)
+		}
+		if control.dot {
+			// The dot of an enabled plugin uses the accent color, as .set-dot of packages/workbench/settings.css does; it stands at the end.
+			ui.Box(c).Size(pane.navMarkW, pane.navMarkW).Radius(pane.navMarkR).Background(s.palette.Rail)
+		}
+		if control.Badge != "" {
+			ui.Text(c, control.Badge).FontSize(s.textCaption()).TextColor(s.palette.Muted)
+		}
 	})
 }
 

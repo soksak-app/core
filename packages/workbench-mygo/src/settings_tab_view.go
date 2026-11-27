@@ -97,8 +97,12 @@ type OptionGroup struct {
 type SettingsControl struct {
 	// small is the size sm of a button, 24 points high (docs/spec/settings.md#controls).
 	small bool
-	// dot says that the item of the menu shows the dot of a plugin with settings (docs/spec/settings.md#menu).
-	dot     bool
+	// pluginItem says that the item is a plugin of the group 설정이 있는 플러그인 (docs/spec/settings.md#menu).
+	pluginItem bool
+	// dot says that the item of the menu shows the dot of an enabled plugin (docs/spec/settings.md#menu).
+	dot bool
+	// Badge is the badge 꺼짐 of a disabled plugin item of the menu (docs/spec/settings.md#menu).
+	Badge string `json:"badge,omitempty"`
 	Name    string          `json:"name"`
 	Index   int             `json:"index"`
 	Key     *string         `json:"key"`
@@ -334,11 +338,15 @@ func (s *Shell) settingsBuild() (*settingsModel, error) {
 		model.nav = append(model.nav, b.pressedButton("nav:"+page[0], "core.settings-tab.nav", page[1], "core.settings-tab.nav",
 			map[string]any{"page": page[0]}, page[0] == w.page))
 	}
-	// The plugins with settings or accounts follow the pages in the group of their plugin items, by id (docs/spec/settings.md#menu).
+	// The installed plugins follow the pages in the group of their plugin items, by id (docs/spec/settings.md#menu).
 	for _, plugin := range s.pluginMenuItems() {
 		item := b.pressedButton("plugin:"+plugin.ID, "core.settings-tab.plugin-item", plugin.Name, "core.settings-tab.plugin",
 			map[string]any{"plugin": plugin.ID}, w.page == "plugin" && w.chosen == plugin.ID)
-		item.dot = true
+		item.pluginItem = true
+		item.dot = plugin.Installed.Enabled
+		if !plugin.Installed.Enabled {
+			item.Badge = "꺼짐"
+		}
 		model.nav = append(model.nav, item)
 	}
 	// The search field stands at the top of the menu and runs core.settings-tab.find for each change (docs/spec/settings.md#menu).
@@ -640,15 +648,16 @@ func labelled(values []string, labels map[string]string) ([][2]string, error) {
 	return options, nil
 }
 
-// pluginMenuItems returns the loaded plugins that declare settings or accounts, by id (docs/spec/settings.md#menu).
-func (s *Shell) pluginMenuItems() []*LoadedPlugin {
-	items := []*LoadedPlugin{}
-	for i := range s.plugins {
-		if unit := s.units[s.plugins[i].ID]; unit != nil && (len(unit.Settings) > 0 || unit.Accounts != nil) {
-			items = append(items, &s.plugins[i])
+// pluginMenuItems returns the installed plugins by id: each has an item of the menu group, and its own page whether or not it
+// declares settings (docs/spec/settings.md#menu).
+func (s *Shell) pluginMenuItems() []PluginRow {
+	items := []PluginRow{}
+	for _, row := range s.pluginRowsOf(s.pluginOperations.Status()) {
+		if row.Installed != nil {
+			items = append(items, row)
 		}
 	}
-	slices.SortFunc(items, func(a, b *LoadedPlugin) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(items, func(a, b PluginRow) int { return strings.Compare(a.ID, b.ID) })
 	return items
 }
 

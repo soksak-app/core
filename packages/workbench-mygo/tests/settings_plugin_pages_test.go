@@ -18,6 +18,7 @@ type settingsControl struct {
 	Name    string  `json:"name"`
 	Key     *string `json:"key"`
 	Label   string  `json:"label"`
+	Badge   string  `json:"badge"`
 	Command *struct {
 		Name string `json:"name"`
 	} `json:"command"`
