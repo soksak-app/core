@@ -445,7 +445,7 @@ function accountsGroup(unit) {
   const add = button("추가", { expose: "core.settings-tab.account-add", command: "core.accounts.add", params: { plugin: unit.id, name: state.account.name, kind: state.account.kind ?? declared.kinds[0].value }, disabled: state.account.name === "", variant: "primary" });
   const fresh = element("div", "set-account set-account--new");
   fresh.append(nameField, kindSelect, add);
-  return group("계정", `${unit.name} 플러그인이 실행하는 CLI의 계정. 로그인은 시스템 브라우저에서 한다.`, [...rows, row({ label: "새 계정", control: fresh, key: "account-new", wide: true })]);
+  return group("계정", "에이전트 CLI 계정.", [...rows, row({ label: "새 계정", control: fresh, key: "account-new", wide: true })]);
 }
 
 /** The login text of an account (docs/spec/plugins.md#accounts). */

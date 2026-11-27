@@ -839,7 +839,7 @@ func (s *Shell) buildAccounts(b *settingsBuilder, plugin *LoadedPlugin, declared
 		Options: values, kind: controlSelect, param: "kind", labels: labels})
 	add := b.button("account-add", "core.settings-tab.account-add", "추가", "core.accounts.add", map[string]any{"plugin": plugin.ID, "name": w.accountName, "kind": w.accountKind})
 	rows = append(rows, settingsRow{name: "새 계정", controls: []*SettingsControl{name, kind, add}})
-	b.group("계정", plugin.Name+" 플러그인이 실행하는 CLI의 계정. 로그인은 시스템 브라우저에서 한다.", rows...)
+	b.group("계정", "에이전트 CLI 계정.", rows...)
 }
 
 // registeredSections are the section ids in the order of the plugins and their declarations.
