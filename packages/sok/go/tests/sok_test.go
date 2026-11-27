@@ -151,7 +151,7 @@ func TestEndpointErrorsCarryTheirCode(t *testing.T) {
 func TestWatchPrintsTheValueAndEachChange(t *testing.T) {
 	player := playCase(t, "sok-watch-changes")
 	code, stdout, stderr := run("status", "core.screen", "--window", "main", "--watch", "--config-dir", player.configDir)
-	if stdout != "{\"screen\":\"library\"}\n{\"screen\":\"workspace\"}\n" || code != 1 || stderr != "sok: endpoint connection closed\n" {
+	if stdout != "{\"screen\":\"home\"}\n{\"screen\":\"workspace\"}\n" || code != 1 || stderr != "sok: endpoint connection closed\n" {
 		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
 	if got := strings.Join(player.methods(), ","); got != "status.watch,status.get" {

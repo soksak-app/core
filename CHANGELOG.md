@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: The watch test of the sok command expects the value of its endpoint case, home.
 - F1107-5: A status request whose surface is not a string is refused with the value sent instead of being read as an empty surface.
 - F1217-7: The spec names core.setup.install as the command of the setup buttons.
 - F1108-6: The drop band check measures only the cards that draw a head and a foot, so a window sidebar without a status line no longer fails the window check. Verification: Red of verify-drop-band-cards.test.mjs on the missing export; Green of it and of window-sidebar-place-verification.test.mjs, 5 of 5; the window check run is pending.
