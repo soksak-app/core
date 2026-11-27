@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F856: `settings-scroll-modal` case는 그 case가 기록하는 settings dialog가 더 이상 없어서 제거했다. Settings는 main window의 tab이고, 어떤 page도 그 overlay 교환을 보내지 않는다. `settings-scroll.test.mjs`가 scroll 조항을 고정한다.
 - F1217-8: 프로젝트 홈 검색 포커스를 두 host 모두 cmd+o에 묶고 cmd+k를 뺐다.
 - F1222-2: e2e/progress-notice-ring.test.mjs 창 check가 전달된 frame으로 진행 notice 고리를 판정한다. 동작 줄이기가 켜지면 고리가 바뀌지 않아야 한다. 실행: 대기.
 - F1108: 메인 페이지 reload로 만들어진 view가 적용한 theme을 page.theme.applied 기록으로 남기며, Go 호스트 테스트가 probe view로 reload를 실행해 이를 확인한다.
