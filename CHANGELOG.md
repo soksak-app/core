@@ -16,6 +16,10 @@
 - F1124: The host pins a fork of fsnotify whose kqueue registrations are serialized, and the policy test repeats pass with the pin; the whole-package run has one failure, which is tracked in F1124.
 - F1217-17-5: The mygo agent group shows 없음 for a missing setup part, as the settings specification states, instead of 설치 안 됨.
 
+## 2026-11-27
+
+- F1217-17-5: The agent page head shows the badge 전역 전용 in place of the scope control, as the settings specification states.
+
 ## 2026-11-26
 
 - F1217-17-3: The sets page of the settings tab has no 완료 button in its editor; the row of an edited set shows 완료 instead, as the design draws it.

@@ -241,13 +241,16 @@ const PAGE_KEYS = {
   diag: () => [],
 };
 
+/** The pages that have a setting outside rowsOf and that no project can override: the agent page, whose setup parts are common (docs/spec/settings.md#agents). */
+const COMMON_ONLY_PAGES = new Set(["agents"]);
+
 /**
  * The scope control of the page head (docs/spec/settings.md#page-head): the segment global | <project> · <n> while a project is selected and the page
  * has a setting that a project can override, the badge global only when the page has settings but none that a project can override, and null otherwise.
  */
 export function headScope(page) {
   const overridable = PAGE_KEYS[page]().filter((key) => !commonOnly(key));
-  if (overridable.length === 0) return rowsOf(page).length ? badge("전역 전용", "neutral") : null;
+  if (overridable.length === 0) return rowsOf(page).length || COMMON_ONLY_PAGES.has(page) ? badge("전역 전용", "neutral") : null;
   return projectSelected() ? scopeSegment(overridable) : null;
 }
 
