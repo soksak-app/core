@@ -2,6 +2,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createSystemNotifications, DENIED_LINE } from "../system-notifications.js";
+import { setTargetOfTab } from "../tab-reports.js";
+// The plane tells the card and the target of each tab; the tabs of this file are held by the card card-test.
+setTargetOfTab((id) => ({ card: "card-test", tab: id, plugin: "probe", label: `label ${id}` }));
 
 function fixture() {
   const calls = [];

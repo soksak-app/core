@@ -37,8 +37,6 @@ const memoryStates = new Map();
 const MEMORY_STATES = new Set(["loaded", "unloaded", "restoring"]);
 // The plane tells whether a tab is visible (whether it is the active tab of the focused card).
 let visibleTab = () => false;
-// The plane tells the card that holds a tab id, or null when no card holds it.
-let cardOfTab = () => null;
 // The entry watchers are notified on every change of a notice; the toast watchers only when the shown toasts change.
 const listeners = new Set();
 const toastListeners = new Set();
@@ -145,10 +143,10 @@ export function setVisibleTab(probe) {
  * A notice with system true is also kept for an operating system notification while its tab is not visible.
  */
 export function reportNotice(tabId, fields, plugin) {
-  // The label is the title of the tab when the plane knows it, else the card id (docs/spec/notifications.md#notice-center).
-  const card = cardOfTab(tabId);
-  const label = noticeTargetOfTab(tabId)?.label ?? card;
-  const id = noticeStore.showTab(fields, { card, tab: tabId, plugin, label });
+  // A tab that no card holds has no card notice; the refusal names the tab (docs/spec/notifications.md#notice-center).
+  const target = noticeTargetOfTab(tabId);
+  if (target === null) throw new Error(`no tab ${tabId}`);
+  const id = noticeStore.showTab(fields, { card: target.card, tab: tabId, plugin, label: target.label });
   // A later notice of the tab, system or not, replaces the kept system notice of the tab (docs/spec/plugins.md#tab-reports).
   if (fields.system === true) keepSystemNotice(tabId, fields);
   else if (systemNotices.delete(tabId)) notify();
@@ -186,10 +184,6 @@ export function reportDone(id, kind, title) {
   noticeStore.done(checked.id, checked.kind, checked.title);
 }
 
-/** Sets the probe with which the plane tells the card that holds a tab id. */
-export function setCardOfTab(probe) {
-  cardOfTab = probe;
-}
 
 // The plane tells the card, tab and plugin of a tab id, or null when no card holds it.
 let targetOfTab = () => null;

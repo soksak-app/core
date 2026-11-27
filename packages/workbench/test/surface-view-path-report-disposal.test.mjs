@@ -12,6 +12,9 @@ import { pageIdentity } from "../page-identity.js";
 import { drained } from "./support/drained.mjs";
 
 let wire = selectPageWire("surface-view-path-report-disposal");
+// The plane tells the card and the target of each tab; the tabs of this file are held by the card card-test.
+const { setTargetOfTab } = await import("../tab-reports.js");
+setTargetOfTab((id) => ({ card: "card-test", tab: id, plugin: "probe", label: `label ${id}` }));
 const { registerPlugin } = await import("../registry.js");
 const { endSourceOrigin, registerSourceOrigin, seedSourceOrigins } = await import("../source-origins.js");
 const { setSurfaceTextSize } = await import("../text-size.js");

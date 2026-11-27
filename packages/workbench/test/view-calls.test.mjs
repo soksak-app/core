@@ -13,6 +13,9 @@ import { drained } from "./support/drained.mjs";
 
 // The host is read when host.js is imported, so the case of the import is selected first; the page sends no call while it imports.
 const importing = selectPageWire("log-import");
+// The plane tells the card and the target of each tab; the tabs of this file are held by the card card-test.
+const { setTargetOfTab } = await import("../tab-reports.js");
+setTargetOfTab((id) => ({ card: "card-test", tab: id, plugin: "probe", label: `label ${id}` }));
 const { registerPlugin } = await import("../registry.js");
 const { seedSourceOrigins } = await import("../source-origins.js");
 const { notifyTextSize, setSurfaceTextSize } = await import("../text-size.js");

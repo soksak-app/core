@@ -2,7 +2,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { clearVisibleNotices, forgetTab, onTabReports, recordOrigin, reportDirectory, reportError, reportModified, reportNotice, reportTitle,
-  reportTabState, setVisibleTab, tabButtonData, tabError, tabMemoryState, tabLabel, tabModified, tabNotices, tabOrigin } from "../tab-reports.js";
+  reportTabState, setTargetOfTab, setVisibleTab, tabButtonData, tabError, tabMemoryState, tabLabel, tabModified, tabNotices,
+  tabOrigin } from "../tab-reports.js";
+
+// The plane tells the card and the target of a tab; the tabs of these tests are held by the card card-test with the title tab label.
+const holder = (id) => (id.startsWith("tab-") ? { card: "card-test", tab: id, plugin: "probe", label: `label ${id}` } : null);
+setTargetOfTab(holder);
+
+test("a notice of a tab that no card holds is refused by name and shows nothing", () => {
+  assert.throws(() => reportNotice("missing-tab", { kind: "info", title: "x", text: "" }, "probe"), /no tab missing-tab/);
+  assert.deepEqual(tabNotices("missing-tab"), []);
+});
 
 test("a reported title is the tab label until it is removed, and changes notify once", () => {
   let notified = 0;
