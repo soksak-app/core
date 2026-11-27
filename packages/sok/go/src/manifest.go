@@ -1040,10 +1040,8 @@ func checkAccounts(where string, manifest map[string]any) error {
 			return fmt.Errorf("%s program %s must take two pattern arguments", at, name)
 		}
 	}
-	data, ok := manifest["data"].(map[string]any)
-	if !ok {
-		return fmt.Errorf("%s: accounts need a data declaration with the key accounts", where)
-	}
+	// A missing data declaration is refused with the same text as a data key of another form (validateManifest of the reader).
+	data, _ := manifest["data"].(map[string]any)
 	key, ok := data["accounts"].(map[string]any)
 	defaults, list := key["default"].([]any)
 	if !ok || key["scope"] != "plugin" || !list || len(defaults) != 0 {

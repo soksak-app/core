@@ -6811,6 +6811,65 @@
       ]
     },
     {
+      "id": "settings.string-maxlength-missing",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "x": {
+            "label": "L",
+            "type": "string",
+            "default": "a"
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.x: string default and maxLength are invalid",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "settings.string-maxlength-fraction",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "settings": {
+          "x": {
+            "label": "L",
+            "type": "string",
+            "default": "a",
+            "maxLength": 2.5
+          }
+        }
+      },
+      "accepted": false,
+      "error": "plugin probe.x: string default and maxLength are invalid",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
       "id": "settings.address-scheme",
       "manifest": {
         "id": "probe",

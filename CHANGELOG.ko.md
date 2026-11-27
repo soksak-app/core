@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222: data 선언이 없는 plugin accounts는 다른 형태의 data key와 같은 reader 문구로 거부되며, maxLength가 없거나 소수인 문자열 설정 사례가 공유 manifest 표에 들어간다.
 - F1217-11-3: 오류 toast의 자세히는 core.notices.show로 알림 센터를 그 notice에 연다. 줄 형식의 수는 core.toasts.list로 나머지 toast를 목록으로 보인다.
 - F1221: Rust 계정 거부 테스트는 cargo fmt가 쓰는 형식이다.
 - F999-6: 표면 fixture 테스트의 그리기 단계를 각각 별도 테스트로 나눠, 숨겨진 탭 단계가 단독으로 실패할 수 있습니다.
