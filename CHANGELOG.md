@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1161: mygo shows an outdated surface's card notice when its plane is shown, on the card that holds the tab
 - F1217-6: A test checks that a choice of three values is a segment and a choice of more is a select box.
 - F1161: The page refuses an outdated entry without its surfaces, naming the sidecar, and reports it as the read failure
 - F1217-16: The settings tab replaces the settings modal in the test expectations and comments, and the settings view seat case is removed.

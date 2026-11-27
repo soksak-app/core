@@ -194,3 +194,37 @@ func TestAServiceOnASurfaceShowsItsWarningAsACardNoticeOnItsCard(t *testing.T) {
 		t.Fatalf("card notices after surface-1 left = %v, want none", got)
 	}
 }
+
+// A tab whose surface the outdated entry lists shows the warning as a card notice on the card that holds the tab, with the tab and
+// its plugin as the source (docs/spec/persistent-services.md#updates).
+func TestAnOutdatedSurfaceOfATabShowsItsWarningOnItsCard(t *testing.T) {
+	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{}), core: "1.0.0",
+		plugins: map[string]map[string]any{}}
+	plugins.outdated = []any{map[string]any{"sidecar": "hello", "running": "1.0.0", "installed": "2.0.0", "sessions": 1,
+		"surfaces": []string{"tab-surface"}}}
+	f := newTabShell(t, &storedHost{plugins: plugins, projects: []map[string]any{gridProject(oneCard(tab("tab-surface", "plain")))}})
+	f.open(t)
+	var notices struct {
+		Entries []struct {
+			Source struct {
+				Kind   string `json:"kind"`
+				Card   string `json:"card"`
+				Tab    string `json:"tab"`
+				Plugin string `json:"plugin"`
+			} `json:"source"`
+			Read bool `json:"read"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.notices")), &notices); err != nil {
+		t.Fatalf("core.notices is %s: %v", f.status("core.notices"), err)
+	}
+	var cards []string
+	for _, entry := range notices.Entries {
+		if entry.Source.Kind == "card" && !entry.Read {
+			cards = append(cards, entry.Source.Card+"/"+entry.Source.Tab+"/"+entry.Source.Plugin)
+		}
+	}
+	if len(cards) != 1 || cards[0] != "main/tab-surface/plain" {
+		t.Fatalf("card notices = %v, want one on the card main of tab-surface (plugin plain)", cards)
+	}
+}

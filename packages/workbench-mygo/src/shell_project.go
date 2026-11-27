@@ -892,6 +892,8 @@ func (s *Shell) showPlane(planes *layout.GroupTree) {
 		s.plane = planes.Grid()
 	}
 	s.closePicker()
+	// The card notices of the outdated surfaces follow the tabs of the plane that is now shown (docs/spec/persistent-services.md#updates).
+	s.reconcileOutdatedNotices()
 }
 
 // drawnPlaneShown tells whether the last frame drew the plane of the window. Until the next frame the elements of the last frame

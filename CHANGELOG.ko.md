@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1161: mygo는 plane이 표시될 때 outdated surface의 card notice를 그 tab을 가진 card에 보인다
 - F1217-6: 세 값 선택은 세그먼트, 더 많은 값은 select 상자로 그려짐을 확인하는 테스트를 추가한다.
 - F1161: 페이지는 surfaces가 없는 outdated 항목을 sidecar 이름과 함께 거부하고 읽기 실패로 보고한다
 - F1217-16: 설정 탭이 테스트 기대 문구와 주석에서 설정 모달을 대신하고, 설정 뷰 seat 케이스는 제거된다.
