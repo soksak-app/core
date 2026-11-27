@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 	"unsafe"
 )
 
@@ -607,11 +606,15 @@ func TestAViewCreatedAfterAReloadRecordsTheAppliedTheme(t *testing.T) {
 		map[string]any{"scheme": "dark", "source": "start", "surface": "probe-surface"},
 		map[string]any{"scheme": "dark", "source": "start", "surface": "probe-surface"},
 	}
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		if err := record.Flush(); err != nil {
-			t.Fatal(err)
+	// Each batch that the writer writes signals the test, so the test waits on the write and reads the file only after a write.
+	writes := make(chan struct{}, 1)
+	record.SetOnWrite(func(string, int64) {
+		select {
+		case writes <- struct{}{}:
+		default:
 		}
+	})
+	for {
 		var stored []any
 		for _, event := range viewRecordEvents(t, config) {
 			if event["event"] == "page.theme.applied" {
@@ -621,14 +624,26 @@ func TestAViewCreatedAfterAReloadRecordsTheAppliedTheme(t *testing.T) {
 		if reflect.DeepEqual(stored, want) {
 			return
 		}
-		if len(stored) > len(want) || time.Now().After(deadline) {
+		if len(stored) > len(want) {
 			probe.mu.Lock()
 			events := append([]hostEvent(nil), probe.events...)
 			probe.mu.Unlock()
-			t.Fatalf("page.theme.applied records %v, want %v; probe events %v", stored, want, events)
+			t.Fatalf("page.theme.applied records %v, want %v; probe events %v; host errors %v", stored, want, events, viewRecordErrors(t, config))
 		}
-		time.Sleep(10 * time.Millisecond)
+		<-writes
 	}
+}
+
+// viewRecordErrors returns the error and warning records of the host log of config, so a failed run shows what the host refused.
+func viewRecordErrors(t *testing.T, config string) []map[string]any {
+	t.Helper()
+	var errors []map[string]any
+	for _, event := range viewRecordEvents(t, config) {
+		if level, _ := event["level"].(string); level == "error" || level == "warn" {
+			errors = append(errors, event)
+		}
+	}
+	return errors
 }
 
 // A runtime.log call of a generation that is not the current view is refused with an error that names the plugin and generation of the
