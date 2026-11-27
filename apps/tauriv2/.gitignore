@@ -1,2 +1,5 @@
 # 스테이징이 src/frontend/ 에 생성한다
 src/frontend/
+
+# tauri-build writes the capability schemas here on each build (build.rs); the folder is build output, not a record.
+/gen/

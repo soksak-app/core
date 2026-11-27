@@ -419,7 +419,7 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 | B3 | `pageReload` | `pageReload` | none | `pageReload` | plugin 변경을 적용하는 page가 host에 reload를 요청하는 호출이다([page 다시 읽기](native-host.ko.md#page-다시-읽기)). mygo host의 window에는 page가 없고, 그 workbench는 framework adapter의 `StartWorkbench`로 자신을 다시 만든다. |
 | A1 | 내용만 다름 | 내용만 다름 | 없음 | content differs | `runtime/index.js`가 각 프레임워크의 호출 방식을 사용한다. mygo 애플리케이션에는 runtime이 없다(A6 행). |
 | A2 | 없음 | `build.rs` | 없음 | none | Tauri는 `tauri_build::build()`를 요구한다 |
-| A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | 없음 | none | Tauri 설정 |
+| A3 | 없음 | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` (generated) | 없음 | none | Tauri 설정 |
 | A4 | `go.mod`, `go.sum` | `Cargo.toml`, `Cargo.lock` | `go.mod`, `go.sum` | `Cargo.toml` | 언어마다 매니페스트와 잠금 파일이 다르다 |
 | A5 | `test/support/wails-runtime-loader.mjs` | 없음 | 없음 | none | Wails page는 runtime module을 asset server(`/wails/runtime.js`)에서 import하는데 시험 실행에는 그 파일이 없으므로, loader가 그 specifier에 시험이 제공하는 module을 준다. Tauri page는 `window.__TAURI__`를 읽으며 시험이 직접 정한다 |
 | A6 | `runtime/`, `test/fixtures/start.json`, `test/clipboard.test.mjs`, `test/runtime.test.mjs`, `test/runtime-contract.test.mjs`, `test/runtime-lifecycle.test.mjs`, `test/start-module.test.mjs`, `test/surface-calls.test.mjs` | 내용만 다름 | 없음 | none | main page runtime의 파일과 그 test. mygo에서는 page가 workbench를 실행하지 않으므로 `apps/mygo`에는 `environment.runtime`이 없고, `packages/workbench-mygo`가 host handler를 호출한다 |
@@ -499,7 +499,7 @@ apps/wailsv3/                  apps/tauriv2/
   src/frontend/  (생성됨)        src/frontend/  (생성됨)
   go.mod, go.sum                 Cargo.toml            차이 A4
   (없음)                         build.rs              차이 A2
-  (없음)                         tauri.conf.json, capabilities/, icons/, gen/   차이 A3
+  (없음)                         tauri.conf.json, capabilities/, icons/, gen/ (generated)   차이 A3
 ```
 
 `apps/wailsv3/go.mod`는 Go language host library의 모듈과 Wails framework adapter의 모듈을 요구한다. `apps/tauriv2/Cargo.toml`은 경로로 지정한 `soksak-host-tauriv2`와 `tauri`에 의존한다. `apps/tauriv2/build.rs`는 `tauri_build::build()`만 호출한다.

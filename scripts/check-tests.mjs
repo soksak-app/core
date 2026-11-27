@@ -17949,7 +17949,6 @@ const FEATURE_LINKS = [
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
 const GENERATED_ROOTS = new Map([
   ["packages/soksak/dist/", "generated library output; verified by make test-all"],
-  ["apps/tauriv2/gen/schemas/", "generated Tauri permission schemas"],
 ]);
 
 const sourceLanguages = new Map([

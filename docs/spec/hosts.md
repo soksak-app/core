@@ -419,7 +419,7 @@ The allowed differences are two tables, and a row ID is unique across both. The 
 | B3 | `pageReload` | `pageReload` | none | `pageReload` | The call of a page that applies a plugin change and asks the host to reload it ([page reload](native-host.md#page-reload)). A window of the mygo host has no page: its workbench builds itself again through `StartWorkbench` of the framework adapter. |
 | A1 | content differs | content differs | none | content differs | `runtime/index.js` uses each framework's call mechanism. The mygo application has no runtime (row A6). |
 | A2 | none | `build.rs` | none | none | Tauri requires `tauri_build::build()` |
-| A3 | none | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` | none | none | Tauri configuration |
+| A3 | none | `tauri.conf.json`, `capabilities/`, `icons/`, `gen/` (generated) | none | none | Tauri configuration |
 | A4 | `go.mod`, `go.sum` | `Cargo.toml`, `Cargo.lock` | `go.mod`, `go.sum` | `Cargo.toml` | Each language has its own manifest and lock file |
 | A5 | `test/support/wails-runtime-loader.mjs` | none | none | none | The Wails page imports its runtime module from the asset server (`/wails/runtime.js`), which a test run has no file for, so the loader gives the specifier a module that the test supplies; the Tauri page reads `window.__TAURI__`, which a test sets directly |
 | A6 | `runtime/`, `test/fixtures/start.json`, `test/clipboard.test.mjs`, `test/runtime.test.mjs`, `test/runtime-contract.test.mjs`, `test/runtime-lifecycle.test.mjs`, `test/start-module.test.mjs`, `test/surface-calls.test.mjs` | content differs | none | none | The files of the main page runtime and their tests. No page runs the workbench on mygo, so `apps/mygo` has no `environment.runtime` and `packages/workbench-mygo` calls the host handlers |
@@ -499,7 +499,7 @@ apps/wailsv3/                  apps/tauriv2/
   src/frontend/  (generated)     src/frontend/  (generated)
   go.mod, go.sum                 Cargo.toml            difference A4
   (none)                         build.rs              difference A2
-  (none)                         tauri.conf.json, capabilities/, icons/, gen/   difference A3
+  (none)                         tauri.conf.json, capabilities/, icons/, gen/ (generated)   difference A3
 ```
 
 `apps/wailsv3/go.mod` requires the module of the Go language host library and the module of the Wails framework adapter. `apps/tauriv2/Cargo.toml` depends on `soksak-host-tauriv2` by path and on `tauri`. `apps/tauriv2/build.rs` calls only `tauri_build::build()`.

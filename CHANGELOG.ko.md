@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1225: Tauri gen 출력은 빌드 산출물이어서, git은 apps/tauriv2/gen을 더 이상 추적하지 않습니다. tauri-build가 빌드마다 다시 만듭니다.
 - F1217-7: 설정 메뉴는 설정이나 계정이 있는 불러온 플러그인을 core.settings-tab.plugin-item 항목으로 설정이 있는 플러그인 묶음에 나열한다.
 - F1217-7: 설치됨 페이지의 각 행은 core.settings-tab.plugin-row 요소이며, 항목은 플러그인 id다.
 - F1217-7: 에이전트 그룹 제목은 에이전트 연동이고, 모두 설치는 주 버튼으로 그린다.
