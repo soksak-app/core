@@ -315,7 +315,7 @@ function statusOf() {
   const controls = mounted ? [...root.querySelectorAll("[data-expose]")].map(controlOf(root)) : [];
   const rows = mounted && state.page === "plugin" ? [...root.querySelectorAll(".set-row[data-row]")]
     .filter((el) => Object.hasOwn(settingDefinitions(), el.dataset.row))
-    .map((el) => ({ key: el.dataset.row, name: el.querySelector(".set-row__name").textContent, description: el.querySelector(".set-caption")?.textContent ?? null })) : [];
+    .map((el) => ({ key: el.dataset.row, name: el.querySelector(".set-row__name").textContent, description: el.querySelector(".set-caption")?.textContent ?? null })) : []; // default: a row without a caption has no description.
   const actions = mounted ? [...root.querySelectorAll('[data-expose="core.settings-tab.plugins.action"]')].map((el) => {
     const [plugin, action] = el.dataset.key.split(":");
     return { plugin, action, disabled: el.disabled };
@@ -337,6 +337,7 @@ function statusOf() {
     editing: state.editing,
     rows,
     controls,
+    // default: a pane that is not mounted has scroll position 0.
     scroll: scrollPosition(mounted ? root.querySelector('[data-expose="core.settings-tab.pane"]')?.scrollTop ?? 0 : 0),
     undo: undoState(),
     confirm: state.confirm,
@@ -365,10 +366,12 @@ function controlOf() {
   const counts = new Map();
   return (el) => {
     const name = el.dataset.expose;
+    // default: the first element with a name has the index 0.
     const index = counts.get(name) ?? 0;
     counts.set(name, index + 1);
     const command = commandOf(el);
     const isSelect = el.tagName === "SELECT";
+    // default: an element without a row key or a set key has no key.
     const key = el.dataset.key ?? el.dataset.set ?? null;
     return {
       name,
@@ -593,6 +596,7 @@ export function installSettingsTab(sink) {
   statusSink = sink;
   registry.command("core.settings-tab.nav", ({ page, group }) => {
     oneOf("page", page, [...CORE_PAGES, ...PLUGIN_LIST_PAGES]);
+    // default: a page without groups has no group, so a named group is refused.
     if (group !== undefined && !(GROUPS[page] ?? []).some((item) => item.id === group)) throw invalid(`unknown group "${group}" of page "${page}"`);
     state.page = page;
     state.plugin = null;

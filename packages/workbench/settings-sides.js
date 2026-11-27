@@ -28,6 +28,7 @@ export function linkSelect(place, plugin, { disabled = false } = {}) {
   const links = shownValue("links");
   const sets = shownValue("sets");
   const now = choiceOf(links, place, plugin);
+  // default: a link without a plugin has an empty plugin part in its control name.
   return select(`link:${place}:${plugin ?? ""}`, [["off", "사용 안 함"], ...setOptions(sets)], now, {
     command: "core.settings.link",
     params: { place, plugin, scope: writeScope() },
@@ -90,4 +91,5 @@ function swapped(list, a, b) {
 }
 
 /** The names of the sections of a set, for a line (docs/spec/settings.md#사이드바-세트). */
+// default: a set without sections is labelled 섹션 없음.
 export const sectionLine = (set) => sectionNames(set.sections).join(" · ") || "섹션 없음";

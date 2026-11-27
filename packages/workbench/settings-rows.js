@@ -19,9 +19,11 @@ const LABELS = Object.freeze({
 
 /** The labels of a choice setting, in the declared order (docs/spec/settings.md#values). */
 export function choicesOf(key) {
+  // default: a choice without a label is shown as its value.
   return CHOICES[key].map((choice) => [choice, LABELS[key]?.[choice] ?? String(choice)]);
 }
 
+// default: a key without a declared range has no range (null).
 const range = (key) => (LAYOUT_RANGES[key] ?? SHAPE_RANGES[key] ?? (key === "memorySaverDelay" ? MEMORY_SAVER_DELAY
   : key === "problemToastDismissSeconds" ? PROBLEM_TOAST_DISMISS_SECONDS : null));
 
@@ -53,6 +55,7 @@ export function matchingRowKeys(query) {
 }
 
 /** The page of a row key, or null for a key that no core page draws. */
+// default: a key that no core page draws has no page.
 export const pageOfKey = (key) => ALL_ROWS.find((row) => row.key === key)?.page ?? null;
 
 /** The theme names in the order of the swatch grid (docs/spec/settings.md#pages). */

@@ -21,13 +21,16 @@ function usesOf(setId) {
 /** The name of a link's place for the line 쓰는 곳 (docs/spec/settings.md#사이드바-세트). */
 const SIDE_LABEL = { left: "왼쪽", right: "오른쪽", top: "위", bottom: "아래" };
 function linkName(link) {
+  // default: a place without a side label is shown as its place.
   if (link.plugin === null) return SIDE_LABEL[link.place] ?? link.place;
   const [, side] = link.place.split("-");
   const name = pluginNameOf(link.plugin);
+  // default: a side without a label is shown as its name.
   return `${name} 창 ${SIDE_LABEL[side] ?? side}`;
 }
 
 /** The name of a plugin of this window, or its id when the plugin is not loaded. */
+// default: a plugin that is not loaded is named by its id.
 const pluginNameOf = (id) => pluginUnits().find((unit) => unit.id === id)?.name ?? id;
 
 /** The sections of a set with the badge 불러오지 않음 for a section of a plugin that is not loaded (docs/spec/settings.md#사이드바-세트). */
