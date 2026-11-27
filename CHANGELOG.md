@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222-2: The open notice center panel is a window overlay cut out of the surface hosts with the error toasts, so a plugin surface does not cover it in the Wails and Tauri hosts.
 - F1217: The project home's theme, menu language and folder check follow page-wire case home-removed-project, played by home-removed.test.mjs.
 - F1108: The checklist records the Rust and Go record tests, the causes found in the test harness, and the window check run that does not reproduce the defect.
 - F1222-2: The progress ring check waits until the stills of its recording are all planned, so the recording holds 30 frames; a stop before the plan ended kept 3.

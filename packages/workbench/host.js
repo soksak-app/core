@@ -123,9 +123,10 @@ function windowOverlays() {
 }
 
 /**
- * The error toasts of this document as window overlays that the host cuts out of the container of the surface hosts, so each toast is
- * drawn above the native surfaces and takes the pointer (docs/spec/native-surfaces.md#surface-host-container). A shown modal or dialog
- * surface holds the toasts in its own document or decides the pointer of the window, so no toast is cut while one is open.
+ * The error toasts and the open notice center panel of this document as window overlays that the host cuts out of the container of the
+ * surface hosts, so each is drawn above the native surfaces and takes the pointer (docs/spec/native-surfaces.md#surface-host-container).
+ * A shown modal or dialog surface holds the toasts in its own document or decides the pointer of the window, so no cut is sent while one
+ * is open.
  */
 // Whether the element is in an error toast of the main document.
 function inErrorToast(element) {
@@ -133,12 +134,14 @@ function inErrorToast(element) {
   return holder !== null && holder.parentElement === document.body && holder.contains(element);
 }
 
-function toastCuts() {
+export function toastCuts() {
   if (shown) return [];
   const holder = document.getElementById("toasts");
-  if (!holder || holder.parentElement !== document.body) return [];
-  return [...holder.querySelectorAll(":scope > .toast")]
-    .map((toast) => toast.getBoundingClientRect())
+  const toasts = holder && holder.parentElement === document.body ? [...holder.querySelectorAll(":scope > .toast")] : [];
+  // The open notice center panel, the popover or the drawer, is an overlay of the window too (docs/spec/native-modals.md#toast-overlay).
+  const panels = [...document.body.querySelectorAll(":scope > section.notice-center")];
+  return [...toasts, ...panels]
+    .map((node) => node.getBoundingClientRect())
     .filter((rect) => rect.width > 0 && rect.height > 0)
     .map((rect) => ({ x: rect.left, y: rect.top, w: rect.width, h: rect.height, cut: true }));
 }
