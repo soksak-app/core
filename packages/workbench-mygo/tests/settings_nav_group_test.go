@@ -41,7 +41,7 @@ func TestTheSettingsNavRefusesAnUnknownGroup(t *testing.T) {
 	}
 }
 
-// The gear of the notice center opens the settings tab at the group 알림 of the page 동작 (docs/spec/notifications.md#notice-center).
+// The gear core.notices.settings of the notice center opens the settings tab at the group Notifications of the page Behavior (docs/spec/notifications.md#notice-center).
 func TestTheNoticeCenterGearOpensTheNoticesGroup(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
 	if err := f.finish("core.notices.add", map[string]any{"card": f.tabbedCards()[0], "kind": "info", "title": "Shown"}); err != nil {

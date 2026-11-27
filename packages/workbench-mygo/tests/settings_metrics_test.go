@@ -57,7 +57,7 @@ func TestAControlThatFillsTheColumnIsTwoHundredSixtyPointsWide(t *testing.T) {
 	}
 }
 
-// A row without a label keeps its control in the control column: the button 새 세트 of the sets page ends at the end of the column.
+// A row without a label keeps its control in the control column: the button New set of the sets page ends at the end of the column.
 func TestARowWithoutALabelKeepsItsControlInTheControlColumn(t *testing.T) {
 	look := settingsMetricsPage(t, "look")
 	sets := settingsMetricsPage(t, "sets")
@@ -76,7 +76,7 @@ func TestAnInputAndASelectAreTwentyEightPointsHigh(t *testing.T) {
 	}
 }
 
-// A small button (sm) is 24 points high (docs/spec/settings.md#controls). The button 편집 of a set is a small button.
+// A small button (sm) is 24 points high (docs/spec/settings.md#controls). The button Edit of a set is a small button.
 func TestASmallButtonIsTwentyFourPointsHigh(t *testing.T) {
 	f := settingsMetricsPage(t, "sets")
 	if h := exposedNodeOf(f, "core.settings-tab.edit", "edit:set-1").Bounds.H; math.Abs(float64(h-24)) > 0.5 {

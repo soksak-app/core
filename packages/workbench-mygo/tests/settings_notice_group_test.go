@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// notificationControl is a control of core.settings-tab that the group 알림 test reads.
+// notificationControl is a control of core.settings-tab that the Notifications group test reads.
 type notificationControl struct {
 	Name     string   `json:"name"`
 	Key      *string  `json:"key"`
@@ -42,7 +42,7 @@ func notificationControls(f *shellFixture) map[string]*notificationControl {
 	return controls
 }
 
-// The group 알림 of the behavior page draws the rows of the workbench declaration as the web draws them: each label, description,
+// The group Notifications of the behavior page draws the rows of the workbench declaration as the web draws them: each label, description,
 // control, default and dependency, in the declared order (docs/spec/notifications.md#settings).
 func TestTheNotificationGroupDrawsItsDeclaredRows(t *testing.T) {
 	f := opened(t)

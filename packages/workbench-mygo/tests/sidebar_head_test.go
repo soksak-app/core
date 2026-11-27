@@ -87,8 +87,8 @@ func TestAHiddenSideWithAChoiceShowsItsEdgeButtonOverItsEdge(t *testing.T) {
 	}
 }
 
-// The head is the top row of a window sidebar: it stands above the set, and it shows the name of the set and the layout badge 탭 or
-// 목록 beside its place (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+// The head is the top row of a window sidebar: it stands above the set, and it shows the name of the set and the layout badge Tab or
+// List beside its place (docs/spec/external-sidebars.md#sidebar-head-and-edge).
 func TestTheHeadOfAWindowSidebarStandsAtItsTopWithTheSetNameAndBadge(t *testing.T) {
 	f, _ := surfaceShellOf(t, sidebarsInstalled)
 	card, head := f.box("core.card", "left"), f.box("core.sidebar.head", "left")

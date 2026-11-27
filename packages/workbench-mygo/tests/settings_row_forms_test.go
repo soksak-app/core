@@ -22,7 +22,7 @@ func TestALongRowLabelStaysOnOneLineWithAnEllipsis(t *testing.T) {
 	}
 }
 
-// The switch of a side follows its set select after a gap of space-2 (8 points), as the grid of .set-side (docs/spec/settings.md#작업-공간).
+// The switch of a side follows its set select after a gap of space-2 (8 points), as the grid of .set-side (docs/spec/settings.md#pages).
 func TestTheSideSwitchFollowsItsSelectAfterASpaceTwoGap(t *testing.T) {
 	f := settingsMetricsPage(t, "workspace")
 	for _, side := range []string{"left", "right", "top", "bottom"} {
@@ -34,7 +34,7 @@ func TestTheSideSwitchFollowsItsSelectAfterASpaceTwoGap(t *testing.T) {
 	}
 }
 
-// Every set select of the sides has one width, because each lists the same options and is sized to its widest (docs/spec/settings.md#작업-공간).
+// Every set select of the sides has one width, because each lists the same options and is sized to its widest (docs/spec/settings.md#pages).
 func TestTheSideSelectsHaveOneWidth(t *testing.T) {
 	f := settingsMetricsPage(t, "workspace")
 	first := exposedNodeOf(f, "core.settings-tab.link", "link:left:").Bounds.W
@@ -45,7 +45,7 @@ func TestTheSideSelectsHaveOneWidth(t *testing.T) {
 	}
 }
 
-// The buttons of an account are 4 points apart, the gap of .set-account__buttons (space-1) (docs/spec/settings.md#설치됨).
+// The buttons of an account are 4 points apart, the gap of .set-account__buttons (space-1) (docs/spec/settings.md#plugins).
 func TestTheAccountButtonsAreFourPointsApart(t *testing.T) {
 	host := &accountsHost{runs: []accountAnswer{{stdout: loggedIn}, {code: 1, stderr: "codex: command not found\n"}, {stdout: "not json"}, {stdout: loggedOut}}}
 	f := accountsShell(t, host, []map[string]any{{"id": "account-1", "name": "업무", "kind": "claude"}, {"id": "account-2", "name": "개인", "kind": "codex"}})
@@ -63,8 +63,8 @@ func TestTheAccountButtonsAreFourPointsApart(t *testing.T) {
 	}
 }
 
-// The action of the core update row stands below its caption, because the row is a column (docs/spec/settings.md#설치됨): the button
-// 업데이트 starts below the caption line.
+// The action of the core update row stands below its caption, because the row is a column (docs/spec/settings.md#plugins): the button
+// Update starts below the caption line.
 func TestTheCoreUpdateButtonStandsBelowItsCaption(t *testing.T) {
 	f, _ := updateShell(t, appRelease)
 	f.run("core.settings.open", nil)
@@ -118,7 +118,7 @@ func TestTheThemeSwatchesAreOneGridGapApart(t *testing.T) {
 	}
 }
 
-// A side select is sized to its widest option, so its width does not change when the free width of its row grows (docs/spec/settings.md#작업-공간).
+// A side select is sized to its widest option, so its width does not change when the free width of its row grows (docs/spec/settings.md#pages).
 func TestASideSelectKeepsItsWidthWhenThePageWidens(t *testing.T) {
 	f := settingsMetricsPage(t, "workspace")
 	narrow := exposedNodeOf(f, "core.settings-tab.link", "link:left:").Bounds.W

@@ -9,7 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// An error toast offers 자세히, which opens the notice center at the notice through core.notices.show
+// An error toast offers Details, which opens the notice center at the notice through core.notices.show
 // (docs/spec/notifications.md#toasts).
 func TestAnErrorToastOffersShowWhichOpensTheCenterAtIt(t *testing.T) {
 	f := noticeShell(t, nil, "first failed")

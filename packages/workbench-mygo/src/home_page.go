@@ -40,7 +40,7 @@ func (s *Shell) drawHome(c *ui.Context, width, height float32) {
 	})
 }
 
-// drawHomeStart draws the logo and the line 어디서 시작할까?.
+// drawHomeStart draws the logo and the start line that asks where to start.
 func (s *Shell) drawHomeStart(c *ui.Context) {
 	ui.Row(c).Gap(s.metrics.space3).AlignItems(ui.Center).Children(func() {
 		s.drawBrand(c)
@@ -83,7 +83,7 @@ func (s *Shell) askRemoval() error {
 	return err
 }
 
-// drawHomeButtons draws the primary button 새 프로젝트 and the button 폴더 열기, which open the form in their mode.
+// drawHomeButtons draws the primary button core.home.add and the button core.home.open-folder, which open the form in their mode.
 func (s *Shell) drawHomeButtons(c *ui.Context) {
 	ui.Row(c).Gap(s.metrics.space2).Children(func() {
 		s.uiButton(c, s.binder.Press(c, "core.home.add", "core.home.form.open", "", map[string]string{"mode": "create"}), "새 프로젝트", true)
@@ -140,7 +140,7 @@ func (s *Shell) drawFormField(c *ui.Context, name, field string, value *string, 
 	})
 }
 
-// drawHomeRows draws the rows of the projects in the groups 고정 and 최근; the group 최근 is shown only while a pinned row exists. With a
+// drawHomeRows draws the rows of the projects in the groups Pinned and Recent; the group Recent is shown only while a pinned row exists. With a
 // query that starts with / or ~ and matches no project, it draws the row that opens the path.
 func (s *Shell) drawHomeRows(c *ui.Context) {
 	rows := s.homeRows()
@@ -244,7 +244,7 @@ func (s *Shell) drawHomeLetter(c *ui.Context, name string) {
 	})
 }
 
-// drawHomePin draws the pin button, which runs core.home.pin, with the tooltip 위에 고정 or 고정 풀기.
+// drawHomePin draws the pin button, which runs core.home.pin, with the tooltip Pin to top or Unpin.
 func (s *Shell) drawHomePin(c *ui.Context, project projectRecord) {
 	title := "위에 고정"
 	if project.Pinned {
@@ -262,7 +262,7 @@ func (s *Shell) drawHomeRemove(c *ui.Context, project projectRecord) {
 	ui.Text(c, "×").LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Muted)
 }
 
-// homeDay names the day of an opened project: 오늘, 어제, <n>일 전 within the last week, and <M>월 <D>일 for older days.
+// homeDay names the day of an opened project: Today, Yesterday, <n> days ago within the last week, and <M>/<D> for older days.
 func (s *Shell) homeDay(when time.Time) string {
 	now := time.Now()
 	days := int(now.Sub(when).Hours() / 24)

@@ -13,7 +13,7 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
-// The accounts of a plugin and the group 계정 of its settings page (docs/spec/plugins.md#accounts), as
+// The accounts of a plugin and the group Accounts of its settings page (docs/spec/plugins.md#accounts), as
 // packages/workbench/test/accounts.test.mjs and settings-accounts.test.mjs check them for the web workbench.
 
 const accountsFolder = "/Users/person/Library/Application Support/soksak/plugin-data/agents/accounts"
@@ -280,7 +280,7 @@ func TestAnAccountIsAddedLoggedInCancelledLoggedOutAndRemoved(t *testing.T) {
 	if answered {
 		t.Fatal("the login answered before it ended")
 	}
-	// A frame drawn while the login runs shows its 취소 button; the frame does not wait for the pending calls.
+	// A frame drawn while the login runs shows its Cancel button; the frame does not wait for the pending calls.
 	f.tester.Frame()
 	if _, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.account-login-cancel", ""); !ok {
 		t.Fatal("the running login has no 취소 button")

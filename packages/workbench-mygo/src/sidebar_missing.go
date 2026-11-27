@@ -45,7 +45,7 @@ type MissingWarning struct {
 	Others int
 }
 
-// Shown returns the text of the status line: the text of the line, and ` +<n>개 더` when other plugins are missing too.
+// Shown returns the text of the status line: the text of the line, and ` +<n> more` when other plugins are missing too.
 func (w MissingWarning) Shown() string {
 	if w.Others == 0 {
 		return w.Line.Text

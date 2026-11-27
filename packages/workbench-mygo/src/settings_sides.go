@@ -8,7 +8,7 @@ import (
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
-// The sidebar list of 작업 공간 (docs/spec/settings.md#작업-공간): one row per side in the order of sidebarOrder. Each row shows its
+// The sidebar list of Workspace (docs/spec/settings.md#pages): one row per side in the order of sidebarOrder. Each row shows its
 // number, its name, the badge of a project override and the caption of the shortcuts below the list, and its controls are the set
 // select, the on/off switch and the order buttons, as packages/workbench/settings-sides.js draws them.
 
@@ -26,7 +26,7 @@ type sideList struct {
 
 // sideRows builds the four rows of a sidebar list, the caption of the workspace list, and the reset buttons of the project overrides.
 // Each row shows its number, its name, the badge of a project override, the set select, the switch of the workspace list, and the order
-// buttons (docs/spec/settings.md#작업-공간, docs/spec/settings.md#plugin-page).
+// buttons (docs/spec/settings.md#pages, docs/spec/settings.md#plugin-page).
 func (s *Shell) sideRows(b *settingsBuilder, list sideList, sets []StoredSet, links []StoredLink) ([]settingsRow, error) {
 	scope := s.controlScope(list.order)
 	order, ok := s.value(list.order).([]any)
@@ -74,7 +74,7 @@ func (s *Shell) sideRows(b *settingsBuilder, list sideList, sets []StoredSet, li
 		if err != nil {
 			return nil, err
 		}
-		// A side that is off keeps its stored link and shows the select disabled (docs/spec/settings.md#작업-공간).
+		// A side that is off keeps its stored link and shows the select disabled (docs/spec/settings.md#pages).
 		link.Name, link.kind, link.Disabled = "core.settings-tab.link", controlSelect, list.switches && !on
 		row.controls = append(row.controls, link)
 		if list.switches {

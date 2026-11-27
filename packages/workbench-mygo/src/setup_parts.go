@@ -270,7 +270,7 @@ func (s *Shell) buildSetup(b *settingsBuilder) {
 			control.setup.action = b.button("setup-change:path", "core.settings-tab.setup-change", label, "core.setup.change",
 				map[string]any{"part": "path", "enabled": !*part.Enabled})
 		}
-		// A missing skill or mcp part has its own button: 고치기 when the file differs, else 설치 (docs/spec/settings.md#에이전트).
+		// A missing skill or mcp part has its own button: Repair when the file differs, else the button core.settings-tab.setup-install (docs/spec/settings.md#agents).
 		if (part.Part == "skill" || part.Part == "mcp") && part.State == "missing" {
 			label := "설치"
 			if part.Reason == "differs" {
@@ -283,7 +283,7 @@ func (s *Shell) buildSetup(b *settingsBuilder) {
 	if len(parts) == 0 {
 		rows = append(rows, settingsRow{description: "이 컴퓨터에서 설정할 에이전트 항목이 없습니다."})
 	}
-	// 모두 설치 is always shown and is disabled when no part of the skill and mcp kinds is not ok (docs/spec/settings.md#에이전트).
+	// The install-all control (element `setup-install-all`, command `core.settings-tab.setup-install-all`) is always shown and is disabled when no part of the skill and mcp kinds is not ok (docs/spec/settings.md#agents).
 	kinds := missingSetupKinds(parts)
 	install := b.small("setup-install-all", "core.settings-tab.setup-install-all", "모두 설치", "core.setup.install", map[string]any{"parts": kinds})
 	install.Disabled = len(kinds) == 0

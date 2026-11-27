@@ -4,7 +4,7 @@ package workbench_test
 
 import "testing"
 
-// The chip shows ⚙ 설정 after the project tabs of the title bar, in both places of the project tabs.
+// The chip shows ⚙ Settings after the project tabs of the title bar, in both places of the project tabs.
 func TestTheSettingsChipStandsInTheTitleBarAfterTheProjectTabs(t *testing.T) {
 	f, _, second := twoProjects(t)
 	f.run("core.settings.open", nil)

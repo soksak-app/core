@@ -621,14 +621,14 @@ func (e *ShownErrors) WithdrawNotice(id string) bool {
 	return true
 }
 
-// toastActions returns the actions that a shown toast offers: the actions of its notice, then 카드로 가기 for a warning or an error of a
+// toastActions returns the actions that a shown toast offers: the actions of its notice, then the go-to-card action for a warning or an error of a
 // card that does not have the focus, which runs core.card.focus (docs/spec/notifications.md#toasts).
 func (s *Shell) toastActions(toast *errorToast) []NoticeAction {
 	actions := append([]NoticeAction{}, toast.actions...)
 	if toast.source.Kind == "card" && toast.source.Card != s.focused && (toast.kind == "warning" || toast.kind == "error") {
 		actions = append(actions, NoticeAction{Label: "카드로 가기", Command: "core.card.focus", Params: map[string]any{"card": toast.source.Card}})
 	}
-	// An error toast offers 자세히, which opens the center at the notice (docs/spec/notifications.md#toasts).
+	// An error toast offers the details action, which runs core.notices.show to open the center at the notice (docs/spec/notifications.md#toasts).
 	if toast.kind == "error" {
 		actions = append(actions, NoticeAction{Label: "자세히", Command: "core.notices.show", Params: map[string]any{"id": toast.id}})
 	}

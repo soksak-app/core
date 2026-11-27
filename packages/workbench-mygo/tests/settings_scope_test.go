@@ -68,7 +68,7 @@ func TestAControlChangesTheValueThatItShowsInTheScopeThatTheValueComesFrom(t *te
 	f.tester.SetSize(1200, 3200)
 	f.settle()
 	f.click("core.chrome.settings", "")
-	// The sides are on the page 작업 공간 and the mode on the page 모양 (docs/spec/settings.md#작업-공간).
+	// The sides are on the page Workspace and the mode on the page Look (docs/spec/settings.md#pages).
 	f.run("core.settings-tab.nav", map[string]any{"page": "workspace"})
 	// The common tab shows the project value of the top side with its mark, and a press writes the project scope.
 	on, scope, found := f.modalControl("core.settings-tab.side", "top")

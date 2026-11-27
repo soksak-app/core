@@ -98,7 +98,7 @@ func (s modalStatus) keys(name string) []string {
 }
 
 // labelsWithKeyPrefix is the labels of the controls of one name whose keys start with prefix, so the chips of one set are counted
-// on their own: a set that is edited draws its chips in its row and in its editor (docs/spec/settings.md#사이드바-세트).
+// on their own: a set that is edited draws its chips in its row and in its editor (docs/spec/settings.md#pages).
 func (s modalStatus) labelsWithKeyPrefix(name, prefix string) []string {
 	var labels []string
 	for _, control := range s.Controls {
@@ -338,8 +338,8 @@ func TestTheProjectScopeShowsTheFolderAndResetsAnOverride(t *testing.T) {
 	}
 }
 
-// The ↑ and ↓ buttons of the sidebar list are titled 위로 and 아래로, and the title shows as a tip while the pointer rests on the button
-// (docs/spec/settings.md#작업-공간).
+// The ↑ and ↓ buttons of the sidebar list are titled Up and Down, and the title shows as a tip while the pointer rests on the button
+// (docs/spec/settings.md#pages).
 func TestTheSidebarOrderButtonsShowTheirTitlesAsTips(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-tab.nav", map[string]any{"page": "workspace"})
@@ -369,7 +369,7 @@ func TestTheSidebarOrderButtonsShowTheirTitlesAsTips(t *testing.T) {
 }
 
 // The project scope marks for reset each overridden side switch, the side links and sidebarOrder, and a reset removes only its key
-// (docs/spec/settings.md#작업-공간).
+// (docs/spec/settings.md#pages).
 func TestTheProjectScopeResetsEachOverriddenSideSetting(t *testing.T) {
 	f := openedShell(t)
 	f.click("core.chrome.settings", "")
@@ -499,7 +499,7 @@ func TestTheSidebarsSectionCreatesEditsAndDeletesSets(t *testing.T) {
 	if status.Editing == nil || *status.Editing != "set-2" {
 		t.Fatalf("the new set is not edited: %+v", status)
 	}
-	// The add action appends the section that the select 섹션 추가… names (docs/spec/settings.md#사이드바-세트).
+	// The add action appends the section that the select Add section… names (docs/spec/settings.md#pages).
 	// The edited set draws its chips in its row and in its editor, so each count is 2 per chip.
 	before := len(status.labelsWithKeyPrefix("core.settings-tab.row-act", "remove:set-2:"))
 	f.run("core.settings.sets.row", map[string]any{"id": "set-2", "action": "add", "section": "acme.files"})
@@ -524,13 +524,13 @@ func TestTheSidebarsSectionCreatesEditsAndDeletesSets(t *testing.T) {
 	}
 }
 
-// The select 섹션 추가… adds the section it names, and a section that the set already holds is refused (docs/spec/settings.md#사이드바-세트).
+// The select Add section… adds the section it names, and a section that the set already holds is refused (docs/spec/settings.md#pages).
 func TestTheSectionAddAddsTheNamedSectionAndRefusesARepeat(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-tab.nav", map[string]any{"page": "sets"})
 	f.click("core.settings-tab.create", "")
 	f.run("core.settings.sets.row", map[string]any{"id": "set-2", "action": "add", "section": "acme.git"})
-	// The chip of the row and the chip of the editor (docs/spec/settings.md#사이드바-세트).
+	// The chip of the row and the chip of the editor (docs/spec/settings.md#pages).
 	if got := f.modal().labelsWithKeyPrefix("core.settings-tab.chip", "chip:set-2:"); !slices.Equal(got, []string{"변경", "변경"}) {
 		t.Fatalf("the chips of the set after adding 변경 are %q", got)
 	}
@@ -900,8 +900,8 @@ func selectBoxes(nodes []ui.ElementNode) []ui.ElementNode {
 	return found
 }
 
-// The rows of 설치됨 stand one under another, and the info button of each row stands in its row
-// (docs/spec/settings.md#설치됨).
+// The rows of Installed stand one under another, and the info button of each row stands in its row
+// (docs/spec/settings.md#plugins).
 func TestThePluginRowsStandOneUnderAnother(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})
@@ -1406,7 +1406,7 @@ func TestASelectWithALongChoiceKeepsTheWidthOfItsColumn(t *testing.T) {
 }
 
 // The sidebar list is one group of four rows, one per side in the order of sidebarOrder, each with its number, its name, its set select,
-// its switch and its ↑ and ↓ (docs/spec/settings.md#작업-공간). The first row has no enabled ↑ and the last row no enabled ↓, and the
+// its switch and its ↑ and ↓ (docs/spec/settings.md#pages). The first row has no enabled ↑ and the last row no enabled ↓, and the
 // caption of the shortcuts stands below the list in a fixed order.
 func TestTheSidebarListIsOneGroupOfFourRowsInTheOrderOfSidebarOrder(t *testing.T) {
 	f := opened(t)
@@ -1436,7 +1436,7 @@ func TestTheSidebarListIsOneGroupOfFourRowsInTheOrderOfSidebarOrder(t *testing.T
 	if disabled("core.settings-tab.order", "order:sidebarOrder:3:up") || !disabled("core.settings-tab.order", "order:sidebarOrder:3:down") {
 		t.Error("the last row has a disabled ↑ or an enabled ↓")
 	}
-	// The rows of the list show their number and name in turn; the choices 왼쪽 and 위 of 프로젝트 탭 위치 stand in another group.
+	// The rows of the list show their number and name in turn; the choices Left and Top of the project tab position stand in another group.
 	rowsShown := func(want []string) {
 		t.Helper()
 		texts := f.tester.Texts()
@@ -1472,7 +1472,7 @@ func TestTheSidebarListIsOneGroupOfFourRowsInTheOrderOfSidebarOrder(t *testing.T
 	}
 }
 
-// sideShortcutCaption is the caption of the shortcuts under the sidebar list (docs/spec/settings.md#작업-공간).
+// sideShortcutCaption is the caption of the shortcuts under the sidebar list (docs/spec/settings.md#pages).
 const sideShortcutCaption = "⌘B 왼쪽 · ⌥⌘B 오른쪽 · ⇧⌘J 위 · ⌘J 아래"
 
 // Each setting form has exactly one control of the form (docs/spec/settings.md#controls): a switch, a segment for two or three listed
@@ -1715,7 +1715,7 @@ func TestTheDependentRowsAreIndentedAndDisabledWhileTheirParentIsOff(t *testing.
 }
 
 // The buttons of the sidebar order stand in the control area of 260 points like the controls of every row, which starts at the same x
-// in each row of the pane (docs/spec/settings.md#작업-공간 and #performance). The value name of a row stands in that area too.
+// in each row of the pane (docs/spec/settings.md#pages and #performance). The value name of a row stands in that area too.
 func TestTheSidebarOrderButtonsStandInTheControlArea(t *testing.T) {
 	declared, err := workbench.Declared()
 	if err != nil {
@@ -1960,7 +1960,7 @@ func TestAFailedSettingWriteRestoresTheValueAndShowsItsErrorOnce(t *testing.T) {
 }
 
 // The layout segments of a set are the controls core.settings-tab.layout of the set, and each runs core.settings.sets.update
-// (docs/spec/settings.md#사이드바-세트).
+// (docs/spec/settings.md#pages).
 func TestTheSetLayoutSegmentsAreNamedLayoutControls(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-tab.nav", map[string]any{"page": "sets"})
@@ -1979,8 +1979,8 @@ func TestTheSetLayoutSegmentsAreNamedLayoutControls(t *testing.T) {
 	}
 }
 
-// A stored first width outside the range from the minimum to the maximum shows its line and the button 범위 안으로 맞추기, which runs
-// core.settings.change with the width cut to the range (docs/spec/settings.md#작업-공간).
+// A stored first width outside the range from the minimum to the maximum shows its line and the Fit to range button, which runs
+// core.settings.change with the width cut to the range (docs/spec/settings.md#pages).
 func TestAFirstWidthOutsideTheRangeShowsItsLineAndTheFixButton(t *testing.T) {
 	h := acme()
 	h.common["sidebarMinWidth"], h.common["sidebarMaxWidth"], h.common["sidebarWidth"] = 300.0, 500.0, 200.0

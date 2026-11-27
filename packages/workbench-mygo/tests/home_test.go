@@ -263,7 +263,7 @@ func TestTheHomeRemovalAnswersAfterTheHostRemovesTheProject(t *testing.T) {
 	}
 }
 
-// A project that another window owns is open here too, as the home shows its badge 열림 (docs/spec/projects.md#project-home).
+// A project that another window owns is open here too, as the home shows its Open badge (docs/spec/projects.md#project-home).
 func TestAProjectOfAnotherWindowIsOpen(t *testing.T) {
 	host := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "other"))}}
 	host.open = []string{host.projects[0]["id"].(string)}
@@ -274,7 +274,7 @@ func TestAProjectOfAnotherWindowIsOpen(t *testing.T) {
 	}
 }
 
-// A change of the store tells that another window has released its project, so the home drops its badge 열림.
+// A change of the store tells that another window has released its project, so the home drops its Open badge.
 func TestTheOpenProjectsFollowTheStore(t *testing.T) {
 	host := &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "other"))}}
 	host.open = []string{host.projects[0]["id"].(string)}
@@ -283,7 +283,7 @@ func TestTheOpenProjectsFollowTheStore(t *testing.T) {
 	host.open = nil
 	f.shell.Event("workspace-changed", nil)
 	f.settle()
-	// The status line shows "열림 0", which contains the badge text, so the badge is matched as a whole label.
+	// The status line shows the count text of the open badge, which contains the badge text, so the badge is matched as a whole label.
 	for _, text := range f.tester.Texts() {
 		if text == "열림" {
 			t.Fatalf("the home still shows %q after the release", f.tester.Texts())

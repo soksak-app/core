@@ -3,7 +3,7 @@ package workbench
 // The state of the settings tab that its commands change (docs/spec/settings.md#status). The state is part of the key of the model
 // where the model reads it, so a change builds the model once.
 
-// settingsBrowse is the state of 찾아보기: its search text, its switch and the number of rows it shows.
+// settingsBrowse is the state of Browse: its search text, its switch and the number of rows it shows.
 type settingsBrowse struct {
 	query         string
 	hideInstalled bool
@@ -11,10 +11,10 @@ type settingsBrowse struct {
 	limit int
 }
 
-// settingsBrowseFirst is the number of rows that 찾아보기 shows at once (docs/spec/settings.md#찾아보기).
+// settingsBrowseFirst is the number of rows that Browse shows at once (docs/spec/settings.md#plugins).
 const settingsBrowseFirst = 30
 
-// settingsConfirm is the open confirmation of a set or a plugin removal (docs/spec/settings.md#사이드바-세트).
+// settingsConfirm is the open confirmation of a set or a plugin removal (docs/spec/settings.md#pages).
 type settingsConfirm struct {
 	kind, id string
 }

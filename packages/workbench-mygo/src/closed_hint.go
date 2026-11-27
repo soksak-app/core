@@ -3,7 +3,7 @@ package workbench
 import "github.com/egoist/mygo/ui"
 
 // drawClosedSettingsHint draws the hint at the bottom right of the work screen after the settings tab of this window was closed: the text
-// 설정이 닫혀 있다 and the button 설정 열기, which runs core.settings.open (docs/spec/settings.md#opening-and-closing). It shows only while
+// The hint shows the closed settings tab and the open-settings button, which runs core.settings.open (docs/spec/settings.md#opening-and-closing). It shows only while
 // the work screen is in front and only after this window opened the tab, and it hides when the tab opens again.
 func (s *Shell) drawClosedSettingsHint(c *ui.Context) {
 	if s.settingsTab.open || !s.settingsTab.openedOnce || s.browsing || s.opened() == nil {

@@ -2,7 +2,7 @@ package workbench_test
 
 import "testing"
 
-// After the settings tab closes, the work screen shows the hint 설정이 닫혀 있다 with the button 설정 열기, which runs core.settings.open.
+// After the settings tab closes, the work screen shows the hint that the settings are closed, with the open-settings button, which runs core.settings.open.
 // A window that never opened the tab shows no hint, and the hint hides when the tab opens again (docs/spec/settings.md#opening-and-closing).
 func TestTheClosedSettingsHintShowsAfterCloseAndHidesOnReopen(t *testing.T) {
 	f := projectWithPlugins(t)

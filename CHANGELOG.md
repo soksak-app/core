@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1232-1: The Hangul comments of packages/workbench-mygo are English, and each exposed visible label names its element or command identifier.
 - F1226: The record of the F1226 item names the quit request in literal words, which the structure check accepts.
 - F1217-8: The held item records that editor.find.open binds cmd+f, so the workbench keeps ⌘F unbound until its owner is decided.
 - F1232-2: The comments of 23 files of packages/workbench are English, with ASCII anchors of the English specs.

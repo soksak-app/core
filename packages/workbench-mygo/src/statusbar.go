@@ -13,8 +13,8 @@ func (s *Shell) statusBarHeight() float32 {
 	return float32(s.options.Declared.ChromeNumber("statusbar-h", "px"))
 }
 
-// drawStatusBar draws the status bar at the bottom edge of the window: the name of the project, 카드 n for the content cards of the grid,
-// the theme and the mode of the window separated by ·, and at the right the key hint ⌘, 설정 (docs/spec/external-sidebars.md#status-bar).
+// drawStatusBar draws the status bar at the bottom edge of the window: the name of the project, Card n for the content cards of the grid,
+// the theme and the mode of the window separated by ·, and at the right the key hint ⌘, Settings (docs/spec/external-sidebars.md#status-bar).
 // Its texts are read when it draws.
 func (s *Shell) drawStatusBar(c *ui.Context, width float32) {
 	height := s.statusBarHeight()
@@ -38,7 +38,7 @@ func (s *Shell) drawStatusBar(c *ui.Context, width float32) {
 	mode := fmt.Sprint(s.settings.Value("mode"))
 	ui.Row(c).Size(width, height).Padding(0, m.spacePad, 0, m.spacePad).AlignItems(ui.Center).Gap(s.frameLength(m.chromeGap)).
 		Background(s.palette.Card).BorderWidth(topLine, 0, 0, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("core.statusbar").Children(func() {
-		// The entry 홈 runs core.home.show, which shows the project home in the window (docs/spec/external-sidebars.md#status-bar).
+		// The entry Home runs core.home.show, which shows the project home in the window (docs/spec/external-sidebars.md#status-bar).
 		s.binder.Press(c, "core.statusbar.home", "core.home.show", "", nil).Role(ui.RoleButton).Label("홈").Children(func() {
 			ui.Text(c, "홈").SingleLine().FontSize(size).TextColor(s.palette.Muted)
 		})
@@ -51,7 +51,7 @@ func (s *Shell) drawStatusBar(c *ui.Context, width float32) {
 }
 
 // drawHomeStatus draws the status line of the project home: the number of projects, the number of open projects, the enabled and the
-// installed plugins, the button back to the work screen while the window has one, and at the right the button + 새 창
+// installed plugins, the button back to the work screen while the window has one, and at the right the button + New window
 // (docs/spec/external-sidebars.md#status-bar).
 func (s *Shell) drawHomeStatus(c *ui.Context, width, height, topLine float32) {
 	m := s.metrics

@@ -84,7 +84,7 @@ func (s *Shell) noticeCenterStyle() string {
 	return "popover"
 }
 
-// drawNoticeHead draws the title 알림, the read-all button, the settings button and the close control.
+// drawNoticeHead draws the title Notifications, the core.notices.read-all button, the settings button core.notices.settings and the close control core.notices.close.
 func (s *Shell) drawNoticeHead(c *ui.Context) {
 	m := s.metrics
 	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(m.toastGap).Children(func() {
@@ -109,14 +109,14 @@ func (s *Shell) drawNoticeFilters(c *ui.Context, counts map[string]int) {
 			button := s.binder.Press(c, "core.notices.filter", "core.notices.filter", filter, map[string]any{"filter": filter})
 			s.uiButton(c, button, label, filter == s.errors.noticeFilter)
 		}
-		// The switch 조용히 runs core.settings.set with the patch of quietToasts (docs/spec/notifications.md#notice-center).
+		// The switch core.notices.quiet runs core.settings.set with the patch of quietToasts (docs/spec/notifications.md#notice-center).
 		// silent: the settings store checks that quietToasts is a boolean, as a switch of the declaration.
 		quiet, _ := s.settings.Value("quietToasts").(bool)
 		s.uiButton(c, s.binder.Press(c, "core.notices.quiet", "core.settings.set", "", s.appliedPatch("quietToasts", !quiet)), "조용히", quiet)
 	})
 }
 
-// drawNoticeGroups draws the groups in order: 진행 중 first, then each day of the entries, each with its 지우기 button except 진행 중.
+// drawNoticeGroups draws the groups in order: In progress first, then each day of the entries, each with its core.notices.clear button except In progress.
 func (s *Shell) drawNoticeGroups(c *ui.Context, shown []*errorToast) {
 	m := s.metrics
 	var order []string
@@ -148,7 +148,7 @@ func (s *Shell) drawNoticeGroups(c *ui.Context, shown []*errorToast) {
 	}
 }
 
-// groupLabel is the label of a group: 진행 중, 오늘 or 어제, or the day itself.
+// groupLabel is the label of a group: In progress, Today or Yesterday, or the day itself.
 func groupLabel(group string) string {
 	if label, ok := noticeGroupLabel[group]; ok {
 		return label
@@ -220,7 +220,7 @@ func (s *Shell) drawNoticeEntry(c *ui.Context, toast *errorToast) {
 	}
 }
 
-// sourceChip is the chip of an entry's source: the tab label of a card, the plugin, 설정 or soksak (packages/workbench/notice-view.js).
+// sourceChip is the chip of an entry's source: the tab label of a card, the plugin, Settings or soksak (packages/workbench/notice-view.js).
 func sourceChip(source NoticeSource) string {
 	switch source.Kind {
 	case "card":
@@ -249,7 +249,7 @@ func (s *Shell) drawNoticeProgress(c *ui.Context, toast *errorToast) {
 	})
 }
 
-// drawNoticeFoot draws the rule of the lifetime of the entries and the button 모두 지우기.
+// drawNoticeFoot draws the rule of the lifetime of the entries and the core.notices.clear-all button.
 func (s *Shell) drawNoticeFoot(c *ui.Context) {
 	m := s.metrics
 	ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(m.toastGap).Children(func() {

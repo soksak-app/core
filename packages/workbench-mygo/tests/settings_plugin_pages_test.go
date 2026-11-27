@@ -69,8 +69,8 @@ func installedFixture(t *testing.T) *shellFixture {
 	return f
 }
 
-// The page 설치됨 lists the installed plugins with a problem first, then the plugins with an update, then the rest, each by name
-// (docs/spec/settings.md#설치됨). zzz has an update and aaa has none, so zzz comes first although its name is later.
+// The page Installed lists the installed plugins with a problem first, then the plugins with an update, then the rest, each by name
+// (docs/spec/settings.md#plugins). zzz has an update and aaa has none, so zzz comes first although its name is later.
 func TestTheInstalledPageListsThePluginsWithUpdatesBeforeTheRest(t *testing.T) {
 	f := installedFixture(t)
 	if want := []string{"zzz", "aaa"}; !slices.Equal(f.tabStatus().Listed, want) {
@@ -78,8 +78,8 @@ func TestTheInstalledPageListsThePluginsWithUpdatesBeforeTheRest(t *testing.T) {
 	}
 }
 
-// The filter segment of 설치됨 shows the choices with their counts, in the order of the specification
-// (docs/spec/settings.md#설치됨).
+// The filter segment of Installed shows the choices with their counts, in the order of the specification
+// (docs/spec/settings.md#plugins).
 func TestTheInstalledPageShowsTheFilterChipsWithTheirCounts(t *testing.T) {
 	f := installedFixture(t)
 	want := []string{"전체 2", "사용 중 0", "꺼짐 0", "업데이트 1", "문제 0"}
@@ -88,8 +88,8 @@ func TestTheInstalledPageShowsTheFilterChipsWithTheirCounts(t *testing.T) {
 	}
 }
 
-// A plugin row with an update shows the button 업데이트 that runs core.plugins.update for its plugin, and the button 모두 업데이트 (1)
-// runs core.plugins.update-all (docs/spec/settings.md#설치됨).
+// A plugin row with an update shows the button Update that runs core.plugins.update for its plugin, and the button core.settings-tab.plugins.update-all (1)
+// runs core.plugins.update-all (docs/spec/settings.md#plugins).
 func TestAPluginRowWithAnUpdateOffersItsUpdateAndTheUpdateOfAll(t *testing.T) {
 	f := installedFixture(t)
 	var update, all string
@@ -119,7 +119,7 @@ func findControl(controls []settingsControl, name, key string) (settingsControl,
 	return settingsControl{}, false
 }
 
-// The search of 설치됨 keeps the rows whose name, id or description match the text (docs/spec/settings.md#설치됨).
+// The search of Installed keeps the rows whose name, id or description match the text (docs/spec/settings.md#plugins).
 func TestTheInstalledSearchKeepsTheMatchingRows(t *testing.T) {
 	f := installedFixture(t)
 	f.run("core.settings-tab.search", map[string]string{"query": "AAA"})
@@ -128,7 +128,7 @@ func TestTheInstalledSearchKeepsTheMatchingRows(t *testing.T) {
 	}
 }
 
-// The filter 업데이트 keeps only the rows with an update (docs/spec/settings.md#설치됨).
+// The filter Update keeps only the rows with an update (docs/spec/settings.md#plugins).
 func TestTheUpdatesFilterKeepsOnlyThePluginsWithAnUpdate(t *testing.T) {
 	f := installedFixture(t)
 	f.run("core.settings-tab.filter", map[string]string{"filter": "updates"})
@@ -137,7 +137,7 @@ func TestTheUpdatesFilterKeepsOnlyThePluginsWithAnUpdate(t *testing.T) {
 	}
 }
 
-// A disabled plugin shows the badge 꺼짐 and its switch 사용 is off and runs core.plugins.enable (docs/spec/settings.md#설치됨).
+// A disabled plugin shows the badge Off and its switch core.settings-tab.plugins.switch is off and runs core.plugins.enable (docs/spec/settings.md#plugins).
 func TestADisabledPluginShowsItsBadgeAndAnOffSwitchThatEnables(t *testing.T) {
 	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"off": {"1.0.0"}})}
 	plugins.plugins = map[string]map[string]any{"off": {"version": "1.0.0", "enabled": false, "sidecars": map[string]string{}}}
@@ -160,7 +160,7 @@ func TestADisabledPluginShowsItsBadgeAndAnOffSwitchThatEnables(t *testing.T) {
 }
 
 // A held operation shows the action that ends its sessions and runs its command with end true, with the count of its sessions
-// (docs/spec/settings.md#설치됨, docs/spec/installation.md).
+// (docs/spec/settings.md#plugins, docs/spec/installation.md).
 func TestAHeldOperationIsListedAndItsActionRunsItWithEnd(t *testing.T) {
 	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"zzz": {"1.0.0", "1.2.0"}})}
 	plugins.plugins = map[string]map[string]any{"zzz": {"version": "1.0.0", "enabled": true, "sidecars": map[string]string{}}}
@@ -200,7 +200,7 @@ func TestAStringSettingOfAPluginIsATextFieldInItsPage(t *testing.T) {
 }
 
 // An outdated sidecar shows its replacement, which runs core.plugins.replace for the sidecar and counts its sessions
-// (docs/spec/settings.md#설치됨).
+// (docs/spec/settings.md#plugins).
 func TestAnOutdatedSidecarOffersItsReplacement(t *testing.T) {
 	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{})}
 	plugins.plugins = map[string]map[string]any{}
@@ -217,8 +217,8 @@ func TestAnOutdatedSidecarOffersItsReplacement(t *testing.T) {
 	}
 }
 
-// The core update row shows the running and the available version, and its button 업데이트 runs core.app.update
-// (docs/spec/settings.md#설치됨, docs/spec/installation.md#application-update).
+// The core update row shows the running and the available version, and its button Update runs core.app.update
+// (docs/spec/settings.md#plugins, docs/spec/installation.md#application-update).
 func TestTheInstalledPageShowsTheCoreUpdateRow(t *testing.T) {
 	f, _ := updateShell(t, appRelease)
 	f.run("core.settings.open", nil)
@@ -233,7 +233,7 @@ func TestTheInstalledPageShowsTheCoreUpdateRow(t *testing.T) {
 }
 
 // The core update row holds one notice for each installed plugin that the available release does not fit, in the same row as the
-// core row, and draws them all (docs/spec/settings.md#설치됨).
+// core row, and draws them all (docs/spec/settings.md#plugins).
 func TestTheCoreUpdateRowHoldsAnIncompatibleNoticeForEachPlugin(t *testing.T) {
 	f, _ := updateShell(t, appRelease)
 	f.run("core.settings.open", nil)
@@ -287,7 +287,7 @@ func browseFixture(t *testing.T, catalog []string, installed ...string) *shellFi
 	return f
 }
 
-// The page 찾아보기 lists every catalog plugin by name (docs/spec/settings.md#찾아보기).
+// The page Browse lists every catalog plugin by name (docs/spec/settings.md#plugins).
 func TestTheBrowsePageListsTheCatalogByName(t *testing.T) {
 	f := browseFixture(t, []string{"zzz", "aaa", "mmm"}, "zzz")
 	if want := []string{"aaa", "mmm", "zzz"}; !slices.Equal(f.tabStatus().Listed, want) {
@@ -295,7 +295,7 @@ func TestTheBrowsePageListsTheCatalogByName(t *testing.T) {
 	}
 }
 
-// The switch 설치한 것 숨기기 leaves out the installed plugins and runs core.settings-tab.browse {hideInstalled} (docs/spec/settings.md#찾아보기).
+// The switch core.settings-tab.browse-hide leaves out the installed plugins and runs core.settings-tab.browse {hideInstalled} (docs/spec/settings.md#plugins).
 func TestTheHideSwitchLeavesOutTheInstalledPlugins(t *testing.T) {
 	f := browseFixture(t, []string{"zzz", "aaa", "mmm"}, "zzz")
 	f.run("core.settings-tab.browse", map[string]bool{"hideInstalled": true})
@@ -304,7 +304,7 @@ func TestTheHideSwitchLeavesOutTheInstalledPlugins(t *testing.T) {
 	}
 }
 
-// The search of 찾아보기 keeps the catalog plugins whose name, id or description contain the text (docs/spec/settings.md#찾아보기).
+// The search core.settings-tab.browse-search keeps the catalog plugins whose name, id or description contain the text (docs/spec/settings.md#plugins).
 func TestTheBrowseSearchKeepsTheMatchingPlugins(t *testing.T) {
 	f := browseFixture(t, []string{"zzz", "aaa", "mmm"}, "zzz")
 	f.run("core.settings-tab.browse", map[string]string{"query": "mmm"})
@@ -313,7 +313,7 @@ func TestTheBrowseSearchKeepsTheMatchingPlugins(t *testing.T) {
 	}
 }
 
-// The page shows 30 rows at once and the button of the next rows adds the rows that are left (docs/spec/settings.md#찾아보기).
+// The page shows 30 rows at once and the button of the next rows adds the rows that are left (docs/spec/settings.md#plugins).
 func TestTheBrowsePageShowsThirtyRowsAndMoreOfThem(t *testing.T) {
 	var catalog []string
 	for i := 0; i < 35; i++ {
@@ -333,7 +333,7 @@ func TestTheBrowsePageShowsThirtyRowsAndMoreOfThem(t *testing.T) {
 	}
 }
 
-// An uninstalled catalog plugin offers 설치, which runs core.plugins.install for it (docs/spec/settings.md#찾아보기).
+// An uninstalled catalog plugin offers Install, which runs core.plugins.install for it (docs/spec/settings.md#plugins).
 func TestAnUninstalledCatalogPluginOffersItsInstall(t *testing.T) {
 	f := browseFixture(t, []string{"aaa"})
 	control, ok := findControl(f.controlsOf(), "core.settings-tab.plugins.action", "aaa:install")
@@ -342,7 +342,7 @@ func TestAnUninstalledCatalogPluginOffersItsInstall(t *testing.T) {
 	}
 }
 
-// alphaPageFixture is a window that loads alpha and has it installed and enabled, with its plugin page in front after a click on 설치됨.
+// alphaPageFixture is a window that loads alpha and has it installed and enabled, with its plugin page in front after a click on Installed.
 func alphaPageFixture(t *testing.T) *shellFixture {
 	t.Helper()
 	plugins := &pluginsHost{registry: "file:///registry/index.json", index: registryOf(map[string][]string{"alpha": {"1.0.0"}})}
@@ -371,7 +371,7 @@ func TestThePluginPageHasABackLinkToTheListThatOpenedIt(t *testing.T) {
 	}
 }
 
-// The info card of an installed plugin shows its switch 사용 and the removal, which asks before it runs (docs/spec/settings.md#plugin-page).
+// The info card of an installed plugin shows its switch core.settings-tab.plugins.switch and the removal, which asks before it runs (docs/spec/settings.md#plugin-page).
 func TestThePluginPageRemovalAsksBeforeItRuns(t *testing.T) {
 	f := alphaPageFixture(t)
 	if _, ok := findControl(f.controlsOf(), "core.settings-tab.plugins.switch", "plugin:alpha"); !ok {
@@ -386,7 +386,7 @@ func TestThePluginPageRemovalAsksBeforeItRuns(t *testing.T) {
 	}
 }
 
-// A plugin without settings shows the line 이 플러그인에는 설정이 없다. (docs/spec/settings.md#plugin-page).
+// A plugin without settings shows the line that says it has no settings (docs/spec/settings.md#plugin-page).
 func TestAPluginWithoutSettingsSaysSo(t *testing.T) {
 	f := alphaPageFixture(t)
 	if !f.tester.HasText("이 플러그인에는 설정이 없다.") {
@@ -394,7 +394,7 @@ func TestAPluginWithoutSettingsSaysSo(t *testing.T) {
 	}
 }
 
-// The actions of the plugin page follow the state of its plugin: the switch 사용 runs core.plugins.disable while the plugin is enabled and
+// The actions of the plugin page follow the state of its plugin: the switch core.settings-tab.plugins.switch runs core.plugins.disable while the plugin is enabled and
 // core.plugins.enable after it is disabled, and the update action is shown while the registry lists a newer version of the installed
 // plugin (docs/spec/settings.md#plugin-page).
 func TestTheActionsOfThePluginPageFollowThePlugin(t *testing.T) {
@@ -432,7 +432,7 @@ func TestTheActionsOfThePluginPageFollowThePlugin(t *testing.T) {
 	}
 }
 
-// The group 창 사이드바 of a plugin page is the four-row list of the sidebar group without the switch: its order is stored under
+// The group Window sidebars of a plugin page is the four-row list of the sidebar group without the switch: its order is stored under
 // <plugin>.win.order, starts from left, right, top, bottom, and its buttons write the whole order (docs/spec/settings.md#plugin-page).
 func TestThePluginWindowSidebarsKeepTheirOwnOrderWithoutSwitches(t *testing.T) {
 	f := opened(t)
@@ -480,7 +480,7 @@ func TestVersionsCompareByNumber(t *testing.T) {
 	}
 }
 
-// The group 섹션 of a plugin page shows the names of its sections as read-only chips, one chip for each section
+// The group Sections of a plugin page shows the names of its sections as read-only chips, one chip for each section
 // (docs/spec/settings.md#plugin-page).
 func TestThePluginPageShowsItsSectionsAsReadOnlyChips(t *testing.T) {
 	f := opened(t)
@@ -502,7 +502,7 @@ func TestThePluginPageShowsItsSectionsAsReadOnlyChips(t *testing.T) {
 }
 
 // The meta line of an installed row starts with the categories of the plugin, then its package or key and its version
-// (docs/spec/settings.md#설치됨).
+// (docs/spec/settings.md#plugins).
 func TestTheInstalledRowMetaLineNamesTheCategoryOfThePlugin(t *testing.T) {
 	document := strings.Replace(acmeDocument, `"sections":[`, `"categories":["terminal"],"sections":[`, 1)
 	stored := acme()
@@ -516,7 +516,7 @@ func TestTheInstalledRowMetaLineNamesTheCategoryOfThePlugin(t *testing.T) {
 }
 
 // A running operation of a plugin shows its action on the row of the plugin, and the line leaves when the operation ends
-// (docs/spec/settings.md#설치됨).
+// (docs/spec/settings.md#plugins).
 func TestARunningOperationShowsItsActionOnThePluginRow(t *testing.T) {
 	release := newGate()
 	stored := acme()
@@ -540,7 +540,7 @@ func TestARunningOperationShowsItsActionOnThePluginRow(t *testing.T) {
 }
 
 // A failed operation of a plugin shows its error through the error display under the name plugin <id>, which the record keeps
-// (docs/spec/settings.md#설치됨).
+// (docs/spec/settings.md#plugins).
 func TestAFailedOperationOfAPluginIsShownThroughTheErrorDisplay(t *testing.T) {
 	stored := acme()
 	stored.extra = map[string]workbench.HostCall{"pluginsRun": func(context.Context, json.RawMessage) (any, error) { return nil, errors.New("disable refused") }}
@@ -584,7 +584,7 @@ func TestTheStatusListsTheErrorLinesOfTheSettingsTab(t *testing.T) {
 }
 
 // The core update row names its release link core.settings-tab.plugins.app-release and its button core.settings-tab.plugins.app-update
-// (docs/spec/settings.md#설치됨).
+// (docs/spec/settings.md#plugins).
 func TestTheCoreUpdateRowNamesItsReleaseLinkAndItsUpdateButton(t *testing.T) {
 	f, _ := updateShell(t, appRelease)
 	f.run("core.settings.open", nil)
@@ -667,7 +667,7 @@ func TestTheProjectScopeMarksThePluginSidebarListsAndResetsTheirOverrides(t *tes
 }
 
 // A stored plugin value that names no loaded plugin of its category is a load error of its key alone: the other settings load and
-// apply, the key has no value and is listed in missing, its plugin page shows the badge <value> 필요, and the error shows once
+// apply, the key has no value and is listed in missing, its plugin page shows the badge <value> required, and the error shows once
 // (docs/spec/plugins.md#settings-declarations, docs/spec/settings.md#plugins).
 func TestAStoredPluginValueThatNamesNoLoadedPluginIsALoadErrorOfItsKeyAlone(t *testing.T) {
 	document := strings.Replace(acmeDocument, `"settings":{`, `"settings":{"pick":{"type":"plugin","category":"terminal","label":"대상","description":"d"},`, 1)

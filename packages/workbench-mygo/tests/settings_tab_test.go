@@ -88,7 +88,7 @@ func TestTheSettingsTabOpensAndClosesAndItsStatusFollows(t *testing.T) {
 	}
 }
 
-// The menu lists the pages of 설정 and 플러그인 in the order of the specification, each as core.settings-tab.nav {page}.
+// The menu lists the pages of Settings and Plugins in the order of the specification, each as core.settings-tab.nav {page}.
 func TestTheSettingsTabMenuListsItsPagesInOrder(t *testing.T) {
 	f := newShell(t, acme())
 	f.run("core.settings.open", nil)
@@ -201,7 +201,7 @@ func (f *shellFixture) settingsSetIDs(t *testing.T) []string {
 }
 
 // A removal of a set asks first: core.settings-tab.confirm with answer ask shows the confirmation, answer no closes it without a change,
-// and answer yes deletes the set and closes the confirmation (docs/spec/settings.md#사이드바-세트).
+// and answer yes deletes the set and closes the confirmation (docs/spec/settings.md#pages).
 func TestARemovalOfASetIsConfirmedBeforeItRuns(t *testing.T) {
 	f := newShell(t, acme())
 	f.run("core.settings.open", nil)
@@ -251,7 +251,7 @@ func (f *shellFixture) controlsNamed(name string) []struct {
 }
 
 // The sets page shows each section of a set as a chip, and each chip has one × that removes it. The page has no reorder button, and the
-// select 섹션 추가… lists the registered sections that the set does not contain (docs/spec/settings.md#사이드바-세트).
+// select Add section… lists the registered sections that the set does not contain (docs/spec/settings.md#pages).
 func TestTheSetsPageShowsSectionChipsWithOneRemoveAndAnAddSelect(t *testing.T) {
 	f := newShell(t, acme())
 	f.run("core.settings.open", nil)
@@ -274,7 +274,7 @@ func TestTheSetsPageShowsSectionChipsWithOneRemoveAndAnAddSelect(t *testing.T) {
 	}
 }
 
-// The toast is the element core.settings-tab.toast in the foot of the tab, with its text and the button 되돌리기 (core.settings-tab.undo),
+// The toast is the element core.settings-tab.toast in the foot of the tab, with its text and the Undo button (core.settings-tab.undo),
 // and it leaves the tab with the undo (docs/spec/settings.md#saving-and-undo).
 func TestTheToastIsDrawnInTheFootOfTheTab(t *testing.T) {
 	f := newShell(t, acme())
@@ -313,7 +313,7 @@ func TestAToastNamesTheValuesOfAChangeByItsKind(t *testing.T) {
 	}
 }
 
-// A theme change shows the toast 테마: <old> → <new>, and its undo restores the old theme (docs/spec/settings.md#saving-and-undo).
+// A theme change shows the toast Theme: <old> → <new>, and its undo restores the old theme (docs/spec/settings.md#saving-and-undo).
 func TestAThemeChangeShowsItsToastAndUndoRestoresTheTheme(t *testing.T) {
 	f := newShell(t, acme())
 	f.run("core.settings.open", nil)
@@ -333,7 +333,7 @@ func TestAThemeChangeShowsItsToastAndUndoRestoresTheTheme(t *testing.T) {
 	}
 }
 
-// A sidebar order shows the toast 배치 순서: <sides> with the side names joined by → (docs/spec/settings.md#saving-and-undo).
+// A sidebar order shows the toast Side order: <sides> with the side names joined by → (docs/spec/settings.md#saving-and-undo).
 func TestASidebarOrderShowsItsSidesInItsToast(t *testing.T) {
 	f := newShell(t, acme())
 	f.run("core.settings.open", nil)

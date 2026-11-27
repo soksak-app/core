@@ -83,7 +83,7 @@ func TestADependentRowIsDisabledWhileItsParentIsOff(t *testing.T) {
 	}
 }
 
-// The label column takes the width that the control column leaves, less the gap of the row (docs/spec/settings.md#rows): the name 통로
+// The label column takes the width that the control column leaves, less the gap of the row (docs/spec/settings.md#rows): the name of the fixture row
 // ends one space-2 gap (8 points) before the control column of font.
 func TestTheLabelColumnTakesTheWidthThatTheControlColumnLeaves(t *testing.T) {
 	f := settingsMetricsPage(t, "look")

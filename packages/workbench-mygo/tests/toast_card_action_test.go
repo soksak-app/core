@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// A warning of a card that does not have the focus shows as a toast with the action 카드로 가기, which focuses the card
+// A warning of a card that does not have the focus shows as a toast with the action Go to card, which focuses the card
 // (docs/spec/notifications.md#toasts).
 func TestAWarningOfAnUnfocusedCardOffersTheCardFocusAction(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))

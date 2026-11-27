@@ -278,7 +278,7 @@ func TestTheSetupFailuresAreShownAndKeepTheParts(t *testing.T) {
 	}
 }
 
-// The button 모두 설치 is the primary button of its group, and the group is titled 에이전트 연동 (docs/spec/settings.md#에이전트).
+// The button core.settings-tab.setup-install-all is the primary button of its group, and the group is titled Agent integration (docs/spec/settings.md#agents).
 func TestTheInstallButtonIsPrimaryInTheAgentGroup(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-tab.nav", map[string]any{"page": "agents"})
@@ -296,7 +296,7 @@ func TestTheInstallButtonIsPrimaryInTheAgentGroup(t *testing.T) {
 	}
 }
 
-// setupInstallDisabled reports whether the button 모두 설치 is drawn and disabled: it stays shown when no part is missing.
+// setupInstallDisabled reports whether the button core.settings-tab.setup-install-all is drawn and disabled: it stays shown when no part is missing.
 func setupInstallDisabled(f *shellFixture) bool {
 	f.t.Helper()
 	for _, control := range f.modal().Controls {
@@ -307,8 +307,8 @@ func setupInstallDisabled(f *shellFixture) bool {
 	return false
 }
 
-// A missing skill or mcp part has its own button in its row: 고치기 when the file differs, else 설치, which runs core.setup.install with
-// that part (docs/spec/settings.md#에이전트). A part that is ok or is path or hook has none.
+// A missing skill or mcp part has its own button in its row: Repair when the file differs, else the button core.settings-tab.setup-install, which runs core.setup.install with
+// that part (docs/spec/settings.md#agents). A part that is ok or is path or hook has none.
 func TestAMissingSkillOrMCPPartHasItsOwnFixOrInstallButton(t *testing.T) {
 	host := &setupHost{states: []setupAnswer{{parts: setupMissing}, {parts: setupInstalled}, {parts: setupInstalled}}, installs: []setupAnswer{{parts: setupInstalled}}}
 	f := setupShell(t, host)

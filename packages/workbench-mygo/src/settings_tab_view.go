@@ -42,7 +42,7 @@ type LoadedPlugin struct {
 }
 
 // settingsPages are the pages of the settings tab in menu order, with their labels (docs/spec/settings.md#menu). The plugin page is
-// opened from the menu's plugin items and from 설치됨, and the menu does not list it.
+// opened from the menu's plugin items and from Installed, and the menu does not list it.
 var settingsPages = [][2]string{{"look", "모양"}, {"workspace", "작업 공간"}, {"sets", "사이드바 세트"}, {"behavior", "동작"},
 	{"agents", "에이전트 연동"}, {"diag", "진단"}, {"installed", "설치됨"}, {"browse", "찾아보기"}, {"plugin", "플러그인"}}
 
@@ -74,9 +74,9 @@ const (
 	controlMark
 	// controlSetup is a row of the agent group, with the name, state, file and optional action of a setup part.
 	controlSetup
-	// controlAccount is a row of the group 계정, with the line and the usage lines of an account and its buttons.
+	// controlAccount is a row of the group Accounts, with the line and the usage lines of an account and its buttons.
 	controlAccount
-	// controlChip is a section chip of a set, and controlBadge a badge of a row (docs/spec/settings.md#사이드바-세트).
+	// controlChip is a section chip of a set, and controlBadge a badge of a row (docs/spec/settings.md#pages).
 	controlChip
 	controlBadge
 )
@@ -117,7 +117,7 @@ type SettingsControl struct {
 	kind controlKind
 	// missingTip is the tooltip of a section chip whose plugin is not loaded (docs/spec/plugins.md#missing-plugins).
 	missingTip string
-	title      string            // the title of a button, which shows as its tip while the pointer rests on it (docs/spec/settings.md#작업-공간)
+	title      string            // the title of a button, which shows as its tip while the pointer rests on it (docs/spec/settings.md#pages)
 	param      string            // the parameter that takes the value of the control
 	labels     map[string]string // the text of each option
 	lo, hi     float64           // the bounds of a slider
@@ -127,10 +127,10 @@ type SettingsControl struct {
 	searchable bool        // a field that runs its command for each change, as the plugin search does
 	tone       string      // the tone of a badge: ok, acc, warn, err or neutral (docs/spec/settings.md#controls)
 	setup      *setupRow   // the content of a row of the agent group
-	account    *accountRow // the content of a row of the group 계정
+	account    *accountRow // the content of a row of the group Accounts
 }
 
-// accountRow is the content of a row of the group 계정: the line of the account, its usage lines and its controls.
+// accountRow is the content of a row of the group Accounts: the line of the account, its usage lines and its controls.
 type accountRow struct {
 	line     string
 	usage    []string
@@ -142,7 +142,7 @@ type settingsRow struct {
 	name        string
 	key         string
 	description string
-	// plugin is the id of the plugin of a row of 설치됨, which the row is named by (docs/spec/settings.md#설치됨).
+	// plugin is the id of the plugin of a row of Installed, which the row is named by (docs/spec/settings.md#plugins).
 	plugin string
 	// aboutLines says that each line of the description is one element core.settings-tab.plugins.about (docs/spec/settings.md#plugin-page).
 	aboutLines bool
@@ -150,7 +150,7 @@ type settingsRow struct {
 	// list says that the controls stand in the flow of a line, one after the other (.set-list).
 	list bool
 	// side says that the row is a row of the sidebar list: number is its number in the order, and name its side name
-	// (docs/spec/settings.md#작업-공간).
+	// (docs/spec/settings.md#pages).
 	side   bool
 	number string
 	// indent says that the row depends on a parent setting, so it is indented under it, and disabled that its controls take no
@@ -175,7 +175,7 @@ type settingsModel struct {
 	listed       []string
 	controls     []*SettingsControl
 	// actions are the action buttons of the plugin rows and pages, labels the row name of each control key, shown the number of
-	// catalog rows that 찾아보기 shows, and results the result of a search.
+	// catalog rows that Browse shows, and results the result of a search.
 	actions []settingsActionStatus
 	labels  map[string]string
 	shown   int
@@ -188,9 +188,9 @@ type settingsTab struct {
 	// openedOnce says that this window has opened its settings tab, so the work screen shows the closed hint after a close.
 	openedOnce  bool
 	page, scope string
-	// find is the text of the menu search, filter the filter of 설치됨 and back the page of the back link of the plugin page.
+	// find is the text of the menu search, filter the filter of Installed and back the page of the back link of the plugin page.
 	find, filter, back string
-	// browse is the state of 찾아보기, confirm the open confirmation and undo the toast of the last change.
+	// browse is the state of Browse, confirm the open confirmation and undo the toast of the last change.
 	browse  settingsBrowse
 	confirm settingsConfirm
 	undo    *settingsUndo
@@ -204,8 +204,8 @@ type settingsTab struct {
 	// revealGroup is the name of the group that the next draw scrolls into view, from core.settings-tab.nav with a group.
 	revealGroup string
 	drafts      map[string]string
-	// The fields of the group 계정 of the shown plugin page (docs/spec/plugins.md#accounts): the plugin of the page, the name and the
-	// kind of the row 새 계정, the account whose name is edited and the text of its field. Another page clears them.
+	// The fields of the group Accounts of the shown plugin page (docs/spec/plugins.md#accounts): the plugin of the page, the name and the
+	// kind of the row of core.settings-tab.account-add, the account whose name is edited and the text of its field. Another page clears them.
 	accountPlugin, accountName, accountKind, accountEdit, accountEditName string
 	// builds counts the models that settingsBuild built, which the tests read (SettingsModelBuilds).
 	builds int
@@ -325,7 +325,7 @@ func (s *Shell) settingsBuild() (*settingsModel, error) {
 	model := &settingsModel{labels: map[string]string{}}
 	b := &settingsBuilder{model: model, counts: map[string]int{}, descriptions: declaredDescriptions(s.settings.Catalog.Rows)}
 	model.close = b.add(SettingsControl{Name: "core.settings-tab.close", Key: text("close"), Label: "닫는다", Command: settingCommand("core.settings.close", nil), kind: controlButton})
-	// The menu lists the pages of 설정 and 플러그인; the plugin page is opened by a plugin item.
+	// The menu lists the pages of Settings and Plugins; the plugin page is opened by a plugin item.
 	for _, page := range settingsPages[:len(settingsPages)-1] {
 		model.nav = append(model.nav, b.pressedButton("nav:"+page[0], "core.settings-tab.nav", page[1], "core.settings-tab.nav",
 			map[string]any{"page": page[0]}, page[0] == w.page))
@@ -577,7 +577,7 @@ func joinedOr(names []string, separator, none string) string {
 }
 
 // setOptions are the choices of a sidebar: not used and every set, each with its layout and its number of sections as the hint
-// (docs/spec/settings.md#작업-공간).
+// (docs/spec/settings.md#pages).
 func (s *Shell) setOptions(sets []StoredSet) [][2]string {
 	options := [][2]string{{"off", "사용 안 함"}}
 	for _, set := range sets {
@@ -686,12 +686,12 @@ func accountLogin(account AccountView) string {
 	return "로그인 필요"
 }
 
-// accountField is a text field of the group 계정 that runs command with its text as name.
+// accountField is a text field of the group Accounts that runs command with its text as name.
 func accountField(b *settingsBuilder, key, command, now string) *SettingsControl {
 	return b.add(SettingsControl{Name: "core.settings-tab." + key, Key: text(key), Value: text(now), Command: settingCommand(command, nil), kind: controlText, param: "name", maxLength: 40})
 }
 
-// buildAccounts adds the group 계정 of a plugin that declares accounts: a row per account and the row 새 계정.
+// buildAccounts adds the group Accounts of a plugin that declares accounts: a row per account and the row of core.settings-tab.account-add.
 func (s *Shell) buildAccounts(b *settingsBuilder, plugin *LoadedPlugin, declared *accountsDeclaration) {
 	w := &s.settingsTab
 	accounts, err := s.accounts.List(plugin.ID)
@@ -1325,7 +1325,7 @@ type windowParam struct {
 	Page   string `json:"page,omitempty"`
 	Group  string `json:"group,omitempty"`
 	Answer string `json:"answer,omitempty"`
-	// HideInstalled is the switch of 찾아보기, and More asks for the next rows of 찾아보기.
+	// HideInstalled is the switch of Browse, and More asks for the next rows of Browse.
 	HideInstalled *bool   `json:"hideInstalled,omitempty"`
 	More          bool    `json:"more,omitempty"`
 	Filter        string  `json:"filter,omitempty"`
@@ -1387,7 +1387,7 @@ func (s *Shell) registerSettingsTab() {
 		}
 		if value.Page == "installed" {
 			// The installed page reads the plugin state and the application update of the host when it is shown, as the plugin page did
-			// before the library was removed (docs/spec/settings.md#설치됨).
+			// before the library was removed (docs/spec/settings.md#plugins).
 			s.pluginOperations.Refresh(func() {})
 			s.appUpdates.Refresh(func() {})
 		}
@@ -1415,7 +1415,7 @@ func (s *Shell) registerSettingsTab() {
 			return fmt.Errorf("unknown plugin %s", *value.Plugin)
 		}
 		w.chosen = *value.Plugin
-		// The back link returns to the page that opened the plugin page: 찾아보기 when it was shown, else 설치됨.
+		// The back link returns to the page that opened the plugin page: Browse when it was shown, else Installed.
 		w.back = "installed"
 		if w.page == "browse" {
 			w.back = "browse"
@@ -1514,7 +1514,7 @@ func (s *Shell) registerSettingsTab() {
 	})
 }
 
-// accountPage refuses a field command of the group 계정 while no page of a plugin with accounts shows.
+// accountPage refuses a field command of the group Accounts while no page of a plugin with accounts shows.
 func (s *Shell) accountPage() error {
 	w := &s.settingsTab
 	if w.page != "plugin" || w.chosen == "" || !s.accounts.Declares(w.chosen) {
@@ -1523,7 +1523,7 @@ func (s *Shell) accountPage() error {
 	return nil
 }
 
-// accountFinished clears the name of the row 새 계정 after a finished add and ends the edit after a finished rename, on the page of
+// accountFinished clears the name of the row of core.settings-tab.account-add after a finished add and ends the edit after a finished rename, on the page of
 // the plugin (docs/spec/plugins.md#accounts).
 func (s *Shell) accountFinished(command, plugin string) {
 	w := &s.settingsTab

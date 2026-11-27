@@ -17,7 +17,7 @@ type pluginParam struct {
 	End *bool `json:"end,omitempty"`
 }
 
-// showSettingsPage opens the settings tab on page, and on the filter of 설치됨 when filter is not empty, as core.settings.open opens it
+// showSettingsPage opens the settings tab on page, and on the filter of Installed when filter is not empty, as core.settings.open opens it
 // (docs/spec/settings.md#plugins). The page scrolls to its top, as the page of a command does.
 func (s *Shell) showSettingsPage(page, filter string) error {
 	if err := s.dialogRefusal(); err != nil {

@@ -33,7 +33,7 @@ func (s *Shell) dependentRow(b *settingsBuilder, name string, control *SettingsC
 	return row
 }
 
-// buildLook builds 모양: the theme and its mode, the shape values and the display choices.
+// buildLook builds Look: the theme and its mode, the shape values and the display choices.
 func (s *Shell) buildLook(b *settingsBuilder) error {
 	catalog := s.settings.Catalog
 	themeScope := s.controlScope("theme")
@@ -90,7 +90,7 @@ func (s *Shell) buildLook(b *settingsBuilder) error {
 	return nil
 }
 
-// buildWorkspace builds 작업 공간: the project opening, the project tab position, the window sidebars and their sizes.
+// buildWorkspace builds Workspace: the project opening, the project tab position, the window sidebars and their sizes.
 func (s *Shell) buildWorkspace(b *settingsBuilder) error {
 	scope := s.settingsTab.scope
 	if scope == "common" {
@@ -108,7 +108,7 @@ func (s *Shell) buildWorkspace(b *settingsBuilder) error {
 	return s.buildSidebarRows(b)
 }
 
-// buildSidebarRows builds the group 사이드바 and the group 사이드바 크기 of the window sidebars.
+// buildSidebarRows builds the group Sidebar and the group Sidebar size of the window sidebars.
 func (s *Shell) buildSidebarRows(b *settingsBuilder) error {
 	// A link control takes the sets of the scope of the links as its options.
 	sets, err := s.settings.Sets(s.controlScope("links"))
@@ -139,12 +139,12 @@ func (s *Shell) buildSidebarRows(b *settingsBuilder) error {
 	return nil
 }
 
-// sizeErrorWhere is the error place of the sidebar size group (docs/spec/settings.md#작업-공간).
+// sizeErrorWhere is the error place of the sidebar size group (docs/spec/settings.md#pages).
 const sizeErrorWhere = "settings sidebar-size"
 
 // sizeErrorRows shows the error of the sidebar size group: the minimum must be below the maximum, and the first width must lie between
-// them. A first width outside the range shows its line and the button 범위 안으로 맞추기, which runs core.settings.change with the width cut
-// to the range (docs/spec/settings.md#작업-공간). A valid group shows no error.
+// them. A first width outside the range shows its line and the Fit to range button, which runs core.settings.change with the width cut
+// to the range (docs/spec/settings.md#pages). A valid group shows no error.
 func (s *Shell) sizeErrorRows(b *settingsBuilder) []settingsRow {
 	least, _ := s.value("sidebarMinWidth").(float64)
 	most, _ := s.value("sidebarMaxWidth").(float64)
@@ -170,7 +170,7 @@ func (s *Shell) sizeErrorRows(b *settingsBuilder) []settingsRow {
 	return []settingsRow{{controls: []*SettingsControl{fix}, list: true}}
 }
 
-// buildBehavior builds 동작: the language, the card arrangement, the memory saver and the error toasts.
+// buildBehavior builds Behavior: the language, the card arrangement, the memory saver and the error toasts.
 func (s *Shell) buildBehavior(b *settingsBuilder) error {
 	catalog := s.settings.Catalog
 	languages := map[string]string{"auto": "자동"}
@@ -201,7 +201,7 @@ func (s *Shell) buildBehavior(b *settingsBuilder) error {
 	return s.buildNotices(b, catalog.Rows)
 }
 
-// buildNotices builds the group 알림 of the behavior page from the rows of the workbench declaration, with their labels, descriptions,
+// buildNotices builds the group Notifications of the behavior page from the rows of the workbench declaration, with their labels, descriptions,
 // units and dependencies, in the declared order (docs/spec/notifications.md#settings).
 func (s *Shell) buildNotices(b *settingsBuilder, rows declaredRows) error {
 	group, ok := rows.groupByID("behavior", "notices")
@@ -232,7 +232,7 @@ func (s *Shell) buildNotices(b *settingsBuilder, rows declaredRows) error {
 	return nil
 }
 
-// buildDiag builds 진단: the debug switch.
+// buildDiag builds Diagnostics: the debug switch.
 func (s *Shell) buildDiag(b *settingsBuilder) error {
 	on := s.settings.DebugOn()
 	debug := b.add(SettingsControl{Name: "core.settings-tab.debug", Label: "디버그", On: &on, Command: settingCommand("core.settings.debug", nil), kind: controlSwitch, param: "on"})
@@ -264,7 +264,7 @@ func settingsPageTitle(w *settingsTab) string {
 	return ""
 }
 
-// buildAgents builds 에이전트 연동: the setup parts of the agent.
+// buildAgents builds Agent integration: the setup parts of the agent.
 func (s *Shell) buildAgents(b *settingsBuilder) error {
 	s.buildSetup(b)
 	return nil

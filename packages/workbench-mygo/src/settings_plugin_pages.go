@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-// The plugin pages of the settings tab: 설치됨, 찾아보기 and the page of one plugin (docs/spec/settings.md#plugins). Their rows come
+// The plugin pages of the settings tab: Installed, Browse and the page of one plugin (docs/spec/settings.md#plugins). Their rows come
 // from the plugin state of the host (`core.plugins`), and every action runs a declared plugin command.
 
-// pluginEntry is a row of 설치됨 with the facts that its badges, its sort and its filter read.
+// pluginEntry is a row of Installed with the facts that its badges, its sort and its filter read.
 type pluginEntry struct {
 	row     PluginRow
 	problem bool
@@ -20,7 +20,7 @@ type pluginEntry struct {
 }
 
 // missingDependencies returns the dependencies of a loaded plugin that are not installed, sorted by id. The dependencies come from the
-// loaded manifest; a dependency that the state does not list is not reported (docs/spec/settings.md#설치됨).
+// loaded manifest; a dependency that the state does not list is not reported (docs/spec/settings.md#plugins).
 func (s *Shell) missingDependencies(id string, rows []PluginRow) []string {
 	loaded := s.loadedPlugin(id)
 	if loaded == nil {
@@ -38,8 +38,8 @@ func (s *Shell) missingDependencies(id string, rows []PluginRow) []string {
 	return missing
 }
 
-// installedEntries returns the rows of 설치됨 sorted as the page shows them: a problem first, then an update, then the rest, each group
-// by name (docs/spec/settings.md#설치됨).
+// installedEntries returns the rows of Installed sorted as the page shows them: a problem first, then an update, then the rest, each group
+// by name (docs/spec/settings.md#plugins).
 func (s *Shell) installedEntries(rows []PluginRow) ([]pluginEntry, error) {
 	var entries []pluginEntry
 	for _, row := range rows {
@@ -72,7 +72,7 @@ func (s *Shell) installedEntries(rows []PluginRow) ([]pluginEntry, error) {
 	return entries, nil
 }
 
-// installedMatches reports whether a row passes the filter of 설치됨 (docs/spec/settings.md#설치됨).
+// installedMatches reports whether a row passes the filter of Installed (docs/spec/settings.md#plugins).
 func installedMatches(entry pluginEntry, filter string) bool {
 	switch filter {
 	case "active":
@@ -87,7 +87,7 @@ func installedMatches(entry pluginEntry, filter string) bool {
 	return true
 }
 
-// installedQueryMatches reports whether a row matches the search text of 설치됨: its name, its id or its description.
+// installedQueryMatches reports whether a row matches the search text of Installed: its name, its id or its description.
 func installedQueryMatches(entry pluginEntry, query string) bool {
 	query = strings.ToLower(strings.TrimSpace(query))
 	if query == "" {
@@ -101,7 +101,7 @@ func installedQueryMatches(entry pluginEntry, query string) bool {
 	return false
 }
 
-// pluginBadge is a badge of a row of 설치됨 with its tone (docs/spec/settings.md#설치됨).
+// pluginBadge is a badge of a row of Installed with its tone (docs/spec/settings.md#plugins).
 func pluginBadge(b *settingsBuilder, label, tone string) *SettingsControl {
 	return b.add(SettingsControl{Name: "core.settings-tab.badge", Key: text(label), Label: label, tone: tone, kind: controlBadge})
 }
@@ -115,7 +115,7 @@ func (s *Shell) pluginAction(b *settingsBuilder, busy bool, plugin, action, labe
 	return control
 }
 
-// pluginSwitch is the switch 사용 of a plugin: on runs core.plugins.disable and off runs core.plugins.enable.
+// pluginSwitch is the switch core.settings-tab.plugins.switch of a plugin: on runs core.plugins.disable and off runs core.plugins.enable.
 func pluginSwitch(b *settingsBuilder, row PluginRow, busy bool) *SettingsControl {
 	on := row.Installed.Enabled
 	command := "core.plugins.enable"
@@ -127,7 +127,7 @@ func pluginSwitch(b *settingsBuilder, row PluginRow, busy bool) *SettingsControl
 }
 
 // pluginMeta is the meta line of a row: the category of the plugin when it declares one, its id, and the installed version or the latest
-// version of an uninstalled plugin, joined with ` · ` and with the parts that have no value left out (docs/spec/settings.md#설치됨).
+// version of an uninstalled plugin, joined with ` · ` and with the parts that have no value left out (docs/spec/settings.md#plugins).
 // The category comes from the loaded manifest, and an uninstalled plugin has none.
 func pluginMeta(row PluginRow, category string) string {
 	version := ""
@@ -149,7 +149,7 @@ func pluginMeta(row PluginRow, category string) string {
 	return strings.Join(parts, " · ")
 }
 
-// installedRows builds the rows of one installed plugin in 설치됨 and the line of its last operation, when it has one.
+// installedRows builds the rows of one installed plugin in Installed and the line of its last operation, when it has one.
 func (s *Shell) installedRows(b *settingsBuilder, entry pluginEntry, status PluginsStatus, busy bool) []settingsRow {
 	row := entry.row
 	var category string
@@ -193,8 +193,8 @@ func (s *Shell) installedRows(b *settingsBuilder, entry pluginEntry, status Plug
 	return rows
 }
 
-// buildInstalled builds 설치됨: the search, the filter with its counts, the update of all, the rows and the card that opens 찾아보기
-// (docs/spec/settings.md#설치됨).
+// buildInstalled builds Installed: the search, the filter with its counts, the update of all, the rows and the card that opens Browse
+// (docs/spec/settings.md#plugins).
 func (s *Shell) buildInstalled(b *settingsBuilder) error {
 	w := &s.settingsTab
 	status := s.pluginOperations.Status()
@@ -253,7 +253,7 @@ func (s *Shell) buildInstalled(b *settingsBuilder) error {
 
 // pluginOperationLine is the line that the operation of a plugin shows under its row: its running action. A failed operation shows its
 // error through the error display under the name plugin <id>, and the error leaves when the operation of the plugin ends without a
-// failure (docs/spec/settings.md#설치됨).
+// failure (docs/spec/settings.md#plugins).
 func (s *Shell) pluginOperationLine(id string, operation *PluginOperation) string {
 	if operation == nil || operation.Plugin != id {
 		return ""
@@ -269,8 +269,8 @@ func (s *Shell) pluginOperationLine(id string, operation *PluginOperation) strin
 	return ""
 }
 
-// installedTopRows builds the lines above the tool row of 설치됨, in document order: the core update row with its notices and its
-// operation, the update list with 모두 업데이트, the outdated sidecars and the held operations (docs/spec/settings.md#설치됨).
+// installedTopRows builds the lines above the tool row of Installed, in document order: the core update row with its notices and its
+// operation, the update list with Update all, the outdated sidecars and the held operations (docs/spec/settings.md#plugins).
 func (s *Shell) installedTopRows(b *settingsBuilder, entries []pluginEntry, busy bool) ([]settingsRow, error) {
 	var rows []settingsRow
 	app := s.appUpdates.Status()
@@ -339,7 +339,7 @@ func (s *Shell) installedTopRows(b *settingsBuilder, entries []pluginEntry, busy
 var heldVerbs = map[string][2]string{"update": {"업데이트", "core.plugins.update"}, "install": {"설치", "core.plugins.install"}, "enable": {"사용", "core.plugins.enable"}}
 
 // heldRows builds the error line and the action of each held operation: the error goes through the error display, and the action ends
-// the sessions with end true. The action is absent while a sessions count is not known (docs/spec/settings.md#설치됨).
+// the sessions with end true. The action is absent while a sessions count is not known (docs/spec/settings.md#plugins).
 func (s *Shell) heldRows(b *settingsBuilder, busy bool) ([]settingsRow, error) {
 	var rows []settingsRow
 	for _, held := range s.pluginOperations.Status().Held {
@@ -369,11 +369,11 @@ func (s *Shell) heldRows(b *settingsBuilder, busy bool) ([]settingsRow, error) {
 	return rows, nil
 }
 
-// browseSize is the number of catalog rows that 찾아보기 shows at once (docs/spec/settings.md#찾아보기).
+// browseSize is the number of catalog rows that Browse shows at once (docs/spec/settings.md#plugins).
 const browseSize = 30
 
-// buildBrowse builds 찾아보기: the search, the switch 설치한 것 숨기기, the count, the rows of the catalog that match, and the button
-// of the next rows (docs/spec/settings.md#찾아보기).
+// buildBrowse builds Browse: the search, the switch core.settings-tab.browse-hide, the count, the rows of the catalog that match, and the button
+// of the next rows (docs/spec/settings.md#plugins).
 func (s *Shell) buildBrowse(b *settingsBuilder) error {
 	w := &s.settingsTab
 	status := s.pluginOperations.Status()
@@ -438,14 +438,14 @@ func catalogQueryMatches(row PluginRow, query string) bool {
 	return false
 }
 
-// hideInstalledSwitch is the switch 설치한 것 숨기기 of 찾아보기.
+// hideInstalledSwitch is the switch core.settings-tab.browse-hide of Browse.
 func hideInstalledSwitch(b *settingsBuilder, on bool) *SettingsControl {
 	return b.add(SettingsControl{Name: "core.settings-tab.browse-hide", Key: text("hideInstalled"), Label: "설치한 것 숨기기", On: &on,
 		Command: settingCommand("core.settings-tab.browse", nil), kind: controlSwitch, param: "hideInstalled"})
 }
 
-// catalogRow is one row of 찾아보기: the name that opens the plugin page, the missing dependencies, the description, the meta line and
-// the install action or the state of the installed plugin (docs/spec/settings.md#찾아보기).
+// catalogRow is one row of Browse: the name that opens the plugin page, the missing dependencies, the description, the meta line and
+// the install action or the state of the installed plugin (docs/spec/settings.md#plugins).
 func (s *Shell) catalogRow(b *settingsBuilder, row PluginRow, busy bool) settingsRow {
 	name := b.button(row.ID, "core.settings-tab.browse-row", row.Name, "core.settings-tab.plugin", map[string]any{"plugin": row.ID})
 	controls := []*SettingsControl{name}
@@ -467,8 +467,8 @@ func (s *Shell) catalogRow(b *settingsBuilder, row PluginRow, busy bool) setting
 	return settingsRow{description: strings.TrimSpace(description + "\n" + pluginMeta(row, "")), controls: controls}
 }
 
-// buildPluginTab builds the page of one plugin: the back link, the info card, then the groups 계정, 설정, 섹션, 창 사이드바 and
-// 카드 사이드바 (docs/spec/settings.md#plugin-page). The info card follows the state of the plugin: an uninstalled plugin offers its
+// buildPluginTab builds the page of one plugin: the back link, the info card, then the groups Accounts, Settings, Sections, Window sidebars and
+// Card sidebar (docs/spec/settings.md#plugin-page). The info card follows the state of the plugin: an uninstalled plugin offers its
 // installation, and an installed plugin its switch, its update, its missing dependencies and its removal.
 func (s *Shell) buildPluginTab(b *settingsBuilder) error {
 	w := &s.settingsTab
@@ -592,7 +592,7 @@ func (s *Shell) contributionRows(b *settingsBuilder, plugin string) ([]settingsR
 	return rows, nil
 }
 
-// removalRow is the row 제거 of the info card: its description, the button 제거… and, while the removal is asked, the buttons 취소 and 제거.
+// removalRow is the row Remove of the info card: its description, the button Remove… and, while the removal is asked, the buttons Cancel and Remove.
 func (s *Shell) removalRow(b *settingsBuilder, plugin string) settingsRow {
 	w := &s.settingsTab
 	row := settingsRow{name: "제거", description: "설정 값은 남겨 두고, 다시 설치하면 이어서 쓴다."}
@@ -607,7 +607,7 @@ func (s *Shell) removalRow(b *settingsBuilder, plugin string) settingsRow {
 	return row
 }
 
-// buildPluginSettings builds the group 설정 of a plugin: one row for each setting that its declaration names, or the line that it has none.
+// buildPluginSettings builds the group Settings of a plugin: one row for each setting that its declaration names, or the line that it has none.
 func (s *Shell) buildPluginSettings(b *settingsBuilder, plugin string) error {
 	var rows []settingsRow
 	for _, definition := range s.settings.Definitions {
@@ -634,7 +634,7 @@ func (s *Shell) buildPluginSettings(b *settingsBuilder, plugin string) error {
 	return nil
 }
 
-// buildPluginSides builds the groups 창 사이드바 and, for a plugin with a surface, 카드 사이드바: the four-row sidebar list of each, without
+// buildPluginSides builds the groups Window sidebars and, for a plugin with a surface, Card sidebar: the four-row sidebar list of each, without
 // switches, with the order of the plugin and the links of its places (docs/spec/settings.md#plugin-page).
 func (s *Shell) buildPluginSides(b *settingsBuilder, plugin string, surface bool) error {
 	scope := s.controlScope("links")

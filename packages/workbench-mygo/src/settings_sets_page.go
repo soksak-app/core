@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// The page 사이드바 세트 (docs/spec/settings.md#사이드바-세트): the set list with the section chips and the confirmation of a removal, and
+// The page Sidebar sets (docs/spec/settings.md#pages): the set list with the section chips and the confirmation of a removal, and
 // the editor of the edited set. Every change runs a declared command of the sets, and a removal runs core.settings-tab.confirm first.
 
 // buildSets builds the set list and the editor of the edited set.
@@ -83,7 +83,7 @@ func (s *Shell) setRow(b *settingsBuilder, set StoredSet, links []StoredLink, sc
 	return row
 }
 
-// confirmLine is the line of the confirmation of a removal: the links that use the set become 사용 안 함.
+// confirmLine is the line of the confirmation of a removal: the links that use the set become Not in use.
 func confirmLine(users []string) string {
 	if len(users) > 0 {
 		return "쓰는 곳은 “사용 안 함”이 된다."
@@ -116,7 +116,7 @@ func (s *Shell) pluginNameOf(id string) string {
 }
 
 // sectionChips are the chips of the sections of a set, each with its removal control. A section of a plugin that is not loaded has a
-// dashed chip with its name struck through and the tooltip `<name>(<id>) 플러그인 필요` (docs/spec/plugins.md#missing-plugins).
+// dashed chip with its name struck through and the tooltip `<name>(<id>) plugin required` (docs/spec/plugins.md#missing-plugins).
 func (s *Shell) sectionChips(b *settingsBuilder, set StoredSet, scope string) []*SettingsControl {
 	var controls []*SettingsControl
 	for index, id := range set.Sections {
@@ -146,7 +146,7 @@ func (s *Shell) sectionLoaded(id string) bool {
 	return false
 }
 
-// setEditor is the group of the edited set: its name, its layout, its section chips and the select 섹션 추가….
+// setEditor is the group of the edited set: its name, its layout, its section chips and the select Add section….
 func (s *Shell) setEditor(b *settingsBuilder, set StoredSet, scope string) {
 	update := map[string]any{"id": set.ID, "scope": scope}
 	title := b.add(SettingsControl{Name: "core.settings-tab.set-title", Key: text("title:" + set.ID), Value: text(set.Title), Command: settingCommand("core.settings.sets.update", update),
@@ -169,7 +169,7 @@ func (s *Shell) setEditor(b *settingsBuilder, set StoredSet, scope string) {
 	b.group("세트 편집: "+set.Title, "", rows...)
 }
 
-// sectionAdder is the select 섹션 추가…: its options are the registered sections that the set does not contain, each with its plugin.
+// sectionAdder is the select Add section…: its options are the registered sections that the set does not contain, each with its plugin.
 func (s *Shell) sectionAdder(b *settingsBuilder, set StoredSet, scope string) *SettingsControl {
 	labels := map[string]string{}
 	var groups []OptionGroup

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1232-1: packages/workbench-mygo의 한글 주석이 영어가 되었고, 노출된 보이는 라벨은 element 또는 command 식별자로 부른다.
 - F1226: F1226 항목의 기록은 structure check가 받는 문구로 quit 요청을 적는다.
 - F1217-8: 보류 항목에 편집기 찾기(editor.find.open)가 cmd+f를 쓴다는 사실을 적어, ⌘F의 소유자가 정해질 때까지 workbench는 ⌘F를 연결하지 않는다.
 - F1232-2: packages/workbench 파일 23개의 주석을 영어로 바꾸고, 설정 절 참조를 영어 spec의 ASCII anchor로 바꿨다.

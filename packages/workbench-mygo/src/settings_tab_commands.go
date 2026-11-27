@@ -96,7 +96,7 @@ func (s *Shell) recordChange(key, scope string, old, new any, wasOverridden bool
 	s.showUndo(toast)
 }
 
-// recordTheme shows the toast of a theme change: 테마: <old> → <new>. Its undo restores the old theme and mode.
+// recordTheme shows the toast of a theme change: Theme: <old> → <new>. Its undo restores the old theme and mode.
 func (s *Shell) recordTheme(scope, oldName, oldMode, newName string) {
 	w := &s.settingsTab
 	if !w.open || oldName == newName {
@@ -135,7 +135,7 @@ func (s *Shell) undoText(key, label string, old, new any) string {
 	return fmt.Sprintf("%s: %s → %s", label, s.undoValueText(key, old), s.undoValueText(key, new))
 }
 
-// undoValueText is a value of a toast: a switch shows 켬 or 끔, a choice shows the label of its option, and any other value is its text.
+// undoValueText is a value of a toast: a switch shows On or Off, a choice shows the label of its option, and any other value is its text.
 func (s *Shell) undoValueText(key string, value any) string {
 	if on, ok := value.(bool); ok {
 		if on {

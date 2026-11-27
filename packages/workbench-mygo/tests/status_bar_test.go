@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-// The status bar at the bottom of the main window shows the project name, 카드 n, the theme and the mode with ·, and the key hint ⌘, 설정,
+// The status bar at the bottom of the main window shows the project name, Card n, the theme and the mode with ·, and the key hint ⌘, Settings,
 // while the work screen or the settings tab is in front; the project home has none (docs/spec/external-sidebars.md#status-bar).
 func TestTheStatusBarShowsTheProjectCardsThemeAndKeyHintOnTheWorkScreen(t *testing.T) {
 	home := newShell(t, acme())
-	// The home hint ↑↓ 이동, Enter 열기, ⌘⌫ 목록에서 빼기, ⌘, 설정 contains the key hint, so the bar is told by its exact text.
+	// The home hint ↑↓ Move, Enter Open, ⌘⌫ Remove from list, ⌘, Settings contains the key hint, so the bar is told by its exact text.
 	if slices.Contains(home.tester.Texts(), "⌘, 설정") {
 		t.Fatal("the project home shows the status bar")
 	}
@@ -54,7 +54,7 @@ func TestTheStatusBarNamesItsProjectCardsAndThemeElements(t *testing.T) {
 	}
 }
 
-// The work screen status bar starts with the entry 홈, element core.statusbar.home, which runs core.home.show and shows the project home
+// The work screen status bar starts with the entry Home, element core.statusbar.home, which runs core.home.show and shows the project home
 // in the window (docs/spec/external-sidebars.md#status-bar).
 func TestTheStatusBarHasTheHomeEntryOnTheWorkScreen(t *testing.T) {
 	f := projectWithPlugins(t)

@@ -7,7 +7,7 @@ import (
 )
 
 // A card entry keeps the title of its tab as the label of its source, which the source chip shows (docs/spec/notifications.md#notice-center).
-// The fixture tab of the plugin textprobe has the title 터미널.
+// The fixture tab of the plugin textprobe has the title Terminal.
 func TestACardEntryKeepsTheTitleOfItsTabAsItsLabel(t *testing.T) {
 	f := sidebarShell(t)
 	card := f.tabbedCards()[0]

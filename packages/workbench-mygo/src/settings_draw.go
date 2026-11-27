@@ -63,7 +63,7 @@ func (s *Shell) settingsForFrame(c *ui.Context, width, height float32) {
 	w.width, w.height = float64(width), float64(height)
 	w.locale = c.Locale()
 	s.tellLanguage(w.locale)
-	// Showing the agent page reads the setup parts (docs/spec/settings.md#에이전트); the page stands in the common scope while no
+	// Showing the agent page reads the setup parts (docs/spec/settings.md#agents); the page stands in the common scope while no
 	// project is selected.
 	s.setupOperations.Show(w.open && w.page == "agents" && (w.scope == "common" || s.settings.Project() == ""))
 	// Showing the plugin page reads the accounts of the plugin (docs/spec/plugins.md#accounts).
@@ -103,7 +103,7 @@ func (s *Shell) settingsModelNow() (*settingsModel, error) {
 // is a sufficient key.
 func (s *Shell) settingsKeyOf(locale string) settingsKey {
 	w := &s.settingsTab
-	// The operation of a plugin is part of the key, so a running action and its end redraw the plugin rows (docs/spec/settings.md#설치됨).
+	// The operation of a plugin is part of the key, so a running action and its end redraw the plugin rows (docs/spec/settings.md#plugins).
 	var operation PluginOperation
 	if current := s.pluginOperations.Status().Operation; current != nil {
 		operation = *current
@@ -154,7 +154,7 @@ func (s *Shell) settingsFootHeight(pane settingsPane) float32 {
 	return s.metrics.actH + pane.paneTop + pane.paneBottom
 }
 
-// drawSettingsToast draws the undo toast in the foot of the tab: its text and the button 되돌리기, which runs core.settings-tab.undo
+// drawSettingsToast draws the undo toast in the foot of the tab: its text and the Undo button, which runs core.settings-tab.undo
 // (docs/spec/settings.md#saving-and-undo).
 func (s *Shell) drawSettingsToast(c *ui.Context, width, height float32, pane settingsPane) {
 	toast := s.settingsTab.undo
@@ -197,7 +197,7 @@ func (s *Shell) drawSettingsHead(c *ui.Context, model *settingsModel, width floa
 	})
 }
 
-// drawSettingsMenu draws the menu at the left of the tab: the pages of 설정 and 플러그인, each as a button of its page.
+// drawSettingsMenu draws the menu at the left of the tab: the pages Settings and Plugins, each as a button of its page.
 func (s *Shell) drawSettingsMenu(c *ui.Context, model *settingsModel, pane settingsPane) {
 	ui.Column(c).Width(pane.navW).Gap(pane.navGap).Padding(pane.navPadY, pane.navPadX).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).Children(func() {
 		s.drawSearchControl(c, model.find)
@@ -314,7 +314,7 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 		return
 	}
 	if len(row.controls) > 0 && row.controls[0].kind == controlCaption {
-		// A row with a caption is a column: the caption line, then its buttons in a wrapping line (docs/spec/settings.md#설치됨).
+		// A row with a caption is a column: the caption line, then its buttons in a wrapping line (docs/spec/settings.md#plugins).
 		ui.Column(c).FillWidth().Gap(pane.nameGap).Children(func() {
 			s.drawControl(c, row.controls[0], pane)
 			if len(row.controls) > 1 {
@@ -339,7 +339,7 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 	marked := slices.ContainsFunc(row.controls, func(control *SettingsControl) bool {
 		return strings.HasPrefix(control.item(), "reset:") || control.kind == controlMark
 	})
-	// A row of 설치됨 is the element core.settings-tab.plugin-row with the plugin id as its item.
+	// A row of the Installed page is the element core.settings-tab.plugin-row with the plugin id as its item.
 	// The group role and the label keep the row in the element tree; an unlabelled container is not kept.
 	line := ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center)
 	if row.plugin != "" {
@@ -369,7 +369,7 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 	})
 }
 
-// drawSideRow draws a row of the sidebar list (docs/spec/settings.md#작업-공간) as the web grid of .set-side: the number, the name
+// drawSideRow draws a row of the sidebar list (docs/spec/settings.md#pages) as the web grid of .set-side: the number, the name
 // that fills the row, the badges of the side, then the set select sized to its widest option, the switch and the order buttons, with a
 // gap of space-2 between the columns. The list has no 260-point control column.
 func (s *Shell) drawSideRow(c *ui.Context, row settingsRow, pane settingsPane) {
@@ -400,7 +400,7 @@ func (s *Shell) drawSideRow(c *ui.Context, row settingsRow, pane settingsPane) {
 }
 
 // sideSelectWidth is the width of the set select of a side: the width of its widest option with the padding and the arrow, as a native
-// select sizes to its longest option (docs/spec/settings.md#작업-공간).
+// select sizes to its longest option (docs/spec/settings.md#pages).
 func (s *Shell) sideSelectWidth(c *ui.Context, control *SettingsControl, pane settingsPane) float32 {
 	var widest float32
 	for _, id := range control.Options {
@@ -468,7 +468,7 @@ func (s *Shell) drawControl(c *ui.Context, control *SettingsControl, pane settin
 	case controlAccount:
 		s.drawAccountRow(c, control, pane)
 	case controlChip:
-		// The chip of a section: its name in a box of the card edge (docs/spec/settings.md#사이드바-세트). A section of a plugin that is
+		// The chip of a section: its name in a box of the card edge (docs/spec/settings.md#pages). A section of a plugin that is
 		// not loaded has a dashed edge in the muted tone and its name struck through, with the tooltip that names the plugin.
 		chip := s.exposedBox(c, control.Name, "", control.item()).Shrink(0).Padding(0, pane.fieldPadX).BorderWidth(s.palette.BorderWidth).BorderColor(s.palette.Edge).
 			Radius(s.radiusSmall()).Role(ui.RoleGroup).Label(control.Label)
@@ -535,7 +535,7 @@ func (s *Shell) drawButton(c *ui.Context, control *SettingsControl, pane setting
 		button.Height(pane.buttonSmH)
 	}
 	if control.title != "" {
-		// The title of the button shows as its tip, as the title attribute of the button does (docs/spec/settings.md#작업-공간).
+		// The title of the button shows as its tip, as the title attribute of the button does (docs/spec/settings.md#pages).
 		button.Tooltip(control.title)
 	}
 	button.Children(func() {
@@ -867,7 +867,7 @@ func (s *Shell) drawSetupRow(c *ui.Context, control *SettingsControl, pane setti
 	})
 }
 
-// drawAccountRow draws a row of the group 계정: the line of the account, its usage lines, and its controls in one line.
+// drawAccountRow draws a row of the group Accounts: the line of the account, its usage lines, and its controls in one line.
 func (s *Shell) drawAccountRow(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	row := control.account
 	s.exposedBox(c, control.Name, "", control.item()).FillWidth().Column().Gap(pane.rowGap).Role(ui.RoleGroup).Label(control.Label).Children(func() {

@@ -24,7 +24,7 @@ func TestTheOpenCenterDrawsItsHeadFilterAndFoot(t *testing.T) {
 	}
 }
 
-// Entries are grouped under 오늘, and a progress entry is first under 진행 중 (docs/spec/notifications.md#notice-center).
+// Entries are grouped under Today, and a progress entry is first under In progress (docs/spec/notifications.md#notice-center).
 func TestTheCenterGroupsEntriesByDay(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
 	if err := f.finish("core.notices.add", map[string]any{"card": f.tabbedCards()[0], "kind": "progress", "title": "Working"}); err != nil {

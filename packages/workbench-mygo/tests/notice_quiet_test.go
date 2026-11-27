@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// The open center has the switch 조용히 beside its filter, the element core.notices.quiet, which runs core.settings.set with the patch
+// The open center has the switch Quiet beside its filter, the element core.notices.quiet, which runs core.settings.set with the patch
 // of quietToasts (docs/spec/notifications.md#notice-center).
 func TestTheOpenCenterHasTheQuietSwitch(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))

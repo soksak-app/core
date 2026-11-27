@@ -652,7 +652,7 @@ func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metric
 }
 
 // drawSidebarHead draws the head row at the top of a window sidebar: the place of the side in sidebarOrder as the text of the head, the
-// name of its set (the side name without a set), the layout badge 탭 or 목록 of the set, and the × that turns the side off. shown tells
+// name of its set (the side name without a set), the layout badge Tab or List of the set, and the × that turns the side off. shown tells
 // whether the pointer is over the sidebar or the sidebar has focus: the × is absent otherwise, as the page keeps it hidden.
 func drawSidebarHead(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics, shown bool) {
 	theme := c.Theme()

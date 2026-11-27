@@ -153,7 +153,7 @@ func noticeShell(t *testing.T, common map[string]any, texts ...string) *tabShell
 	return f
 }
 
-// The card form shows three toasts at the top right under the bell and counts the rest in the line +<n>개 더
+// The card form shows three toasts at the top right under the bell and counts the rest in the line +<n> more
 // (docs/spec/notifications.md#toasts).
 func TestTheCardFormShowsThreeToastsAndCountsTheRest(t *testing.T) {
 	f := noticeShell(t, nil, "first failed", "second failed", "third failed", "fourth failed")

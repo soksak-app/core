@@ -87,7 +87,7 @@ func UpdateSet(sets []StoredSet, id string, title, layout *string) ([]StoredSet,
 	return next, nil
 }
 
-// ChangeRow changes the section rows of a set (docs/spec/settings.md#사이드바-세트): add appends section, which must be registered and
+// ChangeRow changes the section rows of a set (docs/spec/settings.md#pages): add appends section, which must be registered and
 // absent from the set, and remove deletes the row at index. A section moves by removing it and adding it again.
 func ChangeRow(sets []StoredSet, id, action string, index int, section string, registered []string) ([]StoredSet, error) {
 	at, err := setIndex(sets, id)

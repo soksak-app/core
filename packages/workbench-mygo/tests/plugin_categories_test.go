@@ -280,7 +280,7 @@ func TestAPluginPageNamesEachDescriptionLine(t *testing.T) {
 	}
 }
 
-// Each row of 설치됨 is the element core.settings-tab.plugin-row with the plugin id as its item (docs/spec/settings.md#설치됨).
+// Each row of Installed is the element core.settings-tab.plugin-row with the plugin id as its item (docs/spec/settings.md#plugins).
 func TestEachInstalledRowIsNamedByItsPlugin(t *testing.T) {
 	f := categoryShell(t, enabledPlugins("card"), settingsWithTerminal)
 	f.clickQuiet("core.chrome.settings", "")

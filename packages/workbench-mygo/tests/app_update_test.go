@@ -245,7 +245,7 @@ func filterCalls(calls []string, prefix string) []string {
 	return found
 }
 
-// openInstalled shows the installed page, which reads the application update when it is shown (docs/spec/settings.md#설치됨).
+// openInstalled shows the installed page, which reads the application update when it is shown (docs/spec/settings.md#plugins).
 func openInstalled(t *testing.T, f *shellFixture) {
 	t.Helper()
 	f.run("core.settings.open", nil)

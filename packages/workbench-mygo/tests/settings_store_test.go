@@ -286,7 +286,7 @@ func TestTheRowsOfASetAddAndRemove(t *testing.T) {
 	if _, err := row(sets, "remove", 2, ""); err == nil || err.Error() != "set a has no row 2" {
 		t.Fatalf("remove a missing row: %v", err)
 	}
-	// The spec has no reorder and no choose row action (docs/spec/settings.md#사이드바-세트): a section moves by removing and adding it.
+	// The spec has no reorder and no choose row action (docs/spec/settings.md#pages): a section moves by removing and adding it.
 	for _, action := range []string{"choose", "up", "down"} {
 		if _, err := row(sets, action, 0, "r"); err == nil || err.Error() != "unknown row action "+action {
 			t.Fatalf("%s: %v", action, err)
