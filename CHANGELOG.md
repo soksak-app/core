@@ -6,11 +6,14 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
-- F1252: The Go host item for the Rust surface and view theme tests records the TestMain store check count and waits on F1237.
-- F1244: The window check package ships an event catalog equal to docs/spec/events.json again.
+- F1217-17-1-1: The changelog lines that a records commit removed are restored; the label record keeps one line.
 - F1237-2: The store close refuses a directory without a data store with an error that names it, and keys stores by canonical path.
 - F1240: The record states the cause of the client watch test timeout: the case value changed by the F1217 design work, not the watch code.
-- F1217-17-1-1: The text size steps row of the look page is labeled 글자 크기 단계 in the declaration copies of the web and mygo hosts; the specification and the mygo label follow with the settings declaration.
+- F1251: The Rust surface test fixture plugin declares the icon that a surface requires.
+- F1251: The Go host item for the Rust surface and view theme tests records the Go counterpart run and its TestMain failure.
+- F1248: The Rust surface test fixture reads the sidecar folder OS key from the platform module, and no test selects it by cfg.
+- F1238: The clean-worktree check runs the Go package at main with the audit test skipped: 6 of 6 runs pass, and the F1238 record states the observed counts.
+- F1217-17-5: The agent page record is closed: the remaining row layout moved to F1250, and the six-row design, the removal button, the hook install buttons, the err tone for 없음 and the check timer are not adopted.
 - F1217-17-5: The comments and the test message of the agent badge icon name the design element and no design file.
 - F1217-18-3: The settings menu search field keeps its height, so the first menu item no longer overlaps it.
 - F1247: The shown surface drawing item records its Red and Green results and is complete.
@@ -23,7 +26,6 @@
 - F1217-17-5: The agent group summary shows the warning icon of settings-36 in the web and mygo hosts, and mygo shows the count badge of the parts that differ or are missing.
 - F1247: The Rust host tests that a region attached while its surface is hidden draws when the surface is shown.
 - F1217-17-1: The web look preview draws its cards with the applied radius, font, font size and seam.
-- F1217-17-1-1: The text size steps row of the look page is labeled 글자 크기 단계 in the declaration copies of the web and mygo hosts; the specification and the mygo label follow with the settings declaration.
 - F1239-1: The settings tab draws its menu beside the content, and the theme swatches of the page 모양 fill the width of the pane.
 - F1245-1: Name the reason of the three status read defaults of sok.rs, quoting the spec of sok.status.read.
 - F1217-9: The registry index format 3 carries maker, categories and updated, and plugin.json requires maker; the index build and the pages follow.
