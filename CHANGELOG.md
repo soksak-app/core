@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F999-3: A layout sends the drawing states of image regions after every layout, so a page that mounts after a failed mount receives its drawing state without a window change.
 - F1222: The notice module states the defaults of log text, log place, messages and missing notices for the fallback check.
 - F1222: A project home row shows no day for a project that was never opened, and the other home defaults state their reasons.
 - F1222: The notice decoders and the plugin page check their discarded results, and the sections and switch state their reasons.

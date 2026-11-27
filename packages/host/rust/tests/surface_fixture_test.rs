@@ -147,6 +147,40 @@ fn is_drawing_state(line: &str) -> bool {
 /// A shown surface sends the drawing state of its image region to the supplier, which is the flush after the layout of the
 /// visibility change (surfaces.rs apply_surfaces). The test window and its main webview are real; the echo sidecar is the one
 /// that the installed probe plugin declares, and its requests file is the observation.
+
+/// Counts the drawing states that draw in the requests that the echo sidecar recorded.
+fn count_drawing_states(requests: &str) -> usize {
+    requests
+        .lines()
+        .filter(|line| is_drawing_state(line))
+        .count()
+}
+
+/// Waits until the echo sidecar records a drawing state that draws beyond the first `after` of them, which the flush after the
+/// layout sends on a routine thread.
+fn wait_for_drawing_state(
+    config: &std::path::Path,
+    after: usize,
+    what: &str,
+) -> Result<(), String> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let requests = surface_fixture::installed_echo_requests_so_far(config)?;
+        if count_drawing_states(&requests) > after {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(format!(
+                "{what} sent its region no drawing state that draws: {requests:?}"
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+/// Shows the probe surface with its region in a real window. Then its page mounts again after a failed mount: the document begins a new
+/// generation of the surface, and the layout that follows keeps the surface shown, so it changes no visibility. The region of the new
+/// supplier must still receive the drawing state of the shown surface, without a window change or a click.
 fn a_shown_surface_sends_the_drawing_state_of_its_region() -> Result<(), String> {
     use soksak_host::framework::{Manager, Window};
     use soksak_host::sidecars::WindowSidecars;
@@ -213,22 +247,16 @@ fn a_shown_surface_sends_the_drawing_state_of_its_region() -> Result<(), String>
             // test does not bring it to the front. The state that the platform reads at attach is replaced by the on-screen state
             // of the scenario, the same as the Go host test does, so the region draws when its surface shows.
             records.images.set_on_screen(true);
-            // The layout that shows the surface sends the drawing states after its placement (apply_surfaces). The flush runs on
-            // a routine thread that reports no event to the test, so the test waits for its line in the requests of the echo sidecar.
+            // The layout that shows the surface sends the drawing state of its region. The sends run on a routine thread that
+            // reports no event to the test, so the test waits for their lines in the requests of the echo sidecar.
             surfaces::sync(&window, layout_request(true)?)?;
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-            loop {
-                let requests = surface_fixture::installed_echo_requests_so_far(config.path())?;
-                if requests.lines().any(is_drawing_state) {
-                    return Ok(());
-                }
-                if std::time::Instant::now() >= deadline {
-                    return Err(format!(
-                        "showing the surface sent its region no drawing state that draws: {requests:?}"
-                    ));
-                }
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
+            wait_for_drawing_state(config.path(), 0, "showing the surface")?;
+            let before = count_drawing_states(&surface_fixture::installed_echo_requests_so_far(config.path())?);
+            // The mounted page opens its document, which begins a new generation of the surface (documents.rs).
+            records.images.begin_generation(SURFACE);
+            surfaces::sync(&window, layout_request(true)?)?;
+            wait_for_drawing_state(config.path(), before, "the mounted page and the layout after it")?;
+            Ok(())
         })();
         // The echo sidecar ends with its record, so its requests file is complete when the test reads it.
         window.state::<WindowSidecars>().stop();

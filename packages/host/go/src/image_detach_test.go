@@ -728,10 +728,10 @@ func regionsOfSurface(t *testing.T, p *viewProbe) int {
 	return int(support.ImageRegions(t, runOnMainThread, p.window))
 }
 
-// contract: images.drawing.shown-surface
-// A region that its page attached while its surface was hidden receives the drawing state of the surface when a layout shows the surface,
-// without a window change, so its supplier starts to draw (docs/spec/native-surfaces.md#image-regions).
-func TestAShownSurfaceSendsTheDrawingStateOfItsRegion(t *testing.T) {
+// shownRegionScenario builds a window whose surface holds one image region of a sidecar that is hidden while the page attaches
+// and places the region. It returns the layout request that shows the surface; the caller applies it.
+func shownRegionScenario(t *testing.T) (*Surfaces, *sidecar, SyncRequest, string) {
+	t.Helper()
 	p := realViewProbe(t, Theme{}, nullOriginStart())
 	s := p.s
 	// The layout of the test runs its steps on the thread of the test, as the layout tests do (nestedMainFramework).
@@ -771,16 +771,26 @@ func TestAShownSurfaceSendsTheDrawingStateOfItsRegion(t *testing.T) {
 	for len(service.outbox) > 0 {
 		<-service.outbox
 	}
-	// The layout that shows the surface is the apply of the sync request, which the layout callback runs on the main thread.
 	req := SyncRequest{Settled: true, Titlebar: 40, Surfaces: []Surface{
 		{ID: surface, Visible: true, Plugin: "probe", Rect: Rect{W: 500, H: 400}, Composition: composition,
 			Start: &ViewStart{Origin: json.RawMessage(`{"directory":null}`), Diagnostics: json.RawMessage(`null`), Section: json.RawMessage(`null`), Dialog: json.RawMessage(`null`), Process: "plugin"}},
 	}}
+	return s, service, req, surface
+}
+
+// applyShownLayout applies the layout that shows the surface on the main thread, as the layout callback does.
+func applyShownLayout(t *testing.T, s *Surfaces, req SyncRequest) {
+	t.Helper()
 	var applyErr error
 	runOnMainThread(func() { _, _, applyErr = s.apply(s.window, req) })
 	if applyErr != nil {
 		t.Fatalf("show the surface: %v", applyErr)
 	}
+}
+
+// awaitDrawingThatDraws reads the outbox of the sidecar until it receives the drawing state of the region named view that draws.
+// It reports false when no such state arrives within five seconds.
+func awaitDrawingThatDraws(service *sidecar) bool {
 	limit := time.After(5 * time.Second)
 	for {
 		select {
@@ -793,10 +803,42 @@ func TestAShownSurfaceSendsTheDrawingStateOfItsRegion(t *testing.T) {
 				} `json:"body"`
 			}
 			if json.Unmarshal(line.bytes, &message) == nil && message.Body.Image.Drawing != nil && message.Body.Image.Drawing.Name == "view" && message.Body.Image.Drawing.Drawing {
-				return
+				return true
 			}
 		case <-limit:
-			t.Fatal("showing the surface sent its region no drawing state that draws: the supplier draws nothing until a window change")
+			return false
 		}
+	}
+}
+
+// contract: images.drawing.shown-surface
+// A region that its page attached while its surface was hidden receives the drawing state of the surface when a layout shows the surface,
+// without a window change, so its supplier starts to draw (docs/spec/native-surfaces.md#image-regions).
+func TestAShownSurfaceSendsTheDrawingStateOfItsRegion(t *testing.T) {
+	s, service, req, _ := shownRegionScenario(t)
+	applyShownLayout(t, s, req)
+	if !awaitDrawingThatDraws(service) {
+		t.Fatal("showing the surface sent its region no drawing state that draws: the supplier draws nothing until a window change")
+	}
+}
+
+// A page that failed to mount holds no document of its surface. When the page mounts, its document begins a new generation of the surface
+// (documents.go surfaceCommitted), and the core.plugins.apply that follows keeps the surface shown, so the layout changes no visibility.
+// The region of the new supplier must still receive the drawing state of the shown surface, without a window change or a click.
+// contract: images.drawing.shown-surface
+func TestAMountedPageOfAShownSurfaceSendsTheDrawingStateAfterApply(t *testing.T) {
+	s, service, req, surface := shownRegionScenario(t)
+	applyShownLayout(t, s, req)
+	if !awaitDrawingThatDraws(service) {
+		t.Fatal("showing the surface sent its region no drawing state that draws")
+	}
+	for len(service.outbox) > 0 {
+		<-service.outbox
+	}
+	// The mounted page opens its document: the surface begins a generation, as surfaceCommitted does on the main thread.
+	runOnMainThread(func() { s.images.BeginGeneration(surface) })
+	applyShownLayout(t, s, req)
+	if !awaitDrawingThatDraws(service) {
+		t.Fatal("after the page mounted and the apply ran, the shown surface sent its region no drawing state that draws: the supplier draws nothing until a window change")
 	}
 }
