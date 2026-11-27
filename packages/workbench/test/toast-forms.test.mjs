@@ -75,7 +75,10 @@ test("the pointer or the focus on a toast holds its notice while it is over, and
 test("the deck stack spreads on hover, and reduced motion stops the bar and leaves no toast animation", () => {
   const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
   assert.match(css, /#toasts\[data-style="deck"\]:hover \.toast:not\(:first-child\) \{ transform: none;/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.toast__bar \{ animation: none; \} \}/);
+  // The system reduced motion stops the bar unless the motion override of the window (data-reduce-motion) says otherwise, and the
+  // override true stops it too (docs/spec/notifications.md#toasts).
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ :root:not\(\[data-reduce-motion\]\) \.toast__bar \{ animation: none; \} \}/);
+  assert.match(css, /:root\[data-reduce-motion="true"\] \.toast__bar \{ animation: none; \}/);
   assert.doesNotMatch(css, /\.toast(?:\[[^\]]*\])?\s*\{[^}]*animation:/, "a toast has no animation of its own");
 });
 

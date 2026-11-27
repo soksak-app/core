@@ -189,6 +189,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
     - [o] F1217-11-5 — 알림 group의 web 설정.
     - [o] F1217-11-6 — 카드 notice는 그 tab의 dot을 바꾸지 않고, tab의 다음 notice는 system이든 아니든 그 tab의 system notification을 지운다(docs/spec/plugins.md#tab-reports).
     - [o] F1217-11-7 — debug 화면, modal 오류 toast, group header, files list, published imports의 page-wire case가 notice 경로의 호출을 따른다.
+    - [o] F1217-11-8 — 토스트 막대의 동작 줄이기 규칙이 창의 동작 재정의를 따른다. 시스템의 동작 줄이기는 `data-reduce-motion`이 없을 때 막대를 멈추고, 재정의 true도 멈춘다. 입력: `packages/workbench/test/toast-forms.test.mjs`가 규칙을 하나의 고정 selector로 고정했는데, 동작 재정의(F1222-2)가 selector를 바꾸어 F1217-11-3이 끝났다고 표시된 뒤에도 main에서 그 테스트가 실패했다. 기대: 테스트가 `app.css`의 두 규칙을 모두 고정하고, 재정의 true와 재정의가 없는 시스템 동작 줄이기에서 막대가 멈춘다. Red: `the deck stack spreads on hover, and reduced motion stops the bar and leaves no toast animation`이 main에서 `app.css`에 고정 selector가 없어 실패했다. Green: 테스트 파일이 6개 중 6개 통과한다.
   - [o] F1217-15 — 명령과 카드 없는 plugin의 notice. `core.notices.add {card?, plugin?, ...}`, `core.notices.progress`, `core.notices.done`, `core.notices.read {id}`는 `tab.notify`의 경로로 실행된다. plugin API의 `page.notify`, `page.progress`, `page.done`은 source `plugin`의 notice를 준다. `core.notices`는 각 항목을 `read`와 `source`와 함께 보인다. web, mygo, plugin API.
     - [o] F1217-16 — code, test, 기록이 kit의 term 목록이 거절하는 settings window, settings modal 대신 settings tab을 쓴다. 다음 kit 목록(0.0.17)으로 검사하면 그 term은 하나도 나오지 않는다.
   - [~] F1217-12 — P0, F1217-10 다음: mygo host가 같은 알림을 같은 글로 보인다. 남은 일: F1217-12-8, theme마다 값이 주어질 때까지 보류.
