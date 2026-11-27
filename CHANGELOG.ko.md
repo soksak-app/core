@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-17: 설정 탭은 handoff의 컨트롤 칸, 행 높이, 입력 높이, 작은 버튼, 라벨 아래 설명 규칙과 일치한다.
 - F1124: fsnotify fork를 고정한 뒤 policy watch 테스트의 320회 반복을 두 번 통과했다. HEAD에서는 320회 중 2회 실패했다.
 - F1217-17: 설정 디자인 기준은 11-27의 handoff와 settings-36 10.html이며, settings-renew.html을 대체한다.
 - F1217-17-6: 진단 page 머리는 웹과 mygo host에서 범위 컨트롤 대신 전역 전용 표지를 보인다.
