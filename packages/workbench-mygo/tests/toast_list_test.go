@@ -14,7 +14,7 @@ func TestTheToastStatusReportsTheListState(t *testing.T) {
 	f := noticeShell(t, map[string]any{"toastStyle": "line"}, "first failed", "second failed")
 	var state struct {
 		Toasts   []json.RawMessage `json:"toasts"`
-		ListOpen *bool            `json:"listOpen"`
+		ListOpen *bool             `json:"listOpen"`
 	}
 	if err := json.Unmarshal([]byte(f.status("core.toasts")), &state); err != nil || state.ListOpen == nil || *state.ListOpen || len(state.Toasts) != 2 {
 		t.Fatalf("core.toasts is %s, want two toasts and listOpen false (%v)", f.status("core.toasts"), err)
