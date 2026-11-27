@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-process-tools check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load benchmark-click-cpu benchmark-scroll-cpu benchmark-layout-redraw repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-terminal-text measure-terminal-input measure-terminal-resize measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
+.PHONY: check-push check-preflight check-events check-agent-layout-runs benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-process-tools check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load benchmark-click-cpu benchmark-scroll-cpu benchmark-layout-redraw repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-terminal-text measure-terminal-input measure-terminal-resize measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
 
 check-docs:
 	@node scripts/check-docs.mjs
@@ -192,6 +192,12 @@ check-boundaries:
 check-events:
 	@node scripts/check-events.mjs
 	@pnpm exec sok-check events --config scripts/event-sources.json
+
+# check-agent-layout-runs runs each request of docs/spec/cases/agent-layout once with claude against the debug mygo application and judges
+# the layout that core.grid reports (F959-2). It starts its own application and folders, takes the session token of the keychain item
+# soksak-soul-check, and is not part of make test. CLAUDE_BIN names the claude binary.
+check-agent-layout-runs:
+	@CLAUDE_BIN="$(or $(CLAUDE_BIN),claude)" node scripts/agent-layout-run.mjs
 
 # The TLS certificates of the registry window check (docs/operations/examples.md). Creates a certificate authority owned by the check and a server certificate for 127.0.0.1.
 # openssl reads only the configuration file that the target writes, so no machine configuration adds an extension.

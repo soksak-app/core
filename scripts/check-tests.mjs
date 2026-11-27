@@ -97,7 +97,7 @@ lane("release packages", "js-ts", ["scripts/pack-release-packages.mjs"], ["scrip
 lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-range.test.mjs"]),
   // The repository test judges the sources of the hosts and of the mygo workbench, which no package test of another package reads.
   lane("administrator rights of the hosts", "js-ts", ["scripts/check-administrator-rights.mjs"], ["scripts/test/administrator-rights.test.mjs"]),
-  lane("agent layout verifier", "js-ts", ["scripts/agent-layout.mjs"], ["scripts/test/agent-layout.test.mjs"]),
+  lane("agent layout verifier", "js-ts", ["scripts/agent-layout.mjs", "scripts/agent-layout-run.mjs"], ["scripts/test/agent-layout.test.mjs"]),
   lane("documentation and checklist checks", "js-ts", ["scripts/check-docs.mjs", "scripts/checklist.mjs"], ["scripts/test/checklist.test.mjs", "scripts/test/kit-records.test.mjs"]),
   lane("release notes", "js-ts", ["scripts/release-notes.mjs", "scripts/markdown-links.mjs"], ["scripts/test/release-notes.test.mjs"]),
   lane("markdown table cells", "js-ts", ["scripts/markdown-table.mjs"], ["scripts/test/markdown-table.test.mjs"]),
@@ -17986,6 +17986,25 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-app.test.mjs", id: "a run ends a persistent service that stays after its folder is removed, by the SIGTERM that its service declares" },
     ],
     expected: "A run ends the persistent services of its applications before the remaining-processes step judges the processes, so a check that starts a service passes its audit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1231",
+    implementation: [
+      { file: "packages/workbench/sidebar-sections.js", symbol: "function reconcileMissing(sidebar, context, groups) {" },
+      { file: "packages/workbench/notices.js", symbol: "sidebarLineOf(sidebar) {" },
+      { file: "packages/workbench-mygo/src/sidebar_missing.go", symbol: "func (m *missingNotices) reconcile(sidebar, card string, lines []MissingLine) {" },
+      { file: "packages/workbench-mygo/src/errors_screen.go", symbol: "func (e *ShownErrors) quietFor(source NoticeSource) bool {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a window sidebar's missing plugin is a warning notice on its status line, and no line sits above its sections" },
+      { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a card sidebar's missing plugin is a toast with 카드로 가기 while its card does not have the focus" },
+      { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a redraw of the same missing plugin keeps one notice, and a set that stops drawing its sections withdraws it from the status line and the toasts" },
+      { file: "packages/workbench-mygo/tests/sidebar_missing_notice_test.go", id: "TestTheMissingPluginOfAWindowSidebarIsAWarningNoticeOnItsStatusLine" },
+      { file: "packages/workbench-mygo/tests/sidebar_missing_notice_test.go", id: "TestTheMissingPluginNoticeIsWithdrawnWhenThePluginReloads" },
+      { file: "packages/workbench-mygo/tests/sidebar_missing_notice_test.go", id: "TestACardSidebarNoticeHasNoToastWhileItsCardHasTheFocus" },
+    ],
+    expected: "The missing plugin warning of a card or window sidebar is a warning notice whose source is the sidebar: it shows on the sidebar status line, as a toast while the card does not have the focus, and in the notice center; it is merged by origin and withdrawn when the plugin loads or the sidebar stops drawing its sections.",
     levels: ["unit"],
   },
   {
