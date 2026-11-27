@@ -5,6 +5,6 @@
   "reason": "The outdated sidecars and their replacement come from the running persistent services of the host, which the Go producer does not start.",
   "steps": [
     {"call":{"name":"sidecarsOutdated"}},
-    {"reply":{"result":[{"sidecar":"@fixture/sidecar-service","running":"0.0.3","installed":"0.0.7","sessions":2}]}}
+    {"reply":{"result":[{"sidecar":"@fixture/sidecar-service","running":"0.0.3","installed":"0.0.7","sessions":2,"surfaces":["surface-1","surface-2"]}]}}
   ]
 }

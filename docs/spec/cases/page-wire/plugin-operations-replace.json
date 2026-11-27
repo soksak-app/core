@@ -11,6 +11,6 @@
     {"call":{"name":"sidecarsReplace","payload":{"sidecar":"probe"}}},
     {"reply":{"error":"sidecar probe: replace: close owner: boom"}},
     {"call":{"name":"sidecarsOutdated"}},
-    {"reply":{"result":[{"sidecar":"probe","running":"0.0.3","installed":"0.0.7","sessions":0}]}}
+    {"reply":{"result":[{"sidecar":"probe","running":"0.0.3","installed":"0.0.7","sessions":0,"surfaces":[]}]}}
   ]
 }

@@ -94,6 +94,24 @@ export function pluginRows(loaded, state, refused, unmet = new Map()) {
  * Plugin operation state. If host is null, it reports only the loaded plugins, without operations. changed is called
  * whenever the state changes.
  */
+/**
+ * Checks the reply of sidecarsOutdated against the entries of host.sidecars `outdated` (docs/spec/persistent-services.md#updates): each entry
+ * names its sidecar, and its surfaces are a list of identifiers whose length is its sessions. An entry of another shape is refused by name.
+ */
+function outdatedOf(list) {
+  if (!Array.isArray(list)) throw new TypeError("sidecarsOutdated must reply with a list of outdated sidecars");
+  for (const entry of list) {
+    if (typeof entry?.sidecar !== "string") throw new TypeError("sidecarsOutdated entry has no sidecar name");
+    if (!Array.isArray(entry.surfaces) || !entry.surfaces.every((surface) => typeof surface === "string")) {
+      throw new TypeError(`sidecarsOutdated entry ${entry.sidecar} has no surfaces list`);
+    }
+    if (entry.sessions !== entry.surfaces.length) {
+      throw new TypeError(`sidecarsOutdated entry ${entry.sidecar} counts ${entry.sessions} sessions but lists ${entry.surfaces.length} surfaces`);
+    }
+  }
+  return list;
+}
+
 export function createPluginOperations({ host, loaded, refused, unmet = () => new Map(), changed }) {
   let state = null;
   // A read failure is {kind, message}. kind is index if the registry index could not be read, or state if the plugin state could not be read.
@@ -116,11 +134,11 @@ export function createPluginOperations({ host, loaded, refused, unmet = () => ne
     changed();
   }
 
-  /** Reads the outdated sidecars of the host again. A read that fails is reported as the error of the state. */
+  /** Reads the outdated sidecars of the host again. A read that fails, or an entry that breaks the contract, is reported as the error of the state. */
   async function refreshOutdated() {
     if (!host) return;
     try {
-      outdated = await host.call("sidecarsOutdated");
+      outdated = outdatedOf(await host.call("sidecarsOutdated"));
     } catch (error) {
       outdated = [];
       // default: an error that is not an Error carries its value as the text.

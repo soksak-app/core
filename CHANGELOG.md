@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1161: The page refuses an outdated entry without its surfaces, naming the sidecar, and reports it as the read failure
 - F1217-16: The settings tab replaces the settings modal in the test expectations and comments, and the settings view seat case is removed.
 - F1109: Pin the empty root of a no-project window in the Rust host test
 - F1217-11-7: The state tests of the debug view each have a file and read the shown error from the notice store.

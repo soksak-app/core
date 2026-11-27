@@ -357,11 +357,19 @@ test("setting the registry runs pluginsUseRegistry and reads the state again", a
 });
 
 test("status reports the outdated sidecars that the host lists", async () => {
-  const outdated = [{ sidecar: "@fixture/sidecar-service", running: "0.0.3", installed: "0.0.7", sessions: 2 }];
+  const outdated = [{ sidecar: "@fixture/sidecar-service", running: "0.0.3", installed: "0.0.7", sessions: 2, surfaces: ["surface-1", "surface-2"] }];
   const operations = createPluginOperations({ host: open("outdated"), loaded: () => loaded, refused: () => new Set(), changed: () => {} });
   assert.deepEqual(operations.status().outdated, []);
   await operations.refreshOutdated();
   assert.deepEqual(operations.status().outdated, outdated);
+  wire.finish();
+});
+
+test("an outdated entry without its surfaces is refused by name, and no outdated sidecar is shown", async () => {
+  const operations = createPluginOperations({ host: open("outdated-without-surfaces"), loaded: () => loaded, refused: () => new Set(), changed: () => {} });
+  await operations.refreshOutdated();
+  assert.deepEqual(operations.failure(), { kind: "state", message: "sidecarsOutdated entry @fixture/sidecar-service has no surfaces list" });
+  assert.deepEqual(operations.status().outdated, []);
   wire.finish();
 });
 
