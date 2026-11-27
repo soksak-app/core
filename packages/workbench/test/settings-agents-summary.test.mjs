@@ -20,5 +20,5 @@ test("the summary of the agent group is a warn badge with the warning icon", { t
   assert.equal(summary?.textContent, "4개 중 4개가 다름", "the summary shows the count of the parts that differ or are missing");
   const icon = summary.querySelector("svg");
   assert.ok(icon, "the summary badge has the warning icon");
-  assert.deepEqual([icon.getAttribute("width"), icon.getAttribute("height"), icon.getAttribute("viewBox")], ["16", "16", "0 0 16 16"], "the icon is the 16-point badge icon of settings-36 page 5");
+  assert.deepEqual([icon.getAttribute("width"), icon.getAttribute("height"), icon.getAttribute("viewBox")], ["16", "16", "0 0 16 16"], "the icon is the 16-point badge icon");
 });

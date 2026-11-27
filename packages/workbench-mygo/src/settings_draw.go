@@ -494,7 +494,7 @@ func (s *Shell) drawControl(c *ui.Context, control *SettingsControl, pane settin
 				ui.Text(c, control.Label).NoWrap().FontSize(s.textCaption()).TextColor(color)
 				return
 			}
-			// The badge icon is 16 of the 11 points of the caption, and the gap 4 of them, as the badges of settings-36 page 5 (docs/spec/settings.md#controls).
+			// The badge icon is 16 of the 11 points of the caption, and the gap 4 of them, as the badges of the design (docs/spec/settings.md#controls).
 			paint := `fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"`
 			ui.Row(c).AlignItems(ui.Center).Gap(s.textCaption() * 4 / 11).Children(func() {
 				ui.Icon(c, s.declaredIcon("0 0 16 16", paint, s.options.Declared.Icons[control.Icon])).Size(s.textCaption()*16/11, s.textCaption()*16/11).Shrink(0).TextColor(color)

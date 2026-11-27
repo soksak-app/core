@@ -44,7 +44,7 @@ export function icon(name) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
 }
 
-/** The badge icon of that name at 16 points, drawn with the stroke of the badges of settings-36 page 5 (docs/spec/settings.md#controls). */
+/** The badge icon of that name at 16 points, drawn with the stroke of the badges of the design (docs/spec/settings.md#controls). */
 export function badgeIcon(name) {
   const body = declaredIcons[name];
   if (!body) throw new Error(`unknown badge icon: ${name}`);
