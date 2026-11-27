@@ -164,45 +164,56 @@ func (s *Shell) drawNoticeEntry(c *ui.Context, toast *errorToast) {
 	if toast.source.Kind == "card" {
 		steps = append(steps, PressStep{Command: "core.card.focus", Params: map[string]any{"card": toast.source.Card}})
 	}
-	entry := s.binder.PressAll(c, "core.notices.entry", toast.id, steps...)
 	color := s.noticeKindColor(toast.kind)
 	shown := toast.id == s.errors.shownNotice
-	if shown && s.errors.revealShown {
-		entry.ScrollIntoView()
-	}
-	if shown {
-		entry.Background(s.palette.Bg)
-	}
-	entry.FillWidth().Row().AlignItems(ui.Start).Gap(m.toastGap).Padding(m.noticeEntryPad, m.noticeEntryPad, m.noticeEntryPad, m.noticeEntryPad).Children(func() {
+	// The ring is a sibling of the press target, not a child of it: an element that holds an image hides the image from the element tree
+	// (a leaf role), so the ring of a progress notice is drawn over the entry as a pass-through element with its own name.
+	ui.Box(c).FillWidth().Children(func() {
+		entry := s.binder.PressAll(c, "core.notices.entry", toast.id, steps...)
+		if shown && s.errors.revealShown {
+			entry.ScrollIntoView()
+		}
+		if shown {
+			entry.Background(s.palette.Bg)
+		}
+		entry.FillWidth().Row().AlignItems(ui.Start).Gap(m.toastGap).Padding(m.noticeEntryPad, m.noticeEntryPad, m.noticeEntryPad, m.noticeEntryPad).Children(func() {
+			// The room of the icon, which stands over the entry as its sibling (see the holder above).
+			ui.Box(c).Size(m.noticeGlyph, 0).Shrink(0)
+			ui.Column(c).FillWidth().Gap(m.toastGap).Children(func() {
+				ui.Text(c, displayTitle(toast)).Wrap().TextColor(s.palette.Fg).Label(displayTitle(toast))
+				if toast.text != "" {
+					ui.Text(c, toast.text).Wrap().TextColor(s.palette.Muted)
+				}
+				if toast.kind == "progress" {
+					s.drawNoticeProgress(c, toast)
+				}
+				ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(m.toastGap).Children(func() {
+					ui.Text(c, sourceChip(toast.source)).SingleLine().TextColor(s.palette.Muted)
+					ui.Text(c, toast.at.Local().Format("15:04")).SingleLine().TextColor(s.palette.Muted)
+				})
+				if len(toast.actions) > 0 {
+					ui.Row(c).FillWidth().Gap(m.toastGap).Children(func() {
+						for _, action := range toast.actions {
+							if !s.binder.Declares(action.Command) {
+								continue
+							}
+							s.uiButton(c, s.binder.Press(c, "core.notices.action", action.Command, toast.id, action.Params), action.Label, false)
+						}
+					})
+				}
+			})
+		})
 		// The ring of a progress entry carries its element name, which the check of the turning ring samples (core.notices.ring).
 		iconContext := c
 		if toast.kind == "progress" {
 			iconContext = s.binder.Name(c, "core.notices.ring", toast.id)
 		}
-		s.noticeIcon(iconContext, toast.kind, m.noticeGlyph, color)
-		ui.Column(c).FillWidth().Gap(m.toastGap).Children(func() {
-			ui.Text(c, displayTitle(toast)).Wrap().TextColor(s.palette.Fg).Label(displayTitle(toast))
-			if toast.text != "" {
-				ui.Text(c, toast.text).Wrap().TextColor(s.palette.Muted)
-			}
-			if toast.kind == "progress" {
-				s.drawNoticeProgress(c, toast)
-			}
-			ui.Row(c).FillWidth().AlignItems(ui.Center).Gap(m.toastGap).Children(func() {
-				ui.Text(c, sourceChip(toast.source)).SingleLine().TextColor(s.palette.Muted)
-				ui.Text(c, toast.at.Local().Format("15:04")).SingleLine().TextColor(s.palette.Muted)
-			})
-			if len(toast.actions) > 0 {
-				ui.Row(c).FillWidth().Gap(m.toastGap).Children(func() {
-					for _, action := range toast.actions {
-						if !s.binder.Declares(action.Command) {
-							continue
-						}
-						s.uiButton(c, s.binder.Press(c, "core.notices.action", action.Command, toast.id, action.Params), action.Label, false)
-					}
-				})
-			}
-		})
+		ring := s.noticeIcon(iconContext, toast.kind, m.noticeGlyph, color)
+		// An icon is an image of the element tree only with a label, so the ring of a progress entry is labeled with its group.
+		if toast.kind == "progress" {
+			ring = ring.Role(ui.RoleImage).Label(groupLabel(toast.kind))
+		}
+		ring.Absolute().Left(m.noticeEntryPad).Top(m.noticeEntryPad).PassThrough()
 	})
 	if !toast.read {
 		ui.Box(c).Absolute().Left(0).Top(m.noticeEntryPad).Size(m.noticeDotSize, m.noticeDotSize).Radius(m.noticeDotSize / 2).Background(color)
@@ -285,11 +296,12 @@ func noticeTurns(kind string, reduceMotion bool) bool {
 
 // noticeIcon draws the icon of a notice kind at size. A progress ring turns with the frames of its window, which the Loop of the element
 // keeps coming while the ring is drawn, so a ring that is not drawn does not turn; the period is the time of one turn, not a frame time.
-func (s *Shell) noticeIcon(c *ui.Context, kind string, size float32, color ui.Color) {
+func (s *Shell) noticeIcon(c *ui.Context, kind string, size float32, color ui.Color) ui.Element {
 	icon := ui.Icon(c, s.noticeGlyph(kind)).Size(size, size).Shrink(0).TextColor(color)
 	if noticeTurns(kind, c.Preferences().ReduceMotion) {
 		icon.Rotate(icon.Loop("notice-ring", time.Second, ui.Linear) * 360)
 	}
+	return icon
 }
 
 // noticeKindColor is the color of a kind's icon: the error token for an error, the accent for info and progress.

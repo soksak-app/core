@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222-2: mygo 진행 알림 고리는 entry 버튼의 형제이므로 element core.notices.ring으로 element tree에 나타나며, 고리를 눌러도 entry를 읽는다.
 - F1226: handle이 이미 끝난 application의 quit이 실패하면, 그 run의 configuration directory를 가진 각 process를 SIGKILL로 끝낸다.
 - F239-209: 선언된 검색 focus 명령의 기록이 F1217-8 이후 키인 cmd+o와 완료 당시 키인 Command-K를 함께 적는다.
 - F1217-8: 프로젝트 홈 검색 포커스의 테스트 주장이 선언된 키 cmd+o의 테스트 이름과 일치한다.
