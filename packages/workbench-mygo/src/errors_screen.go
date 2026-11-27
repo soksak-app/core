@@ -202,7 +202,7 @@ func (e *ShownErrors) quietFor(source NoticeSource) bool {
 	if source.Kind != "sidebar" {
 		return false
 	}
-	// A window sidebar has no card, and its notice shows on its status line only (docs/spec/notifications.md#sidebar-notices).
+	// A window sidebar has no card, and its notice shows on its status line only (docs/spec/notifications.md#sidebar-notice).
 	if source.Card == "" {
 		return true
 	}

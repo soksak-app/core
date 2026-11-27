@@ -32,7 +32,7 @@ The workbench writes one application log line when a notice appears or merges, i
 | Place | Notices | Where | How long |
 | --- | --- | --- | --- |
 | Card status line | The notices of that card, and the notices of a sidebar on the status line of that sidebar | The content footer of the card, or the status line of the sidebar | `success` and `info` 6 seconds; `warning` and `error` until the person closes them; `progress` until it ends |
-| Toast | The notices whose source is not a card or a sidebar, the `warning` and `error` notices of a card that does not have the focus, and the `warning` notices of a card sidebar as described in [sidebar notices](#sidebar-notices), except a missing-plugin warning | Under the bell, at the right of the window | `success` and `info` 4 seconds; `warning` and `error` until the person closes them, or after the delay of 오류·경고 자동 닫힘; `progress` until it ends |
+| Toast | The notices whose source is not a card or a sidebar, the `warning` and `error` notices of a card that does not have the focus, and the `warning` notices of a card sidebar as described in [sidebar notices](#sidebar-notice), except a missing-plugin warning | Under the bell, at the right of the window | `success` and `info` 4 seconds; `warning` and `error` until the person closes them, or after the delay of 오류·경고 자동 닫힘; `progress` until it ends |
 | Notice center | Every notice | Opened by the bell | `error` until the person clears it; every other kind 7 days after `at` |
 
 A notice of the focused card shows on its status line only. A `warning` or `error` notice of a card that does not have the focus shows on its status line and as a toast with the action `카드로 가기`, which runs `core.card.focus {card}`. Focusing a card marks its notices read.
@@ -45,7 +45,7 @@ Closing a toast or a status line notice removes it from that place and keeps its
 
 The content footer of a card ([tab reports](plugins.md#tab-reports)) shows the newest unclosed notice of any tab of the card, and the footer text of the active tab while the card has no unclosed notice. A notice line reads `● <title> · <text> · [<action>] · ×`: the dot is the icon of the kind, the line shows the first action only, the tab name precedes the title when the notice comes from a tab that is not the active tab, and a `warning` or `error` line tints its background with the light tone of its kind. The line is the element `core.card.notice` with the parameter `card`; its close control runs `core.notices.close {id}`. `core.grid` reports for each card its `notice` (the `id`, `kind` and `title` of the shown notice, or `null`) beside its `status` (the shown footer text, or `null` while a notice is shown).
 
-## Sidebar notices
+## Sidebar notice
 
 A sidebar notice (source `sidebar`) shows on the status line of its sidebar, in the form of the card status line, and its close control runs `core.notices.close`. It merges only with a shown notice of the same sidebar. Its `card` is the card of a card sidebar and null for a window sidebar. A window sidebar's notice is never a toast: it shows on its status line. A card sidebar's notice is a toast only while its card does not have the focus, and that toast carries `카드로 가기` when `card` is not null. A missing-plugin warning is no toast and no status line notice: it is one line at the top of its sidebar ([missing plugins](plugins.md#missing-plugins)), and the notice center and the bell keep it as its record. When the notice is withdrawn, the status line and the toast drop it and the center keeps its entry.
 

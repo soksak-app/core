@@ -1,5 +1,5 @@
 // The warning of a missing plugin of a sidebar is one line at the top of the sidebar, with its action, and a record of the notice path
-// (docs/spec/plugins.md#missing-plugins, docs/spec/notifications.md#sidebar-notices): the record is an entry of the notice center whose
+// (docs/spec/plugins.md#missing-plugins, docs/spec/notifications.md#sidebar-notice): the record is an entry of the notice center whose
 // source is the sidebar, and it is no toast and no line of the status line. It is withdrawn when the sidebar stops drawing the sections.
 import assert from "node:assert/strict";
 import test from "node:test";

@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1285: 영문 알림 명세의 사이드바 알림 절이 `Sidebar notice` 제목을 쓰며, 코드가 인용하는 anchor가 해석된다.
 - F1282: 벤치마크 러너 테스트는 darwin에서만 실행되어, linux-node 작업은 darwin 네이티브 빌드를 실행하지 않는다.
 - F1281: clone, clone event, notification identifier 테스트가 host 계약에 정의된 행을 가리키며, Rust host가 clone 사례와 parent 거부 사례를 실행한다.
 - F1283: 영어 설정 spec의 절 제목을 영어로 바꿔, 코드가 가리키는 anchor가 resolve된다.
