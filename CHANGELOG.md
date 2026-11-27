@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-16: The launcher of a window without an open project is named project home in the app guide and the private API note.
 - F999-2: A new generation of a shown surface is tested to send its region drawing state without input.
 - F1217-16: The owner of a sidecar session is named owner in the spec and in the host, not a session owner.
 - F1217-11-7: The overlay update rule sends a changed copy once, and the new test pins the identical-copy rule.
