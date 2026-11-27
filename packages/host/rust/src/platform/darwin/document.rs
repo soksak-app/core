@@ -92,6 +92,13 @@ unsafe extern "C" {
     fn sp_document_appearance(document: *mut c_void, dark: bool);
     fn sp_document_close(document: *mut c_void);
     fn sp_document_query(document: *mut c_void, reply: Event, context: *mut c_void);
+    fn sp_document_boxes(
+        document: *mut c_void,
+        selector: *const c_char,
+        properties: *const c_char,
+        reply: Event,
+        context: *mut c_void,
+    );
     fn sp_document_interaction_state(document: *mut c_void) -> *mut c_char;
     fn sp_document_restore(document: *mut c_void, state: *const c_char) -> *const c_char;
     fn free(pointer: *mut c_void);
@@ -275,6 +282,31 @@ extern "C" fn queried(context: *mut c_void, value: *const c_char) {
 pub fn query(document: Handle, reply: Box<dyn FnOnce(String) + Send>) {
     let receiver = Box::into_raw(Box::new(QueryReceiver(reply)));
     unsafe { sp_document_query(document as *mut c_void, queried, receiver as *mut c_void) };
+}
+
+/// Measures the elements of the region that match the selector with the named CSS properties; reply receives the JSON reply of native
+/// once. Native reads the selector and the properties before the call returns, so the C strings live only for the call.
+pub fn boxes(
+    document: Handle,
+    selector: &str,
+    properties: &str,
+    reply: Box<dyn FnOnce(String) + Send>,
+) -> Result<(), String> {
+    let selector = CString::new(selector)
+        .map_err(|_| "selector must not contain a NUL character".to_string())?;
+    let properties = CString::new(properties)
+        .map_err(|_| "properties must not contain a NUL character".to_string())?;
+    let receiver = Box::into_raw(Box::new(QueryReceiver(reply)));
+    unsafe {
+        sp_document_boxes(
+            document as *mut c_void,
+            selector.as_ptr(),
+            properties.as_ptr(),
+            queried,
+            receiver as *mut c_void,
+        )
+    };
+    Ok(())
 }
 
 /// The interactionState of the region as base64, empty when the web view yields none, or None for a closed region.

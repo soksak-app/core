@@ -720,3 +720,36 @@ func TestDocumentInteractionStateMustNotBeEmpty(t *testing.T) {
 		t.Fatalf("empty state: %v", err)
 	}
 }
+
+// contract: documents.boxes.reply-is-the-box-report
+func TestDocumentBoxesReplyIsTheBoxReport(t *testing.T) {
+	boxes, err := host.ParseDocumentBoxes(`{"total":2,"truncated":false,"boxes":[{"x":10,"y":10,"width":100,"height":20,"style":{"font-size":"13px","color":"rgb(1, 2, 3)"}},{"x":10,"y":40,"width":100,"height":20,"style":{"font-size":"13px","color":"rgb(1, 2, 3)"}}]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if boxes.Total != 2 || boxes.Truncated || len(boxes.Boxes) != 2 {
+		t.Fatalf("boxes %+v", boxes)
+	}
+	first := boxes.Boxes[0]
+	if first.X != 10 || first.Y != 10 || first.Width != 100 || first.Height != 20 {
+		t.Fatalf("border box %+v", first)
+	}
+	if first.Style["font-size"] != "13px" || first.Style["color"] != "rgb(1, 2, 3)" {
+		t.Fatalf("computed style %+v", first.Style)
+	}
+	for reply, want := range map[string]string{
+		`{"error":"the document region shows no page"}`: "the document region shows no page",
+		`{"error":"selector must not be empty"}`:        "selector must not be empty",
+		`{"error":"unknown style property font-siz"}`:   "unknown style property font-siz",
+	} {
+		if _, err := host.ParseDocumentBoxes(reply); err == nil || err.Error() != want {
+			t.Fatalf("%s: %v", reply, err)
+		}
+	}
+	for _, reply := range []string{`{"total":"2","truncated":false,"boxes":[]}`, `{"total":2,"truncated":false}`, `not json`} {
+		want := "document boxes answered an invalid reply: " + reply
+		if _, err := host.ParseDocumentBoxes(reply); err == nil || err.Error() != want {
+			t.Fatalf("%s: %v", reply, err)
+		}
+	}
+}

@@ -385,6 +385,26 @@ func (h *Host) DocumentGo(ctx context.Context, reqJSON json.RawMessage) (bool, e
 	return s.goDocument(uint64(s.window.ID()), req)
 }
 
+// DocumentBoxesRequest is the argument of documentBoxes: the document of the calling surface, the selector and the CSS property names.
+type DocumentBoxesRequest struct {
+	DocumentRequest
+	Selector   string   `json:"selector"`
+	Properties []string `json:"properties"`
+}
+
+// DocumentBoxes measures the elements of a document region that match a selector (docs/spec/native-surfaces.md#box-query).
+func (h *Host) DocumentBoxes(ctx context.Context, reqJSON json.RawMessage) (DocumentBoxes, error) {
+	req, err := argument[DocumentBoxesRequest]("request", reqJSON)
+	if err != nil {
+		return DocumentBoxes{}, err
+	}
+	s, err := h.surface(ctx)
+	if err != nil {
+		return DocumentBoxes{}, err
+	}
+	return s.boxDocument(uint64(s.window.ID()), req.DocumentRequest, req.Selector, req.Properties)
+}
+
 // DocumentQuery answers the media, capture and form state of a document region (docs/spec/plugins.md#memory-saver).
 func (h *Host) DocumentQuery(ctx context.Context, reqJSON json.RawMessage) (DocumentReport, error) {
 	req, err := argument[DocumentRequest]("request", reqJSON)

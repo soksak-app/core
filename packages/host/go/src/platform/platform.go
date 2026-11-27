@@ -614,6 +614,9 @@ type Platform interface {
 	// QueryDocument asks the region for its media, capture and form state; reply receives the JSON reply of native once, as
 	// {media, capture, form} or {error}.
 	QueryDocument(document unsafe.Pointer, reply func(value string))
+	// BoxDocument measures the elements of the region that match selector with the named CSS properties; reply receives the JSON reply
+	// of native once, as {total, truncated, boxes} or {error}.
+	BoxDocument(document unsafe.Pointer, selector, properties string, reply func(value string))
 	// DocumentInteractionState returns the interactionState of the region as base64, empty when the web view yields none; ok
 	// is false for a closed region.
 	DocumentInteractionState(document unsafe.Pointer) (state string, ok bool)

@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use soksak_host::documents::{
     Documents, Key, Report, Request, StreamEffect, Streams, ViewChannels, check, go_action,
-    parse_report, remove_surface_for_reload, remove_view_regions, stream_ack_refusal,
+    parse_boxes, parse_report, remove_surface_for_reload, remove_view_regions, stream_ack_refusal,
 };
 use soksak_host::images::Images;
 use soksak_host::view_lifecycle::{
@@ -1590,4 +1590,51 @@ fn a_view_process_end_removes_the_regions_of_its_surface() {
         Ok(13),
         "the regions of another surface stay"
     );
+}
+
+// contract: documents.boxes.reply-is-the-box-report
+#[test]
+fn document_boxes_reply_is_the_box_report() {
+    let boxes = parse_boxes(
+        r#"{"total":2,"truncated":false,"boxes":[{"x":10,"y":10,"width":100,"height":20,"style":{"font-size":"13px","color":"rgb(1, 2, 3)"}},{"x":10,"y":40,"width":100,"height":20,"style":{"font-size":"13px","color":"rgb(1, 2, 3)"}}]}"#,
+    )
+    .unwrap();
+    assert_eq!(boxes.total, 2);
+    assert!(!boxes.truncated);
+    assert_eq!(boxes.boxes.len(), 2);
+    let first = &boxes.boxes[0];
+    assert_eq!(
+        (first.x, first.y, first.width, first.height),
+        (10.0, 10.0, 100.0, 20.0)
+    );
+    assert_eq!(
+        first.style.get("font-size").map(String::as_str),
+        Some("13px")
+    );
+    assert_eq!(
+        first.style.get("color").map(String::as_str),
+        Some("rgb(1, 2, 3)")
+    );
+    assert_eq!(
+        parse_boxes(r#"{"error":"the document region shows no page"}"#),
+        Err("the document region shows no page".into())
+    );
+    assert_eq!(
+        parse_boxes(r#"{"error":"selector must not be empty"}"#),
+        Err("selector must not be empty".into())
+    );
+    assert_eq!(
+        parse_boxes(r#"{"error":"unknown style property font-siz"}"#),
+        Err("unknown style property font-siz".into())
+    );
+    for reply in [
+        r#"{"total":"2","truncated":false,"boxes":[]}"#,
+        r#"{"total":2,"truncated":false}"#,
+        "not json",
+    ] {
+        assert_eq!(
+            parse_boxes(reply),
+            Err(format!("document boxes answered an invalid reply: {reply}"))
+        );
+    }
 }

@@ -863,6 +863,15 @@ pub trait Platform: CoreRootHost + Send + Sync {
         document: Handle,
         reply: Box<dyn FnOnce(String) + Send>,
     ) -> Result<(), String>;
+    /// Measures the elements of the region that match selector with the named CSS properties; reply receives the JSON reply of native
+    /// once, as {total, truncated, boxes} or {error}. Call it on the main thread.
+    fn box_document(
+        &self,
+        document: Handle,
+        selector: &str,
+        properties: &str,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String>;
     /// The interactionState of the region as base64, empty when the web view yields none, or None for a closed region.
     fn document_interaction_state(&self, document: Handle) -> Result<Option<String>, String>;
     /// Restores the base64 interactionState into a region that has loaded nothing; the error is the refusal of native.

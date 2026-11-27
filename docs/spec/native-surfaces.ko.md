@@ -408,6 +408,7 @@ plugin은 `boxes` 요청으로 문서 영역의 페이지를 잰다. 이것은 �
 - 실패한 호출은 원인에 맞는 명시적 오류로 거부되고 값을 돌려주지 않는다.
   - 영역에 커밋된 주 프레임 문서가 없으면 `the document region shows no page`.
   - `selector`가 비어 있으면 `selector must not be empty`.
+  - `selector`에 NUL 문자가 있으면 `selector must not contain a NUL character`. native가 이를 C 문자열로 읽기 때문이다.
   - 엔진이 선택자를 거부하면 `invalid selector <selector>: <message>`. `<message>`는 엔진 오류의 문구다.
   - `properties`의 이름에 대해 `CSS.supports(<name>, "inherit")`가 false이면 `unknown style property <name>`. `--`로 시작하는 사용자 속성도 여기에 든다.
 - darwin에서 스크립트는 영역 web view의 `callAsyncJavaScript`로, 문서 스크립트의 콘텐츠 월드에서 실행된다. 이것은 공개 WebKit API다. 스크립트가 돌려줄 수 없는 값, 예를 들어 유한하지 않은 숫자는 `box query returned a value that is not JSON`으로 거부된다.

@@ -391,6 +391,10 @@ func (implementation) QueryDocument(unsafe.Pointer, func(string)) {
 	unreachable("document query")
 }
 
+func (implementation) BoxDocument(unsafe.Pointer, string, string, func(string)) {
+	unreachable("document boxes")
+}
+
 func (implementation) DocumentInteractionState(unsafe.Pointer) (string, bool) {
 	unreachable("document interaction state")
 	return "", false

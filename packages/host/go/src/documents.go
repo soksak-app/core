@@ -997,6 +997,68 @@ func (s *Surfaces) queryDocument(viewID uint64, req DocumentRequest) (DocumentRe
 	return ParseDocumentReport(req.Document, <-replies)
 }
 
+// DocumentBoxes is the reply of documentBoxes: the number of matches of the selector, whether the reply holds fewer matches than
+// that number, and the border box and the computed style of each match in document order (docs/spec/native-surfaces.md#box-query).
+type DocumentBoxes struct {
+	Total     int           `json:"total"`
+	Truncated bool          `json:"truncated"`
+	Boxes     []DocumentBox `json:"boxes"`
+}
+
+// DocumentBox is one match of a box query: its border box in CSS pixels of the region and the requested computed style values.
+type DocumentBox struct {
+	X      float64           `json:"x"`
+	Y      float64           `json:"y"`
+	Width  float64           `json:"width"`
+	Height float64           `json:"height"`
+	Style  map[string]string `json:"style"`
+}
+
+// ParseDocumentBoxes turns the box reply of native into DocumentBoxes. A reply {error} is the refusal of native, and its text is the
+// error unchanged. A value that is not a box reply, with a field missing or of another type, is an invalid reply.
+func ParseDocumentBoxes(reply string) (DocumentBoxes, error) {
+	var refusal struct {
+		Error *string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(reply), &refusal); err == nil && refusal.Error != nil {
+		return DocumentBoxes{}, errors.New(*refusal.Error)
+	}
+	var value struct {
+		Total     *int          `json:"total"`
+		Truncated *bool         `json:"truncated"`
+		Boxes     []DocumentBox `json:"boxes"`
+	}
+	if err := json.Unmarshal([]byte(reply), &value); err != nil || value.Total == nil || value.Truncated == nil || value.Boxes == nil {
+		return DocumentBoxes{}, fmt.Errorf("document boxes answered an invalid reply: %s", reply)
+	}
+	return DocumentBoxes{Total: *value.Total, Truncated: *value.Truncated, Boxes: value.Boxes}, nil
+}
+
+// boxDocument measures the elements of a document region that match selector, with the named CSS property values, and waits for the
+// reply of native outside the UI thread (docs/spec/native-surfaces.md#box-query).
+func (s *Surfaces) boxDocument(viewID uint64, req DocumentRequest, selector string, properties []string) (DocumentBoxes, error) {
+	// The selector is passed to native as a C string, which ends at a NUL character, so a selector with one is refused here.
+	if strings.ContainsRune(selector, 0) {
+		return DocumentBoxes{}, errors.New("selector must not contain a NUL character")
+	}
+	if properties == nil {
+		properties = []string{}
+	}
+	encoded, err := json.Marshal(properties)
+	if err != nil {
+		return DocumentBoxes{}, err
+	}
+	replies := make(chan string, 1)
+	err = s.withDocument(viewID, req, func(handle unsafe.Pointer) error {
+		system.BoxDocument(handle, selector, string(encoded), func(reply string) { replies <- reply })
+		return nil
+	})
+	if err != nil {
+		return DocumentBoxes{}, err
+	}
+	return ParseDocumentBoxes(<-replies)
+}
+
 // documentInteractionState returns the interactionState of a document region as base64, empty when the web view yields none.
 func (s *Surfaces) documentInteractionState(viewID uint64, req DocumentRequest) (string, error) {
 	var state string

@@ -370,6 +370,15 @@ impl Platform for Windows {
     ) -> Result<(), String> {
         unsupported::query_document(document, reply)
     }
+    fn box_document(
+        &self,
+        document: Handle,
+        selector: &str,
+        properties: &str,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        unsupported::box_document(document, selector, properties, reply)
+    }
     fn document_interaction_state(&self, document: Handle) -> Result<Option<String>, String> {
         unsupported::document_interaction_state(document)
     }

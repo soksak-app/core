@@ -276,6 +276,14 @@ func (implementation) QueryDocument(document unsafe.Pointer, reply func(value st
 	native.DocumentQuery(document, uintptr(handles.NewHandle(reply)))
 }
 
+func (implementation) BoxDocument(document unsafe.Pointer, selector, properties string, reply func(value string)) {
+	selectorText := native.CString(selector)
+	defer native.Free(unsafe.Pointer(selectorText))
+	propertiesText := native.CString(properties)
+	defer native.Free(unsafe.Pointer(propertiesText))
+	native.DocumentBoxes(document, selectorText, propertiesText, uintptr(handles.NewHandle(reply)))
+}
+
 func (implementation) DocumentInteractionState(document unsafe.Pointer) (string, bool) {
 	state := native.MainSpDocumentInteractionState(document)
 	if state == nil {

@@ -906,6 +906,16 @@ async fn document_query(webview: Webview, request: Argument<documents::Request>)
     .await
 }
 
+/// Measures the elements of a document region that match a selector (docs/spec/native-surfaces.md#box-query).
+#[tauri::command]
+async fn document_boxes(webview: Webview, request: Argument<documents::BoxRequest>) -> Result<documents::Boxes, String> {
+    let Argument(request) = request;
+    blocking(move || {
+        documents::boxes(&webview, request)
+    })
+    .await
+}
+
 /// Returns the interactionState of a document region as base64.
 #[tauri::command]
 async fn document_interaction_state(webview: Webview, request: Argument<documents::Request>) -> Result<String, String> {

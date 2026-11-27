@@ -99,6 +99,40 @@ pub fn parse_report(document: &str, reply: &str) -> Result<Report, String> {
     }
 }
 
+/// One match of a box query: its border box in CSS pixels of the region and the requested computed style values
+/// (docs/spec/native-surfaces.md#box-query).
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct DocumentBox {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub style: BTreeMap<String, String>,
+}
+
+/// The reply of documentBoxes: the number of matches of the selector, whether the reply holds fewer matches than that number,
+/// and the box of each match in document order.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Boxes {
+    pub total: u64,
+    pub truncated: bool,
+    pub boxes: Vec<DocumentBox>,
+}
+
+/// Turns the box reply of native, {total, truncated, boxes} or {error}, into the boxes. A reply {error} is the refusal of native and
+/// its text is the error unchanged; a value that is not a box reply, with a field missing or of another type, is an invalid reply.
+pub fn parse_boxes(reply: &str) -> Result<Boxes, String> {
+    #[derive(Deserialize)]
+    struct Refusal {
+        error: String,
+    }
+    if let Ok(Refusal { error }) = serde_json::from_str::<Refusal>(reply) {
+        return Err(error);
+    }
+    serde_json::from_str::<Boxes>(reply)
+        .map_err(|_| format!("document boxes answered an invalid reply: {reply}"))
+}
+
 /// The reply of a stream subscription: the handle that ends it.
 #[derive(Serialize)]
 pub struct Subscription {
@@ -2864,6 +2898,45 @@ pub fn query(webview: &Webview, request: Request) -> Result<Report, String> {
         .recv()
         .map_err(|_| format!("document {} gave no query reply", request.document))?;
     parse_report(&request.document, &reply)
+}
+
+/// A box query of a surface page: the document region, the selector and the CSS property names (docs/spec/native-surfaces.md#box-query).
+#[derive(Clone, Debug, Deserialize)]
+pub struct BoxRequest {
+    #[serde(flatten)]
+    pub request: Request,
+    pub selector: String,
+    #[serde(default)]
+    pub properties: Vec<String>,
+}
+
+/// Measures the elements of a document region that match the selector (docs/spec/native-surfaces.md#box-query). The reply of native
+/// arrives later on the main thread, and this call waits for it outside the main thread.
+pub fn boxes(webview: &Webview, request: BoxRequest) -> Result<Boxes, String> {
+    if request.selector.contains('\0') {
+        return Err("selector must not contain a NUL character".into());
+    }
+    let platform = platform::current()?;
+    let properties =
+        serde_json::to_string(&request.properties).map_err(|error| error.to_string())?;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    let selector = request.selector.clone();
+    with_document(webview, &request.request, move |handle| {
+        platform.box_document(
+            handle,
+            &selector,
+            &properties,
+            Box::new(move |reply| {
+                if sender.send(reply).is_err() {
+                    log_error("document boxes", "the caller stopped waiting for the reply");
+                }
+            }),
+        )
+    })?;
+    let reply = receiver
+        .recv()
+        .map_err(|_| format!("document {} gave no boxes reply", request.request.document))?;
+    parse_boxes(&reply)
 }
 
 /// Returns the interactionState of a document region as base64, empty when the web view yields none.

@@ -498,6 +498,15 @@ impl Platform for Darwin {
         document::query(document, reply);
         Ok(())
     }
+    fn box_document(
+        &self,
+        document: Handle,
+        selector: &str,
+        properties: &str,
+        reply: Box<dyn FnOnce(String) + Send>,
+    ) -> Result<(), String> {
+        document::boxes(document, selector, properties, reply)
+    }
     fn document_interaction_state(&self, document: Handle) -> Result<Option<String>, String> {
         Ok(document::interaction_state(document))
     }

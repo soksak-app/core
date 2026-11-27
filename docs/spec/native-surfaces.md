@@ -406,6 +406,7 @@ A plugin measures the page of a document region with the `boxes` request. It is 
 - A call that fails is refused with the explicit error of its cause, and no value is returned:
   - `the document region shows no page` when the region has no committed main frame document.
   - `selector must not be empty` when `selector` is empty.
+  - `selector must not contain a NUL character` when `selector` holds a NUL character, because native reads it as a C string.
   - `invalid selector <selector>: <message>` when the engine rejects the selector, where `<message>` is the text of the engine error.
   - `unknown style property <name>` when `CSS.supports(<name>, "inherit")` is false for a name in `properties`, which includes custom properties whose names start with `--`.
 - On darwin the script runs through `callAsyncJavaScript` of the region's web view, in the content world of the document script, which is a public WebKit API. A value that the script cannot return, such as a non-finite number, is refused with `box query returned a value that is not JSON`.

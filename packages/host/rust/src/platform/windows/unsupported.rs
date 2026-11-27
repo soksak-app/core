@@ -333,6 +333,15 @@ pub fn query_document(
     missing("document query")
 }
 
+pub fn box_document(
+    _document: Handle,
+    _selector: &str,
+    _properties: &str,
+    _reply: Box<dyn FnOnce(String) + Send>,
+) -> Result<(), String> {
+    missing("document boxes")
+}
+
 pub fn document_interaction_state(_document: Handle) -> Result<Option<String>, String> {
     missing("document interaction state")
 }
