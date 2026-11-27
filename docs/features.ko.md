@@ -154,7 +154,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [-] F1217-4 — P0: web settings window의 drag는 시작할 때 layout을 한 번 읽고 transform으로 창을 옮긴다. Input: 창의 drag. Behavior: `moveBy`가 pointer move마다 사각형을 읽고 위치를 쓴다. Expected: drag 하나에 layout 읽기 한 번. Closed: 설정이 끌어 옮기지 않는 본창의 tab이 되므로, F1217-1이 창과 그 drag를 없앤다.
   - [o] F1217-5 — P1: web 설정은 grid의 행 component 하나로 그리고, 값이 바뀌면 바뀐 행만 갱신한다.
   - [o] F1217-6 — P1: mygo 설정은 같은 행 component와 F1217-2의 control로 그린다.
-  - [~] F1217-7 — P1: 본창과 그 tab이 디자인을 따르며, 각 element는 선언된 command에 연결된다.
+  - [~] F1217-7 — P1: 본창과 그 tab이 디자인을 따르며, 각 element는 선언된 command에 연결된다. 남은 일: 핸드오프 5·7·8장 감사에서 결정이 필요한 두 항목이 남았다. 8장의 `git 저장소 가져오기` 버튼은 명령, 스펙, 웹 계약이 없다. `⌘O` 검색 단축키, `⌘⌫` 목록 빼기 단축키와 안내는 스펙의 `cmd+k` 바인딩과 다르며 `⌘⌫` 행이 없다. 두 항목은 사람의 결정을 기다린다. settings-renew.html의 요소별 비교는 하지 않았다.
     - [o] F1217-7-1 — mygo 시작 read가 실행마다 한 순서를 지킨다: ready 보고가 theme 응답, 그다음 notice read를 기다린다. `tests/app_test.go`가 시작 호출 순서를 고정하고, 시작, status bar, seam, sidebar fold의 mygo 테스트 135개가 통과한다.
   - [o] F1217-10 — P0: 알림의 명세가 갱신된 디자인을 따른다. 알림은 경로 하나이며 종류는 성공, 정보, 경고, 오류, 진행이다. 알림은 세 곳에 보인다: 카드의 상태줄(그 카드의 알림), 종 아래의 토스트(앱 알림과 포커스가 아닌 카드의 알림), 알림 센터(모든 알림). 종은 모든 화면에서 제목줄 오른쪽 끝에 읽지 않은 수와 함께 있다. 설정은 토스트 모양, 알림 센터 모양, 조용히, 오류·경고 자동 닫힘이며, plugin이 카드에 알림을 주는 호출이 있다. 기대: `docs/spec/notifications.md`가 contract를 정하고, `docs/spec/exposure.md`의 오류 표시, `docs/spec/settings.md`의 오류 토스트, `docs/spec/native-modals.md`의 토스트 overlay를 대신하며, 반대 검토의 결정과 이유를 적는다.
   - [~] F1217-11 — P0, F1217-10 다음: web host가 알림을 보인다. 종, 토스트 세 모양, 센터의 팝오버와 서랍, 카드 상태줄, 알림 group의 설정이다.
@@ -167,17 +167,17 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
     - [o] F1217-11-7 — debug 화면, modal 오류 toast, group header, files list, published imports의 page-wire case가 notice 경로의 호출을 따른다.
   - [o] F1217-15 — 명령과 카드 없는 plugin의 notice. `core.notices.add {card?, plugin?, ...}`, `core.notices.progress`, `core.notices.done`, `core.notices.read {id}`는 `tab.notify`의 경로로 실행된다. plugin API의 `page.notify`, `page.progress`, `page.done`은 source `plugin`의 notice를 준다. `core.notices`는 각 항목을 `read`와 `source`와 함께 보인다. web, mygo, plugin API.
     - [o] F1217-16 — code, test, 기록이 kit의 term 목록이 거절하는 settings window, settings modal 대신 settings tab을 쓴다. 다음 kit 목록(0.0.17)으로 검사하면 그 term은 하나도 나오지 않는다.
-  - [~] F1217-12 — P0, F1217-10 다음: mygo host가 같은 알림을 같은 글로 보인다.
+  - [~] F1217-12 — P0, F1217-10 다음: mygo host가 같은 알림을 같은 글로 보인다. 남은 일: F1217-12-8, theme마다 값이 주어질 때까지 보류.
     - [o] F1217-12-1 — mygo에서 알림 경로가 오류 토스트를 대신한다. 토스트를 보이던 모든 오류는 오류 notice를 만들고, notice는 kind와 title로 합쳐지며, 세 모양의 토스트가 정해진 시간 동안 보이고, `core.toasts`와 `core.notices.close {id}`가 `core.workbench.error`와 `core.error.dismiss`를 대신한다.
     - [o] F1217-12-2 — 모든 화면의 제목줄 종과, 거르기·묶음·지우기·읽음을 가진 팝오버와 서랍의 notice center. 기록은 configuration directory의 `notices.json`에 둔다.
     - [o] F1217-12-3 — content footer의 카드 status line과 카드마다의 `core.grid` `notice`, view 호출 `tab.notify`, `tab.progress`, `tab.done`.
     - [o] F1217-12-4 — 알림 group의 설정 `toastStyle`, `noticeCenterStyle`, `quietToasts`, `autoDismissProblemToasts`, `problemToastDismissSeconds`.
     - [o] F1217-12-5 — 열린 notice center가 닫기 control, element `core.notices.toggle`을 그린다.
-    - [o] F1217-12-6 — filter segment 옆 조용히 switch가 두 page에서 `core.settings.set {patch: {quietToasts}, scope: "common"}`을 실행한다. 남은 일: commit.
+    - [o] F1217-12-6 — filter segment 옆 조용히 switch가 두 page에서 `core.settings.set {patch: {quietToasts}, scope: "common"}`을 실행한다.
     - [o] F1217-12-7 — ⚙ 버튼이 동작 page의 알림 group에서 settings tab을 연다: `rows.groups`의 각 group에 `id`가 있고, `core.settings-tab.nav`가 선택 인자 `group`을 받으며 없는 id는 -32602로 거절한다.
     - [!] F1217-12-8 — 성공과 경고 icon이 모든 theme의 token `ok`, `warn`을 쓴다. 보류: token은 theme마다 값이 필요하다. 원인: 디자인은 dark 값만 주고, light 값은 디자인 결정이다. 재시도 조건: theme마다 값이 주어진다.
     - [o] F1217-12-9 — 카드 notice의 source chip이 notice를 낸 tab의 label을 보여 주고 entry에 남긴다; `notices.json`은 format 2가 된다.
-    - [o] F1217-12-10 — Escape가 열린 notice center를 닫는다(center가 열린 동안 shortcut 행 Escape → `core.notices.toggle`). 남은 일: mygo shell의 시작 순서 변경 다음의 commit.
+    - [o] F1217-12-10 — Escape가 열린 notice center를 닫는다(center가 열린 동안 shortcut 행 Escape → `core.notices.toggle`).
   - [o] F1217-13 — P0, F1217-10 다음: `@soksak/plugin-api`가 page에 카드 알림 호출을 주고, 이 호출이 `tab.notify`를 대신한다. `tab.notify`를 부르는 plugin은 각자의 체크리스트에서 옮긴다.
   - [o] F1217-14 — P0: 설치되지 않은 plugin의 섹션을 디자인대로 보인다. 칩은 점선 테두리와 취소선, 툴팁 `<이름>(<id>) 플러그인 필요`를 갖고, 세트 줄과 사이드바는 없는 plugin마다 경고 한 줄과 설치 버튼 하나를 보이며, 탭 배치의 탭은 흐리게 하고 취소선을 긋는다. 불러오지 않음이라는 말은 쓰지 않는다.
   - [!] F1217-8 — P2: 디자인의 키를 연결한다: ⌘B, ⌥⌘B, ⇧⌘J, ⌘J는 사이드바를 켜고 끄며, ⌘O는 project home의 검색에 focus를 주고, ⌘⌫는 home 행을 빼며, ⌘F는 설정 검색에 focus를 준다. 보류: specification은 새 키를 연결하지 않는다. 원인: workbench의 키가 카드보다 먼저 받으며, 카드의 편집기와 터미널은 ⌘B, ⌘J, ⌘F를 쓴다. 재시도 조건: 설치된 카드 plugin을 검사해 어느 카드도 쓰지 않는 키가 확인될 때.
