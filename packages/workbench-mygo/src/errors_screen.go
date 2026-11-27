@@ -42,6 +42,8 @@ type ShownErrors struct {
 	// noticeOpen is whether the notice center is open, and noticeFilter its filter (notice_store.go).
 	noticeOpen   bool
 	noticeFilter string
+	// shownNotice is the entry that core.notices.show marked as the shown entry, or "" when none was shown.
+	shownNotice string
 }
 
 type errorOrigin struct {
@@ -457,10 +459,18 @@ func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
 			_, bodyH = ui.ShapeRichTextWith([]ui.Span{{Text: toast.text}}, font, ui.TextShape{Direction: c.Direction(), KeepAll: true, Width: textWidth}).Size()
 		}
 		height := titleH + bodyH + m.toastPadTop + m.toastPadBottom
+		_, actionsHeight := ui.ShapeText("가", font, 0).Size()
 		if style == "line" {
 			height = m.toastLineH
 		}
-		rows = append(rows, toastRow{status: status, body: toast.text, width: maxWidth,
+		actions := s.toastActions(toast)
+		if style == "line" && len(actions) > 1 {
+			actions = actions[:1]
+		}
+		if len(actions) > 0 && style != "line" {
+			height += actionsHeight + m.toastGap
+		}
+		rows = append(rows, toastRow{status: status, body: toast.text, actions: actions, width: maxWidth,
 			height: max(height, closeHeight+m.toastPadTop+m.toastPadBottom)})
 	}
 	stackHovered := false
@@ -485,7 +495,13 @@ func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
 					if row.body != "" && style != "line" {
 						ui.Text(c, row.body).Wrap().TextColor(s.palette.Muted).Label(row.body).Width(textWidth).Shrink(0).LineHeight(font.LineHeight).KeepAll()
 					}
+					if len(row.actions) > 0 && style != "line" {
+						ui.Row(c).Gap(m.toastGap).Children(func() { s.drawToastActions(c, row) })
+					}
 				})
+				if style == "line" {
+					s.drawToastActions(c, row)
+				}
 				close := s.binder.Press(c, "core.notices.close", "core.notices.close", row.status.ID, map[string]any{"id": row.status.ID})
 				close.Size(closeWidth, closeHeight).Shrink(0).PaddingX(m.toastMorePadX).Center().
 					Label("닫기").Tooltip("닫기").Cursor(ui.CursorPointer).Children(func() {
@@ -530,8 +546,9 @@ func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
 
 // toastRow is one drawn notice: the status it draws and the measured sizes of its content.
 type toastRow struct {
-	status ToastStatus
-	body   string
+	status  ToastStatus
+	body    string
+	actions []NoticeAction
 	width  float32
 	height float32
 }
@@ -574,4 +591,24 @@ func (e *ShownErrors) WithdrawNotice(id string) bool {
 	e.toasts[at].origin = ""
 	e.closeToast(at)
 	return true
+}
+
+// toastActions returns the actions that a shown toast offers: the actions of its notice, then 카드로 가기 for a warning or an error of a
+// card that does not have the focus, which runs core.card.focus (docs/spec/notifications.md#toasts).
+func (s *Shell) toastActions(toast *errorToast) []NoticeAction {
+	actions := append([]NoticeAction{}, toast.actions...)
+	if toast.source.Kind == "card" && toast.source.Card != s.focused && (toast.kind == "warning" || toast.kind == "error") {
+		actions = append(actions, NoticeAction{Label: "카드로 가기", Command: "core.card.focus", Params: map[string]any{"card": toast.source.Card}})
+	}
+	return actions
+}
+
+// drawToastActions draws the action buttons of a toast row; an action whose command is not declared is not drawn.
+func (s *Shell) drawToastActions(c *ui.Context, row toastRow) {
+	for _, action := range row.actions {
+		if !s.binder.Declares(action.Command) {
+			continue
+		}
+		s.uiButton(c, s.binder.Press(c, "core.notices.action", action.Command, row.status.ID, action.Params), action.Label, false)
+	}
 }

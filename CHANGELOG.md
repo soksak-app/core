@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-12: A warning or error toast of a card that does not have the focus offers 카드로 가기, which focuses the card.
 - F1217-12-10: The view-host test expects the Escape row that closes the notice center.
 - F1223: A refused view status watch rejects the ready promise of its stop function with the refusal code and text.
 - F1222: A progress notice draws a declared turning ring that reduced motion stops, and an unknown notice kind fails.
