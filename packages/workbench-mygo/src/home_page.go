@@ -174,27 +174,33 @@ func (s *Shell) drawHomeRow(c *ui.Context, project projectRecord, selected bool)
 		})
 		return
 	}
-	row := s.binder.Press(c, "core.home.open", "core.home.open", project.ID, projectParam{project.ID})
-	row.FillWidth().Radius(s.radiusSmall()).Padding(m.space2, m.space3).AlignItems(ui.Center).Gap(m.space3).Label(project.Title)
-	if selected || row.Hovered() {
-		row.Background(s.palette.Card)
+	// The open button and the pin and remove buttons are siblings: a button element keeps no child in the element tree, so a
+	// button nested in the open button would not be found by its element name.
+	// The selected or hovered background belongs to the line, so it covers the action buttons as the row did before.
+	line := ui.Row(c).Role(ui.RoleGroup).Label(project.Title).FillWidth().Radius(s.radiusSmall()).Padding(m.space2, m.space3).Gap(m.space2).AlignItems(ui.Center)
+	if selected || line.Hovered() {
+		line.Background(s.palette.Card)
 	}
-	row.Children(func() {
-		s.drawHomeLetter(c, project.Title)
-		ui.Column(c).FillWidth().MinWidth(0).Children(func() {
-			ui.Row(c).Gap(m.space2).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, project.Title).SingleLine().Ellipsis("…").LineHeight(m.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Fg)
-				if s.isOpen(project.ID) {
-					ui.Text(c, "열림").LineHeight(m.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.Rail)
-				}
+	line.Children(func() {
+		row := s.binder.Press(c, "core.home.open", "core.home.open", project.ID, projectParam{project.ID})
+		row.Grow(1).MinWidth(0).AlignItems(ui.Center).Gap(m.space3).Label(project.Title)
+		row.Children(func() {
+			s.drawHomeLetter(c, project.Title)
+			ui.Column(c).FillWidth().MinWidth(0).Children(func() {
+				ui.Row(c).Gap(m.space2).AlignItems(ui.Center).Children(func() {
+					ui.Text(c, project.Title).SingleLine().Ellipsis("…").LineHeight(m.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Fg)
+					if s.isOpen(project.ID) {
+						ui.Text(c, "열림").LineHeight(m.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.Rail)
+					}
+				})
+				ui.Text(c, project.Root).SingleLine().Ellipsis("…").Font(debugMonoFont).Tooltip(project.Root).LineHeight(m.lineHeight).FontSize(s.textSmall()).TextColor(s.palette.Muted)
 			})
-			ui.Text(c, project.Root).SingleLine().Ellipsis("…").Font(debugMonoFont).Tooltip(project.Root).LineHeight(m.lineHeight).FontSize(s.textSmall()).TextColor(s.palette.Muted)
+			ui.Text(c, fmt.Sprintf("스페이스 %d", len(project.Spaces))).LineHeight(m.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.Muted)
+			if project.LastOpened > 0 {
+				ui.Text(c, s.homeDay(time.UnixMilli(int64(project.LastOpened)))).LineHeight(m.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.Muted)
+			}
 		})
-		ui.Text(c, fmt.Sprintf("스페이스 %d", len(project.Spaces))).LineHeight(m.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.Muted)
-		if project.LastOpened > 0 {
-			ui.Text(c, s.homeDay(time.UnixMilli(int64(project.LastOpened)))).LineHeight(m.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.Muted)
-		}
-		if selected || row.Hovered() || project.Pinned {
+		if selected || line.Hovered() || project.Pinned {
 			s.drawHomePin(c, project)
 			s.drawHomeRemove(c, project)
 		}

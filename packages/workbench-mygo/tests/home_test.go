@@ -114,6 +114,10 @@ func TestTheHomeOpenWithoutARowAnswersAnError(t *testing.T) {
 func TestTheHomeRemovalAsksBeforeItRemovesTheRow(t *testing.T) {
 	f, alpha, _ := twoProjects(t)
 	f.run("core.projects.browse", nil)
+	selectRow(t, f, alpha)
+	if !f.has("core.home.remove-ask", alpha) {
+		t.Fatal("the × button of " + alpha + " is not drawn before the removal is asked")
+	}
 	f.run("core.home.confirm", map[string]string{"project": alpha, "answer": "ask"})
 	if !f.has("core.home.confirm", alpha) || f.has("core.home.remove-ask", alpha) {
 		t.Fatal("the confirm state does not replace the row of " + alpha)
@@ -187,8 +191,16 @@ func TestTheHomeStatusHasTheRowsAndTheirErrors(t *testing.T) {
 func TestAPinIsReportedByCoreProjectsOnceTheStoreHoldsIt(t *testing.T) {
 	f, alpha, _ := twoProjects(t)
 	f.run("core.projects.browse", nil)
+	selectRow(t, f, alpha)
+	// The pin button of the row names the action that the row takes, which changes with the pin.
+	if label := exposedLabel(t, f, "core.home.pin", alpha); label != "위에 고정" {
+		t.Fatalf("the pin button of %s is labelled %q before the pin", alpha, label)
+	}
 	f.run("core.home.pin", map[string]string{"project": alpha})
 	f.settle()
+	if label := exposedLabel(t, f, "core.home.pin", alpha); label != "고정 풀기" {
+		t.Fatalf("the pin button of %s is labelled %q after the pin", alpha, label)
+	}
 	if pinned, _ := f.host.project(alpha)["pinned"].(bool); !pinned {
 		t.Fatal("the store does not hold the pin")
 	}
@@ -455,5 +467,81 @@ func TestTheHomeListScrollsAndItsKeyHintStays(t *testing.T) {
 	hintNode, ok = f.tester.Find("↑↓ 이동, Enter 열기, ⌘, 설정")
 	if !ok || hintNode.Y != hint {
 		t.Fatalf("the key hint line moved from %v with the list", hint)
+	}
+}
+
+// The selected row draws its background on the line that holds the open button and both action buttons: the line spans the
+// action buttons, and the open button ends before them (docs/spec/projects.md#project-home).
+func TestTheSelectedRowBackgroundCoversItsActionButtons(t *testing.T) {
+	f, alpha, _ := twoProjects(t)
+	f.run("core.projects.browse", nil)
+	selectRow(t, f, alpha)
+	tree := f.tester.ElementTree()
+	open, ok := exposedNode(tree, "core.home.open", alpha)
+	if !ok {
+		t.Fatalf("no element core.home.open %q", alpha)
+	}
+	pin, ok := exposedNode(tree, "core.home.pin", alpha)
+	if !ok {
+		t.Fatalf("no element core.home.pin %q", alpha)
+	}
+	remove, ok := exposedNode(tree, "core.home.remove-ask", alpha)
+	if !ok {
+		t.Fatalf("no element core.home.remove-ask %q", alpha)
+	}
+	line, ok := parentOf(tree, pin.ID)
+	if !ok {
+		t.Fatalf("the pin button of %s has no parent", alpha)
+	}
+	if parent, _ := parentOf(tree, remove.ID); parent.ID != line.ID {
+		t.Fatalf("the pin and remove buttons of %s are in different lines", alpha)
+	}
+	if !contains(line.Bounds, pin.Bounds) || !contains(line.Bounds, remove.Bounds) {
+		t.Fatalf("the line %v of %s does not cover its action buttons %v and %v", line.Bounds, alpha, pin.Bounds, remove.Bounds)
+	}
+	if contains(open.Bounds, remove.Bounds) || open.Bounds.X+open.Bounds.W > pin.Bounds.X {
+		t.Fatalf("the open button %v of %s overlaps its action buttons", open.Bounds, alpha)
+	}
+}
+
+// parentOf returns the element whose children include the element with the ID.
+func parentOf(nodes []ui.ElementNode, id uint64) (ui.ElementNode, bool) {
+	for _, n := range nodes {
+		for _, child := range n.Children {
+			if child.ID == id {
+				return n, true
+			}
+		}
+		if p, ok := parentOf(n.Children, id); ok {
+			return p, true
+		}
+	}
+	return ui.ElementNode{}, false
+}
+
+// contains reports whether the rectangle outer holds the rectangle inner.
+func contains(outer, inner ui.Rect) bool {
+	return inner.X >= outer.X && inner.Y >= outer.Y && inner.X+inner.W <= outer.X+outer.W && inner.Y+inner.H <= outer.Y+outer.H
+}
+
+// exposedLabel returns the label of the element with the element name and item, as the element tree draws it.
+func exposedLabel(t *testing.T, f *shellFixture, name, item string) string {
+	t.Helper()
+	node, ok := exposedNode(f.tester.ElementTree(), name, item)
+	if !ok {
+		t.Fatalf("no element %s %q", name, item)
+	}
+	return node.Label
+}
+
+// selectRow selects the row of the project with the selection step of core.home.select, since a row shows its pin and × buttons on
+// hover or selection (docs/spec/projects.md#project-home). The first row is selected at first.
+func selectRow(t *testing.T, f *shellFixture, id string) {
+	t.Helper()
+	rows := status[homeRead](t, f, "core.home").Rows
+	if len(rows) == 2 && rows[0] != id {
+		if err := runHome(t, f, "core.home.select", map[string]any{"step": 1}); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: The home row draws its pin and remove buttons beside the open button, so their element names reach the element tree.
 - F1217-11-3: The timeline cases record the toast markup of the show and list change.
 - F1217: A main-thread test target run without a test filter exits with an error that names the declared runner, instead of running two scenarios in one process.
 - F1217: A main-thread test target run without a test filter runs each test in its own process, as the declared runner does.
