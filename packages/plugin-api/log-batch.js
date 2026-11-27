@@ -219,6 +219,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
         const lostEvents = queued + clockStated;
         const reasons = lostEvents > 0 ? [...carried, ["the host refused the batch", { count: lostEvents, bytes: queuedBytes }]] : carried;
         for (const [reason, { count, bytes }] of reasons) {
+          // default: a reason that no earlier batch lost starts with zero counts, so its counts accumulate from this batch.
           const held = lost.get(reason) ?? { count: 0, bytes: 0 };
           lost.set(reason, { count: held.count + count, bytes: held.bytes + bytes });
         }
