@@ -431,6 +431,26 @@ test("requests for surface names are forwarded to the preferred surface in the a
   wire.finish();
 });
 
+// A status of a plugin that two tab surfaces register is read from the surface that the request names, not from the other one.
+test("a status read that names a surface is forwarded to that surface when two surfaces register the status", { timeout: 10000 }, async () => {
+  const host = open("exposure-registry-status-surface");
+  const made = coreRegistry(host);
+  const plugins = { "tab-a": "probe", "tab-b": "probe" };
+  made.configure({ surfacePlugin: (surface) => plugins[surface] ?? null });
+  made.registered({ surface: "tab-a", kind: "status", name: "probe.lines" });
+  made.registered({ surface: "tab-b", kind: "status", name: "probe.lines" });
+  assert.deepEqual(await made.handle({ method: "status.get", params: { name: "probe.lines", surface: "tab-b" } }),
+    { result: { screen: "tab-b" } });
+  assert.deepEqual(await made.handle({ method: "status.get", params: { name: "probe.lines", surface: "tab-a" } }),
+    { result: { screen: "tab-a" } });
+  const forwarded = calls().filter(([name]) => name === "exposureForward").map(([, arg]) => arg);
+  assert.deepEqual(forwarded.map(({ surface, params }) => [surface, params]), [
+    ["tab-b", { name: "probe.lines", surface: "tab-b" }],
+    ["tab-a", { name: "probe.lines", surface: "tab-a" }],
+  ]);
+  wire.finish();
+});
+
 // A command has no time limit, so the registry refuses a declaration that states one (`timeout` in docs/spec/exposure.md).
 // contract: exposure.command.declaration-refuses-a-time-limit
 test("the registry refuses a command declaration with timeout and keeps no time limit of a command", () => {

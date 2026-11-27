@@ -84,3 +84,19 @@ test("a changed status value that is a promise is refused instead of being sent 
     { message: `status ${NAME} value is a promise; a status value is JSON, and a read that answers later delivers the value it resolves` });
   assert.deepEqual(values, [{ surface: "tab-a" }], "the follow delivered the promise");
 });
+
+// Two tab surfaces of one plugin register the same status. A read names the surface that it reads, so each request gets the value of
+// its own surface and not the value of the first or the last registered surface.
+test("a status read names a surface and returns the value of that surface when the plugin has two surfaces", { timeout: 5000 }, async () => {
+  const screens = { "tab-a": "screen of tab-a", "tab-b": "screen of tab-b" };
+  const reads = [];
+  const entries = exposureEntries(declarationMap({ status: [{ name: NAME, description: "The screen of a tab.", type: "string" }] }));
+  entries.status(NAME, (surface) => {
+    reads.push(surface);
+    if (!(surface in screens)) throw new Error(`no screen of ${surface}`);
+    return screens[surface];
+  }, () => () => {}, { surface: true });
+  assert.equal(await entries.answer("status.get", { name: NAME, surface: "tab-b" }, () => {}), "screen of tab-b");
+  assert.equal(await entries.answer("status.get", { name: NAME, surface: "tab-a" }, () => {}), "screen of tab-a");
+  assert.deepEqual(reads, ["tab-b", "tab-a"]);
+});

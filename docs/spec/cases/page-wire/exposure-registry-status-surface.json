@@ -1,0 +1,12 @@
+{
+  "name": "exposure-registry-status-surface",
+  "description": "The page forwards two status reads of one plugin status to the two tab surfaces that name them, and each reply is the value of the named surface.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"tab-b","method":"status.get","params":{"name":"probe.lines","surface":"tab-b"}}}},
+    {"reply":{"result":{"result":{"screen":"tab-b"}}}},
+    {"call":{"name":"exposureForward","payload":{"id":2,"surface":"tab-a","method":"status.get","params":{"name":"probe.lines","surface":"tab-a"}}}},
+    {"reply":{"result":{"result":{"screen":"tab-a"}}}}
+  ]
+}
