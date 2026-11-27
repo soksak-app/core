@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F999-1: Rust 호스트는 layout 뒤 surface의 드로잉 상태를 보내며, apply 수준 테스트로 이를 고정하고 중복된 visibility spawn을 제거합니다.
 - F1161: Go 호스트는 outdated 서비스의 sessions가 세는 surface 목록을 보고한다
 - F1161: Rust 호스트는 outdated 서비스의 sessions가 세는 surface 목록을 보고한다
 - F1217: 두 page가 design을 그려요: bell, notice center, card status line, toast 형태를 가진 notice store 하나, row component와 plugin page를 가진 settings tab, library 대신 project home, status bar, closed hint, sidebar head row, 네 위치의 project tab이에요(F1217-1, F1217-3, F1217-5, F1217-6, F1217-7, F1217-11~F1217-15). outdated service notice가 두 page에 보이고 outdated 항목이 surface를 나열해요(F1161).
