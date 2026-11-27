@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1270: 복제 이벤트의 Go host 테스트가 다시 빌드된 native library에서 실행되었고, Red와 Green 결과를 기록했다.
 - F1217-17-10: 설정 검색과 설치됨 검색은 플러그인의 분류 이름으로도 플러그인을 찾는다.
 - F1270: 복제 이벤트는 모든 gate를 통과하는 명명된 예외라서 진단 빌드가 기본 정책에서도 저장한다.
 - F1236-6: sidebar 없는 mygo surface 테스트는 테스트 environment의 workspace를 유지하고, 두 테스트는 sidebar plugin을 설치한다.

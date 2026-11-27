@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1270: The Go host tests of the clone events ran on the rebuilt native library, and their Red and Green results are recorded.
 - F1217-17-10: The settings search and the Installed search match a plugin by the name of its plugin category.
 - F1270: The clone events are named exceptions of the every-gate list, so a diagnostic build stores them under its default policy.
 - F1236-6: The mygo surface tests without sidebars keep the workspace of the test environment, and two tests install the sidebar plugin.
