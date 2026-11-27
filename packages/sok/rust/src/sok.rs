@@ -764,9 +764,9 @@ fn record_status_read(
     sent: &Result<String, Failure>,
 ) {
     let mut fields = serde_json::json!({
-        "window": params.get("window").cloned().unwrap_or(Value::Null),
-        "name": params.get("name").cloned().unwrap_or(Value::Null),
-        "surface": params.get("surface").cloned().unwrap_or(Value::Null),
+        "window": params.get("window").cloned().unwrap_or(Value::Null), // default: null when the command names none, per docs/spec/events.json sok.status.read: "(null when it named none)".
+        "name": params.get("name").cloned().unwrap_or(Value::Null), // default: null when the command names none, per docs/spec/events.json sok.status.read: "(null when it named none)".
+        "surface": params.get("surface").cloned().unwrap_or(Value::Null), // default: null when the command names none, per docs/spec/events.json sok.status.read: "(null when it named none)".
         "micros": started.elapsed().as_micros() as u64,
         "ok": sent.is_ok(),
     });
