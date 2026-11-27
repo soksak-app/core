@@ -184,6 +184,11 @@ func (s *Shell) drawSettingsHead(c *ui.Context, model *settingsModel, width floa
 		if description := settingsPageDescription(w.page); description != "" {
 			ui.Text(c, description).FontSize(s.textSmall()).TextColor(s.palette.Muted)
 		}
+		if model.headBadge != nil {
+			ui.Row(c).FillWidth().Margin(0, 0, pane.scopeGap, 0).Children(func() {
+				s.drawControl(c, model.headBadge, pane)
+			})
+		}
 		if len(model.scopes) > 0 {
 			ui.Row(c).FillWidth().Gap(pane.scopeGap).Margin(0, 0, pane.scopeGap, 0).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("설정 범위").Children(func() {
 				for _, control := range model.scopes {

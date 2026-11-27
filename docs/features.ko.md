@@ -200,7 +200,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
     - [~] F1217-17-3 — 사이드바 세트 page, 차이 11–14: 편집기에는 완료 버튼이 없고, 편집 중인 세트의 행이 완료를 보인다(S:design, 디자인을 따른다. Red와 Green 테스트로 고쳤다). 세트 이름은 두 host 모두 1–40자다(S:impl, 이미 맞아서 바꾸지 않았다). 남은 것: 차이 11, 범위 segment(S:design: 디자인은 page에 범위 컨트롤이 없고 세트가 하나의 목록이라, 세트를 범위별로 저장하는지 결정이 필요하다)와 차이 12, 불러오지 않은 chip(S:design: 디자인은 경고 badge 불러오지 않음을 보이는데 docs/spec/plugins.md#missing-plugins가 이 단어를 금한다. 결정이 필요하다). 두 결정을 기다린다.
     - [ ] F1217-17-4 — 동작 page, 차이 15–20: 언어는 자동, 한국어, English의 segment이고 日本語가 없다(S:impl). 보기 프로세스는 두 값과 행 설명이다(S:impl). 메모리 범위는 5–720이고 project 범위에서 행이 비활성이다(S:impl). 알림 행은 명세대로다(S:impl). 카드 group과 그 설명은 명세가 비워 둔다(S:silent).
     - [ ] F1217-17-5 — 에이전트 연동 page, 차이 21–24: 부품마다 한 행, 네 행이다(S:impl). 없음은 경고 톤이고 설치 안 됨, 제거, hook 버튼이다(S:impl). 모두 설치됨과 N개 중 M개가 다름 요약(S:impl). 전역 전용 표시가 page에 있다(S:design).
-    - [ ] F1217-17-6 — 진단 page, 차이 25–26: 행은 디버그 기록이고 명세 문장을 쓴다(S:impl). 전역 전용 표시가 page에 있다(S:design).
+    - [o] F1217-17-6 — 진단 page, 차이 25–26: 행은 디버그 기록이고 명세 문장을 쓴다(S:impl). 전역 전용 표시가 page에 있다(S:design).
     - [ ] F1217-17-7 — 설치됨 page, 차이 27–31: 코어 업데이트 행과 오래된 사이드카 행(S:impl). 필요한 플러그인 없음, 창을 다시 불러오면 적용, 불러오지 못함 문장(S:impl). 개발 빌드 표시가 mygo host에 없다(S:design). soksak가 배포하지 않은 plugin의 만든 이는 보이지 않는다(S:impl). 바닥글 문장은 명세대로다(S:impl).
     - [ ] F1217-17-8 — 찾아보기 page, 차이 32–34: 자리 표시 문장은 명세대로다(S:impl). 정렬, 분류 chip, 만든 이 segment가 없다. 목록이 제공하지 않기 때문이다(S:impl). 행 meta와 설명(S:impl).
     - [ ] F1217-17-9 — 플러그인 페이지, 차이 35–39: 미리보기 행은 명세대로이고 소개 줄은 명세가 정한 때만 나온다(S:impl). 사이드카와 더하는 것 행(S:design). 기여 줄(S:impl). 빈 섹션 group은 숨긴다(S:design). 창과 카드 사이드바 group은 surface가 있는 plugin에만 보인다(S:impl).

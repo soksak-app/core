@@ -247,7 +247,7 @@ const PAGE_KEYS = {
  */
 export function headScope(page) {
   const overridable = PAGE_KEYS[page]().filter((key) => !commonOnly(key));
-  if (overridable.length === 0) return PAGE_KEYS[page]().length ? badge("전역 전용", "neutral") : null;
+  if (overridable.length === 0) return rowsOf(page).length ? badge("전역 전용", "neutral") : null;
   return projectSelected() ? scopeSegment(overridable) : null;
 }
 

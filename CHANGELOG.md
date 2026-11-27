@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-17-6: The diagnostics page head shows the badge 전역 전용 in place of the scope control on the web and mygo hosts.
 - F1233-3: Each hidden tab that the workbench leaves without a view is logged with its reason.
 - F1124: The host pins a fork of fsnotify whose kqueue registrations are serialized, and the policy test repeats pass with the pin; the whole-package run has one failure, which is tracked in F1124.
 - F1217-17-5: The mygo agent group shows 없음 for a missing setup part, as the settings specification states, instead of 설치 안 됨.

@@ -169,6 +169,7 @@ type settingsModel struct {
 	close        *SettingsControl
 	find         *SettingsControl
 	nav, scopes  []*SettingsControl
+	headBadge    *SettingsControl // the badge 전역 전용 of a page with no setting that a project can override, in place of the scopes
 	folder       string
 	groups       []settingsGroup
 	declaredRows []settingsRow
@@ -366,6 +367,19 @@ func (s *Shell) settingsBuild() (*settingsModel, error) {
 	}
 	if err := s.pageBuilders()[w.page](b); err != nil {
 		return nil, err
+	}
+	// A page that has settings and none that a project can override shows the badge 전역 전용 in place of the scope control
+	// (docs/spec/settings.md#page-head).
+	if len(model.groups) > 0 && !s.hasProjectOverride(model) {
+		model.scopes = nil
+		kept := model.controls[:0]
+		for _, control := range model.controls {
+			if control.Name != "core.settings-tab.scope" {
+				kept = append(kept, control)
+			}
+		}
+		model.controls = kept
+		model.headBadge = b.add(SettingsControl{Name: "core.settings-tab.badge", Label: "전역 전용", tone: "neutral", kind: controlBadge})
 	}
 	return model, nil
 }
@@ -1695,4 +1709,28 @@ func (s *Shell) sendTraceSwitch() {
 		return
 	}
 	send()
+}
+
+// hasProjectOverride reports whether a row of the page is a setting that a project can override.
+func (s *Shell) hasProjectOverride(model *settingsModel) bool {
+	for _, group := range model.groups {
+		for _, row := range group.rows {
+			for _, control := range row.controls {
+				if control.Key != nil && !isCommonOnly(s.settings.Catalog.Settings.CommonOnly, *control.Key) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// isCommonOnly reports whether key is one of the common-only settings.
+func isCommonOnly(keys []string, key string) bool {
+	for _, item := range keys {
+		if item == key {
+			return true
+		}
+	}
+	return false
 }
