@@ -159,7 +159,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "packages/client/testing/**/*.js",
     "packages/client/bench/**/*.mjs",
   ], ["packages/client/test/**/*.mjs"]),
-  lane("mygo workbench layout", "go", ["packages/workbench-mygo/src/**/*.go"], ["packages/workbench-mygo/tests/**/*.go"]),
+  lane("mygo workbench layout", "go", ["packages/workbench-mygo/src/**/*.go"], ["packages/workbench-mygo/tests/**/*.go", "packages/workbench-mygo/src/notice_glyph_test.go"]),
   // The C file is the fault injection library that test/folder-wait-stream-start.test.mjs compiles and loads into its child process.
   lane("window check harness", "js-ts", ["packages/window-check/*.mjs", "packages/window-check/platform/*.mjs", "packages/window-check/platform/*/*.mjs", "packages/window-check/fixtures/*.mjs", "packages/window-check/fixtures/*/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c", "packages/window-check/test/fixtures/*.json"], { testExtensions: new Set([".mjs", ".c", ".json"]), sharedTests: true }),
   // The start probe that @soksak/window-check ships for the checks of plugin repositories.
@@ -17942,6 +17942,35 @@ const FEATURE_LINKS = [
     implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditFeatureKeys" }],
     tests: [{ file: "scripts/test/check-tests.test.mjs", id: "every feature link key names an item of the checklist" }],
     expected: "Every key of the feature link table names an item of docs/features.md, so a link left behind by a renamed or removed item is reported.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1222",
+    implementation: [
+      { file: "scripts/check-fallbacks.mjs", symbol: "export function findFallbacks(files, read) {" },
+      { file: "packages/workbench-mygo/src/notice_center_draw.go", symbol: "func noticeGlyphName(kind string, icons map[string]string) (string, error) {" },
+    ],
+    tests: [
+      { file: "scripts/test/fallbacks.test.mjs", id: "the repository states a reason for every default and discarded error in product code" },
+      { file: "packages/workbench-mygo/src/notice_glyph_test.go", id: "TestNoticeGlyphNameDrawsTheProgressRingAndRefusesAKindWithoutAnIcon" },
+      { file: "packages/workbench-mygo/src/notice_glyph_test.go", id: "TestNoticeTurnsOnlyTheProgressRingUnderAllowedMotion" },
+      { file: "packages/workbench/test/notice-progress-icon.test.mjs", id: "a progress toast draws the progress ring and no info glyph" },
+    ],
+    expected: "A default or discarded error without a stated reason is reported by the fallback check, and the notice glyph lookup refuses a kind without an icon.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1223",
+    implementation: [{ file: "packages/plugin-api/view.js", symbol: 'Object.defineProperty(stop, "ready", { get: () => started.then(() => undefined) });' }],
+    tests: [{ file: "packages/plugin-api/test/view-status-refusal.test.mjs", id: "a refused status watch rejects its ready promise with the refusal code and text" }],
+    expected: "A refused runtime.status.watch rejects the ready promise of its stop function with the refusal code and message.",
+    levels: ["unit"],
+  },
+  {
+    id: "F1224",
+    implementation: [{ file: "packages/plugin-api/clipboard.js", symbol: "bridge.persistPNG = (value) => {" }],
+    tests: [{ file: "packages/plugin-api/test/clipboard.test.mjs", id: "PNG persistence is an explicit clipboard capability and returns an inert shell argument" }],
+    expected: "PNG persistence of the clipboard requires an explicit clipboard capability and returns an inert shell argument.",
     levels: ["unit"],
   },
 ];

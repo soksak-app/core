@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222: The feature links of F1222 to F1224 name their implementation and tests, and the glyph test of the notice center is claimed by the test inventory.
 - F1217-7: The element declaration core.settings-tab.confirm, which no build draws, is removed from both exposure declarations.
 - F1107-1-1: The forward comment of the page exposure is placed on forward, not on the status read record.
 - F1217-7: A missing skill or mcp setup part has a 고치기 or 설치 button, core.settings-tab.setup-install, that runs core.setup.install.
