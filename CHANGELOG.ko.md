@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222-2: scripts/check-tests.mjs의 테스트 주장이 Go, Rust, mygo 호스트의 동작 줄이기 테스트를 이름으로 들고 이 항목에 잇는다.
 - F1222-2: 진행 notice 고리 검사의 Red와 Green 결과를 기록하고, gpuikit 동작 줄이기 재정의는 F914가 보류한 상태로 둔다.
 - F959-1: agent layout 요청과 verifier가 core.grid가 보고하는 layout을 predicate마다 test와 함께 판정한다.
 - F1222-2: mygo와 웹 워크벤치, Wails와 Tauri 페이지가 동작 줄이기 재정의를 알림 진행 고리에 적용하고, 재정의가 켜지면 웹 토스트 막대는 줄어드는 애니메이션을 멈춘다.
