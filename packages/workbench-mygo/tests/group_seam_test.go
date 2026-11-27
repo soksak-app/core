@@ -164,8 +164,9 @@ func (f *tabShell) seamLines() map[string][]colorRun {
 func TestEverySeamLineIsOneLineHoweverManyGroupCardsEndOnIt(t *testing.T) {
 	f := seamShell(t)
 	f.run(t, "core.card.focus", `{"card": "card-8"}`)
+	// The bottom edge of the plane lies above the status bar, so its lines are lines between two boxes, not lines at the window edge.
 	edges := map[string]bool{"left of card-1, where three group cards end": true, "left of card-4, where two group cards end": true,
-		"right of card-8, the edge of the plane": true, "below card-4, where two group cards end": true, "below card-2, where one group card ends": true}
+		"right of card-8, the edge of the plane": true}
 	for where, got := range f.seamLines() {
 		f.seamLine(t, where, got, edges[where], nil)
 	}
@@ -223,8 +224,7 @@ func TestTheInnermostMarkOwnsASeamLine(t *testing.T) {
 		"below card-2, where one group card ends":        marked(3),
 		"under the space bar above card-2":               marked(3),
 	} {
-		edge := where == "left of card-1, where three group cards end" || where == "left of card-4, where two group cards end" ||
-			where == "below card-4, where two group cards end" || where == "below card-2, where one group card ends"
+		edge := where == "left of card-1, where three group cards end" || where == "left of card-4, where two group cards end"
 		f.seamLine(t, fmt.Sprintf("card-1 focused, %s", where), lines[where], edge, want)
 	}
 }

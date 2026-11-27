@@ -48,6 +48,9 @@ func TestAPlaceWithoutADeclaredNameStaysEmpty(t *testing.T) {
 	f := openedShell(t)
 	f.settle()
 	add := f.box("core.space-tab.add", "")
+	// The status bar stands under the work area (docs/spec/external-sidebars.md#status-bar), so the bottom margin of the plane lies just
+	// above it.
+	plane := f.box("core.plane", "")
 	for _, place := range []struct {
 		name string
 		x, y float32
@@ -55,7 +58,7 @@ func TestAPlaceWithoutADeclaredNameStaysEmpty(t *testing.T) {
 		{"the space row beside its tabs", add.X + add.W + 40, add.Y + add.H/2},
 		{"the left margin of the plane", 2, 400},
 		{"the right margin of the plane", 1198, 400},
-		{"the bottom margin of the plane", 600, 798},
+		{"the bottom margin of the plane", 600, plane.Y + plane.H + 2},
 	} {
 		got := pressedAt(t, f, place.x, place.y)
 		if *got.Down != "unknown" || *got.Up != "unknown" || *got.Click != "unknown" || got.PressedConnected != nil {

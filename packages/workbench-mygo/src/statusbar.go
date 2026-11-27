@@ -24,12 +24,18 @@ func (s *Shell) drawStatusBar(c *ui.Context, width float32) {
 		return
 	}
 	m := s.metrics
+	// At the seam the plane above the bar shares its bottom line with the bar, as the stage shares the lines of the bars above it
+	// (stageShare), so the bar draws no line of its own there.
+	topLine := s.palette.BorderWidth
+	if s.palette.Seam() {
+		topLine = 0
+	}
 	project := s.opened()
 	size := s.frameFont(s.textControl())
 	theme := fmt.Sprint(s.settings.Value("theme"))
 	mode := fmt.Sprint(s.settings.Value("mode"))
 	ui.Row(c).Size(width, height).Padding(0, m.spacePad, 0, m.spacePad).AlignItems(ui.Center).Gap(s.frameLength(m.chromeGap)).
-		Background(s.palette.Card).BorderWidth(s.palette.BorderWidth, 0, 0, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("core.statusbar").Children(func() {
+		Background(s.palette.Card).BorderWidth(topLine, 0, 0, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("core.statusbar").Children(func() {
 		ui.Text(c, project.Title).SingleLine().FontSize(size).TextColor(s.palette.Fg)
 		ui.Text(c, fmt.Sprintf("카드 %d", len(s.planes.Cards()))).SingleLine().FontSize(size).TextColor(s.palette.Muted)
 		ui.Text(c, theme+" · "+mode).SingleLine().FontSize(size).TextColor(s.palette.Muted)

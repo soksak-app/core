@@ -116,6 +116,13 @@ func TestEveryPressOfTheWorkbenchEndsWithOneDecidedCall(t *testing.T) {
 			cards, _ := keyboardCards(t, f)
 			keyboardAddTab(t, f, cards[0])
 			f.settle()
+			// The × of a window sidebar shows while the pointer is over the sidebar (docs/spec/external-sidebars.md#sidebar-head-and-edge),
+			// so the test points at the head of the left sidebar before it looks for the control.
+			if press.name == "core.sidebar.fold" {
+				head := f.box("core.sidebar.head", "left")
+				f.tester.Move(head.X+head.W/2, head.Y+head.H/2)
+				f.settle()
+			}
 			if !f.has(press.name, press.item) {
 				t.Fatalf("the workbench shows no %s", press.name)
 			}
