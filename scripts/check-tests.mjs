@@ -18063,6 +18063,19 @@ const FEATURE_LINKS = [
     expected: "A file under apps/tauriv2/gen that is tracked or not ignored is reported, and the repository's own file list reports none.",
     levels: ["unit"],
   },
+  {
+    id: "F1234",
+    implementation: [
+      { file: "scripts/check-exposure.mjs", symbol: "export const DECLARATION_COPIES = Object.freeze([" },
+      { file: "scripts/check-hosts-same.mjs", symbol: "export function auditCommonOnlyKeys(keys) {" },
+    ],
+    tests: [
+      { file: "scripts/test/check-exposure.test.mjs", id: "each language host library and the mygo workbench hold their copies of the declarations" },
+      { file: "scripts/test/check-hosts-same.test.mjs", id: "the common-only keys of the hosts and the workbench are read from their sources" },
+    ],
+    expected: "The declaration copies of the exposure check and the common-only keys of the parity check match the declarations on main, so both tests pass.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
