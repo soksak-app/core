@@ -3,7 +3,7 @@ package workbench
 import "fmt"
 
 // DeclaredPage is a settings page of a declaration: its sections in order, each with its items, and each item names a component of the
-// component set (docs/spec/settings.md#declaration).
+// component set (docs/spec/settings.md#declarations).
 type DeclaredPage struct {
 	ID       string
 	Label    string

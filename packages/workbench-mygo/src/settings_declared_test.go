@@ -6,7 +6,7 @@ import (
 )
 
 // A page declaration lowers to its sections in declaration order, and each item to the exposed element of its component, so the three
-// items of two sections draw as three exposed controls in order (docs/spec/settings.md#declaration).
+// items of two sections draw as three exposed controls in order (docs/spec/settings.md#declarations).
 func TestADeclaredPageLowersSectionsAndItemsInOrder(t *testing.T) {
 	page := DeclaredPage{ID: "main", Label: "Main", Sections: []DeclaredSection{
 		{ID: "one", Label: "First", Items: []DeclaredItem{

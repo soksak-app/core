@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1283: The English settings spec names its sections in English, so the anchors that the code refers to resolve.
 - F1280: The native host callback test and the hosts specification state 42 base callbacks, which the header declares, so the build-native check passes.
 - F1279: The failure table of the diagnostics has a row for each error record of the plugin folder watch and the document boxes, so the failure table check passes.
 - F1217-9-1-1: The plugin folder count case has the scope all, because the gpuikit host runs the Rust library test that declares it.

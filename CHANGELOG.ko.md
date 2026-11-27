@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1283: 영어 설정 spec의 절 제목을 영어로 바꿔, 코드가 가리키는 anchor가 resolve된다.
 - F1280: native host callback 테스트와 hosts 명세가 header가 선언하는 기본 callback 42개를 적어, build-native 검사가 통과한다.
 - F1279: 진단 실패 표가 plugin 폴더 감시와 문서 box의 오류 기록마다 행을 가져, 실패 표 검사가 통과한다.
 - F1217-9-1-1: 플러그인 폴더 수 case는 gpuikit 호스트도 이 case를 선언한 Rust library test를 실행하므로 scope를 all로 한다.

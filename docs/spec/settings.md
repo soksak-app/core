@@ -118,11 +118,13 @@ The settings tab draws every page from its declaration and the [component set](#
 
 The pages follow the menu order. The text in quotation marks is the label shown to the person.
 
-### 모양
+### Look
 
 The page 모양 has the title `모양` and the description `테마와 모드, 카드의 간격·모서리·글꼴.`
 
 The top of the page is a preview: two sample cards headed `터미널` and `브라우저`, drawn with the applied theme, gap, radius, font and size. The sample text is fixed. A gap of 0 makes the cards share one line.
+
+### Theme
 
 Group `테마`, description `테마가 색과 형태의 기본값을 정하고, 모드는 그 테마의 밝은 쪽과 어두운 쪽을 고른다.`
 
@@ -153,7 +155,7 @@ Group `표시`:
 
 The choices of `focusInd` and `fullRule` are shown by their values, because the page declares no label for them.
 
-### 작업 공간
+### Workspace
 
 The page 작업 공간 has the title `작업 공간` and the description `프로젝트 창, 탭 위치, 사이드바 배치와 크기.`
 
@@ -192,11 +194,11 @@ The group checks the effective values of the scope, because a project value can 
 - When the minimum is not less than the maximum, the group shows the line `최소 폭(<값>pt)이 최대 폭(<값>pt)보다 작아야 한다.`
 - When the first width is outside the range from the minimum to the maximum, the group shows the line `처음 폭 <값>pt가 범위 <최소>–<최대>pt 밖이다.` and the button `범위 안으로 맞추기`. The button (element `core.settings-tab.fix`) runs `core.settings.change {key: sidebarWidth, value, scope}` with the value cut to the range. When the minimum is not below the maximum, the group shows `최소 폭(<최소>pt)이 최대 폭(<최대>pt)보다 작아야 한다.` and no button. The line is an error of the tab and shows in the error display, and it is withdrawn when the widths are valid.
 
-### 사이드바 세트
+### Sidebar sets
 
 The page 사이드바 세트 has the title `사이드바 세트` and the description `사이드바에 보여 줄 섹션 묶음. 어느 변에 놓을지는 작업 공간과 플러그인에서 고른다.` The scope control shows, because the sets follow the scope rule.
 
-### 동작
+### Behavior
 
 The page 동작 has the title `동작` and the description `언어, 메모리, 알림.` The scope control shows, because `language` can be overridden by a project.
 
@@ -222,7 +224,7 @@ Group `메모리`, description `메모리 절약을 켜면 숨긴 지 정한 시
 
 Group `알림` (`id` `notices`) follows [notifications](notifications.md#settings). Its keys are `toastStyle`, `noticeCenterStyle`, `quietToasts`, `autoDismissProblemToasts` and `problemToastDismissSeconds`, and every row of the group is common only.
 
-### 진단
+### Diagnostics
 
 The page 진단 has the title `진단`, the description `문제를 추적할 때만 켠다.` and the badge `전역 전용`.
 
@@ -237,7 +239,7 @@ The plugin pages hold the settings of the loaded plugins, because a plugin's set
 
 The plugin pages are 설치됨, 찾아보기 and one page for each plugin. The pages show the plugin descriptions, versions and sidecars, and they run the plugin operations. The plugin operations are defined in [plugin operations in the application](installation.md#plugin-operations-in-the-application), and the state changes that they apply are defined in [applying a change](installation.md#applying-a-change).
 
-### 설치됨
+### Installed
 
 The page 설치됨 has the title `설치된 플러그인`, the description `켜고 끄기, 업데이트, 문제 고치기. 하나를 누르면 그 플러그인의 정보와 설정이 한 페이지에 있다. 새로 찾는 일은 ‘찾아보기’ 화면에서 한다.` and no scope control.
 
@@ -279,7 +281,7 @@ An operation that runs disables every action of every row, and the row of its pl
 
 Below the rows, a dashed card titled `플러그인 찾아보기` says `카탈로그 <N>개 중 <M>개를 더 설치할 수 있다. 설치 전에 필요한 플러그인을 확인한다.`, where `<N>` is the catalog count and `<M>` the number of catalog plugins that are not installed. The button `찾아보기` (primary, search icon) runs `core.settings-tab.nav {page: "browse"}`. When no row matches the filter, the page shows `맞는 플러그인이 없다.`
 
-### 찾아보기
+### Browse
 
 The page 찾아보기 has the title `플러그인 찾아보기` and the description `카탈로그 <N>개. 하나를 누르면 설치 전에 자세히 본다.` It has no scope control.
 
@@ -432,7 +434,7 @@ Sizes and keys of the controls:
 - A text field of a set name with an empty value shows `이름이 필요하다.`. A text field of an account identifier shows `소문자, 숫자, _ - 만 쓸 수 있다.` for an invalid identifier and `이미 있는 식별자다.` for a repeated one.
 - Names of the sides are `왼쪽`, `오른쪽`, `위` and `아래`. The text `상단` and `하단` is not used.
 
-### Status rows
+### Agents
 
 The page 에이전트 연동 has the title `에이전트 연동`, the description `에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.` and the badge `전역 전용`.
 
@@ -617,7 +619,7 @@ The settings tab keeps these rules, which apply to every page:
 - Each row has a label area and a control area. The control area is 260 points wide and starts at the same x in every row of the pane, and the label area takes the remaining width; a row without a label keeps an empty label area. The width of the pane is read once per layout pass, and no row is measured, so a value change moves no row. The browser host meets this with a CSS grid of the columns `minmax(0,1fr)` and 260 points and uses no `ResizeObserver`; the native host computes the same x from the pane width.
 - A change updates the rows of the changed setting only, the rows of the settings that depend on it, because a dependent row is disabled while its parent is off, and the row that reads it, such as the debug switch of the diagnostics settings; a rule across several fields draws its whole group again, because its error line and its fix button stand under the group. The page is built when it is shown, not when the window is created.
 - The host builds the settings model only when a setting, an account, the language, the shown page, the plugin state, the application update state or the setup state changes; the changes of the settings, the accounts, the plugin state and the application update advance the inputs of the model through their callbacks, and the key holds the page, the language, the setup generation and the running plugin operation, never an encoded status. A change of a setting builds the model once. The answer of a write, successful or failed, builds nothing: the model shows the value of the change, and a write that the host refuses puts the stored value back in the store and in the control, and the error is shown once through the one display path, so the control shows the value that the host stores. A frame without a change builds nothing, and the model is never built per frame.
-- No timer or poll sets a status. A status that is not known yet shows no placeholder state and no delayed state. The setup state and the plugin state are read by the events of [Agents](#declarations) and [설치됨](#설치됨).
+- No timer or poll sets a status. A status that is not known yet shows no placeholder state and no delayed state. The setup state and the plugin state are read by the events of [Agents](#declarations) and [설치됨](#installed).
 - The undo toast lasts 5 seconds. This duration is a deadline the person sees, and the toast uses the existing toast mechanism.
 - No animation changes a layout property. A shadow appears only on a static surface.
 - The catalog list shows 30 rows at once, and the page loads the rest when the person asks for it.
