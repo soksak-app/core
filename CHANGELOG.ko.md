@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1253: 벤치마크 선행 조건 항목의 남은 단계는 CI benchmark step이다.
 - F1217-17-1-2: 설정 stylesheet의 모양 preview 규칙은 literal 길이와 비율 대신 chrome metric을 읽는다.
 - F1257: packages/workbench의 한글 주석을 영어로 바꿨고, 주석 언어 검사가 아무것도 보고하지 않는다.
 - F1252: 이 항목의 체크리스트 줄은 체크리스트의 최상위 목록에 있다.
