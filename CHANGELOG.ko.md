@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1107: status 읽기 단위 F1107-1부터 F1107-5까지 기록했으며, F1107-4의 실행 확인은 아직 남았다.
 - F856: `settings-scroll-modal` case는 그 case가 기록하는 settings dialog가 더 이상 없어서 제거했다. Settings는 main window의 tab이고, 어떤 page도 그 overlay 교환을 보내지 않는다. `settings-scroll.test.mjs`가 scroll 조항을 고정한다.
 - F1217-8: 프로젝트 홈 검색 포커스를 두 host 모두 cmd+o에 묶고 cmd+k를 뺐다.
 - F1222-2: e2e/progress-notice-ring.test.mjs 창 check가 전달된 frame으로 진행 notice 고리를 판정한다. 동작 줄이기가 켜지면 고리가 바뀌지 않아야 한다. 실행: 대기.

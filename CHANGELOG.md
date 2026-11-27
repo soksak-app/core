@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1107: The status-read units F1107-1 to F1107-5 are recorded; the live run of F1107-4 is still open.
 - F856: The case `settings-scroll-modal` was removed because the settings dialog that it records no longer exists: settings is a tab of the main window, and no page sends its overlay exchange. `settings-scroll.test.mjs` pins the scroll clauses.
 - F1217-8: The project home search focus is bound to cmd+o in both hosts, and cmd+k is removed.
 - F1222-2: The window check e2e/progress-notice-ring.test.mjs judges the progress notice ring by the frames that the window delivers, which must differ unless reduced motion is set. Run: pending.
