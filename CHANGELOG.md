@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-6: A test checks that the set select of a side keeps its width when the settings page widens.
 - F1161: The card notice target of an outdated surface is the card that holds its tab, tested through noticeTargetIn
 - F1217-11-7: Each debug timeline test runs in its own test file with its own page, and the shared helpers are in one support module.
 - F1109: The Go host sends the root of every page request, with an empty root for a window that shows no project, so the sidecar never receives a request without a root.

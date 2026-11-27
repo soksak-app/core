@@ -117,3 +117,15 @@ func TestTheThemeSwatchesAreOneGridGapApart(t *testing.T) {
 		t.Fatalf("the swatches are %v points apart, want 8", got)
 	}
 }
+
+// A side select is sized to its widest option, so its width does not change when the free width of its row grows (docs/spec/settings.md#작업-공간).
+func TestASideSelectKeepsItsWidthWhenThePageWidens(t *testing.T) {
+	f := settingsMetricsPage(t, "workspace")
+	narrow := exposedNodeOf(f, "core.settings-tab.link", "link:left:").Bounds.W
+	f.tester.SetSize(1600, 3200)
+	f.settle()
+	wide := exposedNodeOf(f, "core.settings-tab.link", "link:left:").Bounds.W
+	if math.Abs(float64(wide-narrow)) > 0.5 {
+		t.Fatalf("the select of left is %v wide at 1200 points and %v at 1600 points, want one width", narrow, wide)
+	}
+}

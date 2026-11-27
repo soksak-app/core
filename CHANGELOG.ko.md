@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-6: 사이드 세트 select가 설정 페이지가 넓어져도 너비를 유지하는지 확인하는 테스트를 추가한다.
 - F1161: outdated surface의 card notice 대상은 그 tab을 가진 card이며, noticeTargetIn으로 검사한다
 - F1217-11-7: 디버그 타임라인 테스트는 테스트마다 별도 파일에서 자체 페이지로 실행되고, 공용 헬퍼는 support 모듈 하나에 있다.
 - F1109: Go 호스트는 모든 page 요청에 root를 보내며, project가 없는 창은 빈 root를 보내 sidecar가 root 없는 요청을 받지 않는다.
