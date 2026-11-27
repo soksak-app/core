@@ -840,11 +840,13 @@ impl Images {
         self.changed();
     }
 
-    /// Records the visibility state of the outer SurfaceHost.
-    pub fn set_surface_visible(&self, surface: &str, visible: bool) {
+    /// Records the visibility state of the outer SurfaceHost and reports whether it changed. A change makes the drawing state of
+    /// each region of the surface differ from the state that its supplier holds, so the caller sends the drawing states
+    /// (docs/spec/native-surfaces.md#image-regions).
+    pub fn set_surface_visible(&self, surface: &str, visible: bool) -> bool {
         let mut inner = self.lock();
         if inner.surface_visibility.get(surface).copied() == Some(visible) {
-            return;
+            return false;
         }
         inner
             .surface_visibility
@@ -865,6 +867,7 @@ impl Images {
             }
         }
         self.changed();
+        true
     }
 
     /// Takes a name. It returns an error when there is no sidecar or it is an empty string.

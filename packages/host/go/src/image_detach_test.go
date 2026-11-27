@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
 	support "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
@@ -725,4 +726,77 @@ func TestAMalformedImageDetachAcknowledgementNamesItsMember(t *testing.T) {
 func regionsOfSurface(t *testing.T, p *viewProbe) int {
 	t.Helper()
 	return int(support.ImageRegions(t, runOnMainThread, p.window))
+}
+
+// contract: images.drawing.shown-surface
+// A region that its page attached while its surface was hidden receives the drawing state of the surface when a layout shows the surface,
+// without a window change, so its supplier starts to draw (docs/spec/native-surfaces.md#image-regions).
+func TestAShownSurfaceSendsTheDrawingStateOfItsRegion(t *testing.T) {
+	p := realViewProbe(t, Theme{}, nullOriginStart())
+	s := p.s
+	// The layout of the test runs its steps on the thread of the test, as the layout tests do (nestedMainFramework).
+	savedFramework := framework
+	framework = nestedMainFramework{}
+	t.Cleanup(func() { framework = savedFramework })
+	const surface, sidecarName = "probe-surface", "fixture-sidecar"
+	c := sidecarSessionSurfaces(t).sidecars
+	c.stopped = false
+	service := &sidecar{name: sidecarName, persistent: true, outbox: make(chan queuedLine, 16),
+		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
+	c.running[sidecarName] = service
+	s.sidecars = c
+	s.images = NewImages()
+	s.window = &openFrontend{native: p.window}
+	s.events = func(string, any) {}
+	// The first commit of the page emits page-ready, which the window of this fixture does not deliver.
+	s.first.Do(func() {})
+	composition := SurfaceComposition{Kind: "view", Page: "ui/page.html", Regions: []SurfaceRegion{
+		{Name: "view", Kind: "image", Input: "dom", Sidecar: sidecarName, Present: "copy"},
+	}}
+	s.compositions = map[string]SurfaceComposition{surface: composition}
+	s.surfacePlugins = map[string]string{surface: "probe"}
+	s.surfacePrograms = map[string]map[string]programDeclaration{}
+	// The region is attached while the surface is hidden, so its first drawing state says that it does not draw.
+	s.images.SetSurfaceVisible(surface, false)
+	key, request := ImageKey{Surface: surface, Name: "view"}, ImageRequest{Surface: surface, Name: "view", Sidecar: sidecarName}
+	if err := s.attachCheckedImage(key, request); err != nil {
+		t.Fatalf("attach the region of the hidden surface: %v", err)
+	}
+	// The page places the region while the surface is hidden (composition.go, placeComposition), which marks the region visible.
+	if err := s.images.SetVisible(key, true); err != nil {
+		t.Fatalf("place the region: %v", err)
+	}
+	// The window of the scenario is on the screen: a test window that is not on the screen draws no region.
+	s.images.SetOnScreen(true)
+	for len(service.outbox) > 0 {
+		<-service.outbox
+	}
+	// The layout that shows the surface is the apply of the sync request, which the layout callback runs on the main thread.
+	req := SyncRequest{Settled: true, Titlebar: 40, Surfaces: []Surface{
+		{ID: surface, Visible: true, Plugin: "probe", Rect: Rect{W: 500, H: 400}, Composition: composition,
+			Start: &ViewStart{Origin: json.RawMessage(`{"directory":null}`), Diagnostics: json.RawMessage(`null`), Section: json.RawMessage(`null`), Dialog: json.RawMessage(`null`), Process: "plugin"}},
+	}}
+	var applyErr error
+	runOnMainThread(func() { _, _, applyErr = s.apply(s.window, req) })
+	if applyErr != nil {
+		t.Fatalf("show the surface: %v", applyErr)
+	}
+	limit := time.After(5 * time.Second)
+	for {
+		select {
+		case line := <-service.outbox:
+			var message struct {
+				Body struct {
+					Image struct {
+						Drawing *ImageDrawing `json:"drawing"`
+					} `json:"image"`
+				} `json:"body"`
+			}
+			if json.Unmarshal(line.bytes, &message) == nil && message.Body.Image.Drawing != nil && message.Body.Image.Drawing.Name == "view" && message.Body.Image.Drawing.Drawing {
+				return
+			}
+		case <-limit:
+			t.Fatal("showing the surface sent its region no drawing state that draws: the supplier draws nothing until a window change")
+		}
+	}
 }

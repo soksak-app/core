@@ -27,12 +27,12 @@ fn a_build_without_diagnostics_cannot_draw_a_covered_window() {
         ),
         (
             "hidden surface while occluded",
-            Box::new(|| images.set_surface_visible(&key.0, false)),
+            Box::new(|| { images.set_surface_visible(&key.0, false); }),
             vec!["view=false hidden"],
         ),
         (
             "shown surface while occluded",
-            Box::new(|| images.set_surface_visible(&key.0, true)),
+            Box::new(|| { images.set_surface_visible(&key.0, true); }),
             vec!["view=false"],
         ),
         (

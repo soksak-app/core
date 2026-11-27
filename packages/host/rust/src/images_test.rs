@@ -2198,3 +2198,23 @@ fn a_later_process_issues_greater_image_generations_than_an_earlier_one() {
         "the later process issued {first} first, want more than {last} of the earlier process"
     );
 }
+
+// contract: images.drawing.shown-surface
+// A visibility change of a surface is reported, so that its layout sends the drawing states of its regions; a repeated value changes
+// nothing (docs/spec/native-surfaces.md#image-regions).
+#[test]
+fn a_visibility_change_of_a_surface_is_reported_for_the_drawing_flush() {
+    let images = super::Images::default();
+    assert!(
+        images.set_surface_visible("surface-shown", false),
+        "the first hide of a surface is a change"
+    );
+    assert!(
+        !images.set_surface_visible("surface-shown", false),
+        "a repeated hide changes nothing"
+    );
+    assert!(
+        images.set_surface_visible("surface-shown", true),
+        "showing a hidden surface is a change"
+    );
+}

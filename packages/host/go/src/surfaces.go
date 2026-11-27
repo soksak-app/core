@@ -2123,9 +2123,14 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 	}
 
 	placed := make([]Placement, 0, len(desired))
+	// A surface that this layout shows or hides changes the drawing state of its image regions. No window change announces that
+	// to the suppliers, so the drawing states are sent after the layout (sendImageDrawing).
+	visibilityChanged := false
 	for _, item := range desired {
 		s.recordSyncedSurface(item.decl)
-		s.images.SetSurfaceVisible(item.id, item.visible)
+		if s.images.SetSurfaceVisible(item.id, item.visible) {
+			visibilityChanged = true
+		}
 		// The view of a view surface is created by its first sync and fills the surface (docs/spec/plugins.md#view-surfaces).
 		start, err := s.viewStartOf(item.decl)
 		if err != nil {
@@ -2181,6 +2186,13 @@ func (s *Surfaces) apply(win Frontend, req SyncRequest) ([]string, []Placement, 
 		s.sidecars.SurfaceOpened(surface.Plugin, surface.ID)
 	}
 	s.placedDialog(placed)
+	if visibilityChanged {
+		routine.Go("image-drawing", func() {
+			if err := s.sendImageDrawing(); err != nil {
+				LogError("image drawing", err)
+			}
+		})
+	}
 	return gone, placed, nil
 }
 

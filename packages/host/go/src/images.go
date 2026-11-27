@@ -526,12 +526,14 @@ func (i *Images) EndGeneration(surface string) {
 	i.changedLocked()
 }
 
-// SetSurfaceVisible records the visibility of the outer SurfaceHost.
-func (i *Images) SetSurfaceVisible(surface string, visible bool) {
+// SetSurfaceVisible records the visibility of the outer SurfaceHost and reports whether it changed. A change makes the drawing state of
+// each region of the surface differ from the state that its supplier holds, so the caller sends the drawing states
+// (docs/spec/native-surfaces.md#image-regions).
+func (i *Images) SetSurfaceVisible(surface string, visible bool) bool {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	if held, ok := i.surfaceVisible[surface]; ok && held == visible {
-		return
+		return false
 	}
 	i.surfaceVisible[surface] = visible
 	if visible {
@@ -550,6 +552,7 @@ func (i *Images) SetSurfaceVisible(surface string, visible bool) {
 		}
 	}
 	i.changedLocked()
+	return true
 }
 
 // Reserve takes a name. It returns an error when owner names no supplier sidecar or no window that receives its messages, because

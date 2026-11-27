@@ -5,6 +5,8 @@
 
 ## 2026-11-26
 
+- F999: layout이 보이게 한 surface는 Go와 Rust host에서 layout 뒤에 image region의 drawing 상태를 supplier에 보내, 재시작 뒤 보인 terminal이 입력 없이 그려진다(Red: surface를 보여도 region에 그리는 drawing 상태를 보내지 않았다).
+- F1219: 객체 수 테스트는 측정이 `finally`에서 하듯 실패한 단계에서 client를 닫아, `open`이 없는 picker 응답이 card menu 단계를 판정 함수 오류로 곧바로 실패시킨다(case `object-counts-menu-picker-without-open`. Red: 테스트가 timeout까지 돌았다).
 - F1220: Page event batcher는 host가 거절한 batch의 event를 이유 `the host refused the batch`로 버린 수에 세어 다음 batch에 밝히며, 거절은 곧바로 다시 보내지 않는다(Red: 거절된 9개 event가 수 없이 사라졌다).
 - F1161: `hello` version이 `installed.json`과 다른 persistent service는 Go와 Rust host에서 연결마다 한 번 warn event `host.sidecar.outdated`(name, running, installed)를 쓴다(Red: 기록이 없었다).
 - F1160: `core.app.update`는 macOS App Translocation 폴더에서 실행되는 executable을 후보를 내려받기 전과 애플리케이션이 종료하기 전에 거절하며, 오류는 경로와 격리 해제 단계를 밝힌다. 각 host에서 setup과 업데이트가 한 경로 규칙을 쓴다(Red: stage 호출이 executable을 받지 않았다).
