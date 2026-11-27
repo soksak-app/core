@@ -158,6 +158,7 @@ const EXACT = new Map([
   ["workbench.status.read", "call"],
   ["workbench.surface.mount.failed", "lifecycle"],
   ["workbench.surface.press", "input"],
+  ["workbench.tab.hold.skipped", "lifecycle"],
   ["workbench.tab.keep.changed", "lifecycle"],
   ["workbench.tab.restore.failed", "lifecycle"],
   ["workbench.tab.restored", "lifecycle"],

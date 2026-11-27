@@ -62,7 +62,7 @@ func newTabAppAt(t *testing.T, stored *surfaceHost, document string, time workbe
 		return calls
 	}
 	app, err := workbench.NewApp(workbench.AppOptions{Environment: environment(t), Post: f.queue.post, Table: table, Clock: time,
-		Detaching: func(host.Frontend) []string { return nil },
+		Detaching: func(host.Frontend) []string { return stored.detaching },
 		Installed: func() []byte { return []byte(document) },
 		Element:   func(host.Frontend, string) (uintptr, uintptr, bool) { return 0, 0, false },
 		Report:    func(line string) { f.lines = append(f.lines, line) }})
@@ -741,5 +741,31 @@ func TestColdHiddenSurfaceStatusKeepsThePublicCompositionKind(t *testing.T) {
 		if held == nil || held["composition"] == nil {
 			t.Errorf("the internal hidden composition configuration was lost: %s %+v", id, held)
 		}
+	}
+}
+
+// A hidden tab whose image detach is pending is not held, and the skip is written as an event with its reason, so a hidden tab
+// without a surface can be found in the log (docs/spec/logging.md#catalog).
+func TestAHiddenTabWhoseDetachIsPendingIsWrittenAsSkipped(t *testing.T) {
+	stored := &surfaceHost{classes: traceClasses()}
+	stored.installed = hiddenTabsDocument
+	stored.common = map[string]any{"memorySaver": true, "diagnostics.log": traceClasses()}
+	stored.projects = []map[string]any{storedProject(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes"), tab("tab-cccccc", "plain"))}
+	stored.detaching = []string{"tab-cccccc"}
+	f := newTabApp(t, stored, hiddenTabsDocument)
+	f.command("core.project.activate", map[string]string{"id": "prj-a"})
+	// The memory saver also unloads the other hidden tab, so the wait ends on the event of the tab whose detach is pending.
+	skippedOf := func(tab string) map[string]any {
+		for _, event := range stored.written("workbench.tab.hold.skipped") {
+			if fields := event["fields"].(map[string]any); fields["tab"] == tab {
+				return fields
+			}
+		}
+		return nil
+	}
+	f.queue.until(t, func() bool { return skippedOf("tab-cccccc") != nil })
+	fields := skippedOf("tab-cccccc")
+	if fields["reason"] != "detach-pending" || fields["hiddenDue"] != true {
+		t.Fatalf("the skip event is %v", fields)
 	}
 }

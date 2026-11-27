@@ -7,6 +7,7 @@ import (
 	"maps"
 	"slices"
 
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -399,11 +400,34 @@ func (s *Shell) holdHiddenTabs() {
 	if s.tabs == nil || !s.tabs.hiddenDue || !s.tabs.sectionsStarted || s.opened() == nil || s.plane == nil {
 		return
 	}
+	due := s.tabs.hiddenDue
 	s.tabs.hiddenDue = false
 	err := s.eachLayoutTab(func(project, _ string, tab layout.Tab, active bool) {
+		if active {
+			return
+		}
 		unit := s.units[tab.Plugin]
 		_, stopped := s.surfaces.stopped(tab.ID)
-		if active || unit == nil || unit.Composition == nil || unit.Background != nil || stopped || s.surfaces.detachHeld(tab.ID) || s.tabs.saver.Unloaded(tab.ID) {
+		// Each hidden tab that stays without a surface is written with its reason, so the log shows why no view exists for it.
+		reason := ""
+		switch {
+		case unit == nil:
+			reason = "unit-nil"
+		case unit.Composition == nil:
+			reason = "no-composition"
+		case unit.Background != nil:
+			reason = "background"
+		case stopped:
+			reason = "stopped"
+		case s.surfaces.detachHeld(tab.ID):
+			reason = "detach-pending"
+		case s.tabs.saver.Unloaded(tab.ID):
+			reason = "unloaded"
+		}
+		if reason != "" {
+			s.events.Emit(sok.LevelDebug, "workbench.tab.hold.skipped", func() map[string]any {
+				return map[string]any{"tab": tab.ID, "plugin": tab.Plugin, "reason": reason, "hiddenDue": due}
+			}, nil)
 			return
 		}
 		s.holdSurface(&heldSurface{tab: tab, composition: unit.Composition, owner: project})

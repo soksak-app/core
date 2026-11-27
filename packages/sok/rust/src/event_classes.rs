@@ -213,6 +213,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "workbench.status.read" => Some(Class::Call),
         "workbench.surface.mount.failed" => Some(Class::Lifecycle),
         "workbench.surface.press" => Some(Class::Input),
+        "workbench.tab.hold.skipped" => Some(Class::Lifecycle),
         "workbench.tab.keep.changed" => Some(Class::Lifecycle),
         "workbench.tab.restore.failed" => Some(Class::Lifecycle),
         "workbench.tab.restored" => Some(Class::Lifecycle),

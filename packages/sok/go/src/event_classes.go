@@ -171,6 +171,7 @@ var eventClasses = map[string]Class{
 	"workbench.status.read":                  ClassCall,
 	"workbench.surface.mount.failed":         ClassLifecycle,
 	"workbench.surface.press":                ClassInput,
+	"workbench.tab.hold.skipped":             ClassLifecycle,
 	"workbench.tab.keep.changed":             ClassLifecycle,
 	"workbench.tab.restore.failed":           ClassLifecycle,
 	"workbench.tab.restored":                 ClassLifecycle,
