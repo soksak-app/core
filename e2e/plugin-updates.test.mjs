@@ -18,7 +18,7 @@ import { fresh, restoreRegistry, useRegistry } from "./fixture.mjs";
 const PLUGIN = "probeplain";
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the plugin screen lists the updates and 모두 업데이트 stops at a refused update`, { timeout: 90000 }, async (t) => {
+  test(`${app.name}: the plugin screen lists the updates and the Update all control stops at a refused update`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     await keepCommonSettings(s);

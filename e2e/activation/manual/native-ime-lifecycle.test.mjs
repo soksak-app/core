@@ -55,7 +55,7 @@ async function preserveGestureCapture(s, artifactDir, label) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: F8-9 ddd and Korean 2-Set sequence commits 한글 once`,
+  test(`${app.name}: F8-9 ddd and Korean 2-Set sequence commits Hangul once`,
     { timeout: 60000 }, async (t) => {
       const s = await open(t, app);
       await fresh(s, { log: { ...NATIVE_INPUT_LOG }, reads: READS });
@@ -87,7 +87,7 @@ for (const app of Object.values(APPS)) {
       t.diagnostic(`${app.name}: F8-9 expected document ddd한글 and one committed trailing space`);
     });
 
-  test(`${app.name}: F143 gksk resyllabifies to 하나`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: F143 gksk resyllabifies to the word hana`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s, { log: { ...NATIVE_INPUT_LOG }, reads: READS });
     const { surface } = await rasterProbeTab(s);

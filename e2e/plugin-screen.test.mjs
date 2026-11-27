@@ -36,7 +36,7 @@ async function showPlugins(s) {
 const actionsOf = (tab, plugin) => tab.actions.filter((item) => item.plugin === plugin).map((item) => item.action);
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: the settings page 설치됨 lists plugins with descriptions, versions and sidecars`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the settings page Installed lists plugins with descriptions, versions and sidecars`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     await keepCommonSettings(s);

@@ -167,7 +167,7 @@ for (const app of Object.values(APPS)) {
     await s.until("core.settings-tab", (tab) => tab.plugin === null && tab.listed.join() === list.listed.join(), "목록 did not return to the list");
   });
 
-  test(`${app.name}: the settings plugin page has no plugin operation and 플러그인 관리 shows the installed plugins`, { timeout: 60000 }, async (t) => {
+  test(`${app.name}: the settings plugin page has no plugin operation and the Manage plugins control shows the installed plugins`, { timeout: 60000 }, async (t) => {
     const s = await open(t, app);
     const { plugin } = await fresh(s);
     await keepCommonSettings(s);

@@ -29,7 +29,7 @@ async function modifiedTab(w) {
 }
 
 for (const app of Object.values(APPS)) {
-  test(`${app.name}: closing a window asks about a modified tab and 닫지 않기 keeps the window`, { timeout: 90000 }, async (t) => {
+  test(`${app.name}: closing a window asks about a modified tab and the Do not close action keeps the window`, { timeout: 90000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-window-close-")));

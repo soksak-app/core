@@ -17275,7 +17275,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "native/darwin/src/image_region.m", symbol: "@implementation SPImageRegion" }],
     tests: [
       { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "NSNotFound insertion matches the AppKit text-view reference" },
-      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F143 gksk resyllabifies to 하나" },
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F143 gksk resyllabifies to the word hana" },
     ],
     expected: "The marked buffer preserves replacement and single-commit semantics and passes OS resyllabification.",
     levels: ["native", "application"],
@@ -17285,7 +17285,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "native/darwin/src/image_region.m", symbol: "@implementation SPImageRegion" }],
     tests: [
       { file: "native/darwin/tests/image_region_input_transaction_test.m", id: "close commits the pending text exactly once" },
-      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F8-9 ddd and Korean 2-Set sequence commits 한글 once" },
+      { file: "e2e/activation/manual/native-ime-lifecycle.test.mjs", id: "F8-9 ddd and Korean 2-Set sequence commits Hangul once" },
     ],
     expected: "The client commits pending input once on close and the approved sequence and lifecycle conditions retain their scoped acceptance evidence.",
     levels: ["native", "application"],
@@ -17998,7 +17998,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a window sidebar's missing plugin is a warning notice on its status line, and no line sits above its sections" },
-      { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a card sidebar's missing plugin is a toast with 카드로 가기 while its card does not have the focus" },
+      { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a card sidebar's missing plugin is a toast with the Go to card action (core.card.focus) while its card does not have the focus" },
       { file: "packages/workbench/test/sidebar-missing-notice.test.mjs", id: "a redraw of the same missing plugin keeps one notice, and a set that stops drawing its sections withdraws it from the status line and the toasts" },
       { file: "packages/workbench-mygo/tests/sidebar_missing_notice_test.go", id: "TestTheMissingPluginOfAWindowSidebarIsAWarningNoticeOnItsStatusLine" },
       { file: "packages/workbench-mygo/tests/sidebar_missing_notice_test.go", id: "TestTheMissingPluginNoticeIsWithdrawnWhenThePluginReloads" },
