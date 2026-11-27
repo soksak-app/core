@@ -69,7 +69,7 @@ The bell is the last element of the title bar on every screen, the work screen, 
 
 The setting 알림 센터 모양 (`noticeCenterStyle`) chooses `popover` (팝오버), which drops under the bell, or `drawer` (서랍), which fills the right side of the window from the bottom of the title bar to the bottom of the window. Escape and the close control close it.
 
-- The head shows `알림`, the button `모두 읽음` (`core.notices.read-all`), the button ⚙, which opens the settings tab at the group 알림 of the page 동작, and the close control.
+- The head shows `알림`, the button `모두 읽음` (`core.notices.read-all`), the button ⚙, which opens the settings tab at the group 알림 of the page 동작, and the close control, the element `core.notices.toggle`, which runs `core.notices.toggle`.
 - The filter segment shows `전체 <n>`, `오류·경고 <n>` and `진행 중 <n>` (`core.notices.filter {filter}` with `all`, `problems` or `progress`), with the switch 조용히 beside it.
 - The list groups the entries: `진행 중` first, with a progress bar for each, then `오늘`, `어제` and each earlier day. Each group has the button `지우기` (`core.notices.clear {group}`).
 - An entry shows the icon, the title with its count, the text, the source chip (the card name, the plugin name, `설정` or `soksak`), the time and its actions. An unread entry has a dot at its left, in the error token for an error. A press on the entry of a card notice runs `core.card.focus {card}`.

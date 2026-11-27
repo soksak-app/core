@@ -5840,6 +5840,10 @@
         "description": "The notice center, popover or drawer."
       },
       {
+        "name": "core.notices.toggle",
+        "description": "The close control of the notice center, which runs core.notices.toggle."
+      },
+      {
         "name": "core.notices.filter",
         "description": "A filter button of the notice center, with the parameter filter."
       },

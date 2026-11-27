@@ -69,7 +69,7 @@ Toast는 아이콘, title, text, action, 닫기 control을 보인다. 닫기 con
 
 설정 알림 센터 모양(`noticeCenterStyle`)은 `popover`(팝오버)와 `drawer`(서랍) 중 하나를 고른다. 팝오버는 종 아래로 내려온다. 서랍은 제목줄 아래에서 창 아래까지 창의 오른쪽을 채운다. Escape와 닫기 control이 센터를 닫는다.
 
-- 머리에는 `알림`, 버튼 `모두 읽음`(`core.notices.read-all`), 버튼 ⚙, 닫기 control이 있다. ⚙은 동작 페이지의 알림 묶음이 열린 설정 탭을 연다.
+- 머리에는 `알림`, 버튼 `모두 읽음`(`core.notices.read-all`), 버튼 ⚙, 닫기 control(element `core.notices.toggle`, `core.notices.toggle`을 실행)이 있다. ⚙은 동작 페이지의 알림 묶음이 열린 설정 탭을 연다.
 - 필터 세그먼트는 `전체 <n>`, `오류·경고 <n>`, `진행 중 <n>`을 보이며(`core.notices.filter {filter}`, 값은 `all`, `problems`, `progress`), 그 옆에 스위치 조용히가 있다.
 - 목록은 항목을 묶는다. `진행 중`이 먼저 오며 각 항목에 진행 막대가 있다. 그다음 `오늘`, `어제`, 그리고 그 이전의 날마다 묶음이 온다. 각 묶음에는 버튼 `지우기`(`core.notices.clear {group}`)가 있다.
 - 항목은 아이콘, 수가 붙은 title, text, source chip(card 이름, plugin 이름, `설정` 또는 `soksak`), 시간, action을 보인다. 읽지 않은 항목은 왼쪽에 점이 있으며, error의 점은 error token이다. Card notice 항목을 누르면 `core.card.focus {card}`를 실행한다.
