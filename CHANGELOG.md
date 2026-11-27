@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-12-10: Escape closes the open notice center through core.notices.toggle.
 - F795-13: The test check links F795-13 to the notice store factory, the error display and the seven occurrence tests.
 - F1217-11-7: The refused-save case of the debug view records the overlay calls of a failed save shown as a notice.
 - F1161: A card notice merges only with a shown notice of the same card; app notices keep merging by kind and title

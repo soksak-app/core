@@ -103,6 +103,7 @@ view는 넘길 수 있는 행을 view call `runtime.shortcuts.read`로 읽는다
 | `Escape` | workbench | core.home.search | — | 프로젝트 홈 검색 필드에 빈 값이 아닌 검색어가 있음. command는 빈 검색어를 받음 |
 | `Enter` | workbench | core.home.open | — | 프로젝트 홈이 보이고, 행이 선택되어 있으며, 폼 필드에 포커스가 없음 |
 | `Escape` | workbench | core.picker.close | — | 선택 layer가 열려 있음 |
+| `Escape` | workbench | core.notices.toggle | — | 알림 센터가 열려 있음 |
 | `Escape` | workbench | core.modal.dismiss | — | 네이티브 modal 메뉴가 열려 있고 키보드 포커스가 있음 |
 | `Escape` | view | none | — | 플러그인 view가 키보드 포커스를 가짐. view가 키를 직접 처리하며, 넘길 때만 열린 picker의 Escape 명령을 실행한다 |
 | `text input keys` | view | none | — | 플러그인 view의 텍스트 입력에 포커스가 있음. view가 키를 직접 처리하며 기본 동작을 유지한다 |

@@ -2,6 +2,8 @@ package workbench_test
 
 import (
 	"testing"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // The open center draws its head, its filter with the counts, and its foot (docs/spec/notifications.md#notice-center).
@@ -57,5 +59,23 @@ func TestAPressOnAnEntryReadsItAndTheGroupClearRemovesIt(t *testing.T) {
 	f.settle()
 	if n := len(noticesOf(t, f.shellFixture).Entries); n != 0 {
 		t.Fatalf("%d entries remain after the clear of today", n)
+	}
+}
+
+// Escape closes the open notice center (docs/spec/notifications.md#notice-center).
+func TestEscapeClosesTheOpenCenter(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	if err := f.finish("core.notices.add", map[string]any{"card": f.tabbedCards()[0], "kind": "info", "title": "Shown"}); err != nil {
+		t.Fatal(err)
+	}
+	f.click("core.chrome.notices", "")
+	f.settle()
+	if !f.has("core.notices.panel", "") {
+		t.Fatal("the center did not open")
+	}
+	f.tester.Key(0, ui.KeyEscape)
+	f.settle()
+	if f.has("core.notices.panel", "") {
+		t.Fatal("Escape did not close the open center")
 	}
 }
