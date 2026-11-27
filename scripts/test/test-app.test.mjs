@@ -287,6 +287,24 @@ test("a quit step whose application handle exited follows the replacement that p
   assert.ok(lines.some((line) => line.includes(`${replacement.pid}`)), lines.join("\n"));
 });
 
+test("a run ends a persistent service that stays after its folder is removed, by the SIGTERM that its service declares", { timeout: 30000 }, async (t) => {
+  if (process.platform !== "darwin") t.skip("the process table of this platform is not implemented here");
+  const configRoot = workspace(t);
+  const services = join(configRoot, "soksak-check-app", "services");
+  const directory = join(services, "sok-term");
+  mkdirSync(directory, { recursive: true });
+  // The service ignores the removal of its folder and exits by SIGTERM, which docs/spec/persistent-services.md declares as its exit.
+  const service = spawn(process.execPath, ["-e", `process.on("SIGTERM", () => process.exit(0)); setInterval(() => {}, 1000);`, directory], { stdio: "ignore" });
+  t.after(() => service.kill("SIGKILL"));
+  await once(service, "spawn");
+  const serviceEnded = once(service, "exit");
+  const failures = await runPlan([{ name: "persistent services end", phase: "cleanup", kind: "services", directories: [services], platform: "darwin" }],
+    { write: () => {}, serviceLimitMs: 5000, serviceFolderLimitMs: 500 });
+  assert.deepEqual(failures, [], `the services of the run did not end: ${JSON.stringify(failures)}`);
+  const [code] = await serviceEnded;
+  assert.equal(code, 0, "the service ended by its SIGTERM handler, which runs its cleanup");
+});
+
 test("a run ends the persistent services of its applications before its process audit, and names a service that does not end", { timeout: 30000 }, async (t) => {
   if (process.platform !== "darwin") t.skip("the process table of this platform is not implemented here");
   const configRoot = workspace(t);
@@ -308,11 +326,11 @@ test("a run ends the persistent services of its applications before its process 
 
   // A service that stays after its folder is removed fails the step and names its pid; the test ends it.
   mkdirSync(directory, { recursive: true });
-  const stuck = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", directory], { stdio: "ignore" });
+  const stuck = spawn(process.execPath, ["-e", `process.on("SIGTERM", () => {}); setInterval(() => {}, 1000);`, directory], { stdio: "ignore" });
   t.after(() => stuck.kill("SIGKILL"));
   await once(stuck, "spawn");
   const stuckFailures = await runPlan([{ name: "persistent services end", phase: "cleanup", kind: "services", directories: [services], platform: "darwin" }],
-    { write: () => {}, serviceLimitMs: 1000 });
+    { write: () => {}, serviceLimitMs: 1000, serviceFolderLimitMs: 100 });
   assert.equal(stuckFailures.length, 1, JSON.stringify(stuckFailures));
   assert.match(stuckFailures[0], new RegExp(`^persistent services end: .*${stuck.pid}`));
 });

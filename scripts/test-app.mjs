@@ -29,6 +29,8 @@ const APPS = ['wailsv3', 'tauriv2', 'mygo'];
 const START_LIMIT_MS = 60_000;
 /** The limit of a services step: the time that a persistent service has to exit after its folder is removed. */
 const SERVICE_END_LIMIT_MS = 30_000;
+/** The time that a persistent service has to exit after its folder is removed, before the run sends it SIGTERM. */
+const SERVICE_FOLDER_LIMIT_MS = 5_000;
 /** The limit of a quit step: the time that an application has to exit after its quit item or its quit key. */
 const QUIT_LIMIT_MS = 60_000;
 
@@ -128,8 +130,8 @@ export async function e2ePlan({ root, configRoot, script, native, only, platform
       name: `quit ${app}`, phase: 'cleanup', kind: 'quit', by: index === APPS.length - 1 ? 'key' : 'menu', app, configDir: configDir(configRoot, app),
       platform,
     })),
-    // A persistent service exits when its folder is removed (docs/spec/persistent-services.md), and a quit keeps the services, so the run
-    // removes them before its audit of the processes.
+    // A persistent service exits when its folder is removed, or by SIGTERM (docs/spec/persistent-services.md), and a quit keeps the services,
+    // so the run ends them before its audit of the processes.
     { name: 'persistent services end', phase: 'cleanup', kind: 'services', directories: APPS.map((app) => join(configDir(configRoot, app), 'services')), platform },
     { name: 'remaining processes', phase: 'cleanup', kind: 'remaining', paths: [configRoot, ...APPS.map((app) => located.get(app))], platform },
   ];
@@ -387,10 +389,12 @@ async function checkRemaining(item, processes) {
 }
 
 /**
- * Removes the services folders of the run and waits until no process of the platform list names one of them. A service that stays
- * after its folder is removed is named by its pid in the failure of the step; the step does not end it.
+ * Removes the services folders of the run, then ends each service of them that stays. A service exits when its folder is removed
+ * (docs/spec/persistent-services.md); one that stays after `folderLimitMs` receives SIGTERM, the other exit that the spec declares,
+ * and the step waits `limitMs` for its end. A service that stays after SIGTERM fails the step and is named by its pid. The step
+ * finds the services by the folders of the run, which their command lines name.
  */
-async function endServices(item, processes, limitMs) {
+async function endServices(item, processes, limitMs, folderLimitMs) {
   const removed = [];
   for (const directory of item.directories) {
     if (!existsSync(directory)) continue;
@@ -399,14 +403,29 @@ async function endServices(item, processes, limitMs) {
   }
   if (removed.length === 0) return;
   const named = ({ executable, arguments: line }) => removed.some((directory) => (executable !== null && executable.includes(directory)) || line.includes(directory));
+  const stayed = await untilServicesEnd(item.platform, processes, named, folderLimitMs);
+  if (stayed.length === 0) return;
+  for (const { pid } of stayed) {
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch (error) {
+      // ESRCH is the service that ended after the process list was read, which is the end the step waits for.
+      if (error.code !== 'ESRCH') throw error;
+    }
+  }
+  const remaining = await untilServicesEnd(item.platform, processes, named, limitMs);
+  if (remaining.length > 0) {
+    throw new Error(`the persistent services did not exit in ${folderLimitMs / 1000}s after their folders were removed or in ${limitMs / 1000}s after SIGTERM: ${remaining.map(({ pid }) => pid).join(', ')}`);
+  }
+}
+
+/** Reads the process list until no process is `named` or `limitMs` passes, and returns the named processes of the last read. */
+async function untilServicesEnd(platform, processes, named, limitMs) {
   const bound = Date.now() + limitMs;
   for (;;) {
-    const running = (await processes({ platform: item.platform })).filter(named);
-    if (running.length === 0) return;
-    if (Date.now() >= bound) {
-      throw new Error(`the persistent services did not exit in ${limitMs / 1000}s after their folders were removed: ${running.map(({ pid }) => pid).join(', ')}`);
-    }
-    // A service exits by itself after its folder is removed, and the process table is the only record of its exit: a service of this run is not a child, so no wait status exists for it.
+    const running = (await processes({ platform })).filter(named);
+    if (running.length === 0 || Date.now() >= bound) return running;
+    // The process table is the only record of a service's exit: a service of this run is not a child of the runner, so no wait status exists.
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
@@ -430,7 +449,7 @@ async function runNative(item, interrupted) {
  * `quitLimitMs` is the limit of each quit step (QUIT_LIMIT_MS by default); a test passes a shorter limit.
  */
 export async function runPlan(steps, { write, children = new Map(), interrupted, outcome = () => {}, connectClient = connect,
-  lockRelease = waitForLockRelease, processes = listProcesses, quitLimitMs = QUIT_LIMIT_MS, serviceLimitMs = SERVICE_END_LIMIT_MS }) {
+  lockRelease = waitForLockRelease, processes = listProcesses, quitLimitMs = QUIT_LIMIT_MS, serviceLimitMs = SERVICE_END_LIMIT_MS, serviceFolderLimitMs = SERVICE_FOLDER_LIMIT_MS }) {
   const failures = [];
   const since = Date.now();
   let stopped = null;
@@ -459,7 +478,7 @@ export async function runPlan(steps, { write, children = new Map(), interrupted,
       else if (item.kind === 'start') await startApplication(item, children);
       else if (item.kind === 'quit') await quitApplication(item, children, since, write, connectClient, lockRelease, quitLimitMs, processes);
       else if (item.kind === 'native') await runNative(item, item.phase === 'cleanup' ? undefined : interrupted);
-      else if (item.kind === 'services') await endServices(item, processes, serviceLimitMs);
+      else if (item.kind === 'services') await endServices(item, processes, serviceLimitMs, serviceFolderLimitMs);
       else if (item.kind === 'remaining') await checkRemaining(item, processes);
       else throw new Error(`unknown step kind ${JSON.stringify(item.kind)}`);
       if (interrupted?.aborted && item.phase !== 'cleanup') throw interruptedBy(interrupted);
