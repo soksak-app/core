@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1279: The failure table of the diagnostics has a row for each error record of the plugin folder watch and the document boxes, so the failure table check passes.
 - F1217-9-1-1: The plugin folder count case has the scope all, because the gpuikit host runs the Rust library test that declares it.
 - F1278: The plugin folder count case names its hosts in the scope cell, so the contract parser reads it and the gpuikit check runs.
 - F1264-3: The Go and Rust hosts bind `documentBoxes` to the native box query, with the refusal texts of the specification.
