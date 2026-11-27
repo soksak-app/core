@@ -7,20 +7,36 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use soksak_sok::appupdate::{self, AppUpdateState};
 
+use crate::setup::is_translocated;
+
 /// Reads the registry index and returns the candidate of an application that runs core version `running` for the
 /// release `key`.
 pub fn read_state(config_dir: &Path, running: &str, key: &str) -> Result<AppUpdateState, String> {
     appupdate::read_app_update_state(config_dir, running, key)
 }
 
-/// Prepares the candidate: it fails when `version` is not the candidate for `key`, so the host stages only the version
-/// that the registry index offers now.
+/// Refuses an executable that runs from a folder that macOS made for App Translocation: the bundle is then a read-only copy,
+/// and an update that replaces it cannot succeed, so the refusal comes before any change.
+fn refuse_translocated(executable: &Path) -> Result<(), String> {
+    if is_translocated(executable) {
+        return Err(format!(
+            "application update: {} runs from a translocated location of macOS, so the application bundle must be moved out of quarantine and started again",
+            executable.display()
+        ));
+    }
+    Ok(())
+}
+
+/// Prepares the candidate of the running executable: it refuses a translocated executable before it reads anything, and
+/// fails when `version` is not the candidate for `key`, so the host stages only the version that the registry index offers now.
 pub fn stage(
     config_dir: &Path,
+    executable: &Path,
     running: &str,
     key: &str,
     version: &str,
 ) -> Result<PathBuf, String> {
+    refuse_translocated(executable)?;
     let state = read_state(config_dir, running, key)?;
     match state.available {
         Some(update) if update.version == version => {
@@ -67,8 +83,11 @@ pub fn stage_call(config_dir: &Path, request: StageRequest) -> Result<Staged, St
     let Ok(_staging) = STAGING.try_lock() else {
         return Err("application update: another update is being prepared".into());
     };
+    let executable =
+        std::env::current_exe().map_err(|error| format!("application update: {error}"))?;
     let bundle = stage(
         config_dir,
+        &executable,
         soksak_sok::version::CORE_VERSION,
         &key()?,
         &request.version,
@@ -89,6 +108,7 @@ pub fn prepare_start(
     pid: u32,
     arguments: &[String],
 ) -> Result<Command, String> {
+    refuse_translocated(executable)?;
     let updates = config_dir.join("updates");
     if !bundle.starts_with(&updates)
         || bundle

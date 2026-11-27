@@ -97,6 +97,13 @@ type SetupStart struct {
 // translocationFolder is the path element of the folders that macOS makes for App Translocation.
 const translocationFolder = "/AppTranslocation/"
 
+// isTranslocated reports whether the executable runs from a folder that macOS made for App Translocation. It is a path rule, which
+// setup and the application update both use, so the two judge a run alike. The platform query of the Security framework,
+// SecTranslocateIsTranslocatedURL, is private and has no public header, so the host does not bind it (docs/operations/private-native-apis.md).
+func isTranslocated(executable string) bool {
+	return strings.Contains(executable, translocationFolder)
+}
+
 // SetupStartOf returns the start of the setup of the application identifier, run with the configuration directory that the command
 // line gave ("" for none) from the executable.
 func SetupStartOf(identifier, configDirectory, executable string) SetupStart {
@@ -105,7 +112,7 @@ func SetupStartOf(identifier, configDirectory, executable string) SetupStart {
 		return SetupStart{Kept: "the debug build " + identifier}
 	case configDirectory != "":
 		return SetupStart{Kept: "the configuration directory " + configDirectory}
-	case strings.Contains(executable, translocationFolder):
+	case isTranslocated(executable):
 		return SetupStart{Translocated: filepath.Dir(executable)}
 	}
 	return SetupStart{}

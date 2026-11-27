@@ -80,12 +80,33 @@ fn the_host_stages_the_candidate_and_no_other_version() {
             .map(|update| update.version.as_str()),
         Some("0.0.9")
     );
-    let error = stage(&config, "0.0.8", &key, "0.0.10").unwrap_err();
+    let error = stage(
+        &config,
+        Path::new("/Applications/soksak 3.app/Contents/MacOS/soksak"),
+        "0.0.8",
+        &key,
+        "0.0.10",
+    )
+    .unwrap_err();
     assert!(error.contains("0.0.10 is not the candidate"), "{error}");
-    let bundle = stage(&config, "0.0.8", &key, "0.0.9").unwrap();
+    let bundle = stage(
+        &config,
+        Path::new("/Applications/soksak 3.app/Contents/MacOS/soksak"),
+        "0.0.8",
+        &key,
+        "0.0.9",
+    )
+    .unwrap();
     assert_eq!(bundle, config.join("updates/0.0.9/soksak.app"));
     // The running version has no candidate, so nothing is staged for it.
-    let error = stage(&config, "0.0.9", &key, "0.0.9").unwrap_err();
+    let error = stage(
+        &config,
+        Path::new("/Applications/soksak 3.app/Contents/MacOS/soksak"),
+        "0.0.9",
+        &key,
+        "0.0.9",
+    )
+    .unwrap_err();
     assert!(error.contains("0.0.9 is not the candidate"), "{error}");
 }
 
@@ -240,4 +261,39 @@ fn the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts()
         line.contains("app update --wait 4321 --bundle"),
         "the command line is {line:?}"
     );
+}
+
+// contract: app-update.refuses-translocated-bundle
+#[test]
+fn the_host_refuses_a_translocated_bundle_before_any_change() {
+    let key = format!("darwin-arm64-{}", CORE_HOSTS[0]);
+    let work = folder::Folder::new();
+    let config = update_registry(work.path(), &key);
+    // macOS runs a quarantined bundle from a folder of this form, a read-only copy of the bundle.
+    let translocated = work
+        .path()
+        .join("AppTranslocation/ID/d/soksak 3.app/Contents/MacOS/soksak");
+    std::fs::create_dir_all(translocated.parent().unwrap()).unwrap();
+    std::fs::write(&translocated, "#!/bin/sh\nexit 0\n").unwrap();
+    let want = format!(
+        "application update: {} runs from a translocated location of macOS, so the application bundle must be moved out of quarantine and started again",
+        translocated.display()
+    );
+    assert_eq!(
+        stage(&config, &translocated, "0.0.8", &key, "0.0.9").unwrap_err(),
+        want
+    );
+    let staged = config.join("updates/0.0.9/soksak.app");
+    assert_eq!(
+        prepare_start(&config, &translocated, &staged, 4321, &[]).unwrap_err(),
+        want
+    );
+    assert!(
+        !config.join("updates").exists(),
+        "the refused update changed the configuration folder"
+    );
+    // A bundle outside the translocation folder passes the check and stages the candidate.
+    let normal = work.path().join("soksak 3.app/Contents/MacOS/soksak");
+    std::fs::create_dir_all(normal.parent().unwrap()).unwrap();
+    assert!(stage(&config, &normal, "0.0.8", &key, "0.0.9").is_ok());
 }

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1160: `core.app.update`는 macOS App Translocation 폴더에서 실행되는 executable을 후보를 내려받기 전과 애플리케이션이 종료하기 전에 거절하며, 오류는 경로와 격리 해제 단계를 밝힌다. 각 host에서 setup과 업데이트가 한 경로 규칙을 쓴다(Red: stage 호출이 executable을 받지 않았다).
 - F1217-1, F1217-2: specification은 설정을 디자인의 page를 가진 본창의 tab으로, project home을 launcher로, 창 도구를 앞 화면의 도구로 보이며, 행을 측정하지 않는 행 grid와 표준 control 세트 하나를 정한다.
 - F1216: `plugin.json`이 `categories`와 `requires`를 선언한다. `sok`는 요구하는 plugin에 그 category의 plugin이 남지 않게 하는 작업을 거부하고, workbench는 그런 plugin을 `requires` 상태로 불러오지 않으며, `core.plugin-categories`를 보고하고, type `plugin` 설정을 그 category의 plugin select로 그린다.
 - F1215-4, F1215-5: web과 mygo workbench는 계정을 선언한 plugin의 plugin page에 그룹 계정을 그린다. 계정마다 종류, login, 사용량 줄과 버튼 로그인, 취소, 로그아웃, 이름 변경, 삭제를 가진 행 하나와 행 새 계정이 있다. 명령 `core.accounts.add`, `rename`, `remove`, `login`, `login-cancel`, `logout`은 plugin key accounts를 바꾸고 plugin의 계정 프로그램을 실행하며, status `core.accounts`는 보이는 page의 계정을 알리고, 그룹의 field는 `core.settings-modal.account-name`, `account-kind`, `account-edit`, `account-edit-name`을 실행한다.

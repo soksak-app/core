@@ -77,10 +77,10 @@ func TestTheHostStagesTheCandidateAndNoOtherVersion(t *testing.T) {
 	if state.Version != "0.0.8" || state.Available == nil || state.Available.Version != "0.0.9" {
 		t.Fatalf("the state is %+v", state)
 	}
-	if _, err := host.StageAppUpdate(config, "0.0.8", key, "0.0.10"); err == nil || !strings.Contains(err.Error(), "0.0.10 is not the candidate") {
+	if _, err := host.StageAppUpdate(config, "/Applications/soksak 3.app/Contents/MacOS/soksak", "0.0.8", key, "0.0.10"); err == nil || !strings.Contains(err.Error(), "0.0.10 is not the candidate") {
 		t.Fatalf("a version that is not the candidate: %v", err)
 	}
-	bundle, err := host.StageAppUpdate(config, "0.0.8", key, "0.0.9")
+	bundle, err := host.StageAppUpdate(config, "/Applications/soksak 3.app/Contents/MacOS/soksak", "0.0.8", key, "0.0.9")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestTheHostStagesTheCandidateAndNoOtherVersion(t *testing.T) {
 		t.Fatalf("bundle %s, want %s", bundle, want)
 	}
 	// The running version has no candidate, so nothing is staged for it.
-	if _, err := host.StageAppUpdate(config, "0.0.9", key, "0.0.9"); err == nil || !strings.Contains(err.Error(), "0.0.9 is not the candidate") {
+	if _, err := host.StageAppUpdate(config, "/Applications/soksak 3.app/Contents/MacOS/soksak", "0.0.9", key, "0.0.9"); err == nil || !strings.Contains(err.Error(), "0.0.9 is not the candidate") {
 		t.Fatalf("the running version: %v", err)
 	}
 }
@@ -183,5 +183,35 @@ func TestTheDetachedUpdateCommandKeepsItsErrorsAndIsRecordedWhenItStarts(t *test
 	}
 	if len(seen) != 1 || seen[0]["pid"] != float64(started.Process.Pid) || seen[0]["command"] != started.String() {
 		t.Fatalf("host.update.start events = %v, want one for pid %d with the command line", seen, started.Process.Pid)
+	}
+}
+
+// contract: app-update.refuses-translocated-bundle
+func TestTheHostRefusesATranslocatedBundleBeforeAnyChange(t *testing.T) {
+	key := "darwin-arm64-" + sok.CoreHosts[0]
+	config := updateRegistry(t, key)
+	// macOS runs a quarantined bundle from a folder of this form, a read-only copy of the bundle.
+	translocated := filepath.Join(t.TempDir(), "AppTranslocation", "ID", "d", "soksak 3.app", "Contents", "MacOS", "soksak")
+	if err := os.MkdirAll(filepath.Dir(translocated), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(translocated, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	want := "application update: " + translocated + " runs from a translocated location of macOS, so the application bundle must be moved out of quarantine and started again"
+	if _, err := host.StageAppUpdate(config, translocated, "0.0.8", key, "0.0.9"); err == nil || err.Error() != want {
+		t.Fatalf("stage error = %v, want %q", err, want)
+	}
+	staged := filepath.Join(config, "updates", "0.0.9", "soksak.app")
+	if command, err := host.PrepareAppUpdateStart(config, translocated, staged, 4321, nil); command != nil || err == nil || err.Error() != want {
+		t.Fatalf("apply = %v, %v, want error %q", command, err, want)
+	}
+	if _, err := os.Stat(filepath.Join(config, "updates")); !os.IsNotExist(err) {
+		t.Fatalf("the refused update changed the configuration folder: %v", err)
+	}
+	// A bundle outside the translocation folder passes the check and stages the candidate.
+	normal := filepath.Join(t.TempDir(), "soksak 3.app", "Contents", "MacOS", "soksak")
+	if _, err := host.StageAppUpdate(config, normal, "0.0.8", key, "0.0.9"); err != nil {
+		t.Fatalf("stage of a bundle outside the translocation folder: %v", err)
 	}
 }

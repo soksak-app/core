@@ -24,9 +24,21 @@ func ReadAppUpdateState(configDir, running, key string) (*sok.AppUpdateState, er
 	return sok.ReadAppUpdateState(configDir, running, key)
 }
 
-// StageAppUpdate prepares the candidate: it fails when version is not the candidate for key, so the host stages only
-// the version that the registry index offers now.
-func StageAppUpdate(configDir, running, key, version string) (string, error) {
+// refuseTranslocated fails when the executable runs from a folder that macOS made for App Translocation: the bundle is then a read-only
+// copy, and an update that replaces it cannot succeed, so the refusal comes before any change.
+func refuseTranslocated(executable string) error {
+	if isTranslocated(executable) {
+		return fmt.Errorf("application update: %s runs from a translocated location of macOS, so the application bundle must be moved out of quarantine and started again", executable)
+	}
+	return nil
+}
+
+// StageAppUpdate prepares the candidate of the running executable: it refuses a translocated executable before it reads anything,
+// and fails when version is not the candidate for key, so the host stages only the version that the registry index offers now.
+func StageAppUpdate(configDir, executable, running, key, version string) (string, error) {
+	if err := refuseTranslocated(executable); err != nil {
+		return "", err
+	}
 	state, err := sok.ReadAppUpdateState(configDir, running, key)
 	if err != nil {
 		return "", err
@@ -82,7 +94,11 @@ func (h *Host) AppUpdateStage(ctx context.Context, requestJSON json.RawMessage) 
 		return AppUpdateStaged{}, fmt.Errorf("application update: another update is being prepared")
 	}
 	defer appUpdateStaging.Unlock()
-	bundle, err := StageAppUpdate(h.configDir, sok.CoreVersion, key, request.Version)
+	executable, err := os.Executable()
+	if err != nil {
+		return AppUpdateStaged{}, fmt.Errorf("application update: %w", err)
+	}
+	bundle, err := StageAppUpdate(h.configDir, executable, sok.CoreVersion, key, request.Version)
 	if err != nil {
 		return AppUpdateStaged{}, err
 	}
@@ -100,6 +116,9 @@ func isBundleFolder(path string) bool {
 // The bundle must be a staged bundle under that folder, and the executable must run from an application bundle; the
 // arguments are those of the application that starts again.
 func PrepareAppUpdateStart(configDir, executable, bundle string, pid int, arguments []string) (*exec.Cmd, error) {
+	if err := refuseTranslocated(executable); err != nil {
+		return nil, err
+	}
 	updates := filepath.Join(configDir, "updates")
 	relative, err := filepath.Rel(updates, bundle)
 	if err != nil || strings.HasPrefix(relative, "..") || !strings.HasSuffix(bundle, ".app") {

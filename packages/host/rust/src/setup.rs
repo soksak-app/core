@@ -115,6 +115,13 @@ pub struct SetupStart {
 /// The path element of the folders that macOS makes for App Translocation.
 const TRANSLOCATION_FOLDER: &str = "/AppTranslocation/";
 
+/// Reports whether the executable runs from a folder that macOS made for App Translocation. It is a path rule, which setup and the
+/// application update both use, so the two judge a run alike. The platform query of the Security framework,
+/// SecTranslocateIsTranslocatedURL, is private and has no public header, so the host does not bind it (docs/operations/private-native-apis.md).
+pub fn is_translocated(executable: &Path) -> bool {
+    executable.to_string_lossy().contains(TRANSLOCATION_FOLDER)
+}
+
 /// The start of the setup of the application identifier, run with the configuration directory that the command line gave
 /// (`None` for none) from the executable.
 pub fn setup_start_of(
@@ -134,7 +141,7 @@ pub fn setup_start_of(
             translocated: None,
         };
     }
-    if executable.to_string_lossy().contains(TRANSLOCATION_FOLDER) {
+    if is_translocated(executable) {
         // default: an executable path always has a folder.
         let folder = executable.parent().unwrap_or(Path::new("/"));
         return SetupStart {
