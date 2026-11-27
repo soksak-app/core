@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
+- F1251: The Go host item for the Rust surface and view theme tests records the Go counterpart run and its TestMain failure.
 - F1248: The Rust surface test fixture reads the sidecar folder OS key from the platform module, and no test selects it by cfg.
 - F1238: The clean-worktree check runs the Go package at main with the audit test skipped: 6 of 6 runs pass, and the F1238 record states the observed counts.
 - F1217-17-5: The agent page record is closed: the remaining row layout moved to F1250, and the six-row design, the removal button, the hook install buttons, the err tone for 없음 and the check timer are not adopted.

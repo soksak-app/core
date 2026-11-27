@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
+- F1251: Rust surface와 view theme 테스트의 Go 대응 항목을 기록한다. Go 대응 실행 결과와 TestMain 실패를 적는다.
 - F1248: Rust surface test fixture가 sidecar folder OS key를 platform 모듈에서 읽고, 시험은 cfg로 고르지 않는다.
 - F1238: clean worktree 점검은 audit 테스트를 제외하고 main의 Go 패키지를 실행한다. 6회 중 6회 통과하며, F1238 기록에 관찰된 수를 적는다.
 - F1217-17-5: 에이전트 연동 페이지 기록을 닫는다. 남은 행 배치는 F1250으로 옮기고, 여섯 행 디자인, 제거 버튼, hook 설치 버튼, 없음의 err 톤, 확인 타이머는 채택하지 않는다.
