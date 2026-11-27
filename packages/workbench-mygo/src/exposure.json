@@ -5533,7 +5533,7 @@
               "enum": ["ask", "no", "yes"]
             }
           },
-          "required": ["project", "answer"]
+          "required": ["answer"]
         },
         "result": {
           "type": "null"

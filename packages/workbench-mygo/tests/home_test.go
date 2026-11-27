@@ -545,3 +545,23 @@ func selectRow(t *testing.T, f *shellFixture, id string) {
 		}
 	}
 }
+
+// Cmd+Backspace puts the selected row into the removal confirm state, as its × button does, and does nothing while the search field
+// has focus (docs/spec/projects.md#project-home).
+func TestTheShortcutAsksTheRemovalOfTheSelectedRow(t *testing.T) {
+	f, alpha, _ := twoProjects(t)
+	f.run("core.projects.browse", nil)
+	selectRow(t, f, alpha)
+	f.tester.Key(ui.Cmd, ui.KeyBackspace)
+	f.settle()
+	if !f.has("core.home.confirm", alpha) || f.has("core.home.remove-ask", alpha) {
+		t.Fatalf("cmd+Backspace does not put the selected row %s into the confirm state", alpha)
+	}
+	f.run("core.home.confirm", map[string]string{"project": alpha, "answer": "no"})
+	f.run("core.home.search.focus", nil)
+	f.tester.Key(ui.Cmd, ui.KeyBackspace)
+	f.settle()
+	if f.has("core.home.confirm", alpha) {
+		t.Fatal("cmd+Backspace in the search field asks the removal of a row")
+	}
+}

@@ -95,6 +95,7 @@ The view reads the rows that it may forward with the view call `runtime.shortcut
 | `shift+cmd+n` | native menu | core.window.new | window/new-window | Any focus |
 | `shift+cmd+n` | workbench | core.window.new | — | No host chrome (browser build) |
 | `cmd+o` | workbench | core.home.search.focus | — | The project home is shown |
+| `cmd+Backspace` | workbench | core.home.confirm | — | The project home is shown, a row is selected and no text field has focus; the command gets answer ask |
 | `Enter` | workbench | core.rename.commit | — | The tab rename field has focus |
 | `Escape` | workbench | core.rename.cancel | — | The tab rename field has focus |
 | `Enter` | workbench | core.home.form.submit | — | A project home form field has focus |

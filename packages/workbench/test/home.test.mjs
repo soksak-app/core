@@ -221,3 +221,18 @@ test("a project that was never opened shows no last-opened day", async () => {
   const meta = root.querySelector(".home-row__meta");
   assert.equal(meta.textContent, "스페이스 1", "the row shows a day for a project that was never opened");
 });
+
+test("the declared cmd+Backspace row asks the removal of the selected row, and the command without a row names the selected row", async () => {
+  const shortcut = JSON.parse(readFileSync(new URL("../shortcuts.json", import.meta.url), "utf8")).shortcuts
+    .find((row) => row.key === "cmd+Backspace" && row.owner === "workbench");
+  assert.equal(shortcut?.command, "core.home.confirm", "the cmd+Backspace row does not name core.home.confirm");
+  assert.deepEqual(shortcut?.params, { answer: "ask" }, "the cmd+Backspace row does not ask the removal");
+  const { home } = mount([project("a", "alpha"), project("b", "bravo")]);
+  await settled();
+  home.render();
+  home.actions.select(1);
+  home.actions.confirm(undefined, "ask");
+  assert.equal(home.state().confirming, "b", "the removal is not asked for the selected row");
+  home.actions.confirm(undefined, "no");
+  assert.equal(home.state().confirming, null);
+});

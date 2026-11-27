@@ -322,10 +322,13 @@ export function createHome(root) {
     escape() { if (search.value !== '') actions.search(''); },
     // default: opening without an id opens the selected row.
     open: (id) => { const target = id ?? selected; if (target === null) throw new Error('there is no row to open'); return perform(() => projects.activate(target)); },
+    // default: without an id the selected row is the row of the answer (docs/spec/projects.md#project-home).
     confirm(id, answer) {
       if (!['ask', 'no', 'yes'].includes(answer)) throw new Error(`unknown answer ${answer}`);
-      if (answer === 'yes') return actions.remove(id);
-      confirming = answer === 'ask' ? id : null;
+      const target = id ?? selected;
+      if (target === null) throw new Error('there is no row to confirm');
+      if (answer === 'yes') return actions.remove(target);
+      confirming = answer === 'ask' ? target : null;
       render();
     },
     // Removes the record and its spaces from the registry; the folder is not changed (docs/spec/projects.md#project-home).

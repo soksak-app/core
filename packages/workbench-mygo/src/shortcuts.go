@@ -18,7 +18,7 @@ const (
 
 var shortcutModifiers = map[string]ui.Modifiers{"cmd": ui.Cmd, "shift": ui.Shift, "opt": ui.Alt, "ctrl": ui.Ctrl}
 
-var shortcutKeys = map[string]ui.Key{",": ui.KeyComma, "Enter": ui.KeyEnter, "Escape": ui.KeyEscape, "=": ui.KeyEqual, "-": ui.KeyMinus, "ArrowUp": ui.KeyUp, "ArrowDown": ui.KeyDown}
+var shortcutKeys = map[string]ui.Key{",": ui.KeyComma, "Enter": ui.KeyEnter, "Escape": ui.KeyEscape, "Backspace": ui.KeyBackspace, "=": ui.KeyEqual, "-": ui.KeyMinus, "ArrowUp": ui.KeyUp, "ArrowDown": ui.KeyDown}
 
 // ParseShortcut reads a key of the shortcut table, as "shift+cmd+n".
 func ParseShortcut(text string) (ui.Modifiers, ui.Key, error) {

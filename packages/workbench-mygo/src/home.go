@@ -251,6 +251,13 @@ func (s *Shell) registerHome() {
 		s.performHome(func(done func(error)) { s.pinProject(project.ID, !project.Pinned, done) }, func() { answer(nil, nil) })
 	})
 	act(s, "core.home.confirm", func(value confirmParam) error {
+		// An empty project is the selected row, as core.home.open takes it (docs/spec/projects.md#project-home).
+		if value.Project == "" {
+			value.Project = s.selectedRow(s.homeRows())
+		}
+		if value.Project == "" {
+			return fmt.Errorf("no project row is selected")
+		}
 		if _, ok := s.projectByID(value.Project); !ok {
 			return fmt.Errorf("the project %s is not in the project home", value.Project)
 		}

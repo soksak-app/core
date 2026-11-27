@@ -659,6 +659,11 @@ addEventListener("keydown", (event) => {
     event.preventDefault();
     return run("core.home.search.focus", {});
   }
+  // The row Cmd+Backspace asks the removal of the selected row; a text field keeps the key (docs/spec/projects.md#project-home).
+  if (event.key === "Backspace" && projects.inHome() && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName ?? "")) {
+    event.preventDefault();
+    return run("core.home.confirm", { answer: "ask" });
+  }
 });
 /* When a frame outside the plane is pressed, the scope of the text size is the frame (docs/spec/text-size.md). */
 addEventListener("pointerdown", (event) => {
