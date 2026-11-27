@@ -821,7 +821,7 @@ judge는 다음 규칙을 적용한다:
 | `G3-S13-peak-before-drag` | G3 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `peakBeforeDragKb` | KB | median | — | 각 other host와 baseline host |
 | `G3-S13-peak-after-drag` | G3 | S13 | `make benchmark-view-drag ACCESSIBILITY=1 TRACE=0` | `peakAfterDragKb` | KB | median | — | 각 other host와 baseline host |
 | `G3-S11-second-window-footprint` | G3 | S11 | `make measure-app-usage STATE=S11 TAB=term PAGE=browser` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
-| `G3-S15-settings-window-footprint` | G3 | S15 | `make measure-app-usage STATE=S15 TAB=term PAGE=browser` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
+| `G3-S15-settings-tab-footprint` | G3 | S15 | `make measure-app-usage STATE=S15 TAB=term PAGE=browser` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
 | `G3-S14-footprint` | G3 | S14 | `make measure-app-usage STATE=S14` | `applicationFootprintKb` | KB | median | — | 각 other host와 baseline host |
 | `G3-S3-changed-counts` | G3 | S3 | `make measure-object-counts BUILD=release REPETITIONS=30` | `changedCounts` | count | 각 run | 정확히 0 | — |
 | `G3-S3-growing-figures` | G3 | S3 | `make measure-object-counts BUILD=release REPETITIONS=30` | `growingFigures` | count | 각 run | 정확히 0 | — |

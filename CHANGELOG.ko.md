@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-16: S15 상태의 설정 탭 footprint 목표는 G3-S15-settings-tab-footprint로 부른다.
 - F1217-11-3: toast는 error이면 role alert, 그 밖이면 role status를 가지며, 카드의 success 또는 info 알림은 상태 줄에 6초 동안 보입니다.
 - F1222: 노출된 설정 탭 상태와 카드 footer의 기본값을 폴백 검사용으로 명시한다.
 - F1221: 기능 링크 키는 모두 docs/features.md의 항목을 가리키며, 고아 키는 보고된다.

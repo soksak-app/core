@@ -329,7 +329,7 @@
       "relative": true
     },
     {
-      "id": "G3-S15-settings-window-footprint",
+      "id": "G3-S15-settings-tab-footprint",
       "goal": "G3",
       "scenario": "S15",
       "target": "make measure-app-usage STATE=S15 TAB=term PAGE=browser",
