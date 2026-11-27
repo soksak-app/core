@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-12-10: The view-host test expects the Escape row that closes the notice center.
 - F1223: A refused view status watch rejects the ready promise of its stop function with the refusal code and text.
 - F1222: A progress notice draws a declared turning ring that reduced motion stops, and an unknown notice kind fails.
 - F1217-11-1: The toast bar keeps its first width on a later redraw, and time that passes notifies no toast watcher, pinned on the page clock.

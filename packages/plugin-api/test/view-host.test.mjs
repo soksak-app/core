@@ -25,6 +25,7 @@ const SHORTCUT_ROWS = [
   { key: "Enter", owner: "workbench", command: "core.home.form.submit" },
   { key: "Enter", owner: "workbench", command: "core.home.open" },
   { key: "Escape", owner: "workbench", command: "core.picker.close" },
+  { key: "Escape", owner: "workbench", command: "core.notices.toggle" },
   { key: "Escape", owner: "workbench", command: "core.modal.dismiss" },
   { key: "Escape", owner: "view", command: "none" },
   { key: "text input keys", owner: "view", command: "none" },
