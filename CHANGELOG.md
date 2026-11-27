@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-18-2: The mygo title bar shows the bell on the settings tab, as every other screen does.
 - F1235: The test names of the packages/workbench tests are English, and the feature links name them.
 - F1217-18-1: The window sidebar head is as high as a card header and takes its padding and gap in web and mygo.
 - F1217-7-2-3: The import form of the project home clones a Git repository into projectsFolder through projectClone in the web workbench, mygo, the Go host and the Rust host; a refused or failed clone adds no project and leaves no target folder.

@@ -69,6 +69,15 @@ func TestTheSettingsTabTitleBarShowsNoWindowTool(t *testing.T) {
 	}
 }
 
+// The bell is the last element of the title bar on every screen, the settings tab included (docs/spec/notifications.md#bell).
+func TestTheSettingsTabTitleBarShowsTheBell(t *testing.T) {
+	f, _, _ := twoProjects(t)
+	f.run("core.settings.open", nil)
+	if !f.has("core.chrome.notices", "") {
+		t.Fatal("the settings tab title bar shows no bell, want the bell as the last element of the title bar")
+	}
+}
+
 // While the settings tab is in front no surface of the window is visible, and every surface keeps its session as a hidden tab does.
 func TestWhileTheSettingsTabIsInFrontNoSurfaceIsVisible(t *testing.T) {
 	f, stored := surfaceShellOf(t, sidebarsInstalled)

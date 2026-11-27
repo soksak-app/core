@@ -80,8 +80,9 @@ type settingChange struct {
 // work screen the four side switches, a separator and the settings button; on the project home only the settings button. The settings
 // tab shows none.
 func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
-	// The settings tab in front shows no tool, and its settings entry is the chip beside the project tabs.
+	// The settings tab in front shows no tool, and its settings entry is the chip beside the project tabs. The bell is drawn on every screen.
 	if s.settingsTabInFront() {
+		s.drawBell(c)
 		return
 	}
 	if !browsing {
