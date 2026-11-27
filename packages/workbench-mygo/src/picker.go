@@ -693,8 +693,9 @@ func (s *Shell) registerPicker() {
 	s.registry.Status("core.picker", func() any { return s.pickerStatus() })
 	s.registry.Status("core.modal", s.modalStatus)
 	s.registry.Status("core.screen", func() any {
+		// The settings tab is a tab of the work screen, so it is in front of the project home (docs/spec/settings.md#opening-and-closing).
 		screen := "workspace"
-		if s.browsing || s.opened() == nil {
+		if (s.browsing || s.opened() == nil) && !s.settingsTabInFront() {
 			screen = "home"
 		}
 		return screenStatus{Screen: screen, Modal: s.modalName()}

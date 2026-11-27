@@ -110,7 +110,7 @@ import { checkStoredLayout } from "./stored-layout.js";
 import { mountPlacedSections, onChoicesChange, restoreSection, unloadedSections, unloadSections } from "./sidebar-sections.js";
 
 import { createHome } from "./home.js";
-import { createSettingsChip } from "./settings-chip.js";
+import { createSettingsChip, screenOfWindow } from "./settings-chip.js";
 import { createSidebarEdges } from "./sidebar-edges.js";
 import { createHomeStatusBar, createStatusBar } from "./statusbar.js";
 import { gripMetrics, installBrandLogo, installChromeMetrics } from "./chrome-metrics.js";
@@ -515,11 +515,11 @@ onActivity(() => { redrawActivities(); drawBars(); });
 
 function drawBars() {
   const browsing = projects.inHome();
-  document.body.dataset.screen = browsing ? "home" : "workspace";
   barTabs.draw(value("projectTabs"));
   // The window tools of the screen in front (docs/spec/external-sidebars.md#window-tools): the work screen shows the four side switches, a separator
   // and the settings button; the project home shows the settings button; the settings tab in front shows none.
   const chip = settingsChip.draw(!browsing);
+  document.body.dataset.screen = screenOfWindow({ browsing, settingsFront: chip.front });
   document.getElementById("work").hidden = chip.front;
   const tools = titleTools({ front: chip.front, browsing, sidebarButtons: sidebarSwitches.map(({ button }) => button), separator, settingsButton, bell });
   bell.refresh();

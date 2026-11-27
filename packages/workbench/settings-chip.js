@@ -5,6 +5,14 @@ import { bind } from "./commands.js";
 import { icon } from "./icons.js";
 
 /**
+ * The value of body[data-screen]: the settings tab is a tab of the work screen, so while it is in front on the project home, the
+ * body shows the work screen and the project home stays hidden (docs/spec/external-sidebars.md#window-tools).
+ */
+export function screenOfWindow({ browsing, settingsFront }) {
+  return browsing && !settingsFront ? "home" : "workspace";
+}
+
+/**
  * Draws the chip into root and returns the state it draws. root holds the chip button and the close control; the content container is
  * the element that the settings module mounts into while the settings tab is in front.
  */

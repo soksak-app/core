@@ -10,7 +10,7 @@ const dom = new JSDOM('<!doctype html><body><div id="chip"></div><section id="co
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 const { installExposure } = await import("../exposure.js");
-const { createSettingsChip } = await import("../settings-chip.js");
+const { createSettingsChip, screenOfWindow } = await import("../settings-chip.js");
 installExposure(exposureFile);
 
 function build(state) {
@@ -97,4 +97,12 @@ test("after the settings tab is closed, the work screen shows the hint with its 
   chip.draw(true);
   assert.equal(hint.hidden, true, "the hint stays after the tab opens again");
   hint.remove();
+});
+
+// The settings tab is a tab of the work screen: on the project home it comes to the front, so the body shows the work screen, and the
+// project home stays hidden (docs/spec/external-sidebars.md#window-tools, docs/spec/settings.md#opening-and-closing).
+test("the body shows the work screen while the settings tab is in front on the project home", () => {
+  assert.equal(screenOfWindow({ browsing: true, settingsFront: true }), "workspace");
+  assert.equal(screenOfWindow({ browsing: true, settingsFront: false }), "home");
+  assert.equal(screenOfWindow({ browsing: false, settingsFront: false }), "workspace");
 });
