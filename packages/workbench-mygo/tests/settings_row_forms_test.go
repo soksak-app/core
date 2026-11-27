@@ -129,3 +129,20 @@ func TestASideSelectKeepsItsWidthWhenThePageWidens(t *testing.T) {
 		t.Fatalf("the select of left is %v wide at 1200 points and %v at 1600 points, want one width", narrow, wide)
 	}
 }
+
+// A choice of three values is a segment with one button per value, and a choice of more is a select box (docs/spec/settings.md#controls).
+func TestAChoiceOfThreeValuesIsASegmentAndOfMoreIsASelect(t *testing.T) {
+	f := settingsMetricsPage(t, "look")
+	if _, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.choice", "fullRule:over"); !ok {
+		t.Fatal("the three-value choice fullRule shows no button for over")
+	}
+	if _, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.choice", "fullRule"); ok {
+		t.Fatal("the three-value choice fullRule is a select box, want a segment")
+	}
+	if _, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.choice", "font"); !ok {
+		t.Fatal("the many-value choice font shows no select box")
+	}
+	if _, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.choice", "font:mono-jet"); ok {
+		t.Fatal("the many-value choice font shows a button per value, want a select box")
+	}
+}
