@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1107: The window-check package ships the event catalog of docs/spec/events.json, which holds the status read events.
 - F1217-7-2-2: The 작업 공간 page draws the group 프로젝트 폴더 with the folder row of projectsFolder and its 찾아보기 button, which runs core.settings.choose-folder in both hosts.
 - F1107: The scripted status-get cases of F1107 run through the scripted page runner, which plays every scripted case.
 - F1217-7-2-4: The Wails and Tauri hosts refuse a projectsFolder that is neither an absolute path nor a path that starts with ~/, in a common settings write and in a common settings.json, with the text of mygo and the web workbench.

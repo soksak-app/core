@@ -426,6 +426,52 @@
       },
       "description": "One run of the command line tool: the command word, the arguments and the error text cut to 1024 bytes (`truncated` is true when either was cut), the microseconds, the exit status, and the first line of its standard error for a status other than 0."
     },
+    "sok.status.read": {
+      "layer": "sok",
+      "class": "call",
+      "level": [
+        "debug",
+        "warn"
+      ],
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "surface": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "micros": {
+            "type": "number"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "window",
+          "name",
+          "surface",
+          "micros",
+          "ok"
+        ]
+      },
+      "description": "One status read that the command line tool sends with status.get: the window, the status name, the surface that the command named (null when it named none), the microseconds, and for a failed read the error text cut to 1024 bytes (`truncated` is true when it was cut)."
+    },
     "sok.exec": {
       "layer": "sok",
       "class": "lifecycle",
@@ -888,40 +934,79 @@
       "level": "info",
       "fields": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "plugin": {
-            "type": "string"
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "surface": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "program": {
+                "type": "string"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "cwd": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "plugin",
+              "surface",
+              "name",
+              "program",
+              "args",
+              "cwd"
+            ]
           },
-          "surface": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "program": {
-            "type": "string"
-          },
-          "args": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "cwd": {
-            "type": "string"
+          {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "run": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "program": {
+                "type": "string"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "cwd": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "plugin",
+              "run",
+              "name",
+              "program",
+              "args",
+              "cwd"
+            ]
           }
-        },
-        "required": [
-          "plugin",
-          "surface",
-          "name",
-          "program",
-          "args",
-          "cwd"
         ]
       },
-      "description": "A declared program of a plugin page starts. name is the declared name, program the declared text, args the argument texts of the run and cwd the project folder of the surface (docs/spec/native-surfaces.md#program-runs)."
+      "description": "A declared program of a plugin page starts. name is the declared name, program the declared text, args the argument texts of the run and cwd the project folder of the surface (docs/spec/native-surfaces.md#program-runs). A view run carries its surface, and an account run carries its run in place of the surface."
     },
     "host.program.end": {
       "layer": "host",
@@ -929,73 +1014,145 @@
       "level": "info",
       "fields": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "plugin": {
-            "type": "string"
-          },
-          "surface": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "result": {
-            "type": "string",
-            "enum": [
-              "exited",
-              "cancelled",
-              "process-ended",
-              "surface-closed",
-              "window-closed"
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "surface": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "result": {
+                "type": "string",
+                "enum": [
+                  "exited",
+                  "cancelled",
+                  "process-ended",
+                  "surface-closed",
+                  "window-closed"
+                ]
+              },
+              "code": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "signal": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "stdoutBytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "stderrBytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "stdoutTruncated": {
+                "type": "boolean"
+              },
+              "stderrTruncated": {
+                "type": "boolean"
+              },
+              "durationUs": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "plugin",
+              "surface",
+              "name",
+              "result",
+              "code",
+              "signal",
+              "stdoutBytes",
+              "stderrBytes",
+              "stdoutTruncated",
+              "stderrTruncated",
+              "durationUs"
             ]
           },
-          "code": {
-            "type": [
-              "integer",
-              "null"
+          {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "run": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "result": {
+                "type": "string",
+                "enum": [
+                  "exited",
+                  "cancelled",
+                  "process-ended",
+                  "surface-closed",
+                  "window-closed"
+                ]
+              },
+              "code": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "signal": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "stdoutBytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "stderrBytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "stdoutTruncated": {
+                "type": "boolean"
+              },
+              "stderrTruncated": {
+                "type": "boolean"
+              },
+              "durationUs": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "plugin",
+              "run",
+              "name",
+              "result",
+              "code",
+              "signal",
+              "stdoutBytes",
+              "stderrBytes",
+              "stdoutTruncated",
+              "stderrTruncated",
+              "durationUs"
             ]
-          },
-          "signal": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "stdoutBytes": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "stderrBytes": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "stdoutTruncated": {
-            "type": "boolean"
-          },
-          "stderrTruncated": {
-            "type": "boolean"
-          },
-          "durationUs": {
-            "type": "integer",
-            "minimum": 0
           }
-        },
-        "required": [
-          "plugin",
-          "surface",
-          "name",
-          "result",
-          "code",
-          "signal",
-          "stdoutBytes",
-          "stderrBytes",
-          "stdoutTruncated",
-          "stderrTruncated",
-          "durationUs"
         ]
       },
-      "description": "A run of a declared program ends. result is exited for an exit, or the end that ended the run; code is the exit status, null when a signal ended the program, and signal names that signal. stdoutBytes and stderrBytes count every byte the program wrote, kept or discarded (docs/spec/native-surfaces.md#program-runs)."
+      "description": "A run of a declared program ends. result is exited for an exit, or the end that ended the run; code is the exit status, null when a signal ended the program, and signal names that signal. stdoutBytes and stderrBytes count every byte the program wrote, kept or discarded (docs/spec/native-surfaces.md#program-runs). A view run carries its surface, and an account run carries its run in place of the surface."
     },
     "host.program.refused": {
       "layer": "host",
@@ -1003,29 +1160,57 @@
       "level": "error",
       "fields": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "plugin": {
-            "type": "string"
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "surface": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "plugin",
+              "surface",
+              "name",
+              "reason"
+            ]
           },
-          "surface": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "reason": {
-            "type": "string"
+          {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "run": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "plugin",
+              "run",
+              "name",
+              "reason"
+            ]
           }
-        },
-        "required": [
-          "plugin",
-          "surface",
-          "name",
-          "reason"
         ]
       },
-      "description": "A run of a declared program was refused before its program started; reason is the refusal text that the view call answers (docs/spec/native-surfaces.md#program-runs)."
+      "description": "A run of a declared program was refused before its program started; reason is the refusal text that the view call answers (docs/spec/native-surfaces.md#program-runs). A view run carries its surface, and an account run carries its run in place of the surface."
     },
     "host.program.failed": {
       "layer": "host",
@@ -1033,29 +1218,57 @@
       "level": "error",
       "fields": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "plugin": {
-            "type": "string"
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "surface": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "plugin",
+              "surface",
+              "name",
+              "reason"
+            ]
           },
-          "surface": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "reason": {
-            "type": "string"
+          {
+            "type": "object",
+            "properties": {
+              "plugin": {
+                "type": "string"
+              },
+              "run": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "plugin",
+              "run",
+              "name",
+              "reason"
+            ]
           }
-        },
-        "required": [
-          "plugin",
-          "surface",
-          "name",
-          "reason"
         ]
       },
-      "description": "A run of a declared program failed after the start was attempted: the program did not start, or a kept output stream is not UTF-8; reason is the failure text that the view call answers (docs/spec/native-surfaces.md#program-runs)."
+      "description": "A run of a declared program failed after the start was attempted: the program did not start, or a kept output stream is not UTF-8; reason is the failure text that the view call answers (docs/spec/native-surfaces.md#program-runs). A view run carries its surface, and an account run carries its run in place of the surface."
     },
     "host.call.peer-lost": {
       "layer": "host",
@@ -3008,6 +3221,27 @@
       },
       "description": "A command request that the workbench answered; `error` names a failed command."
     },
+    "workbench.status.read": {
+      "layer": "workbench",
+      "class": "call",
+      "level": ["debug", "warn"],
+      "result": true,
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "requested": { "type": ["string", "null"] },
+          "resolved": { "type": "string" },
+          "session": { "type": ["string", "null"] },
+          "micros": { "type": "number" },
+          "ok": { "type": "boolean" },
+          "code": { "type": ["integer", "null"] }
+        },
+        "required": ["name", "requested", "resolved", "session", "micros", "ok", "code"]
+      },
+      "description": "A status read that names a surface, answered by the workbench: `requested` is the surface of the request (null when the request names none), `resolved` is the surface that answered it, and `session` is the owned session that the resolved surface shows (null when it shows none); `code` is the error code of a failed read."
+    },
     "workbench.layout.change": {
       "layer": "workbench",
       "class": "call",
@@ -4120,6 +4354,35 @@
       },
       "description": "The host connected to a persistent service."
     },
+    "host.sidecar.outdated": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "running": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "installed": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "running",
+          "installed"
+        ]
+      },
+      "description": "The host connected to a persistent service whose hello version differs from the version that installed.json records: running is the version of the hello reply or null when it has none, and installed the recorded version (docs/spec/persistent-services.md#updates)."
+    },
     "host.sidecar.disconnect": {
       "layer": "host",
       "class": "lifecycle",
@@ -4357,6 +4620,28 @@
         ]
       },
       "description": "The host showed the window of a project owner after another window opened the project: key tells whether the window is the key window after it was shown, and app_active whether the application is active (null when that state could not be read). The host does not activate the application (docs/spec/projects.md)."
+    },
+    "host.workspace.plugin-data": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "plugin": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plugin",
+          "key"
+        ]
+      },
+      "description": "An entry of a plugin key was stored in plugin-data.json; plugin and key name the entry, never its value (docs/spec/plugins.md#plugin-data)."
     },
     "host.workspace.settings": {
       "layer": "host",

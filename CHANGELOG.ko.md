@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1107: window-check 패키지가 docs/spec/events.json의 이벤트 목록을 싣고, 그 목록에 상태 읽기 이벤트가 있다.
 - F1217-7-2-2: 작업 공간 페이지가 그룹 프로젝트 폴더와 projectsFolder의 폴더 행, 찾아보기 버튼을 그리며, 두 호스트에서 core.settings.choose-folder를 실행한다.
 - F1107: F1107의 scripted status-get 케이스는 scripted page runner로 실행되며, 이 runner가 모든 scripted 케이스를 실행한다.
 - F1217-7-2-4: Wails host와 Tauri host가 절대 경로도 ~/로 시작하는 경로도 아닌 projectsFolder를 공통 설정 쓰기와 공통 settings.json에서 mygo와 web workbench와 같은 글로 거부한다.
