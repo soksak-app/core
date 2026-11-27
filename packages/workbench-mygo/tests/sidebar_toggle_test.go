@@ -83,3 +83,20 @@ func TestTheSideShortcutsDoNothingOnTheProjectHome(t *testing.T) {
 		t.Fatalf("⌘B changed the left side from %v to %v on the project home", before, after)
 	}
 }
+
+// A side shortcut does not run while a text input has focus: the field that renames a project keeps the command key for its own input
+// (docs/spec/exposure.md#keyboard-shortcuts, the row of the side keys and the row of text input keys).
+func TestTheSideShortcutDoesNotRunWhileATextFieldHasFocus(t *testing.T) {
+	f := openedShell(t)
+	if len(f.host.projects) == 0 {
+		t.Fatal("the fixture opened no project")
+	}
+	f.run("core.rename.begin", map[string]string{"kind": "project", "id": f.host.projects[0]["id"].(string)})
+	f.settle()
+	before := appliedSide(t, f, "left")
+	f.tester.Key(ui.Cmd, ui.KeyB)
+	f.settle()
+	if got := appliedSide(t, f, "left"); got != before {
+		t.Fatalf("⌘B changed the left side from %v to %v while the rename field has focus", before, got)
+	}
+}

@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import shortcutTable from "../shortcuts.json" with { type: "json" };
-import { sideShortcut } from "../window-sidebars.js";
+import { JSDOM } from "jsdom";
+import { sideShortcut, textInputFocused } from "../window-sidebars.js";
 
 const rows = [
   { key: "cmd+b", side: "left" },
@@ -18,7 +19,7 @@ test("the shortcut table holds one row of core.sidebar.toggle for each side, wit
     const row = shortcutTable.shortcuts.find((entry) => entry.key === key && entry.owner === "workbench");
     assert.equal(row?.command, "core.sidebar.toggle", `the workbench row ${key} does not name core.sidebar.toggle`);
     assert.deepEqual(row.params, { side }, `the workbench row ${key} does not pass the side ${side}`);
-    assert.equal(row.when, "The work screen is shown", `the workbench row ${key} has another condition`);
+    assert.equal(row.when, "The work screen is shown and no text input has focus", `the workbench row ${key} has another condition`);
   }
 });
 
@@ -37,4 +38,13 @@ test("the window page takes the side keys with the same table, and no side key i
   assert.match(source, /sideShortcut\(event\)/, "the window keydown handler does not read the side keys through sideShortcut");
   const keys = rows.map((row) => row.key);
   assert.equal(new Set(keys).size, keys.length);
+});
+
+test("a text input that has focus keeps the side keys for its own typing, and another element does not", (t) => {
+  const dom = new JSDOM('<body><input id="field"><textarea id="area"></textarea><div id="edit" contenteditable="true"></div><button id="button">b</button></body>');
+  t.after(() => dom.window.close());
+  const { document } = dom.window;
+  for (const id of ["field", "area", "edit"]) assert.equal(textInputFocused(document.getElementById(id)), true, `${id} is a text input`);
+  assert.equal(textInputFocused(document.getElementById("button")), false, "a button takes no typed keys");
+  assert.equal(textInputFocused(null), false, "no focused element takes no typed keys");
 });

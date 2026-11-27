@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-8: The side keys cmd+b, opt+cmd+b, shift+cmd+j and cmd+j run only while no text input has focus, in both hosts.
 - F1122: The services step of the runner ends the persistent services of a run before the remaining-processes step, and the hidden-view-reload check passes with no service left.
 - F1222-2: The test claims of scripts/check-tests.mjs name the reduced motion tests of the Go, Rust and mygo hosts and link them to the item.
 - F1222-2: The progress notice ring check records its Red and Green results, and the gpuikit reduced motion override is held by F914.

@@ -75,7 +75,7 @@ import { observePlaneGrid } from "./device-grid.js";
 /* Reads the plane and the compositor and verifies them. It changes nothing, so those two do not
    know this module. */
 import { verify } from "./verify.js";
-import { chromeSwitches, sideShortcut } from "./window-sidebars.js";
+import { chromeSwitches, sideShortcut, textInputFocused } from "./window-sidebars.js";
 /* Wiring of the error display and the layout queue. This document passes the document, the host, the plane and the compositor. */
 import { createPageLayout, reportUncaught, verificationRows } from "./page-layout.js";
 
@@ -678,7 +678,7 @@ addEventListener("keydown", (event) => {
   }
   // The side keys show or hide a window sidebar on the work screen (docs/spec/external-sidebars.md#window-tools).
   const side = sideShortcut(event);
-  if (side !== null && !projects.inHome()) {
+  if (side !== null && !projects.inHome() && !textInputFocused(document.activeElement)) {
     event.preventDefault();
     return run("core.sidebar.toggle", { side });
   }

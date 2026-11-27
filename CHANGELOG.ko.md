@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-8: 변 단축키 cmd+b, opt+cmd+b, shift+cmd+j, cmd+j는 텍스트 입력에 포커스가 없을 때만 두 호스트에서 실행된다.
 - F1122: 실행기의 services 단계가 remaining processes 단계 전에 run의 persistent service를 끝내며, hidden-view-reload check가 남은 service 없이 통과한다.
 - F1222-2: scripts/check-tests.mjs의 테스트 주장이 Go, Rust, mygo 호스트의 동작 줄이기 테스트를 이름으로 들고 이 항목에 잇는다.
 - F1222-2: 진행 notice 고리 검사의 Red와 Green 결과를 기록하고, gpuikit 동작 줄이기 재정의는 F914가 보류한 상태로 둔다.

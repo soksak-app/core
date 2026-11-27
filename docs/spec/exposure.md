@@ -96,10 +96,10 @@ The view reads the rows that it may forward with the view call `runtime.shortcut
 | `shift+cmd+n` | workbench | core.window.new | — | No host chrome (browser build) |
 | `cmd+o` | workbench | core.home.search.focus | — | The project home is shown |
 | `cmd+Backspace` | workbench | core.home.confirm | — | The project home is shown, a row is selected and no form field has focus; the command gets answer ask |
-| `cmd+b` | workbench | core.sidebar.toggle | — | The work screen is shown; the command gets side left |
-| `opt+cmd+b` | workbench | core.sidebar.toggle | — | The work screen is shown; the command gets side right |
-| `shift+cmd+j` | workbench | core.sidebar.toggle | — | The work screen is shown; the command gets side top |
-| `cmd+j` | workbench | core.sidebar.toggle | — | The work screen is shown; the command gets side bottom |
+| `cmd+b` | workbench | core.sidebar.toggle | — | The work screen is shown and no text input has focus; the command gets side left |
+| `opt+cmd+b` | workbench | core.sidebar.toggle | — | The work screen is shown and no text input has focus; the command gets side right |
+| `shift+cmd+j` | workbench | core.sidebar.toggle | — | The work screen is shown and no text input has focus; the command gets side top |
+| `cmd+j` | workbench | core.sidebar.toggle | — | The work screen is shown and no text input has focus; the command gets side bottom |
 | `Enter` | workbench | core.rename.commit | — | The tab rename field has focus |
 | `Escape` | workbench | core.rename.cancel | — | The tab rename field has focus |
 | `Enter` | workbench | core.home.form.submit | — | A project home form field has focus |

@@ -48,6 +48,14 @@ export function sideShortcut(event) {
   return null;
 }
 
+/**
+ * Whether element takes the typed keys as text, so that the side keys leave them to it: an input, a textarea or an editable element
+ * (docs/spec/exposure.md#keyboard-shortcuts). The rows of the side keys hold only while no text input has focus.
+ */
+export function textInputFocused(element) {
+  return element?.matches?.("input, textarea, [contenteditable]") === true;
+}
+
 /** The orientation of the sections of the sidebar of a side: vertical at left and right, horizontal at top and bottom. */
 export function windowOrientation(side) {
   return windowAxis(side) === "x" ? "vertical" : "horizontal";
