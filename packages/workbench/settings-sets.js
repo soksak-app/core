@@ -147,7 +147,6 @@ function editor(set) {
     row({ label: "배치", control: layout, key: `layout:${set.id}` }),
     row({ label: "섹션", control: sections, key: `sections:${set.id}`, extras: [addSection(set)] }),
     element("p", "set-caption", "바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다."),
-    button("완료", { expose: "core.settings-tab.edit", command: "core.settings-tab.edit", params: { set: null }, variant: "primary" }),
   );
   return wrap;
 }

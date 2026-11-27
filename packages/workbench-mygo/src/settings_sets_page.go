@@ -164,8 +164,7 @@ func (s *Shell) setEditor(b *settingsBuilder, set StoredSet, scope string) {
 	}
 	rows = append(rows, chips)
 	rows = append(rows, settingsRow{controls: []*SettingsControl{s.sectionAdder(b, set, scope)}})
-	rows = append(rows, settingsRow{description: "바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다.",
-		controls: []*SettingsControl{b.small("done:"+set.ID, "core.settings-tab.edit", "완료", "core.settings-tab.edit", map[string]any{"set": nil})}})
+	rows = append(rows, settingsRow{description: "바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다."})
 	b.group("세트 편집: "+set.Title, "", rows...)
 }
 
