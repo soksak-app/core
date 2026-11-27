@@ -291,6 +291,7 @@ func TestTheSnapshotOfAWindowHoldsItsLayoutItsPluginsAndItsSurfaces(t *testing.T
 		t.Fatalf("the snapshot holds the layout %v, the description %v", result["layout"], described)
 	}
 	plugins := []any{
+		map[string]any{"plugin": "fieldprobe", "name": "파일", "description": "fieldprobe", "surface": nil},
 		map[string]any{"plugin": "notes", "name": "노트", "description": "notes", "surface": map[string]any{
 			"params": map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "line": map[string]any{"type": "number"}}},
 			"opens":  []any{}}},
@@ -304,7 +305,8 @@ func TestTheSnapshotOfAWindowHoldsItsLayoutItsPluginsAndItsSurfaces(t *testing.T
 		read := group.(map[string]any)
 		surfaces = append(surfaces, read["surface"].(string)+" "+read["plugin"].(string)+" "+read["state"].(string))
 	}
-	if want := []string{"t1 notes loaded", "t2 plain loaded"}; !reflect.DeepEqual(surfaces, want) {
+	if want := []string{"spc-aaaaaa/left/fieldprobe.tree fieldprobe loaded", "spc-aaaaaa/left/fieldprobe.bookmarks fieldprobe loaded",
+		"t1 notes loaded", "t2 plain loaded"}; !reflect.DeepEqual(surfaces, want) {
 		t.Fatalf("the snapshot holds the surface groups %v, want %v", surfaces, want)
 	}
 }

@@ -30,10 +30,13 @@ const layoutPlugins = `{"plugins": [
 		"exposes": {"commands": [{"name": "notes.save", "description": "saves", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}]}}},
 	{"id": "plain", "package": "@scope/plugin-plain", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "plain", "name": "Plain", "description": "plain", "mark": "p", "icon": "<path d=\"M1 1h14\"/>",
 		"surface": {"composition": {"kind": "view", "page": "ui/plain.html"}}}},
-	{"id": "fieldprobe", "package": "f", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "fieldprobe", "name": "파일", "description": "fieldprobe", "sections": [
-		{"id": "fieldprobe.tree", "name": "파일 트리", "composition": {"kind": "view", "page": "ui/tree.html"}, "height": "fill"},
-		{"id": "fieldprobe.bookmarks", "name": "북마크", "composition": {"kind": "view", "page": "ui/bookmarks.html"}, "height": 160}]}}
+	` + fieldprobeEntry + `
 ]}`
+
+// fieldprobeEntry is the installed entry of the plugin that holds the sections of the left window sidebar of the test environment.
+const fieldprobeEntry = `{"id": "fieldprobe", "package": "f", "version": "1.0.0", "folder": "/installed/plugin", "manifest": {"id": "fieldprobe", "name": "파일", "description": "fieldprobe", "sections": [
+		{"id": "fieldprobe.tree", "name": "파일 트리", "composition": {"kind": "view", "page": "ui/tree.html"}, "height": "fill"},
+		{"id": "fieldprobe.bookmarks", "name": "북마크", "composition": {"kind": "view", "page": "ui/bookmarks.html"}, "height": 160}]}}`
 
 // paramTab is a stored tab of plugin with the stored params, which are absent for nil.
 func paramTab(id, plugin string, params map[string]any) map[string]any {

@@ -1372,7 +1372,8 @@ func TestAFailureStaysUntilTheSurfacesPresent(t *testing.T) {
 		}
 		return 0, nil
 	}}
-	f := surfaceShellOn(t, installedDocument, stored)
+	// fieldprobe holds the sections of the left window sidebar of the test environment, so no warning of a missing plugin stands in the banner.
+	f := surfaceShellOn(t, strings.Replace(installedDocument, "\n]}", ",\n"+fieldprobeEntry+"\n]}", 1), stored)
 	stored.presentFailure = errors.New("the current image raster did not present")
 	f.tester.SetSize(1160, 800)
 	f.shownErrors()

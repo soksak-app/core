@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1236-5: The mygo snapshot and presentation failure tests expect the sidebar plugin that the layout fixture installs.
 - F1262: The clone of the import form writes host.clone.start, host.clone.line and host.clone.end to the event log through the gated writer.
 - F1265: The pressed fullscreen tool test uses a fixture without sidebar sets, so the missing-plugin notice does not cover its head tools.
 - F1246: The contract audit reads the reload binding case declaration of the Rust host, so tauriv2 and gpuikit declare it.
