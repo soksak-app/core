@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1226: The record of the F1226 item names the quit request in literal words, which the structure check accepts.
 - F1217-8: The held item records that editor.find.open binds cmd+f, so the workbench keeps ⌘F unbound until its owner is decided.
 - F1232-2: The comments of 23 files of packages/workbench are English, with ASCII anchors of the English specs.
 - F959-2: A make target runs each agent layout request once with claude against mygo and judges the resulting layout; the first run meets 1 of 4 requests.
