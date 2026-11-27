@@ -6660,10 +6660,6 @@
         "description": "The 되돌리기 button of the undo toast."
       },
       {
-        "name": "core.settings-tab.confirm",
-        "description": "The buttons of an open removal confirmation."
-      },
-      {
         "name": "core.settings-tab.choice",
         "description": "The segments and select boxes of the setting rows, bound to core.settings.change."
       },

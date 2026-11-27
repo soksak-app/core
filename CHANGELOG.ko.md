@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: 어떤 빌드도 그리지 않는 요소 선언 core.settings-tab.confirm을 두 노출 선언에서 제거했다.
 - F1107-1-1: 페이지 exposure의 forward 주석을 status read 기록이 아니라 forward 위에 둔다.
 - F1217-7: 누락된 스킬 또는 MCP 설정 항목은 core.settings-tab.setup-install 고치기 또는 설치 버튼을 가지며 core.setup.install을 실행한다.
 - F1217-7: 플러그인 끝내기 동작과 플러그인 문자열 설정의 텍스트 필드를 테스트가 요소 트리에서 읽는다.
