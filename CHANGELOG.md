@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1249: The host file audit records the sok category test pair as an allowed difference of the Rust private test placement.
 - F959-4: The Tauri run passed on a bundle built before later commits changed the request path; F959-4 waits for the final verification batch.
 - F1254: The checklist line of this item is in the top-level list of the checklist.
 - F1258-1: The F1258 record states the environment that the six tests need, because they pass on main with the installed dependencies.
