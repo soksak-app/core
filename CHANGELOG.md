@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-17: The settings tab is compared page by page with the settings-36 design, and its look preview missing from both hosts is recorded as a defect.
 - F1236-2: The Wails host returns the errors of the JSON encodings of the notification identifier and of the view sidecar message instead of discarding them.
 - F1235: The page head tests of the agents and diagnostics pages have English names and comments.
 - F1240: The client watch test waits for the home screen that the endpoint case holds instead of the removed library screen.
