@@ -368,7 +368,7 @@ fn watch_prints_the_value_and_each_change() {
         (code, stdout.as_str(), stderr.as_str()),
         (
             1,
-            "{\"screen\":\"library\"}\n{\"screen\":\"workspace\"}\n",
+            "{\"screen\":\"home\"}\n{\"screen\":\"workspace\"}\n",
             "sok: endpoint connection closed\n"
         )
     );
