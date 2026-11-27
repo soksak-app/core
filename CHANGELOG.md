@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3: Test fixtures declare core.toasts.list with the notice commands; the error toast test selects its close control by class.
 - F1217-12: core.notices reports the shown entry, and the center scrolls the entry of core.notices.show into view and draws it as the shown entry.
 - F1217-11-3: The web notice center marks the entry of core.notices.show as the shown entry and reports it in core.notices shown; the marked entry scrolls into view.
 - F1217-12-10: The workbench shortcut table is tied to the declared rows of the view-calls-shortcuts-read page-wire case; the plugin-api view host test reads those rows.

@@ -65,8 +65,8 @@ const schedule = () => { page.onLayout(new Map(), () => {}, new Map(), 40, () =>
 test("a layout failure of a project switch started from the interface writes one workbench error line", async () => {
   reportRejectionsAsPage();
   const declared = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes;
-  // The notice commands of the declaration, which the toasts and the center bind.
-  const notices = declared.commands.filter(({ name }) => name.startsWith("core.notices."));
+  // The notice commands of the declaration, which the toasts and the center bind (core.toasts.list is the line form list).
+  const notices = declared.commands.filter(({ name }) => name.startsWith("core.notices.") || name.startsWith("core.toasts."));
   registry.declare("core", { status: [], element: [], commands: [...notices, {
     name: "core.fixture.activate", description: "Activates.", params: { type: "object", properties: {} }, result: { type: "null" },
   }] });

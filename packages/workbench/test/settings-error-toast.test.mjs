@@ -14,7 +14,8 @@ test("an error toast closes with its own control, which runs core.notices.close 
   await openSettingsTab(ctx);
   const toast = document.querySelector(".toast");
   assert.ok(toast, "the error toast is not shown while the settings tab is open");
-  const button = toast.querySelector("button");
+  // The close control is the toast__close button; the actions of the toast come before it (docs/spec/notifications.md#toasts).
+  const button = toast.querySelector(".toast__close");
   let dismissals = 0;
   ctx.registry.watch((name) => { if (name === "core.notices.close") dismissals++; });
   button.click();

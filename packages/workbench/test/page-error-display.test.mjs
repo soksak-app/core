@@ -15,7 +15,7 @@ const { notificationStore } = await import("../tab-reports.js");
 const { registry } = await import("../exposure.js");
 // The notice commands of the declaration, which the toasts bind.
 const declared = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes;
-registry.declare("core", { status: [], element: [], commands: declared.commands.filter(({ name }) => name.startsWith("core.notices.")) });
+registry.declare("core", { status: [], element: [], commands: declared.commands.filter(({ name }) => name.startsWith("core.notices.") || name.startsWith("core.toasts.")) });
 
 const dom = new JSDOM("<body></body>");
 
