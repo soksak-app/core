@@ -133,9 +133,11 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
   | Merged toast title | title ×n | notices.js line 132 | errors_screen.go line 341 | existing rule | matches |
   | Quiet mode | errors only as toasts | notices.js line 95, notice-view.js line 236 | notice_center_draw.go, notice_store.go | existing rule | matches |
   | Toast and notice center roles | alert for errors, status for others | notice-view.js lines 95, 131 | errors_screen.go | existing rule | web matches; mygo not measured at DOM level |
+  | Notice center shape and stacking | popover or drawer | notice-view.js | notice_center_draw.go | owned by F1239-5 | not measured in this table |
   | Launcher search and hint | placeholder, ⌘O caption, hint line | home.js line 59 (`home__search-key`), line 63 | home_page.go lines 57, 72, 303 | existing rule | matches |
   | Launcher buttons | 새 프로젝트 (primary), 폴더 열기, Git 저장소 가져오기 | home.js lines 242–248 | home_page.go lines 89–91 | existing rule | matches |
   | Launcher groups and row | 고정, 최근; row with 열림, 스페이스 n, relative day | home.js lines 163, 172, 208–209 | home_page.go lines 170–173, 232–290 | existing rule | matches |
+  | Gear size in the title bar | owned by F1239-6 | not measured in this table | not measured in this table | owned by F1239-6 | not measured in this table |
 
   The proposals of section 10 of the design reference are not implemented: the window sidebar set for a closed side while its plugin has focus, plugin relationship information (required plugins, section count, settings count, install count, maker), the launcher folder open and git import behavior, settings folding above 20 plugins, catalog paging above hundreds of entries, the card notice source API, and the shortcut conflicts of ⌘B, ⌥⌘B, ⌘J and ⇧⌘J.
   - [o] F1217-18-4 — The title of a missing plugin names the id alone when the plugin name is the id, so `files(files)` is not shown. Input: a window sidebar whose set names a plugin with no other name. Behavior: the title repeated the id as `name(id)`. Expected: the title is the id alone when the name is the id, and `name(id)` otherwise (docs/spec/plugins.md#missing-plugins). Verified by the missing-plugin tests of mygo, whose expected titles changed from `gone(gone)` to `gone` in the same change (Red: the titles still repeat the id; Green: the title names the id once).

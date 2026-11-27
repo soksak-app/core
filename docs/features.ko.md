@@ -137,9 +137,11 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   | 합친 토스트 제목 | 제목 ×n | notices.js 132행 | errors_screen.go 341행 | 기존 규칙 | 일치 |
   | 조용히 모드 | 오류만 토스트로 | notices.js 95행, notice-view.js 236행 | notice_center_draw.go, notice_store.go | 기존 규칙 | 일치 |
   | 토스트와 알림 센터 역할 | 오류는 alert, 나머지는 status | notice-view.js 95행, 131행 | errors_screen.go | 기존 규칙 | web 일치, mygo는 DOM 수준에서 측정하지 않음 |
+  | 알림 센터 모양과 쌓임 | 팝오버 또는 서랍 | notice-view.js | notice_center_draw.go | F1239-5 소관 | 이 표에서 측정하지 않음 |
   | 런처 검색칸과 안내 | 자리 표시 문구, ⌘O 표시, 안내 줄 | home.js 59행(`home__search-key`), 63행 | home_page.go 57, 72, 303행 | 기존 규칙 | 일치 |
   | 런처 버튼 | 새 프로젝트(primary), 폴더 열기, Git 저장소 가져오기 | home.js 242–248행 | home_page.go 89–91행 | 기존 규칙 | 일치 |
   | 런처 묶음과 줄 | 고정, 최근; 열림, 스페이스 n, 상대 날짜가 있는 줄 | home.js 163, 172, 208–209행 | home_page.go 170–173, 232–290행 | 기존 규칙 | 일치 |
+  | 제목줄 설정 아이콘 크기 | F1239-6 소관 | 이 표에서 측정하지 않음 | 이 표에서 측정하지 않음 | F1239-6 소관 | 이 표에서 측정하지 않음 |
 
   디자인 참조 10장의 제안 항목은 구현하지 않았다: 닫힌 변에 대한 창 사이드바 세트를 플러그인 포커스 동안 보이기, 플러그인 관계 정보(필요한 플러그인, 섹션 수, 설정 수, 설치 수, 만든 이), 런처의 폴더 열기와 git 가져오기 동작, 플러그인 20개를 넘을 때 설정 접기, 수백 개를 넘을 때 카탈로그 페이지 나누기, 카드 알림 출처 API, ⌘B·⌥⌘B·⌘J·⇧⌘J 단축키 충돌.
   - [o] F1217-18-4 — 이름이 id와 같은 플러그인의 빠진 플러그인 제목은 id만 쓴다, 그래서 `files(files)`를 보이지 않는다. Input: 세트가 이름 말고는 없는 플러그인을 가리키는 창 사이드바. Behavior: 제목이 id를 `이름(id)`로 되풀이했다. Expected: 이름이 id와 같으면 제목은 id만이고, 아니면 `이름(id)`다(docs/spec/plugins.md#missing-plugins). 빠진 플러그인의 mygo 테스트로 검증한다. 기대 제목을 `gone(gone)`에서 `gone`으로 같은 변경에서 바꿨다(Red: 제목이 여전히 id를 되풀이함, Green: 제목에 id가 한 번만 나옴).
