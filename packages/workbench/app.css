@@ -683,7 +683,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   align-self: stretch; padding: var(--toast-pad-top) var(--toast-pad-right) var(--toast-pad-bottom) var(--toast-pad-x); overflow: hidden; pointer-events: auto;
   background: var(--card); color: var(--fg); border: var(--bw) solid var(--edge); border-radius: var(--r-sm); box-shadow: var(--toast-shadow); }
 /* The list of the other toasts of the line form: a column under the line (docs/spec/notifications.md#toasts). */
-#toasts .toast__list { flex-basis: 100%; display: flex; flex-direction: column; align-items: flex-end; gap: var(--toast-gap); }
+#toasts .toast__list { flex-basis: var(--fill); display: flex; flex-direction: column; align-items: flex-end; gap: var(--toast-gap); }
 #toasts .toast__list[hidden] { display: none; }
 #toasts[data-style="line"] .toast { width: max-content; max-width: var(--toast-width); height: var(--toast-line-h); padding-block: 0; align-items: center; border-radius: var(--toast-line-h); }
 .toast[hidden] { display: none; }

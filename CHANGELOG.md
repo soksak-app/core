@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3: The toast list reads the declared fill token instead of a literal flex basis.
 - F1217-7: The status bar names its project, card count and theme texts as elements, so they reach the element tree.
 - F999-7: The host Rust test files follow rustfmt, so the workspace format check of CI passes.
 - F1217-7: The home row draws its pin and remove buttons beside the open button, so their element names reach the element tree.
