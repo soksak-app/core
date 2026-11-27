@@ -229,3 +229,29 @@ test("an occurrence of an origin whose notice was closed is a new notice with it
   assert.notEqual(second, first);
   assert.equal(store.notice(second).count, 1);
 });
+
+test("card notices merge only within one card: the same kind and title on two cards are two notices", () => {
+  const { store } = fixture();
+  const onA = store.showTab({ kind: "warning", title: "service outdated", text: "a" }, { card: "card-a", tab: "tab-a", plugin: "plugin" });
+  const onB = store.showTab({ kind: "warning", title: "service outdated", text: "b" }, { card: "card-b", tab: "tab-b", plugin: "plugin" });
+  assert.notEqual(onB, onA);
+  assert.equal(store.toasts().length, 2);
+  assert.equal(store.notice(onA).count, 1);
+  assert.equal(store.notice(onB).count, 1);
+});
+
+test("a card notice and an app notice with the same kind and title do not merge", () => {
+  const { store } = fixture();
+  const app = store.show({ kind: "warning", title: "service outdated", text: "app" });
+  const card = store.showTab({ kind: "warning", title: "service outdated", text: "card" }, { card: "card-a", tab: "tab-a", plugin: "plugin" });
+  assert.notEqual(card, app);
+  assert.equal(store.toasts().length, 2);
+});
+
+test("the same card with the same kind and title merges into the shown card notice", () => {
+  const { store } = fixture();
+  const first = store.showTab({ kind: "warning", title: "service outdated", text: "one" }, { card: "card-a", tab: "tab-a", plugin: "plugin" });
+  const again = store.showTab({ kind: "warning", title: "service outdated", text: "two" }, { card: "card-a", tab: "tab-b", plugin: "plugin" });
+  assert.equal(again, first);
+  assert.equal(store.notice(first).count, 2);
+});

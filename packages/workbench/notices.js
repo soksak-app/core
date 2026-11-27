@@ -170,7 +170,9 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
       const prior = origins.get(origin);
       if (prior && prior.kind === kind && prior.base === title && prior.message === message) return prior.id;
     }
-    const shown = kind === "progress" ? null : notices.find((n) => n.kind === kind && n.base === title && (n.toast !== null || n.line !== null));
+    // A card notice merges only within its card; an app notice has no card and merges with app notices of the same kind and title.
+    const cardOf = (src) => (src.kind === "card" ? src.card : null);
+    const shown = kind === "progress" ? null : notices.find((n) => n.kind === kind && n.base === title && cardOf(n.source) === cardOf(source) && (n.toast !== null || n.line !== null));
     // A redraw of a shown notice with the same message and no origin is the same occurrence: it adds no count and writes no log line.
     if (shown && origin === null && shown.message === message) return shown.id;
     if (shown) {

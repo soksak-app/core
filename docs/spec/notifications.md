@@ -23,7 +23,7 @@ A notice is a record:
 
 Each kind has its own icon shape and color token: success a check in the success token, info an `i` in the accent, warning a triangle in the warning token, error a cross in the error token, and progress a turning ring, which becomes the success or error icon when its work ends. The color is never the only mark. A request for a confirmation, such as an agent that waits for the person, is a `warning` notice whose action answers it.
 
-An occurrence with the same kind and title as a notice that is still shown as a toast or on a status line merges into it: `count` grows, `at`, `text`, `source` and `actions` take the new values, and the title reads `<title> ×<count>`. A redraw of an occurrence that the person closed leaves it closed; the next occurrence, after its origin changed or recovered, opens a new toast and adds a new center entry.
+An occurrence with the same kind and title as a notice that is still shown as a toast or on a status line merges into it: `count` grows, `at`, `text`, `source` and `actions` take the new values, and the title reads `<title> ×<count>`. A redraw of an occurrence that the person closed leaves it closed; the next occurrence, after its origin changed or recovered, opens a new toast and adds a new center entry. A card notice (source `card`) merges only with a shown notice of the same card, so the same kind and title on two cards are two notices; an app notice (no card) merges only with an app notice.
 
 The workbench writes one application log line when a notice appears or merges, in the class of its source: `error: <where>: <text>` at the level `error` for an error, which the default policy stores ([logging](logging.md#policy)), and `notice <kind>: <where>: <title>` at the level `info` for the other kinds, which the policy stores when it names that class at `info`. `<where>` names the source.
 
@@ -69,8 +69,8 @@ The bell is the last element of the title bar on every screen, the work screen, 
 
 The setting 알림 센터 모양 (`noticeCenterStyle`) chooses `popover` (팝오버), which drops under the bell, or `drawer` (서랍), which fills the right side of the window from the bottom of the title bar to the bottom of the window. Escape and the close control close it.
 
-- The head shows `알림`, the button `모두 읽음` (`core.notices.read-all`), the button ⚙, which opens the settings tab at the group 알림 of the page 동작, and the close control, the element `core.notices.toggle`, which runs `core.notices.toggle`.
-- The filter segment shows `전체 <n>`, `오류·경고 <n>` and `진행 중 <n>` (`core.notices.filter {filter}` with `all`, `problems` or `progress`), with the switch 조용히 beside it.
+- The head shows `알림`, the button `모두 읽음` (`core.notices.read-all`), the button ⚙, which runs `core.settings-tab.nav {page: "behavior", group: "notices"}` and so opens the settings tab at the group 알림 of the page 동작, and the close control, the element `core.notices.toggle`, which runs `core.notices.toggle`.
+- The filter segment shows `전체 <n>`, `오류·경고 <n>` and `진행 중 <n>` (`core.notices.filter {filter}` with `all`, `problems` or `progress`), with the switch 조용히 beside it (element `core.notices.quiet`, which runs `core.settings.set {patch: {quietToasts}}`).
 - The list groups the entries: `진행 중` first, with a progress bar for each, then `오늘`, `어제` and each earlier day. Each group has the button `지우기` (`core.notices.clear {group}`).
 - An entry shows the icon, the title with its count, the text, the source chip (the card name, the plugin name, `설정` or `soksak`), the time and its actions. An unread entry has a dot at its left, in the error token for an error. A press on the entry of a card notice runs `core.card.focus {card}`.
 - The foot reads `오류는 지울 때까지, 나머지는 7일 동안 남는다.` with the button `모두 지우기` (`core.notices.clear-all`).

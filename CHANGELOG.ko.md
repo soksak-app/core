@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1161: card notice는 같은 card의 떠 있는 notice하고만 합쳐지고, app notice는 kind와 title로 계속 합쳐진다
 - F1217-16: 설정 창을 settings tab으로 이름 바꾸고 settings_modal.go를 settings_tab_view.go로 옮겼다.
 - F1161: workbench package의 files 목록이 sidecar-outdated.js를 적어서, staging한 frontend가 core-exposure.js가 import하는 module을 가져요.
 - F715-3: 테스트 링크 검사가 오류 toast, surface view path, 설정 탭, fixture 페이지의 남은 링크를 현재 심볼과 테스트로 연결하고, 제목이 없어진 F699 e2e 링크를 제거한다.

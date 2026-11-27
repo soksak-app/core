@@ -23,7 +23,7 @@ Notice는 다음 필드를 가진 기록이다.
 
 각 kind는 자기 아이콘 모양과 색 token을 가진다. `success`는 success token의 체크, `info`는 accent의 `i`, `warning`은 warning token의 삼각형, `error`는 error token의 ×, `progress`는 도는 고리이며 작업이 끝나면 success 또는 error 아이콘이 된다. 색만으로 표시하지 않는다. 사용자의 확인을 기다리는 요청, 예컨대 사용자를 기다리는 agent는 그 답을 실행하는 action을 가진 `warning` notice다.
 
-같은 kind와 title을 가진 발생은, 아직 toast나 status line에 떠 있는 notice가 있으면 그 notice에 합쳐진다. `count`는 늘고, `at`, `text`, `source`, `actions`는 새 값을 가지며, title은 `<title> ×<count>`로 읽힌다. 사용자가 닫은 발생을 다시 그려도 닫힌 채로 남는다. 출처가 바뀌거나 회복된 뒤의 다음 발생은 새 toast를 열고 알림 센터에 새 항목을 추가한다.
+같은 kind와 title을 가진 발생은, 아직 toast나 status line에 떠 있는 notice가 있으면 그 notice에 합쳐진다. `count`는 늘고, `at`, `text`, `source`, `actions`는 새 값을 가지며, title은 `<title> ×<count>`로 읽힌다. 사용자가 닫은 발생을 다시 그려도 닫힌 채로 남는다. 출처가 바뀌거나 회복된 뒤의 다음 발생은 새 toast를 열고 알림 센터에 새 항목을 추가한다. card notice(source `card`)는 같은 card의 떠 있는 notice하고만 합쳐진다. 그래서 두 card에 같은 kind와 title이 있으면 notice가 두 개다. app notice(card 없음)는 app notice하고만 합쳐진다.
 
 워크벤치는 notice가 나타나거나 합쳐질 때 애플리케이션 log에 한 줄을 쓴다. Source의 class에 따라 쓰는 줄이 다르다. 오류는 `error: <where>: <text>` 줄을 level `error`로 쓰고, 기본 정책이 이를 저장한다([logging](logging.ko.md#정책)). 나머지 kind는 `notice <kind>: <where>: <title>` 줄을 level `info`로 쓰며, 정책이 `info`로 이 class를 지정할 때 저장한다. `<where>`는 source를 가리킨다.
 
@@ -69,8 +69,8 @@ Toast는 아이콘, title, text, action, 닫기 control을 보인다. 닫기 con
 
 설정 알림 센터 모양(`noticeCenterStyle`)은 `popover`(팝오버)와 `drawer`(서랍) 중 하나를 고른다. 팝오버는 종 아래로 내려온다. 서랍은 제목줄 아래에서 창 아래까지 창의 오른쪽을 채운다. Escape와 닫기 control이 센터를 닫는다.
 
-- 머리에는 `알림`, 버튼 `모두 읽음`(`core.notices.read-all`), 버튼 ⚙, 닫기 control(element `core.notices.toggle`, `core.notices.toggle`을 실행)이 있다. ⚙은 동작 페이지의 알림 묶음이 열린 설정 탭을 연다.
-- 필터 세그먼트는 `전체 <n>`, `오류·경고 <n>`, `진행 중 <n>`을 보이며(`core.notices.filter {filter}`, 값은 `all`, `problems`, `progress`), 그 옆에 스위치 조용히가 있다.
+- 머리에는 `알림`, 버튼 `모두 읽음`(`core.notices.read-all`), 버튼 ⚙, 닫기 control(element `core.notices.toggle`, `core.notices.toggle`을 실행)이 있다. ⚙은 `core.settings-tab.nav {page: "behavior", group: "notices"}`를 실행해 동작 페이지의 알림 묶음이 보이는 설정 탭을 연다.
+- 필터 세그먼트는 `전체 <n>`, `오류·경고 <n>`, `진행 중 <n>`을 보이며(`core.notices.filter {filter}`, 값은 `all`, `problems`, `progress`), 그 옆에 스위치 조용히가 있다(element `core.notices.quiet`, `core.settings.set {patch: {quietToasts}}`를 실행한다).
 - 목록은 항목을 묶는다. `진행 중`이 먼저 오며 각 항목에 진행 막대가 있다. 그다음 `오늘`, `어제`, 그리고 그 이전의 날마다 묶음이 온다. 각 묶음에는 버튼 `지우기`(`core.notices.clear {group}`)가 있다.
 - 항목은 아이콘, 수가 붙은 title, text, source chip(card 이름, plugin 이름, `설정` 또는 `soksak`), 시간, action을 보인다. 읽지 않은 항목은 왼쪽에 점이 있으며, error의 점은 error token이다. Card notice 항목을 누르면 `core.card.focus {card}`를 실행한다.
 - 바닥글은 `오류는 지울 때까지, 나머지는 7일 동안 남는다.`와 버튼 `모두 지우기`(`core.notices.clear-all`)를 보인다.
