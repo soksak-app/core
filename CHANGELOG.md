@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1255: The Rust diagnostics motion test file has the name of its Go counterpart, so the host file audit pairs the two.
 - Retired checklist entry `F1217-17-14`: it repeats F1217-17-3-1, which tracks the same defect.
 - Retired checklist entry `F1217-17-15`: it repeats F1217-17-3-2, which tracks the same defect.
 - Retired checklist entry `F1217-17-16`: it repeats F1217-17-3-3, which tracks the same defect.

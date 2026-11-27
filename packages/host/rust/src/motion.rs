@@ -59,5 +59,5 @@ pub(crate) fn parse_reduce(value: Option<&Value>) -> Result<Option<bool>, &'stat
 }
 
 #[cfg(test)]
-#[path = "motion_test.rs"]
-mod motion_test;
+#[path = "diagnostics_motion_test.rs"]
+mod diagnostics_motion_test;
