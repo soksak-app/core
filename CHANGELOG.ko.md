@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-17-3: 사이드바 세트 항목을 닫는다. 편집기의 버튼 완료는 두 host 모두에서 시험으로 지킨다. 남은 차이는 후속 F1217-17-14부터 F1217-17-16이다.
 - F1250-4: 작은 정수의 stepper는 입력 높이의 한 상자이며 core.settings-tab.stepper로 노출된다.
 - F1232-4: 전체 comment-language 게이트가 packages/workbench의 한글 주석을 맡은 F1232-2를 기다린다는 점을 기록했다.
 - F1254: shortcuts.json의 mygo copy가 다시 source와 같고, mygo 조건 map이 F1242가 side key와 cmd+Backspace에 준 매개변수 글을 가리키며, side-key 테스트가 명세의 글을 기대한다.
