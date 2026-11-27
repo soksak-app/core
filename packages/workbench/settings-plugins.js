@@ -72,6 +72,7 @@ const HELD_ACTIONS = { install: "설치", update: "업데이트", enable: "사�
 
 /** The held operation of a plugin, or null; it shows its error through the error display and its action (docs/spec/settings.md#설치됨). */
 function heldOf(id) {
+  // default: a plugin with no held operation has no held entry.
   const held = pluginOperations.status().held.find((entry) => entry.plugin === id) ?? null;
   if (held === null) hideTabError(`plugin ${id} held`);
   else showTabError(`plugin ${id} held`, held.error);
@@ -136,7 +137,7 @@ function pluginOperation(id) {
 
 /** The sort of the rows: a problem first, then an update, then the rest, each group by name with localeCompare. */
 const rank = (row) => (problemOf(row) ? 0 : hasUpdate(row) ? 1 : 2);
-const byRank = (a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name);
+const byRank = (a, b) => (rank(a) !== rank(b) ? rank(a) - rank(b) : a.name.localeCompare(b.name));
 
 /** The filter of 설치됨 that a row passes (docs/spec/settings.md#설치됨). */
 const FILTERS = {
@@ -233,6 +234,7 @@ export function browsePage() {
   const hide = state.browse.hideInstalled;
   const all = catalogRows().toSorted((a, b) => a.name.localeCompare(b.name));
   const matched = all.filter((row) => (!hide || row.installed === null)
+    // default: a row field without text contributes no text to the search.
     && (query === "" || [row.name, row.id, row.description].some((text) => String(text ?? "").toLowerCase().includes(query))));
   const shown = matched.slice(0, state.browse.shown);
   const search = element("input", "text-field");
@@ -294,6 +296,7 @@ function catalogRow(item) {
 export function pluginPage(id) {
   const item = statusRows().find((row) => row.id === id);
   if (!item) throw new Error(`plugin ${id} is not in the plugin state`);
+  // default: a plugin that is not loaded has no unit.
   const unit = pluginUnits().find((u) => u.id === id) ?? null;
   const body = [];
   body.push(infoCard(item, unit));
@@ -388,13 +391,14 @@ export function declaredRow(key, def) {
     const options = def.values.map((value) => [value, String(value)]);
     control = options.length <= 3 ? choice(key, options, now, { disabled }) : select(key, options, now, { disabled });
   } else if (def.type === "integer") control = slider(key, [def.minimum, def.maximum], now, { disabled });
-  else if (def.type === "string" || def.type === "address") control = textField(key, { command: "core.settings.change", params: { key, scope: writeScope() }, now: String(now ?? ""), maxLength: def.maxLength ?? 2048, mono: def.type === "address" });
+  else if (def.type === "string" || def.type === "address") control = textField(key, { command: "core.settings.change", params: { key, scope: writeScope() }, now: String(now ?? ""), maxLength: def.maxLength, mono: def.type === "address" });
   else if (def.type === "plugin") {
     const options = [...(now === undefined ? [["", "선택"]] : []), ...pluginsOfCategory(def.category).map(({ id, name }) => [id, name])];
     control = select(key, options, now ?? "", { disabled });
   } else throw new Error(`setting ${key} has an unknown type ${def.type}`);
   const marks = scopeMarks(key, def.label);
   if (def.type === "plugin" && missingPluginValue(key) !== undefined) marks.push(badge(`${missingPluginValue(key)} 필요`, "warn"));
+  // default: a setting declaration without a description has none (docs/spec/plugins.md, description is optional).
   const el = row({ label: def.label, description: def.description ?? null, control, key, extras: marks });
   return [el];
 }

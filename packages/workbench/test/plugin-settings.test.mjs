@@ -19,3 +19,9 @@ test("address plugin settings accept an empty or http address and reject another
   setPluginSettings([{ ...manifest, id: "web4" }], {});
   assert.equal(value("web4.home"), "");
 });
+
+// docs/spec/plugins.md: a string declaration has a maxLength, so a declaration without one is refused at the declaration.
+test("a string plugin setting without a maxLength is refused at its declaration", () => {
+  const manifest = { id: "nomax", settings: { "font.family": { type: "string", default: "D2Coding" } } };
+  assert.throws(() => setPluginSettings([manifest]), /font\.family.*maxLength/);
+});

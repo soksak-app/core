@@ -335,6 +335,7 @@ function validateValues(values, where) {
 
 /** The loaded and enabled plugins of a plugin category, {id, name} in the order of their ids. */
 export function pluginsOfCategory(category) {
+  // default: a category that no loaded plugin serves has no plugins, which the callers report as a missing plugin.
   return categories[category] ?? [];
 }
 
@@ -376,6 +377,10 @@ export function setPluginSettings(manifests, applicationValues = {}, categoryPlu
       const key = `${manifest.id}.${local}`;
       if (pluginDefinitions.has(key) || Object.hasOwn(defaults, key)) {
         throw new Error(`duplicate setting: ${key}`);
+      }
+      // docs/spec/plugins.md: a string declaration states its maxLength, so a declaration without a positive integer is refused.
+      if (definition.type === "string" && !(Number.isInteger(definition.maxLength) && definition.maxLength > 0)) {
+        throw new Error(`${key}: a string setting needs a positive integer maxLength`);
       }
       pluginDefinitions.set(key, Object.freeze({ ...definition, plugin: manifest.id, local }));
       // default: a plugin setting has no default; without a value it names the one plugin of its category when there is exactly one (undefined otherwise).
