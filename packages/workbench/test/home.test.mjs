@@ -236,3 +236,9 @@ test("the declared cmd+Backspace row asks the removal of the selected row, and t
   home.actions.confirm(undefined, "no");
   assert.equal(home.state().confirming, null);
 });
+
+test("the key hint of the project home names the bound keys: the arrows, Enter, cmd+Backspace and cmd+comma", async () => {
+  const { root } = mount([project("a", "alpha")]);
+  await settled();
+  assert.equal(root.querySelector(".home__hint").textContent, "↑↓ 이동Enter 열기⌘⌫ 목록에서 빼기⌘, 설정");
+});

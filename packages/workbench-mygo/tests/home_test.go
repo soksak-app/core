@@ -453,7 +453,7 @@ func TestTheHomeListScrollsAndItsKeyHintStays(t *testing.T) {
 	f.settle()
 	last := "prj-39"
 	before := f.box("core.home.open", last).Y
-	hintNode, ok := f.tester.Find("↑↓ 이동, Enter 열기, ⌘, 설정")
+	hintNode, ok := f.tester.Find("↑↓ 이동, Enter 열기, ⌘⌫ 목록에서 빼기, ⌘, 설정")
 	if !ok {
 		t.Fatal("the key hint line is not drawn")
 	}
@@ -464,7 +464,7 @@ func TestTheHomeListScrollsAndItsKeyHintStays(t *testing.T) {
 	if after := f.box("core.home.open", last).Y; after >= before {
 		t.Fatalf("the last row stayed at %v after the scroll, want it above %v", after, before)
 	}
-	hintNode, ok = f.tester.Find("↑↓ 이동, Enter 열기, ⌘, 설정")
+	hintNode, ok = f.tester.Find("↑↓ 이동, Enter 열기, ⌘⌫ 목록에서 빼기, ⌘, 설정")
 	if !ok || hintNode.Y != hint {
 		t.Fatalf("the key hint line moved from %v with the list", hint)
 	}

@@ -261,7 +261,7 @@ func sameDay(a, b time.Time) bool {
 
 // drawHomeKeys draws the key hint line. Only the keys that the home binds are named.
 func (s *Shell) drawHomeKeys(c *ui.Context) {
-	ui.Text(c, "↑↓ 이동, Enter 열기, ⌘, 설정").LineHeight(s.metrics.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.Muted)
+	ui.Text(c, "↑↓ 이동, Enter 열기, ⌘⌫ 목록에서 빼기, ⌘, 설정").LineHeight(s.metrics.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.Muted)
 }
 
 // storedLayoutFailure returns the reason that the stored layout of the active space of project cannot be opened, or "" when it can.

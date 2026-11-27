@@ -987,7 +987,7 @@ func (f *shellFixture) tabbedCards() []string {
 // The project home of a window without a project starts with the logo line, the two buttons and the key hint line (docs/spec/projects.md#project-home).
 func TestHomeShowsTheStartOfAnEmptyWorkspace(t *testing.T) {
 	f := newShell(t, &storedHost{})
-	if !f.tester.HasText("어디서 시작할까?") || !f.tester.HasText("새 프로젝트") || !f.tester.HasText("폴더 열기") || !f.tester.HasText("↑↓ 이동, Enter 열기, ⌘, 설정") {
+	if !f.tester.HasText("어디서 시작할까?") || !f.tester.HasText("새 프로젝트") || !f.tester.HasText("폴더 열기") || !f.tester.HasText("↑↓ 이동, Enter 열기, ⌘⌫ 목록에서 빼기, ⌘, 설정") {
 		t.Fatalf("the home shows %q", f.tester.Texts())
 	}
 	if !f.has("core.chrome.settings", "") || !f.has("core.chrome.projects", "") {

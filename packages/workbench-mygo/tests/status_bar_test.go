@@ -10,7 +10,7 @@ import (
 // while the work screen or the settings tab is in front; the project home has none (docs/spec/external-sidebars.md#status-bar).
 func TestTheStatusBarShowsTheProjectCardsThemeAndKeyHintOnTheWorkScreen(t *testing.T) {
 	home := newShell(t, acme())
-	// The home hint ↑↓ 이동, Enter 열기, ⌘, 설정 contains the key hint, so the bar is told by its exact text.
+	// The home hint ↑↓ 이동, Enter 열기, ⌘⌫ 목록에서 빼기, ⌘, 설정 contains the key hint, so the bar is told by its exact text.
 	if slices.Contains(home.tester.Texts(), "⌘, 설정") {
 		t.Fatal("the project home shows the status bar")
 	}

@@ -59,7 +59,7 @@ export function createHome(root) {
         <div class="home__actions"></div>
         <div class="home__form" hidden></div>
         <div class="home__list" role="list"></div>
-        <p class="home__hint"><span>↑↓ 이동</span><span>Enter 열기</span><span>⌘, 설정</span></p>
+        <p class="home__hint"><span>↑↓ 이동</span><span>Enter 열기</span><span>⌘⌫ 목록에서 빼기</span><span>⌘, 설정</span></p>
       </div>
     </main>`;
   const search = root.querySelector('[data-expose="core.home.search"]');
