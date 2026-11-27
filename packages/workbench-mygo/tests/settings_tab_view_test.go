@@ -1684,7 +1684,7 @@ func TestTheDependentRowsAreIndentedAndDisabledWhileTheirParentIsOff(t *testing.
 		}
 		return rect.X
 	}
-	for _, pair := range [][2]string{{"메모리 절약", "숨긴 뒤 내리기까지"}, {"자동 닫힘", "닫힐 때까지"}} {
+	for _, pair := range [][2]string{{"메모리 절약", "숨긴 뒤 내리기까지"}, {"오류·경고 자동 닫힘", "닫힐 때까지"}} {
 		if got := labelX(pair[1]) - labelX(pair[0]); got < float32(indent)-0.5 {
 			t.Errorf("the row %s is %v points right of its parent %s, not indented by %v", pair[1], got, pair[0], indent)
 		}
@@ -1759,8 +1759,8 @@ func TestNotificationSettingsEditAndPersistToastDismissal(t *testing.T) {
 	f.settle()
 
 	const dismiss, seconds = "autoDismissProblemToasts", "problemToastDismissSeconds"
-	if !f.tester.HasText("자동 닫힘") || !f.tester.HasText("닫힐 때까지") || !f.tester.HasText("초") {
-		t.Error("the notifications group has no automatic-dismissal label")
+	if !f.tester.HasText("오류·경고 자동 닫힘") || !f.tester.HasText("닫힐 때까지") || !f.tester.HasText("초") {
+		t.Error("the notifications group has no automatic-dismissal label") // The label is the one of docs/spec/notifications.md#settings.
 	}
 	controls := map[string]string{}
 	for _, control := range f.modal().Controls {

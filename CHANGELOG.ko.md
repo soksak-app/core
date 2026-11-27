@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-6: mygo 설정 테스트는 토스트 자동 닫힘 스위치를 명세의 이름으로 찾는다.
 - F1217-12-7: 설정 nav 명령은 묶음 id를 받고, 알림 센터의 ⚙는 알림 묶음을 연다.
 - F1161: mygo는 outdated surface notice의 origin 함수를 gofmt 형식으로 쓴다
 - F1161: mygo도 이전 버전 서비스를 쓰는 surface마다 같은 경고를 card notice로 보인다
