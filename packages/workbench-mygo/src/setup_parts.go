@@ -6,7 +6,7 @@ import (
 	"slices"
 )
 
-// The setup parts of the agents of the machine, the agent group of the settings window, the `core.setup` status and the
+// The setup parts of the agents of the machine, the agent group of the settings tab, the `core.setup` status and the
 // setup commands, as packages/workbench/setup-parts.js has them (docs/spec/settings.md#agents).
 // The parts are read when the group is shown, and while it is shown when the window becomes the key window and after
 // setup-changed, and by core.setup.check; no timer reads them, because the configuration file of the agent is rewritten by every

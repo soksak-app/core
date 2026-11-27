@@ -1,6 +1,6 @@
 // The accounts of the plugins of this window (docs/spec/plugins.md#accounts): the records of the plugin key accounts, the state that
 // the status program of each account reports, the runs of the account programs through the host commands accountRun and
-// accountRunCancel, and the homes through accountHomes, accountHomeCreate and accountHomeRemove. The settings window draws the group
+// accountRunCancel, and the homes through accountHomes, accountHomeCreate and accountHomeRemove. The settings tab draws the group
 // 계정 from this state, and the core.accounts commands and status read and change it.
 
 /** The form of the identifier of an account. */
@@ -316,7 +316,7 @@ export function createAccounts({ host, declarations, data, changed, failed }) {
     });
   }
 
-  /** Records the plugin whose page the settings window shows, or null; a page of a plugin with accounts that appears reads them. */
+  /** Records the plugin whose page the settings tab shows, or null; a page of a plugin with accounts that appears reads them. */
   function show(plugin) {
     const appears = plugin !== shown;
     shown = plugin;

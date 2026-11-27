@@ -11,7 +11,7 @@ import (
 
 // buildSets builds the set list and the editor of the edited set.
 func (s *Shell) buildSets(b *settingsBuilder) error {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	scope := s.controlScope("sets")
 	sets, err := s.settings.Sets(scope)
 	if err != nil {
@@ -45,7 +45,7 @@ func (s *Shell) buildSets(b *settingsBuilder) error {
 
 // setRow is the row of one set: its name, its layout, the sides and windows that use it, its section chips and its buttons.
 func (s *Shell) setRow(b *settingsBuilder, set StoredSet, links []StoredLink, scope string) settingsRow {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	name := set.Title
 	if name == "" {
 		name = "(이름 없음)"

@@ -10,7 +10,7 @@ import (
 	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
-// The plugins that a window loaded, read from the document of the installed plugins: what the settings window and the menus show
+// The plugins that a window loaded, read from the document of the installed plugins: what the settings tab and the menus show
 // of them, and the settings that they declare (docs/spec/plugins.md#pluginjson).
 
 // PluginMenuItem is an item of the context menu that a surface declares.

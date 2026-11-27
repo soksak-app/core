@@ -12,7 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// The settings window of the mygo host (docs/spec/settings.md): native UI instead of the modal web view of the other hosts. A
+// The settings tab of the mygo host (docs/spec/settings.md): native UI instead of the modal web view of the other hosts. A
 // model of the card holds its controls in document order, the status reads it and the drawing draws it, so the two cannot
 // differ.
 
@@ -174,8 +174,8 @@ type settingsModel struct {
 	results *settingsResultsStatus
 }
 
-// settingsWindow is the state of the window of a shell. Its section, scope, search, plugin and edited set outlast a close.
-type settingsWindow struct {
+// settingsTab is the state of the window of a shell. Its section, scope, search, plugin and edited set outlast a close.
+type settingsTab struct {
 	open bool
 	// openedOnce says that this window has opened its settings tab, so the work screen shows the closed hint after a close.
 	openedOnce  bool
@@ -223,15 +223,15 @@ type settingsKey struct {
 
 // settingsInputsChanged records a change that the settings model reads and asks the window for a frame.
 func (s *Shell) settingsInputsChanged() {
-	s.settingsWindow.inputs++
+	s.settingsTab.inputs++
 	s.options.Invalidate()
 }
 
 // SettingsModelBuilds returns how many settings models the shell has built.
-func (s *Shell) SettingsModelBuilds() int { return s.settingsWindow.builds }
+func (s *Shell) SettingsModelBuilds() int { return s.settingsTab.builds }
 
-func newSettingsWindow() settingsWindow {
-	return settingsWindow{page: "look", scope: "common", filter: "all", back: "installed", browse: settingsBrowse{limit: settingsBrowseFirst}, drafts: map[string]string{}}
+func newSettingsTab() settingsTab {
+	return settingsTab{page: "look", scope: "common", filter: "all", back: "installed", browse: settingsBrowse{limit: settingsBrowseFirst}, drafts: map[string]string{}}
 }
 
 // builder adds the controls of a card in document order.
@@ -306,7 +306,7 @@ func valueText(value any) string {
 
 // settingsBuild builds the card of the current state and the current values.
 func (s *Shell) settingsBuild() (*settingsModel, error) {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	store := s.settings
 	if store.Project() == "" {
 		w.scope = "common"
@@ -387,7 +387,7 @@ func (s *Shell) overrideControls(b *settingsBuilder, key, reset string) []*Setti
 	if !s.settings.Overridden(key) || s.settings.Project() == "" {
 		return nil
 	}
-	if s.settingsWindow.scope == "project" {
+	if s.settingsTab.scope == "project" {
 		return []*SettingsControl{b.resetButton(key, reset)}
 	}
 	return []*SettingsControl{b.add(SettingsControl{Name: "core.settings-tab.applied", Key: text("applied:" + key), Label: "프로젝트 값", kind: controlMark})}
@@ -410,7 +410,7 @@ func settingOf(key string) string {
 // controlScope is the scope that a control of the key shows and writes: the project scope in the project tab, and in the common
 // tab the scope that the applied value of its setting comes from (docs/spec/settings.md#scope-of-a-control).
 func (s *Shell) controlScope(key string) string {
-	if s.settingsWindow.scope == "project" {
+	if s.settingsTab.scope == "project" {
 		return "project"
 	}
 	return s.settings.Source(settingOf(key))
@@ -664,7 +664,7 @@ func accountField(b *settingsBuilder, key, command, now string) *SettingsControl
 
 // buildAccounts adds the group 계정 of a plugin that declares accounts: a row per account and the row 새 계정.
 func (s *Shell) buildAccounts(b *settingsBuilder, plugin *LoadedPlugin, declared *accountsDeclaration) {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	accounts, err := s.accounts.List(plugin.ID)
 	if err != nil {
 		// A record of another form fails the page through the error display, and the group shows no account.
@@ -783,7 +783,7 @@ func optional(value string) *string {
 // settingsStatus is the value of core.settings-tab: nil while the tab is not in front. The model is read through the key of the frame,
 // so a command that changed the state reports the state at once, without a frame.
 func (s *Shell) settingsStatus() (any, error) {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	if !w.open {
 		return nil, nil
 	}
@@ -841,7 +841,7 @@ func settingsList[T any](list []T) []T {
 }
 
 func (s *Shell) requireSettings() error {
-	if !s.settingsWindow.open {
+	if !s.settingsTab.open {
 		return errors.New("settings are not open")
 	}
 	return nil
@@ -942,7 +942,7 @@ func (s *Shell) settingsChanged() error {
 
 // applySettings takes what the settings hold for the screens: the colors and the shape, and the sets and the links of the sidebars.
 func (s *Shell) applySettings() error {
-	s.settingsWindow.inputs++
+	s.settingsTab.inputs++
 	if err := s.applyPalette(); err != nil {
 		return err
 	}
@@ -1163,7 +1163,7 @@ func (s *Shell) registerSettings() {
 	})
 	s.registerSettingsValues()
 	s.registerSettingsSets()
-	s.registerSettingsWindow()
+	s.registerSettingsTab()
 	s.registerSettingsTabCommands()
 }
 
@@ -1236,8 +1236,8 @@ func (s *Shell) registerSettingsSets() {
 		if err := s.changing("core.settings.link", func() error { return s.settings.Set(map[string]any{"sets": next}, scope) }); err != nil {
 			return nil, err
 		}
-		if s.settingsWindow.open {
-			s.settingsWindow.editing = id
+		if s.settingsTab.open {
+			s.settingsTab.editing = id
 		}
 		return map[string]string{"id": id}, nil
 	})
@@ -1313,8 +1313,8 @@ func windowAct(s *Shell, name string, run func(value windowParam) error) {
 	})
 }
 
-func (s *Shell) registerSettingsWindow() {
-	w := &s.settingsWindow
+func (s *Shell) registerSettingsTab() {
+	w := &s.settingsTab
 	act(s, "core.settings.open", func(struct{}) error {
 		if err := s.dialogRefusal(); err != nil {
 			return err
@@ -1463,7 +1463,7 @@ func (s *Shell) registerSettingsWindow() {
 
 // accountPage refuses a field command of the group 계정 while no page of a plugin with accounts shows.
 func (s *Shell) accountPage() error {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	if w.page != "plugin" || w.chosen == "" || !s.accounts.Declares(w.chosen) {
 		return errors.New("no page of a plugin with accounts shows")
 	}
@@ -1473,7 +1473,7 @@ func (s *Shell) accountPage() error {
 // accountFinished clears the name of the row 새 계정 after a finished add and ends the edit after a finished rename, on the page of
 // the plugin (docs/spec/plugins.md#accounts).
 func (s *Shell) accountFinished(command, plugin string) {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	if w.accountPlugin != plugin {
 		return
 	}
@@ -1508,7 +1508,7 @@ func (s *Shell) beginSettings(common map[string]any) error {
 
 // closeSettings closes the card.
 func (s *Shell) closeSettings() {
-	s.settingsWindow.open = false
+	s.settingsTab.open = false
 	s.options.Invalidate()
 }
 

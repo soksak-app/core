@@ -138,7 +138,7 @@ var settingsWithTerminal = `{"plugins":[` +
 	categoryPlugin("term-a", `,"categories":["terminal"]`) + `,` +
 	categoryPlugin("term-b", `,"categories":["terminal"]`) + `]}`
 
-// controlOf returns the control of the settings window that holds the setting key.
+// controlOf returns the control of the settings tab that holds the setting key.
 func controlOf(f *shellFixture, key string) *categoryControl {
 	f.t.Helper()
 	for _, control := range f.modal().Controls {
@@ -150,7 +150,7 @@ func controlOf(f *shellFixture, key string) *categoryControl {
 	return nil
 }
 
-// categoryControl is the part of a control of the settings window that the category tests read.
+// categoryControl is the part of a control of the settings tab that the category tests read.
 type categoryControl struct {
 	Options []string
 	Value   *string

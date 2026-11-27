@@ -17,7 +17,7 @@ func (f *shellFixture) settingsStatus() workbench.SettingsStatus {
 	return value.(workbench.SettingsStatus)
 }
 
-// modalControl is the control of the settings window with the element name and the key.
+// modalControl is the control of the settings tab with the element name and the key.
 func (f *shellFixture) modalControl(name, key string) (on *bool, scope any, found bool) {
 	f.t.Helper()
 	for _, control := range f.modal().Controls {

@@ -241,7 +241,7 @@ func TestTheFocusRingMovesInOnePlace(t *testing.T) {
 }
 
 // A modal that opens without a press takes the keyboard from the view, and the view of the focus ring takes it back when the modal
-// closes: the question about a modified tab, the settings window and the debug view, each opened by its command.
+// closes: the question about a modified tab, the settings tab and the debug view, each opened by its command.
 func TestAModalThatACommandOpensTakesTheKeyboardFromTheView(t *testing.T) {
 	for _, modal := range []struct{ name, open, end string }{
 		{"question", "", "core.picker.close"},

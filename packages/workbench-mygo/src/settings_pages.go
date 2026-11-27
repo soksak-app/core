@@ -92,7 +92,7 @@ func (s *Shell) buildLook(b *settingsBuilder) error {
 
 // buildWorkspace builds 작업 공간: the project opening, the project tab position, the window sidebars and their sizes.
 func (s *Shell) buildWorkspace(b *settingsBuilder) error {
-	scope := s.settingsWindow.scope
+	scope := s.settingsTab.scope
 	if scope == "common" {
 		opening, err := s.choiceRow(b, "열기 방식", "projectOpening", map[string]string{"tabs": "현재 창", "windows": "별도 창"})
 		if err != nil {
@@ -152,7 +152,7 @@ func (s *Shell) buildBehavior(b *settingsBuilder) error {
 		return err
 	}
 	b.group("카드", "resize는 배치를 지키며 카드 크기를 고르게 나눈다. even은 카드를 같은 격자로 놓는다.", arrange)
-	if s.settingsWindow.scope != "common" {
+	if s.settingsTab.scope != "common" {
 		return nil
 	}
 	process, err := s.choiceRow(b, "보기 프로세스", "viewProcess", map[string]string{"plugin": "플러그인마다 하나", "view": "카드마다 하나"})
@@ -216,7 +216,7 @@ var settingsPageDescriptions = map[string]string{
 func settingsPageDescription(page string) string { return settingsPageDescriptions[page] }
 
 // settingsPageTitle is the title of the page in front: the label of the menu, or the name of the plugin of a plugin page.
-func settingsPageTitle(w *settingsWindow) string {
+func settingsPageTitle(w *settingsTab) string {
 	if w.page == "plugin" {
 		return w.chosen
 	}

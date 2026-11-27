@@ -117,10 +117,10 @@ export const MENU_LANGUAGES = declaration.menuLanguages;
 /* The default language used when the system language is not in the table. */
 const DEFAULT_LANGUAGE = declaration.defaultLanguage;
 
-/* The range (px) of the shape values. Only integers are accepted, and the slider of the settings window uses the same range. */
+/* The range (px) of the shape values. Only integers are accepted, and the slider of the settings tab uses the same range. */
 export const SHAPE_RANGES = declaration.settings.shapeRanges;
 
-/* The core settings that take one choice. The select control of the settings window shows the choices in this order (docs/spec/settings.md#values).
+/* The core settings that take one choice. The select control of the settings tab shows the choices in this order (docs/spec/settings.md#values).
    workbench.json states the fixed lists; the theme, mode, font, text size and language choices are the catalogs above. */
 const { projectOpening, viewProcess, projectTabs, focusInd, fullRule, cardArrange, toastStyle, noticeCenterStyle } = declaration.settings.choices;
 export const CHOICES = {
@@ -149,7 +149,7 @@ const SWITCHES = declaration.settings.switches;
 const STRUCTURED = ["diagnostics.log", "sets", "links"];
 
 /* The core settings whose value is an order of their listed values, each once: the order of the window sidebars
-   (docs/spec/settings.md#values). The order rows of the settings window show the values in the current order. */
+   (docs/spec/settings.md#values). The order rows of the settings tab show the values in the current order. */
 export const ORDERS = declaration.settings.orders;
 
 /** Whether value is an array that holds each of the values once. */

@@ -1,4 +1,4 @@
-// Set editing and layout value settings in the settings window (docs/spec/settings.md).
+// Set editing and layout value settings in the settings tab (docs/spec/settings.md).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { changeRow, chooseLink, createSet, deleteSet, resolveSidebar, updateSet } from "../sidebar-sets.js";

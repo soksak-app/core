@@ -14,7 +14,7 @@ const settingsUndoDelay = 5 * time.Second
 
 // registerSettingsTabCommands registers the commands of the settings tab that are not the commands of the page builders.
 func (s *Shell) registerSettingsTabCommands() {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	search := func(value windowParam) error {
 		if value.Query == nil {
 			return errors.New("query must be a string")
@@ -68,7 +68,7 @@ func (s *Shell) confirmed(kind, id string) error {
 	switch kind {
 	case "set":
 		// The run sends only the members that the command declares, so the schema accepts it.
-		s.binder.run("core.settings.sets.delete", map[string]any{"id": id, "scope": inScope(s.settingsWindow.scope)})
+		s.binder.run("core.settings.sets.delete", map[string]any{"id": id, "scope": inScope(s.settingsTab.scope)})
 	case "plugin":
 		s.binder.run("core.plugins.remove", pluginParam{Plugin: id})
 	default:
@@ -80,7 +80,7 @@ func (s *Shell) confirmed(kind, id string) error {
 // recordChange shows the toast of a change that the tab made: the old and new value of key in scope. A change made outside the tab shows
 // no toast. The toast lasts settingsUndoDelay and a new toast replaces the one shown.
 func (s *Shell) recordChange(key, scope string, old, new any) {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	if !w.open || key == "" {
 		return
 	}
@@ -107,7 +107,7 @@ func (s *Shell) recordChange(key, scope string, old, new any) {
 
 // undoChange runs the change of the toast with its old value and removes the toast. Without a toast it changes nothing.
 func (s *Shell) undoChange() {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	toast := w.undo
 	if toast == nil {
 		return

@@ -25,7 +25,7 @@ func (s *Shell) showSettingsPage(page, filter string) error {
 	}
 	s.closeDebug()
 	s.closePicker()
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	w.open = true
 	w.page, w.chosen, w.scroll = page, "", ui.ScrollState{}
 	if filter != "" {

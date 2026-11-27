@@ -87,8 +87,8 @@ func TestTheDebugMenuOpensTheDebugView(t *testing.T) {
 	}
 }
 
-// The settings item of the app menu opens the settings window, which takes the keyboard (docs/spec/exposure.md#keyboard-shortcuts).
-func TestTheSettingsItemOfTheMenuOpensTheSettingsWindow(t *testing.T) {
+// The settings item of the app menu opens the settings tab, which takes the keyboard (docs/spec/exposure.md#keyboard-shortcuts).
+func TestTheSettingsItemOfTheMenuOpensTheSettingsTab(t *testing.T) {
 	stored := &storedHost{}
 	app, window, queue, _ := fixtureApp(t, stored)
 	view := app.Build(window)
@@ -97,13 +97,13 @@ func TestTheSettingsItemOfTheMenuOpensTheSettingsWindow(t *testing.T) {
 	tester := ui.NewTester(view, 900, 700)
 	tester.Frame()
 	if slices.Contains(tester.Texts(), "모양") {
-		t.Fatal("the settings window shows before the menu opened it")
+		t.Fatal("the settings tab shows before the menu opened it")
 	}
 	app.Emit(window, "menu-command", map[string]any{"name": "core.settings.open"})
 	queue.drain(t)
 	tester.Frame()
 	if !slices.Contains(tester.Texts(), "모양") {
-		t.Fatalf("the menu did not open the settings window: %q", tester.Texts())
+		t.Fatalf("the menu did not open the settings tab: %q", tester.Texts())
 	}
 }
 

@@ -30,7 +30,7 @@ type sideList struct {
 func (s *Shell) sideRows(b *settingsBuilder, list sideList, sets []StoredSet, links []StoredLink) ([]settingsRow, error) {
 	scope := s.controlScope(list.order)
 	order, _ := s.value(list.order).([]any) // silent: the settings store checks that the value is an order of the sides.
-	inProject := s.settingsWindow.scope == "project" && s.settings.Project() != ""
+	inProject := s.settingsTab.scope == "project" && s.settings.Project() != ""
 	var projectLinks, commonLinks []StoredLink
 	if inProject && s.settings.Overridden("links") {
 		var err error

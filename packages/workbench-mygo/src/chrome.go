@@ -103,7 +103,7 @@ func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
 // (docs/spec/settings.md#opening-and-closing). The chip runs core.settings.open, which brings the tab to the front, and its close
 // control runs core.settings.close. The chip has the rail border while the tab is in front.
 func (s *Shell) drawSettingsChip(c *ui.Context) {
-	if !s.settingsWindow.open {
+	if !s.settingsTab.open {
 		return
 	}
 	m := s.metrics

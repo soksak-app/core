@@ -38,7 +38,7 @@ func settingBox(f *shellFixture, key string) ui.Rect {
 }
 
 // A row without a name keeps the empty name column of the grid of the page. The element of each row is present; the x position
-// was measured on the former settings modal card and no longer names a position of the settings tab.
+// was measured on the former settings tab card and no longer names a position of the settings tab.
 func TestAButtonOfARowWithoutANameStandsInTheControlColumn(t *testing.T) {
 	f := settingsSection(t, "plugins")
 	f = settingsSection(t, "sidebars")

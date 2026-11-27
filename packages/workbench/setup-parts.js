@@ -1,4 +1,4 @@
-// The setup parts of the agents of this machine: the agent group of the settings window, the core.setup status and the
+// The setup parts of the agents of this machine: the agent group of the settings tab, the core.setup status and the
 // core.setup commands (docs/spec/settings.md#agents). The host reads and installs the parts with the
 // setup library of its command line in the environment of the login shell of the person (docs/spec/cli.md#agents-in-the-application).
 // The parts are read when the group is shown, and while it is shown when the window becomes the key window and after setup-changed,

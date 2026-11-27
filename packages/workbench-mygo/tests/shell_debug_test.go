@@ -564,7 +564,7 @@ func TestEnterInAnOpenedDebugViewClosesNothing(t *testing.T) {
 	}
 }
 
-// The debug view has the card of the settings window: its place, the head with the close switch, and the rows of the page.
+// The debug view has the card of the settings tab: its place, the head with the close switch, and the rows of the page.
 func TestTheDebugViewIsDrawnAsThePage(t *testing.T) {
 	f, _ := debugShell(t)
 	declared, err := workbench.Declared()

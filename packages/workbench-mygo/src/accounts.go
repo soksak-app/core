@@ -762,7 +762,7 @@ func (a *Accounts) List(plugin string) ([]AccountView, error) {
 	return views, nil
 }
 
-// Show records the plugin whose page the settings window shows, or ""; a page of a plugin with accounts that appears reads them.
+// Show records the plugin whose page the settings tab shows, or ""; a page of a plugin with accounts that appears reads them.
 func (a *Accounts) Show(plugin string) {
 	appears := plugin != a.shown
 	a.shown = plugin

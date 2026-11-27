@@ -248,7 +248,7 @@ func TestTheKeysOfAnOpenSelectBoxChooseItsItem(t *testing.T) {
 		t.Fatalf("font %v", f.settingValues()["font"])
 	}
 	if !f.modal().Open {
-		t.Fatal("the keys closed the settings window")
+		t.Fatal("the keys closed the settings tab")
 	}
 }
 
@@ -614,13 +614,13 @@ func TestACommonSettingOutlivesTheOpenOfAProject(t *testing.T) {
 	}
 }
 
-// The first focus of the settings window is its card, so a key closes nothing that the user did not reach.
-func TestEnterInAnOpenedSettingsWindowClosesNothing(t *testing.T) {
+// The first focus of the settings tab is its card, so a key closes nothing that the user did not reach.
+func TestEnterInAnOpenedSettingsTabClosesNothing(t *testing.T) {
 	f := opened(t)
 	f.tester.Key(0, ui.KeyEnter)
 	f.settle()
 	if !f.modal().Open {
-		t.Fatal("Enter closed the settings window")
+		t.Fatal("Enter closed the settings tab")
 	}
 }
 
@@ -646,9 +646,9 @@ func TestTheDebugViewSetsTheBackgroundOfTheWorkbench(t *testing.T) {
 	}
 }
 
-// The scope tabs and the group names of the settings window are those of the page: an underlined tab marked in the rail color, and a
+// The scope tabs and the group names of the settings tab are those of the page: an underlined tab marked in the rail color, and a
 // group name in that color.
-func TestTheScopeTabsAndGroupsOfTheSettingsWindowAreThoseOfThePage(t *testing.T) {
+func TestTheScopeTabsAndGroupsOfTheSettingsTabAreThoseOfThePage(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings.theme", map[string]any{"name": "midnight", "mode": "dark"})
 	f.settle()
@@ -912,7 +912,7 @@ func TestThePluginRowsStandOneUnderAnother(t *testing.T) {
 	}
 }
 
-// The search of the settings window is an input of the page without a look of its own: the control background of its color scheme.
+// The search of the settings tab is an input of the page without a look of its own: the control background of its color scheme.
 func TestTheSearchOfTheSettingsHasTheBackgroundOfThePage(t *testing.T) {
 	f := opened(t)
 	f.run("core.settings-tab.nav", map[string]string{"page": "installed"})

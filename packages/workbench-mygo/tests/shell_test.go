@@ -412,7 +412,7 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			plugins.starter = map[string]any{"format": 1, "state": request.State, "pack": request.Pack, "registry": request.Registry, "plugins": request.Plugins}
 			return nil, nil
 		}),
-		// The settings window reads the setup parts when it opens (docs/spec/cli.md#agents-in-the-application); this host has none.
+		// The settings tab reads the setup parts when it opens (docs/spec/cli.md#agents-in-the-application); this host has none.
 		"setupState":   answer("setupState", func(json.RawMessage) (any, error) { return map[string]any{"parts": []any{}}, nil }),
 		"setupInstall": answer("setupInstall", func(json.RawMessage) (any, error) { return map[string]any{"parts": []any{}}, nil }),
 		"linkOpen":     answer("linkOpen", func(argument json.RawMessage) (any, error) { h.opened = append(h.opened, argument); return nil, nil }),

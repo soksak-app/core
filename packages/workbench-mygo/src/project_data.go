@@ -235,7 +235,7 @@ func (s *Shell) takePluginData(data map[string]map[string]json.RawMessage, refus
 // that follows the project data of a dependency of its plugin (docs/spec/plugins.md#project-data). A plugin key names the project "" and
 // reaches the views of every project and of no project (docs/spec/plugins.md#plugin-data).
 func (s *Shell) dataChanged(project, plugin, key string) {
-	// The group 계정 of the settings window draws the records of the plugin key accounts (docs/spec/plugins.md#accounts).
+	// The group 계정 of the settings tab draws the records of the plugin key accounts (docs/spec/plugins.md#accounts).
 	if project == "" && key == "accounts" && s.accounts.Declares(plugin) {
 		s.options.Invalidate()
 	}

@@ -456,7 +456,7 @@ func (s *Shell) openDebug(answer func(any, error)) {
 		answer(nil, err)
 		return
 	}
-	s.settingsWindow.open = false
+	s.settingsTab.open = false
 	*d = debugViewState{open: true, tasks: d.tasks, tokens: d.tokens}
 	s.options.Invalidate()
 	s.calls.Call("debugRecord", map[string]any{"workbench": s.debugStatuses()}, func(value any, err error) {
@@ -1200,7 +1200,7 @@ func (s *Shell) debugStyle() DebugStyle {
 func (s *Shell) debugScreen() DebugView {
 	d := &s.debugView
 	width := s.options.Declared.ChromeNumber("dbg-card-w", "px")
-	view := DebugView{CardWidth: float32(width), CardMaxHeight: float32(s.settingsWindow.height * settingsCardMaxShare), Entries: d.entries,
+	view := DebugView{CardWidth: float32(width), CardMaxHeight: float32(s.settingsTab.height * settingsCardMaxShare), Entries: d.entries,
 		Viewing: d.viewing, TextTail: d.viewing != nil && d.tail == d.viewing, Failure: d.failure, Scroll: &d.scroll, Style: s.debugStyle()}
 	if operation := d.operation; operation != nil {
 		view.Operation = &DebugOperation{Action: operation.Action, State: operation.State, Writing: operation.Total != nil}

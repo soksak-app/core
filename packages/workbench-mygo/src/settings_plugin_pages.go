@@ -196,7 +196,7 @@ func (s *Shell) installedRows(b *settingsBuilder, entry pluginEntry, status Plug
 // buildInstalled builds 설치됨: the search, the filter with its counts, the update of all, the rows and the card that opens 찾아보기
 // (docs/spec/settings.md#설치됨).
 func (s *Shell) buildInstalled(b *settingsBuilder) error {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	status := s.pluginOperations.Status()
 	busy := status.Operation != nil && status.Operation.State == "running"
 	entries, err := s.installedEntries(s.pluginRowsOf(status))
@@ -375,7 +375,7 @@ const browseSize = 30
 // buildBrowse builds 찾아보기: the search, the switch 설치한 것 숨기기, the count, the rows of the catalog that match, and the button
 // of the next rows (docs/spec/settings.md#찾아보기).
 func (s *Shell) buildBrowse(b *settingsBuilder) error {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	status := s.pluginOperations.Status()
 	busy := status.Operation != nil && status.Operation.State == "running"
 	query := strings.ToLower(strings.TrimSpace(w.browse.query))
@@ -471,7 +471,7 @@ func (s *Shell) catalogRow(b *settingsBuilder, row PluginRow, busy bool) setting
 // 카드 사이드바 (docs/spec/settings.md#plugin-page). The info card follows the state of the plugin: an uninstalled plugin offers its
 // installation, and an installed plugin its switch, its update, its missing dependencies and its removal.
 func (s *Shell) buildPluginTab(b *settingsBuilder) error {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	status := s.pluginOperations.Status()
 	var item *PluginRow
 	rows := s.pluginRowsOf(status)
@@ -588,7 +588,7 @@ func (s *Shell) contributionRows(b *settingsBuilder, plugin string) ([]settingsR
 
 // removalRow is the row 제거 of the info card: its description, the button 제거… and, while the removal is asked, the buttons 취소 and 제거.
 func (s *Shell) removalRow(b *settingsBuilder, plugin string) settingsRow {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	row := settingsRow{name: "제거", description: "설정 값은 남겨 두고, 다시 설치하면 이어서 쓴다."}
 	if w.confirm.kind == "plugin" && w.confirm.id == plugin {
 		row.controls = []*SettingsControl{

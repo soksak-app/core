@@ -1,4 +1,4 @@
-// The one plugin operation state of this window (plugin-operations.js). The core.plugins status and the plugin section of the settings window use it together.
+// The one plugin operation state of this window (plugin-operations.js). The core.plugins status and the plugin section of the settings tab use it together.
 import { host } from "@soksak/runtime";
 import { pluginUnits, refusedPlugins, unmetPlugins } from "./environment.js";
 import { createAppUpdate } from "./app-update.js";

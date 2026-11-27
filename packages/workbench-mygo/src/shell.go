@@ -449,7 +449,7 @@ type Shell struct {
 	installed     []InstalledPlugin
 
 	settings       *SettingsStore
-	settingsWindow settingsWindow
+	settingsTab settingsTab
 	// dialog is the open dialog surface of the window, or nil (docs/spec/plugins.md#dialogs).
 	dialog    *dialogSurface
 	debugView debugViewState
@@ -666,7 +666,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.settingsWindow = newSettingsWindow()
+	s.settingsTab = newSettingsTab()
 	var definitions []SettingDefinition
 	if s.plugins, definitions, err = readLoadedPlugins(installed, options.Environment); err != nil {
 		return nil, err
@@ -730,6 +730,7 @@ func (s *Shell) shortcutConditions() map[string]func() bool {
 		"A project home form field has focus":                                      formOpen,
 		"The project home is shown, a row is selected and no form field has focus": func() bool { return noForm() && len(s.homeRows()) > 0 },
 		"A picker layer is open":                                                   never,
+		"The notice center is open":                                                func() bool { return s.errors.noticeOpen },
 		"A native modal menu is open and has keyboard focus":                       never,
 	}
 }
@@ -767,19 +768,26 @@ func (s *Shell) Start() {
 			s.openTabs(func() {
 				s.showRequested(func() {
 					s.options.FirstScreen()
-					s.calls.Call("windowReady", nil, func(_ any, err error) {
-						if err != nil {
-							s.fail(err)
-						}
-						s.options.Invalidate()
-						s.startNotices(func() {
-							s.startPlugins(func(installed bool) {
-								s.started = true
-								// After the application restarts or the window fails, the sessions of surfaces in no layout end.
-								s.adoptSessions(s.retainSessions)
-								if s.changed || installed {
-									s.applyPlugins(func(bool, error) {})
+					// The start reads keep one order in every run: the theme (surfaces) answers, then the notice entries are read, which the first draw
+					// does not wait for, and the ready report follows their answers (docs/spec/notifications.md#notice-center).
+					s.calls.AfterOrder(surfaceOrder, func() {
+						s.loadNotices()
+						s.calls.AfterOrder("notices", func() {
+							s.calls.Call("windowReady", nil, func(_ any, err error) {
+								if err != nil {
+									s.fail(err)
 								}
+								s.options.Invalidate()
+								s.startNotices(func() {
+									s.startPlugins(func(installed bool) {
+										s.started = true
+										// After the application restarts or the window fails, the sessions of surfaces in no layout end.
+										s.adoptSessions(s.retainSessions)
+										if s.changed || installed {
+											s.applyPlugins(func(bool, error) {})
+										}
+									})
+								})
 							})
 						})
 					})

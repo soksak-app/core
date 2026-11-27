@@ -10,7 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// The drawing of the settings card from its model (settings_modal.go). The scrim and the card stand over the window, and only
+// The drawing of the settings card from its model (settings_tab_view.go). The scrim and the card stand over the window, and only
 // the close button closes the card (docs/spec/native-modals.md).
 
 // settingsPane is what the card measures from its metrics.
@@ -59,7 +59,7 @@ func (s *Shell) readSettingsPane() settingsPane {
 // settingsForFrame updates the model of the tab before the window chooses its foreground focus scope. The model is built again only when
 // its key changed (docs/spec/settings.md#performance).
 func (s *Shell) settingsForFrame(c *ui.Context, width, height float32) {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	w.width, w.height = float64(width), float64(height)
 	w.locale = c.Locale()
 	s.tellLanguage(w.locale)
@@ -86,7 +86,7 @@ func (s *Shell) settingsForFrame(c *ui.Context, width, height float32) {
 
 // settingsModelNow returns the model of the current state. It builds the model only when the key of the state changed.
 func (s *Shell) settingsModelNow() (*settingsModel, error) {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	key := s.settingsKeyOf(w.locale)
 	if w.model != nil && w.key == key {
 		return w.model, nil
@@ -102,7 +102,7 @@ func (s *Shell) settingsModelNow() (*settingsModel, error) {
 // settingsKeyOf returns the key of the model of the current state. The plugins are fixed for the life of the window, so len(s.plugins)
 // is a sufficient key.
 func (s *Shell) settingsKeyOf(locale string) settingsKey {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	// The operation of a plugin is part of the key, so a running action and its end redraw the plugin rows (docs/spec/settings.md#설치됨).
 	var operation PluginOperation
 	if current := s.pluginOperations.Status().Operation; current != nil {
@@ -120,7 +120,7 @@ func (s *Shell) settingsKeyOf(locale string) settingsKey {
 // drawSettingsTab draws the settings tab into rect of the frame while the tab is in front (settingsTabInFront). The menu stands at the
 // left of the rect and the page at its right; the tab has no scrim, no card and no drag (docs/spec/settings.md#opening-and-closing).
 func (s *Shell) drawSettingsTab(c *ui.Context, rect ui.Rect) {
-	model := s.settingsWindow.model
+	model := s.settingsTab.model
 	if !s.settingsTabInFront() || model == nil {
 		return
 	}
@@ -141,7 +141,7 @@ func (s *Shell) exposedBox(c *ui.Context, name, command, item string) ui.Element
 }
 
 // settingsTabInFront tells whether the settings tab is in front. The chrome of the window draws the tab only while this is true.
-func (s *Shell) settingsTabInFront() bool { return s.settingsWindow.open }
+func (s *Shell) settingsTabInFront() bool { return s.settingsTab.open }
 
 // settingsHeadHeight is the height of the page head, which stays above the scrolling content.
 func (s *Shell) settingsHeadHeight(pane settingsPane) float32 {
@@ -150,7 +150,7 @@ func (s *Shell) settingsHeadHeight(pane settingsPane) float32 {
 
 // drawSettingsHead draws the title of the page, its description and the scope control with the folder caption of the project scope.
 func (s *Shell) drawSettingsHead(c *ui.Context, model *settingsModel, width float32, pane settingsPane) {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	head := ui.Column(c).Size(width, pane.headH).Padding(pane.paneTop, pane.paneX, 0, pane.paneX)
 	head.Children(func() {
 		ui.Text(c, settingsPageTitle(w)).FontSize(s.textControl()).TextColor(s.palette.Fg)
@@ -203,7 +203,7 @@ func (s *Shell) drawSettingsNavItem(c *ui.Context, control *SettingsControl, pan
 }
 
 func (s *Shell) drawSettingsBody(c *ui.Context, model *settingsModel, width, most float32, pane settingsPane) {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	key := fmt.Sprint(w.page, w.scope, w.chosen, w.editing)
 	if key != w.scrollKey {
 		w.scrollKey, w.scroll.X, w.scroll.Y = key, 0, 0
@@ -738,7 +738,7 @@ func (s *Shell) drawStepButton(c *ui.Context, control *SettingsControl, mark, di
 // drawTextControl draws a one-line field. A setting takes its text when the field submits or loses the focus, as the change
 // of an input does, and the search takes each change.
 func (s *Shell) drawTextControl(c *ui.Context, control *SettingsControl) {
-	w := &s.settingsWindow
+	w := &s.settingsTab
 	key := control.item()
 	if control.searchable {
 		s.drawSearchControl(c, control)
