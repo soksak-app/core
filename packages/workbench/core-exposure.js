@@ -335,8 +335,8 @@ function gridState() {
       tabs: tabs.map(({ id }) => ({ ...tabDescription(card, id, tabLabel(id)), label: tabLabel(id),
         footer: tabFooter(id), modified: tabModified(id), error: tabError(id), program: programOf(id) })),
       // The newest shown notice of the card, and the text of its content footer, which is null while a notice shows (docs/spec/notifications.md#card-status-line).
-      // default: a card that is not drawn yet has no footer text element, so the text is empty.
       notice: cardNotice(card.id),
+      // default: a card that is not drawn yet has no footer text element, so the text is empty.
       status: cardNotice(card.id) === null ? el.querySelector(":scope > .status .status__text")?.textContent ?? "" : null,
       active: tabs.length ? activeTab(card).id : null,
       acts: drawn ? cardActs(card.id) : null,
@@ -426,6 +426,7 @@ const settingsUi = async () => {
 };
 
 /** Whether the settings tab is in front; false while the tab has not loaded. */
+// default: the settings tab is not in front while its screen has not loaded.
 export const settingsTabFront = () => settingsScreen?.settingsTabFront() ?? false;
 /** Subscribes to the front of the settings tab, which the window uses for its surfaces. */
 export const onSettingsTabFront = (fn) => { tabFrontListeners.add(fn); return () => tabFrontListeners.delete(fn); };
@@ -777,6 +778,7 @@ export async function installCoreExposure({ home, renames, chrome, drawn, memory
     await set(deleteSet(scopedValue("sets", scope), scopedValue("links", scope), id), scope, "core.settings.sets.delete");
   });
   // The status and the two commands of the settings tab: the tab loads at its first command (settingsUi).
+  // default: the status of the settings tab is null while its screen has not loaded.
   registry.status("core.settings-tab", () => settingsScreen?.settingsTabStatus() ?? null, (fn) => {
     tabStatusListeners.add(fn);
     return () => tabStatusListeners.delete(fn);

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222: The exposed settings tab state and the card footer state their defaults for the fallback check.
 - F1221: Every feature link key names an item of docs/features.md, and an orphan key is reported.
 - F1222: The notice view states its action, toast and group defaults, and reads a boolean hold and the bell refresh directly.
 - F1222: A string setting declaration without maxLength is refused, and the settings module states its remaining defaults.
