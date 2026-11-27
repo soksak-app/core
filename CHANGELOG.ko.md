@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-17: 설정 디자인 비교의 차이 48개를 page별 sub-item으로 기록하며, 각각 Red와 Green 시험으로 고친다.
 - F1232-2: packages/workbench 파일 28개의 주석을 영어로 바꿨고, 주석이 가리키는 조작 대상에 command 식별자를 붙였다.
 - F1108: 레이아웃 probe 고정물은 탭 뷰의 선언된 theme 모양을 scheme과 배경은 값으로, 나머지 필드는 형으로 판정한다.
 - F959-2: 수정된 verifier에서 claude 한 번 실행으로 mygo의 추적 agent layout 요청 네 개를 모두 충족한다.
