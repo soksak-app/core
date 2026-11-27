@@ -1600,6 +1600,7 @@ fn invalid_json_closes_connection() {
 | `document-callback.retirement-keeps-active-callback-alive` | Tauri document를 폐기할 때 이미 실행 중인 invocation이 반환된 뒤 ended, changed, event, responsiveness callback을 해제한다. | tauriv2 only: native document FFI 경계를 넘는 Rust callback receiver ownership을 검증한다 |
 | `exposure.surface-closed.closed-window-records-nothing` | 창이 닫힌 뒤 닫히는 surface는 아무것도 제거하지 않고 오류도 쓰지 않는다. registration은 창의 record와 함께 끝났다. | tauriv2 only: Go host는 surface 값에 registration을 두고 닫기가 그 값에 직접 접근하므로 그곳에서는 record 조회가 실패할 수 없다 |
 | `surface.sync.closed-window-creates-nothing` | 창이 닫힐 때 진행 중인 배치나 modal 요청은 표면이나 modal view를 만들지 않고 `project window is closed`로 실패한다. 창을 닫을 때 모든 표면을 이미 닫았으므로 그 뒤에 만든 표면은 닫는 곳이 없기 때문이다. | all |
+| `surface.view.reload-keeps-bindings` | 메인 페이지를 다시 불러온 뒤 새 페이지가 표면에 만드는 view는 그 표면으로 해석된다. 네이티브 view는 표면의 이름을 유지하고, view의 요청은 그 표면으로 권한이 확인된다. | all |
 | `exposure.reply.error-member-names-code-and-message` | document reply의 `error` member에 `code`나 `message`가 없으면 `error has no code` 또는 `error has no message`로 거부하며, 기다리는 요청에 code 0이나 빈 message를 전달하지 않는다. | all |
 | `sok.endpoint.error-member-names-code-and-message` | endpoint 응답의 error member에 `code`나 `message`가 없으면 `invalid frame from endpoint: error has no code` 또는 `... error has no message`로 거부하며, code 0이나 빈 message로 대신하지 않는다. | all |
 | `conversation.does-not-follow-symbolic-links` | 세션 folder의 symbolic link는 따라가지도 후보로 세지도 않으므로, 위쪽 tree로 돌아가는 link가 folder를 반복하지 못한다. | all |

@@ -3554,6 +3554,10 @@ mod tests;
 #[path = "documents_test.rs"]
 mod creation_test;
 
+#[cfg(test)]
+#[path = "documents_reload_bindings_test.rs"]
+mod reload_bindings_test;
+
 /// The document-start script that sets window.sokTheme to the frozen theme value {scheme, tokens}, which the first page script of a
 /// view reads (docs/spec/native-surfaces.md#view-surfaces).
 pub fn theme_script(theme: &Value) -> String {

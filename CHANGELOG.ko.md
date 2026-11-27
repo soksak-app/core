@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1109: 메인 페이지를 다시 불러온 뒤 만든 view는 자기 표면으로 해석되며, Go와 Rust 호스트 테스트가 surface.view.reload-keeps-bindings 계약을 확인한다.
 - F1108: reload window check는 거부된 status 요청을 재시도하지 않고 window의 host readiness와 새 workbench start를 기다린다.
 - F1222-2: 진행 알림의 회전 고리는 두 workbench 모두에서 element core.notices.ring이며, 고리 check는 그 element를 sample한다.
 - F1217-7: 작업 화면 상태줄이 두 host 모두에서 core.home.show를 실행하는 항목 홈(core.statusbar.home)으로 시작한다.
