@@ -71,7 +71,7 @@ Toast는 아이콘, title, text, action, 닫기 control을 보인다. 닫기 con
 
 ## 알림 센터
 
-설정 알림 센터 모양(`noticeCenterStyle`)은 `popover`(팝오버)와 `drawer`(서랍) 중 하나를 고른다. 팝오버는 종 아래로 내려온다. 서랍은 제목줄 아래에서 창 아래까지 창의 오른쪽을 채운다. Escape와 닫기 control이 센터를 닫는다.
+설정 알림 센터 모양(`noticeCenterStyle`)은 `popover`(팝오버)와 `drawer`(서랍) 중 하나를 고른다. 팝오버는 종 아래로 내려온다. 서랍은 제목줄 아래에서 창 아래까지 창의 오른쪽을 채운다. Escape와 닫기 control이 센터를 닫는다. 제목줄 row는 frame text 배율에 따라 높아진다([글자 크기](text-size.md)). 팝오버, 서랍, 토스트는 그려진 row 아래에서 시작하므로, row가 이들을 가리지 않고 이들도 종을 가리지 않는다.
 
 - 머리에는 `알림`, 버튼 `모두 읽음`(`core.notices.read-all`), 버튼 ⚙, 닫기 control(element `core.notices.toggle`, `core.notices.toggle`을 실행)이 있다. ⚙은 `core.settings-tab.nav {page: "behavior", group: "notices"}`를 실행해 동작 페이지의 알림 묶음이 보이는 설정 탭을 연다.
 - 필터 세그먼트는 `전체 <n>`, `오류·경고 <n>`, `진행 중 <n>`을 보이며(`core.notices.filter {filter}`, 값은 `all`, `problems`, `progress`), 그 옆에 스위치 조용히가 있다(element `core.notices.quiet`, `core.settings.set {patch: {quietToasts}}`를 실행한다).

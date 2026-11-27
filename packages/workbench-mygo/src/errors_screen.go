@@ -569,11 +569,14 @@ func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
 	}
 	_, height := c.Size()
 	visibleHeight := min(stackHeight, height/2)
-	popup := ui.Box(c).Absolute().Top(m.toastTop).Right(m.toastRight).Size(maxWidth, visibleHeight)
+	// The stack keeps the distance of toast-top from the drawn title bar row, which grows with the frame text factor
+	// (docs/spec/notifications.md#notice-center).
+	top := s.chromeHeight() + m.toastTop - m.chromeH
+	popup := ui.Box(c).Absolute().Top(top).Right(m.toastRight).Size(maxWidth, visibleHeight)
 	if rest > 0 {
 		// The count runs core.toasts.list with the opposite of the list state, so a second press hides the list (docs/spec/notifications.md#toasts).
 		more := s.binder.Press(c, "core.toasts.more", "core.toasts.list", "", map[string]any{"open": !s.errors.toastListOpen}).
-			Absolute().Top(m.toastTop + stackHeight + m.toastGap)
+			Absolute().Top(top + stackHeight + m.toastGap)
 		more.Children(func() {
 			ui.Text(c, counterText(style, rest)).SingleLine().TextColor(s.palette.Muted)
 		})

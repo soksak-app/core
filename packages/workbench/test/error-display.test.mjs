@@ -48,7 +48,8 @@ test("the toast stack floats under the bell at the right of the window and of a 
     const style = (selector) => [...sheet.sheet.cssRules].find((rule) => rule.selectorText === selector)?.style;
     const holder = style("#toasts");
     assert.equal(holder.position, "fixed");
-    assert.equal(holder.top, "var(--toast-top)");
+    // The stack keeps the distance of toast-top from the drawn title bar row, which grows with the frame text factor.
+    assert.equal(holder.top, "calc(var(--chrome-row) + var(--toast-top) - var(--chrome-h))");
     assert.equal(holder.right, "var(--toast-right)");
     assert.equal(holder.getPropertyValue("pointer-events"), "none");
     assert.equal(style('[data-native-modal="dialog"] > #toasts').position, "absolute");

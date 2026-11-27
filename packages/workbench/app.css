@@ -92,7 +92,8 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 /* The first row takes its scaled height in whole pixels, which is the title bar height that the page gives the host
    (chromeRow of frame-text.js, docs/spec/native-surfaces.md#title-bar-height). The rows above and left of the plane need no
    such rounding for the plane: the stage puts the plane on the device pixel grid (alignPlane of device-grid.js). */
-.chrome-bar{--chrome-row:round(nearest,max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text))),var(--pixel))}
+/* The root holds it, so the toasts and the notice center below the row read the same height. */
+:root{--chrome-row:round(nearest,max(var(--chrome-h),calc(var(--chrome-row-h) * var(--frame-text))),var(--pixel))}
 .chrome-bar{position:relative;flex:0 0 var(--chrome-row);height:var(--chrome-row);display:flex;align-items:center;
   gap:var(--space-2);padding:0 var(--space-3) 0 calc(var(--space-3) + var(--controls-w));
   border-bottom:var(--bw) solid var(--edge);background:var(--card);user-select:none}
@@ -672,7 +673,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
    elements of the notification path: the bell, the toasts, the status line and the center (docs/spec/notifications.md#decisions). */
 [data-error] { color: var(--no); }
 /* Toasts lie under the bell at the right of the window, above the content, and keep the form of the setting toastStyle. */
-#toasts { position: fixed; top: var(--toast-top); right: var(--toast-right); z-index: 190; display: flex; flex-direction: column; align-items: flex-end;
+#toasts { position: fixed; top: calc(var(--chrome-row) + var(--toast-top) - var(--chrome-h)); right: var(--toast-right); z-index: 190; display: flex; flex-direction: column; align-items: flex-end;
   gap: var(--toast-gap); width: var(--toast-width); max-width: calc(var(--fill) - var(--toast-right) - var(--toast-right)); pointer-events: none; }
 #toasts[data-style="line"] { left: var(--center); right: auto; transform: translateX(calc(0% - var(--center))); flex-direction: row; flex-wrap: wrap; align-items: center; width: max-content; }
 #toasts[data-style="deck"] .toast:not(:first-child) { margin-top: var(--toast-deck-lift); transform: scale(var(--toast-deck-scale)); }
@@ -719,10 +720,10 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .notice-bell[data-tone="problem"] .notice-bell__count { background: var(--no); }
 .notice-bell__count[hidden] { display: none; }
 /* The notice center: the popover under the bell, or the drawer at the right of the window below the title bar. */
-.notice-center { position: fixed; top: var(--chrome-h); right: var(--toast-right); z-index: 191; box-sizing: border-box; width: var(--notice-center-w);
+.notice-center { position: fixed; top: var(--chrome-row); right: var(--toast-right); z-index: 191; box-sizing: border-box; width: var(--notice-center-w);
   max-height: var(--notice-center-max-h); overflow: auto; display: flex; flex-direction: column; gap: var(--toast-gap); padding: var(--notice-entry-pad);
   background: var(--card); color: var(--fg); border: var(--bw) solid var(--edge); border-radius: var(--r-sm); box-shadow: var(--toast-shadow); }
-.notice-center[data-style="drawer"] { top: var(--chrome-h); right: 0; bottom: 0; max-height: none; border-radius: 0; }
+.notice-center[data-style="drawer"] { top: var(--chrome-row); right: 0; bottom: 0; max-height: none; border-radius: 0; }
 .notice-center__head, .notice-center__filters, .notice-center__label, .notice-center__foot { display: flex; align-items: center; gap: var(--toast-gap); }
 .notice-center__head { justify-content: space-between; }
 .notice-center__head button, .notice-center__filters button, .notice-center__clear, .notice-center__clear-all, .notice-center__read { border: 0; background: none; color: var(--muted); font: inherit; font-size: var(--text-caption); cursor: pointer; padding: 0; }
