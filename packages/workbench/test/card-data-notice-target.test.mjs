@@ -4,14 +4,14 @@ import { test } from "node:test";
 import { noticeTargetIn } from "../card-data.js";
 
 const cards = [
-  { id: "main", data: { tabs: [{ id: "tab-a", plugin: "plain" }, { id: "tab-b", plugin: "notes" }], activeId: "tab-a" } },
-  { id: "side", data: { tabs: [{ id: "tab-c", plugin: "term" }], activeId: "tab-c" } },
+  { id: "main", data: { tabs: [{ id: "tab-a", plugin: "plain", title: "A" }, { id: "tab-b", plugin: "notes", title: "B" }], activeId: "tab-a" } },
+  { id: "side", data: { tabs: [{ id: "tab-c", plugin: "term", title: "C" }], activeId: "tab-c" } },
   { id: "left", data: null },
 ];
 
-test("a tab id names the card that holds it, with the tab and its plugin", () => {
-  assert.deepEqual(noticeTargetIn(cards, "tab-b"), { card: "main", tab: "tab-b", plugin: "notes" });
-  assert.deepEqual(noticeTargetIn(cards, "tab-c"), { card: "side", tab: "tab-c", plugin: "term" });
+test("a tab id names the card that holds it, with the tab, its plugin and its title as label", () => {
+  assert.deepEqual(noticeTargetIn(cards, "tab-b"), { card: "main", tab: "tab-b", plugin: "notes", label: "B" });
+  assert.deepEqual(noticeTargetIn(cards, "tab-c"), { card: "side", tab: "tab-c", plugin: "term", label: "C" });
 });
 
 test("a tab id that no card holds names no target, and a card without data holds no tab", () => {
