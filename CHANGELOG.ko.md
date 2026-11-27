@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F959-3: agent layout verifier가 창의 고정 window sidebar를 빼고 content card만 판정한다. 실패하던 요청이 이제 통과한다.
 - F1217-11-8: 토스트 동작 줄이기 테스트가 동작 재정의의 두 규칙을 고정하며, 다시 통과한다.
 - F1233: F1233 항목은 record 동작을 literal 동사로 적는다.
 - F1231-1: 카드 또는 창 사이드바의 없는 플러그인 경고가 사이드바를 source로 하는 warning notice가 되어, 상태줄과 토스트에 보인다.

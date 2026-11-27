@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F959-3: The agent layout verifier judges the content cards of a window, not its fixed window sidebars; the failing requests now pass.
 - F1217-11-8: The toast reduced motion test pins both rules of the motion override, and the test passes again.
 - F1233: The F1233 entries state their record actions with literal verbs.
 - F1231-1: A missing plugin warning of a card or window sidebar is a warning notice with the sidebar as its source, shown on the status line and as a toast.

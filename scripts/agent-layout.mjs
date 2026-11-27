@@ -62,11 +62,13 @@ const checks = {
 
 /** The failures of a layout of cards against the predicates of one request; an empty list means the layout meets them all. */
 export function judge(cards, predicates) {
+  // A window sidebar is a fixed card of the plane (docs/spec/external-sidebars.md), so the predicates judge the content cards only.
+  const content = cards.filter((card) => !card.fixed);
   const failures = [];
   for (const predicate of predicates) {
     const check = checks[predicate.kind];
     if (!check) throw new Error(`unknown predicate kind ${predicate.kind}`);
-    const failure = check(predicate, cards);
+    const failure = check(predicate, content);
     if (failure !== null) failures.push(`${predicate.kind}: ${failure}`);
   }
   return failures;

@@ -65,3 +65,13 @@ test("one group breaks the group predicate", () => {
   const cards = [card("a", 0, 0, 300, 400, ["terminal"], "group-1"), card("b", 300, 0, 300, 400, ["terminal"], "group-1")];
   assert.equal(judge(cards, predicatesOf("two-groups-of-cards")).length, 1);
 });
+
+// A window starts with its window sidebars, which are fixed cards of the plane beside the content cards (docs/spec/external-sidebars.md).
+// The predicates judge the content cards only, so the sidebars of the window do not count (F959-3).
+test("the window sidebars of a window do not count as cards of the layout", () => {
+  const sidebar = (id, x) => ({ ...card(id, x, 0, 190, 646), fixed: true });
+  const content = row([182, 182, 182, 182]).map((frame) => ({ ...frame, x: frame.x + 190 }));
+  const cards = [sidebar("left", 0), ...content, sidebar("right", 190 + 728)];
+  assert.deepEqual(judge(cards, predicatesOf("row-of-four-equal-cards")), []);
+  assert.deepEqual(judge(cards, predicatesOf("grid-two-by-two")).length, 1);
+});
