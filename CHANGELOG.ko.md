@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1264-1: native surfaces 명세가 상자 조회를 정한다. 문서 영역의 요소 상자와 계산된 스타일을 읽는 요청이다.
 - F1217-9-1-1: Wails와 Tauri 호스트가 선언하도록 host 계약에 plugin 폴더 수 case를 정의한다.
 - F1263: 가져오기 폼의 git clone은 `--progress`로 실행되어, 두 호스트에서 git의 진행 줄이 폼에 도착한다.
 - F1250-1: 선언 컴포넌트가 검토된 속성을 받는다: Badge 톤, Button의 variant와 size, 스테퍼 Number, 편집 가능한 Slider 값, Search의 shortcut, Chip의 remove.

@@ -394,6 +394,23 @@ The element and request data of a document region are streams. The element tree 
 - A host that does not acknowledge a snapshot keeps the next one pending. A subscription ends with its page, its web content process, or its region, and ending it releases the pending snapshot.
 - The document script runs in the host's own content world and posts through a script message handler of that world. Page scripts run in another world and cannot post to that handler, so a page cannot write stream data; a page changes what the streams report only by changing its own document.
 
+### Box query
+
+A plugin measures the page of a document region with the `boxes` request. It is a request, not a stream: each call is served once, and the host keeps no subscription, timer, or cache for it.
+
+- `boxes {document, selector, properties}` is refused for an unknown document, or for a document that the calling surface does not own, as `subscribe` is. `selector` is a non-empty CSS selector string. `properties` is an array of CSS property names in kebab-case, which may be empty. A value that is not a string is refused with `property must be a string`.
+- The host runs a fixed script in its own content world, the world of the document script of the [document streams](#document-streams). The script reads only the main frame document and never runs a script of the page, so a plugin cannot pass it code.
+- The script walks `document.querySelectorAll(selector)` in document order. For each match it reads `Element.getBoundingClientRect()` and `getComputedStyle(element).getPropertyValue(property)` for each requested property.
+- The reply is `{total, truncated, boxes}`. `boxes` lists at most 500 matches, each `{x, y, width, height, style}`: `x`, `y`, `width` and `height` are the border box of the element in CSS pixels of the viewport of the region, and `style` maps each requested property to its computed value. With an empty `properties`, `style` is `{}`. `total` is the number of matches, and `truncated` is true when `total` is larger than 500.
+- The reply reads the document at the time of the call. A page change after the reply is not reflected, and no later change is observed.
+- A call that fails is refused with the explicit error of its cause, and no value is returned:
+  - `the document region shows no page` when the region has no committed main frame document.
+  - `selector must not be empty` when `selector` is empty.
+  - `invalid selector <selector>: <message>` when the engine rejects the selector, where `<message>` is the text of the engine error.
+  - `unknown style property <name>` when `CSS.supports(<name>, "inherit")` is false for a name in `properties`, which includes custom properties whose names start with `--`.
+- On darwin the script runs through `callAsyncJavaScript` of the region's web view, in the content world of the document script, which is a public WebKit API. A value that the script cannot return, such as a non-finite number, is refused with `box query returned a value that is not JSON`.
+- The plugin-api document handle has `boxes(selector, properties)`, which returns a promise of the reply and rejects with the error text above.
+
 ## Image regions
 
 Images are created by sidecars and supplied to the core through a region. The core receives only an opaque token and pixel size; it knows neither the image buffer nor the supplier's identity beyond the token.

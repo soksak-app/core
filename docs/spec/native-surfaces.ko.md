@@ -396,6 +396,23 @@ place가 빼는 표면의 영역 종료는 호스트가 맡는다. 두 호스트
 - 호스트가 스냅샷을 확인하지 않으면 다음 스냅샷은 대기한다. 구독은 그 페이지, web content process 또는 영역과 함께 끝나며, 구독이 끝나면 대기 중인 스냅샷이 해제된다.
 - 문서 스크립트는 호스트 자체 콘텐츠 월드에서 실행되고 그 월드의 스크립트 메시지 처리기로 보낸다. 페이지 스크립트는 다른 월드에서 실행되어 그 처리기에 보낼 수 없으므로, 페이지는 스트림 데이터를 쓸 수 없고 자기 문서를 바꿔서만 스트림이 보고하는 내용을 바꿀 수 있다.
 
+### 상자 조회
+
+plugin은 `boxes` 요청으로 문서 영역의 페이지를 잰다. 이것은 스트림이 아니라 요청이다. 호출마다 한 번 처리하며, 호스트는 이를 위한 구독, timer, 캐시를 두지 않는다.
+
+- `boxes {document, selector, properties}`는 알 수 없는 document이거나 호출한 표면이 소유하지 않은 document이면 `subscribe`와 같이 거부된다. `selector`는 빈 값이 아닌 CSS 선택자 문자열이다. `properties`는 kebab-case CSS 속성 이름의 배열이며 빈 배열일 수 있다. 문자열이 아닌 값은 `property must be a string`으로 거부된다.
+- 호스트는 자기 콘텐츠 월드, 즉 [문서 스트림](#문서-스트림)의 문서 스크립트가 쓰는 월드에서 고정된 스크립트를 실행한다. 이 스크립트는 주 프레임 문서만 읽고 페이지의 스크립트를 실행하지 않으므로, plugin은 코드를 넘길 수 없다.
+- 스크립트는 `document.querySelectorAll(selector)`를 문서 순서로 순회한다. 각 일치 요소마다 `Element.getBoundingClientRect()`와, 요청한 속성마다 `getComputedStyle(element).getPropertyValue(property)`를 읽는다.
+- 답은 `{total, truncated, boxes}`다. `boxes`는 최대 500개의 일치를 나열하며 각각 `{x, y, width, height, style}`다. `x`, `y`, `width`, `height`는 영역 viewport의 CSS 픽셀로 나타낸 요소의 border box이고, `style`은 요청한 각 속성을 계산된 값에 대응시킨다. `properties`가 빈 배열이면 `style`은 `{}`다. `total`은 일치 수이고, `total`이 500보다 크면 `truncated`는 true다.
+- 답은 호출 시점의 문서를 읽는다. 답 이후의 페이지 변경은 반영되지 않으며, 이후의 변경도 관찰하지 않는다.
+- 실패한 호출은 원인에 맞는 명시적 오류로 거부되고 값을 돌려주지 않는다.
+  - 영역에 커밋된 주 프레임 문서가 없으면 `the document region shows no page`.
+  - `selector`가 비어 있으면 `selector must not be empty`.
+  - 엔진이 선택자를 거부하면 `invalid selector <selector>: <message>`. `<message>`는 엔진 오류의 문구다.
+  - `properties`의 이름에 대해 `CSS.supports(<name>, "inherit")`가 false이면 `unknown style property <name>`. `--`로 시작하는 사용자 속성도 여기에 든다.
+- darwin에서 스크립트는 영역 web view의 `callAsyncJavaScript`로, 문서 스크립트의 콘텐츠 월드에서 실행된다. 이것은 공개 WebKit API다. 스크립트가 돌려줄 수 없는 값, 예를 들어 유한하지 않은 숫자는 `box query returned a value that is not JSON`으로 거부된다.
+- plugin-api의 document 손잡이는 `boxes(selector, properties)`를 가지며, 이것은 답의 promise를 돌려주고 위 오류 문구로 거부된다.
+
 ## 그림 영역
 
 그림은 사이드카가 만들고 영역을 통해 코어에 공급한다. 코어는 불투명한 토큰과 픽셀 크기만 받으며, 그림 버퍼도 공급자의 정체도 토큰 외에는 알 수 없다.

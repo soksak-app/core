@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1264-1: The native surfaces specification defines the box query, the request that reads the boxes and computed style of the elements of a document region.
 - F1217-9-1-1: The host contract defines the plugin folder count case for the Wails and Tauri hosts, which declare it in their tests.
 - F1263: The git clone of the import form runs with `--progress`, so the progress lines of git reach the form in both hosts.
 - F1250-1: The declaration components take the review props: the Badge tones, the Button variant and size, the stepper Number, the editable Slider value, the Search shortcut and the Chip remove.
