@@ -134,6 +134,37 @@ test("a surface in a hidden fullscreen sibling stays mounted and becomes invisib
   } finally { dom.window.close(); }
 });
 
+test("a hidden tab selected after a restart publishes its surface visible", async () => {
+  const wire = selectPageWire("compositor-restarted-hidden-select");
+  const dom = new JSDOM(`<div id="plane"><div data-card-id="hidden-card" hidden>
+    <div data-native-surface data-native-surface-id="hidden-surface" data-native-plugin="fullscreen-probe" data-native-layer="0"></div>
+  </div></div>`, { pretendToBeVisual: true });
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
+  const { registerPlugin } = await import("../registry.js");
+  registerPlugin({ id: "fullscreen-probe", surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) });
+  const slot = document.querySelector("[data-native-surface]");
+  // A restart starts a new compositor over the page of the restarted view, so the module is loaded again.
+  const compositor = await import("../compositor.js?restarted-hidden-select");
+  const { surfaces } = await import("../host.js");
+  compositor.setSlotSurface(slot, { surfaceId: "hidden-surface", pluginId: "fullscreen-probe", composition: { kind: "dom" } });
+  slot.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100 });
+  let record;
+  compositor.onCommit((value) => {
+    record = value;
+    return surfaces.place(value);
+  });
+  try {
+    await compositor.publish();
+    assert.equal(record.surfaces[0].visible, false, "a restarted hidden card presents its native surface hidden");
+    document.querySelector('[data-card-id="hidden-card"]').hidden = false;
+    await compositor.publish();
+    assert.equal(record.surfaces[0].visible, true, "selecting the hidden tab after the restart did not publish its surface visible");
+    wire.finish();
+  } finally { dom.window.close(); }
+});
+
 test("a deferred preparation is not recorded as an applied or predicted view", async (t) => {
   const dom = new JSDOM(`<div id="plane"><div data-card-id="card">
     <div data-native-surface data-native-surface-id="deferred-view" data-native-plugin="deferred-probe" data-native-layer="0"></div>

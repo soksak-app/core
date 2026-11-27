@@ -1,0 +1,189 @@
+{
+  "name": "compositor-restarted-hidden-select",
+  "description": "After a restart, the page publishes a surface of a hidden card, and when the card is shown the page publishes the same surface visible; the host answers each syncSurfaces call with the placement that it applied and each presentSurfaces call with the same placement.",
+  "replay": false,
+  "reason": "syncSurfaces and presentSurfaces place native surfaces in a window, and the Go producer runs only log and workspace calls without a window.",
+  "steps": [
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "hidden-surface",
+              "dim": false,
+              "plugin": "fullscreen-probe",
+              "composition": {
+                "kind": "dom"
+              },
+              "visible": false,
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 100
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [],
+          "viewport": {
+            "width": 1024,
+            "height": 768
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "hidden-surface",
+              "visible": false,
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 100
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "hidden-surface",
+              "visible": false,
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 100
+            }
+          ],
+          "settled": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": [
+          {
+            "id": "hidden-surface",
+            "visible": false,
+            "x": 0,
+            "y": 0,
+            "w": 100,
+            "h": 100
+          }
+        ]
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "hidden-surface",
+              "dim": false,
+              "plugin": "fullscreen-probe",
+              "composition": {
+                "kind": "dom"
+              },
+              "visible": true,
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 100
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [],
+          "viewport": {
+            "width": 1024,
+            "height": 768
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 2,
+          "placements": [
+            {
+              "id": "hidden-surface",
+              "visible": true,
+              "scale": 2,
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 100
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 2,
+          "placements": [
+            {
+              "id": "hidden-surface",
+              "visible": true,
+              "scale": 2,
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 100
+            }
+          ],
+          "settled": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": [
+          {
+            "id": "hidden-surface",
+            "visible": true,
+            "scale": 2,
+            "x": 0,
+            "y": 0,
+            "w": 100,
+            "h": 100
+          }
+        ]
+      }
+    }
+  ]
+}
