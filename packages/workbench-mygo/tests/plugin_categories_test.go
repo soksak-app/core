@@ -279,3 +279,13 @@ func TestAPluginPageNamesEachDescriptionLine(t *testing.T) {
 		}
 	}
 }
+
+// Each row of 설치됨 is the element core.settings-tab.plugin-row with the plugin id as its item (docs/spec/settings.md#설치됨).
+func TestEachInstalledRowIsNamedByItsPlugin(t *testing.T) {
+	f := categoryShell(t, enabledPlugins("card"), settingsWithTerminal)
+	f.clickQuiet("core.chrome.settings", "")
+	f.runQuiet("core.settings-tab.nav", map[string]any{"page": "installed"})
+	if !f.has("core.settings-tab.plugin-row", "card") {
+		t.Fatal("the row of the plugin card is not the element core.settings-tab.plugin-row with its id")
+	}
+}

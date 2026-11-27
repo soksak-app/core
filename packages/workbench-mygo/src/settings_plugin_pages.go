@@ -156,7 +156,7 @@ func (s *Shell) installedRows(b *settingsBuilder, entry pluginEntry, status Plug
 	if loaded := s.loadedPlugin(row.ID); loaded != nil && len(loaded.Categories) > 0 {
 		category = loaded.Categories[0]
 	}
-	content := settingsRow{name: row.Name, description: pluginMeta(row, category)}
+	content := settingsRow{name: row.Name, description: pluginMeta(row, category), plugin: row.ID}
 	if entry.problem {
 		content.controls = append(content.controls, pluginBadge(b, "필요한 플러그인 없음", "warn"))
 	}

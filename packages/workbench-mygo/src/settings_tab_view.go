@@ -140,6 +140,8 @@ type settingsRow struct {
 	name        string
 	key         string
 	description string
+	// plugin is the id of the plugin of a row of 설치됨, which the row is named by (docs/spec/settings.md#설치됨).
+	plugin string
 	// aboutLines says that each line of the description is one element core.settings-tab.plugins.about (docs/spec/settings.md#plugin-page).
 	aboutLines bool
 	controls   []*SettingsControl

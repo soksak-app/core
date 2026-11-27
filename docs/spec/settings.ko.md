@@ -303,7 +303,7 @@ part마다 행이 하나이며 part 순서를 따른다(요소 이름 `core.sett
 
 페이지 설치됨의 제목은 `설치된 플러그인`, 설명은 `켜고 끄기, 업데이트, 문제 고치기. 하나를 누르면 그 플러그인의 정보와 설정이 한 페이지에 있다. 새로 찾는 일은 ‘찾아보기’ 화면에서 한다.`이며, 범위 컨트롤이 없다.
 
-페이지는 `installed.json`이 나열하거나 창이 불러온 플러그인의 행을 보인다. 행 앞에는 해당할 때 다음 줄을 보인다.
+페이지는 `installed.json`이 나열하거나 창이 불러온 플러그인의 행을 보인다. 각 행은 요소 `core.settings-tab.plugin-row`이며 항목은 플러그인 id다. 행 앞에는 해당할 때 다음 줄을 보인다.
 
 - 레지스트리 인덱스가 더 새로운 core release를 나열하면 core 업데이트 행: `core: <running> → <available>`, 릴리스 페이지 링크(`core.app.release`를 실행), 버튼 `업데이트`(`core.app.update`를 실행). 이 행은 요소 `core.settings-tab.plugins.app`이고 링크는 `core.settings-tab.plugins.app-release`, 버튼은 `core.settings-tab.plugins.app-update`이며, 받을 수 있는 release에 맞지 않는 설치된 plugin마다 안내 요소 `core.settings-tab.plugins.incompatible`을 보인다. 업데이트 규칙은 [애플리케이션 업데이트](installation.ko.md#애플리케이션-업데이트)에 있다. 나열된 release가 맞지 않는 설치된 플러그인마다 알림 `<id> <installed> (<range>): <available>에 맞는 최신 버전 <version>`을 보인다. 맞는 버전이 없으면 `<id> <installed> (<range>): <available>에 맞는 버전 없음`이다. 알림은 요소 `core.settings-tab.plugins.incompatible`이다. 행의 링크는 요소 `core.settings-tab.plugins.app-release`이며 이름은 `릴리스 페이지`이고, 버튼은 요소 `core.settings-tab.plugins.app-update`다.
 - 오래된 사이드카마다 `<running> → <installed>`와 버튼 `세션 <sessions>개를 끝내고 적용`. 선언되지 않은 사이드카에는 `세션 <sessions>개를 끝내고 종료`. 각 버튼은 `core.plugins.replace {sidecar}`를 실행한다. 선언되지 않은 사이드카의 실행 중인 서비스는 설치된 쪽을 `선언 없음`으로 보인다. 서비스가 version을 보고하지 않은 실행 쪽, 즉 이전 버전의 서비스는 `이전 버전`으로 보인다.

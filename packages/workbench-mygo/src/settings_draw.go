@@ -329,7 +329,12 @@ func (s *Shell) drawSettingsRow(c *ui.Context, row settingsRow, pane settingsPan
 	marked := slices.ContainsFunc(row.controls, func(control *SettingsControl) bool {
 		return strings.HasPrefix(control.item(), "reset:") || control.kind == controlMark
 	})
+	// A row of 설치됨 is the element core.settings-tab.plugin-row with the plugin id as its item.
+	// The group role and the label keep the row in the element tree; an unlabelled container is not kept.
 	line := ui.Row(c).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center)
+	if row.plugin != "" {
+		line = ui.Row(s.binder.Name(c, "core.settings-tab.plugin-row", row.plugin)).Role(ui.RoleGroup).Label(row.name).FillWidth().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center)
+	}
 	if marked {
 		line.Wrap()
 	}
