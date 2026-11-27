@@ -270,7 +270,7 @@
 
 묶음 `에이전트 연동`에는 넓은 행 `연동 상태` 하나가 있다.
 
-- 요약은 배지 `<n>개 중 <m>개가 다름`(warn, 경고 아이콘)을 보인다. `<m>`은 `differs` 또는 `missing`인 part의 수다. 모든 part가 `ok`이면 `모두 설치됨`(ok)을 보인다.
+- 요약은 배지 `<n>개 중 <m>개가 다름`(warn, 경고 아이콘)을 보인다. `<m>`은 `differs` 또는 `missing`인 part의 수다. 모든 part가 `ok`이면 `모두 설치됨`(ok, 확인 아이콘)을 보인다.
 - 버튼 `다시 확인`(refresh 아이콘, sm)은 `core.settings-tab.setup-check`를 실행하며, 이는 `core.setup.check`를 실행한다.
 - 버튼 `모두 설치`(primary, sm, 요소 `core.settings-tab.setup-install-all`)는 상태가 `ok`가 아닌 part가 있는 종류 `skill`과 `mcp`로 `core.setup.install {parts}`를 실행한다. 그런 part가 없으면 비활성이다.
 

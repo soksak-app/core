@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-17-5: 에이전트 연동 요약은 모든 설정 항목이 ok일 때 settings-36의 확인 아이콘을 쓴다고 명세에 적는다.
 - F1217-17: 설정 탭을 settings-36 디자인과 page별로 비교했으며, 두 host에 없는 모양 미리보기를 결함으로 기록했다.
 - F1236-2: Wails host가 알림 identifier와 view sidecar message의 JSON encoding error를 버리지 않고 돌려준다.
 - F1235: agents와 진단 page head test의 이름과 주석을 영어로 바꿨다.

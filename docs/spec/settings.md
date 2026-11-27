@@ -270,7 +270,7 @@ The page shows the setup parts that let an agent on the machine learn and connec
 
 The group 에이전트 연동 has one wide row `연동 상태`:
 
-- The summary shows the badge `<n>개 중 <m>개가 다름` (warn, with a warning icon), where `<m>` counts the parts that are `differs` or `missing`. When every part is `ok` the summary shows `모두 설치됨` (ok).
+- The summary shows the badge `<n>개 중 <m>개가 다름` (warn, with a warning icon), where `<m>` counts the parts that are `differs` or `missing`. When every part is `ok` the summary shows `모두 설치됨` (ok, with a check icon).
 - The button `다시 확인` (refresh icon, sm) runs `core.settings-tab.setup-check`, which runs `core.setup.check`.
 - The button `모두 설치` (primary, sm), element `core.settings-tab.setup-install-all`, runs `core.setup.install {parts}` with the kinds `skill` and `mcp` that have a part that is not `ok`. It is disabled when no such part exists.
 
