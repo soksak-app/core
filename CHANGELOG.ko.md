@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1224, F1225, F1217-11: 체크리스트가 용어, schema, toast 항목을 완료로 기록한다.
 - 중복된 노출 추적 사례를 제거했다: exposure-registry-dropped-trace가 같은 기록을 재생한다.
 - F1222: F1222부터 F1224까지의 feature link가 구현과 테스트를 적고, notice center의 glyph 테스트를 test inventory가 주장한다.
 - F1217-7: 어떤 빌드도 그리지 않는 요소 선언 core.settings-tab.confirm을 두 노출 선언에서 제거했다.

@@ -85,8 +85,8 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F1222-1 — sok Go와 Rust의 manifest reader가 accounts의 `data` 거절과 문자열 설정의 `maxLength` 거절에 공통 case 표의 문구를 쓴다.
   - [~] F1222-2 — web과 mygo의 진행 notice 고리가 창의 display frame에 맞춰 돌고, 동작 줄이기에서 멈춘다. 남은 일: 실행 중인 창에서 도는 모습 확인.
 - [o] F1223 — P1: 거절된 view의 `runtime.status.watch`는 stop 함수의 `ready` promise를 거절의 `code`와 `message`로 거절한다 (docs/spec/native-surfaces.md).
-- [ ] F1224 — P1, follows kit KR44 and F1217-16: code, test, 기록이 kit 0.0.17의 term 목록이 거절하는 capability 대신 plugin category를 쓴다. Input: kit 0.0.17의 `sok-check docs`가 core에서 capability 243줄을 보고한다(`scripts/check-tests.mjs`, 그 test, `docs/spec/cases`, `native/darwin/tests`, sok, plugin-api, window-check, `docs/spec/hosts.md`, `docs/plans/decouple-handoff.md`). 그중 90줄은 Tauri가 만드는 `apps/tauriv2/gen/schemas`이고, capability는 Tauri 자체의 이름이다. Expected: core의 이름과 문장은 plugin category를 쓰고, Tauri가 정하는 이름은 kit 검사가 읽지 않는 선언으로 남는다.
-- [ ] F1225 — P1: core는 Tauri가 만드는 schema를 추적하지 않는다. Input: `apps/tauriv2/gen/schemas`의 `desktop-schema.json`, `macOS-schema.json`, `windows-schema.json`은 추적되는 파일이고, `apps/tauriv2/build.rs`의 `tauri_build::build()`가 빌드마다 다시 만든다. Expected: 그 폴더는 빌드 결과물로 무시되고, 빌드가 다시 만든다.
+- [o] F1224 — P1, follows kit KR44 and F1217-16: code, test, 기록이 kit 0.0.17의 term 목록이 거절하는 capability 대신 plugin category를 쓴다. Input: kit 0.0.17의 `sok-check docs`가 core에서 capability 243줄을 보고한다(`scripts/check-tests.mjs`, 그 test, `docs/spec/cases`, `native/darwin/tests`, sok, plugin-api, window-check, `docs/spec/hosts.md`, `docs/plans/decouple-handoff.md`). 그중 90줄은 Tauri가 만드는 `apps/tauriv2/gen/schemas`이고, capability는 Tauri 자체의 이름이다. Expected: core의 이름과 문장은 plugin category를 쓰고, Tauri가 정하는 이름은 kit 검사가 읽지 않는 선언으로 남는다. kit KR48이 거절 목록을 plugin capability로 좁힌다. MCP의 capabilities와 Tauri의 capabilities/는 외부가 정한 이름이고, 나머지는 plugin category가 아닌 뜻이기 때문이다. kit checkout의 검사는 core에서 아무것도 보고하지 않는다.
+- [o] F1225 — P1: core는 Tauri가 만드는 schema를 추적하지 않는다. Input: `apps/tauriv2/gen/schemas`의 `desktop-schema.json`, `macOS-schema.json`, `windows-schema.json`은 추적되는 파일이고, `apps/tauriv2/build.rs`의 `tauri_build::build()`가 빌드마다 다시 만든다. Expected: 그 폴더는 빌드 결과물로 무시되고, 빌드가 다시 만든다.
 - [o] F795-13 — P1, F795의 일부: 오류 occurrence test가 timer 교체 없이 page clock과 `view`, `now`를 받는 page store factory 위에서 실행된다.
 - [o] F1220 — P0: Page event batcher는 거절된 batch의 event를 버린 수로 세고 곧바로 다시 보내지 않는다. 입력: 9개 event의 batch를 거절하는 page wire. 동작: page가 실패할 때마다 같은 batch를 다시 보내 process의 메모리가 바닥난다. 기대: 실패한 batch는 하나의 오류 표시 경로로 한 번 보고되고, 그 event는 다음 batch에서 버린 수로 세며, batcher는 계속 동작한다.
   - [o] F1220-1 — page log와 performance switch의 case와 test는 거절된 batch의 손실을 다음 batch에 기록한다: page writer는 다음 batch의 `workbench.log.dropped`에 개수, byte, 이유 `the host refused the batch`를 적고 즉시 다시 보내지 않으며, test는 자기 지점에서 flush한다. Test: page-log.test.mjs와 performance.test.mjs, 20개 중 20개.
@@ -158,13 +158,13 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
     - [o] F1217-7-1 — mygo 시작 read가 실행마다 한 순서를 지킨다: ready 보고가 theme 응답, 그다음 notice read를 기다린다. `tests/app_test.go`가 시작 호출 순서를 고정하고, 시작, status bar, seam, sidebar fold의 mygo 테스트 135개가 통과한다.
   - [o] F1217-10 — P0: 알림의 명세가 갱신된 디자인을 따른다. 알림은 경로 하나이며 종류는 성공, 정보, 경고, 오류, 진행이다. 알림은 세 곳에 보인다: 카드의 상태줄(그 카드의 알림), 종 아래의 토스트(앱 알림과 포커스가 아닌 카드의 알림), 알림 센터(모든 알림). 종은 모든 화면에서 제목줄 오른쪽 끝에 읽지 않은 수와 함께 있다. 설정은 토스트 모양, 알림 센터 모양, 조용히, 오류·경고 자동 닫힘이며, plugin이 카드에 알림을 주는 호출이 있다. 기대: `docs/spec/notifications.md`가 contract를 정하고, `docs/spec/exposure.md`의 오류 표시, `docs/spec/settings.md`의 오류 토스트, `docs/spec/native-modals.md`의 토스트 overlay를 대신하며, 반대 검토의 결정과 이유를 적는다.
   - [~] F1217-11 — P0, F1217-10 다음: web host가 알림을 보인다. 종, 토스트 세 모양, 센터의 팝오버와 서랍, 카드 상태줄, 알림 group의 설정이다.
-    - [~] F1217-11-1 — web notice 저장소는 토스트가 바뀔 때만 watcher에 알리고, 토스트의 debug 사본은 timer가 정하는 너비를 담지 않아, 저장소 변경이 바뀌지 않은 사본의 overlay update를 보내지 않는다.
+    - [o] F1217-11-1 — web notice 저장소는 토스트가 바뀔 때만 watcher에 알리고, 토스트의 debug 사본은 timer가 정하는 너비를 담지 않아, 저장소 변경이 바뀌지 않은 사본의 overlay update를 보내지 않는다.
     - [o] F1217-11-2 — 모든 화면의 web 제목줄 종과, 거르기·묶음·지우기·읽음을 가진 팝오버와 서랍의 notice center. 기록은 `workspace` 종류 `notices`와 `noticesPut`으로 `notices.json`에 둔다.
-    - [~] F1217-11-3 — 세 모양의 web 토스트와 그 시간. pointer가 토스트 위에 있거나 토스트가 focus를 가지면 멈춘다.
+    - [o] F1217-11-3 — 세 모양의 web 토스트와 그 시간. pointer가 토스트 위에 있거나 토스트가 focus를 가지면 멈춘다.
     - [o] F1217-11-4 — content footer의 web 카드 status line, nullable `status`를 가진 카드마다의 `core.grid` `notice`, plugin API 검사를 거치는 `tab.notify`, `tab.progress`, `tab.done` handler.
     - [o] F1217-11-5 — 알림 group의 web 설정.
     - [o] F1217-11-6 — 카드 notice는 그 tab의 dot을 바꾸지 않고, tab의 다음 notice는 system이든 아니든 그 tab의 system notification을 지운다(docs/spec/plugins.md#tab-reports).
-    - [~] F1217-11-7 — debug 화면, modal 오류 toast, group header, files list, published imports의 page-wire case가 notice 경로의 호출을 따른다. 남은 일: specification 단계마다 case 갱신이나 page 수정.
+    - [o] F1217-11-7 — debug 화면, modal 오류 toast, group header, files list, published imports의 page-wire case가 notice 경로의 호출을 따른다.
   - [o] F1217-15 — 명령과 카드 없는 plugin의 notice. `core.notices.add {card?, plugin?, ...}`, `core.notices.progress`, `core.notices.done`, `core.notices.read {id}`는 `tab.notify`의 경로로 실행된다. plugin API의 `page.notify`, `page.progress`, `page.done`은 source `plugin`의 notice를 준다. `core.notices`는 각 항목을 `read`와 `source`와 함께 보인다. web, mygo, plugin API.
     - [o] F1217-16 — code, test, 기록이 kit의 term 목록이 거절하는 settings window, settings modal 대신 settings tab을 쓴다. 다음 kit 목록(0.0.17)으로 검사하면 그 term은 하나도 나오지 않는다.
   - [~] F1217-12 — P0, F1217-10 다음: mygo host가 같은 알림을 같은 글로 보인다.
