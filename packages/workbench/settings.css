@@ -145,7 +145,6 @@
 .set-chips,
 .set-chip-group,
 .set-actions,
-.set-set__actions,
 .set-plugin-row__actions,
 .set-account__buttons {
   display: flex;
@@ -163,6 +162,41 @@
   background: var(--chip);
   color: var(--fg);
   font-size: var(--text-caption);
+}
+
+/* A set row is a card: the body with the head, the chips and the warnings, and the actions in the second column of the same row
+   (the layout of the design, settings-36 page 3, .set-row; the tokens and class names are ours). */
+.set-set {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: var(--bw) solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--card);
+}
+.set-set--on {
+  border-color: var(--focus);
+}
+.set-set__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.set-set__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 600;
+}
+.set-set__actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .set-chip--neutral {
@@ -243,7 +277,6 @@
 }
 
 .set-plugin-list,
-.set-set,
 .set-editor,
 .set-account,
 .set-setup,

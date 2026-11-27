@@ -34,7 +34,8 @@ func (s *Shell) buildSets(b *settingsBuilder) error {
 	if controls := s.overrideControls(b, "sets", "전역 세트 사용"); controls != nil {
 		rows = append(rows, settingsRow{controls: controls})
 	}
-	b.group("세트", "사이드바에 보여 줄 섹션 묶음. 어느 변에 놓을지는 작업 공간과 플러그인에서 고른다.", rows...)
+	// The page description is drawn once, by the page head, so the group has no text of its own.
+	b.group("세트", "", rows...)
 	for _, set := range sets {
 		if set.ID == w.editing {
 			s.setEditor(b, set, scope)

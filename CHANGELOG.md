@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
+- F1217-17-12: The web host draws each set row of 사이드바 세트 as one card with the actions in a second column, and the page description is drawn once in both hosts.
 - F1232-1-1: The settings comments of workbench-mygo name each UI label in English, and the reference to the Korean spec anchor names the spec file.
 - F1239-5: The notice center and the toasts stand below the title bar row at every frame text factor, in web and mygo.
 - F1253: `make benchmark-go` and `make benchmark-rust` build the native library before their benchmarks run.

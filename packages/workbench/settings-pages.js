@@ -14,7 +14,9 @@ import { mark } from "./commands.js";
 export function group(name, description, children, id) {
   const el = element("section", "set-group");
   if (id !== undefined) el.dataset.group = id;
-  el.append(element("h3", "set-group__name", name), element("p", "set-caption", description), ...children);
+  el.append(element("h3", "set-group__name", name));
+  if (description) el.append(element("p", "set-caption", description));
+  el.append(...children);
   return el;
 }
 

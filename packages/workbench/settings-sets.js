@@ -56,31 +56,36 @@ function sectionChips(set, { removable }) {
   return wrap;
 }
 
-/** The row of one set in the list (docs/spec/settings.md#stored-sets-and-links). */
+/** The row of one set in the list: a body with the head, the section chips and the warning lines, and the actions in the second column
+ * of the same row (docs/spec/settings.md#stored-sets-and-links). */
 export function setRow(set) {
   const title = set.title === "" ? "(이름 없음)" : set.title;
+  const uses = usesOf(set.id);
   const head = element("span", "set-set__head");
   head.append(element("span", "set-set__title", title), badge(set.layout === "tabs" ? "탭" : "목록", "neutral"));
-  const uses = usesOf(set.id);
-  const lines = [head];
+  if (uses.length) head.append(element("span", "set-caption", `· 쓰는 곳: ${uses.join(", ")}`));
+  const body = element("div", "set-set__body");
+  body.append(head, sectionChips(set, { removable: false }));
   // One warning line for each plugin of the set that cannot be loaded (docs/spec/plugins.md#missing-plugins).
   for (const group of missingGroups(set.sections, pluginRowsNow())) {
     const warning = missingLineNode(document, group);
-    if (warning !== null) lines.push(warning);
+    if (warning !== null) body.append(warning);
   }
-  if (uses.length) lines.push(element("span", "set-caption", `· 쓰는 곳: ${uses.join(", ")}`));
-  lines.push(sectionChips(set, { removable: false }));
-  const actions = element("span", "set-set__actions");
-  if (state.editing === set.id) {
-    actions.append(button("완료", { expose: "core.settings-tab.edit", command: "core.settings-tab.edit", params: { set: null }, variant: "primary" }));
+  const confirming = state.confirm && state.confirm.kind === "set" && state.confirm.id === set.id;
+  const actions = element("div", "set-set__actions");
+  if (confirming) {
+    actions.append(...confirmation(set, uses).children);
   } else {
-    actions.append(button("편집", { expose: "core.settings-tab.edit", command: "core.settings-tab.edit", params: { set: set.id }, variant: "sm" }));
+    if (state.editing === set.id) {
+      actions.append(button("완료", { expose: "core.settings-tab.edit", command: "core.settings-tab.edit", params: { set: null }, variant: "primary" }));
+    } else {
+      actions.append(button("편집", { expose: "core.settings-tab.edit", command: "core.settings-tab.edit", params: { set: set.id }, variant: "sm" }));
+    }
+    actions.append(button("삭제", { expose: "core.settings-tab.delete", command: "core.settings-tab.confirm", params: { kind: "set", id: set.id, answer: "ask" }, variant: "ghost" }));
   }
-  actions.append(button("삭제", { expose: "core.settings-tab.delete", command: "core.settings-tab.confirm", params: { kind: "set", id: set.id, answer: "ask" }, variant: "ghost" }));
-  const el = element("div", "set-set");
+  const el = element("div", state.editing === set.id ? "set-set set-set--on" : "set-set");
   el.dataset.set = set.id;
-  el.append(...lines, actions);
-  if (state.confirm && state.confirm.kind === "set" && state.confirm.id === set.id) el.append(confirmation(set, uses));
+  el.append(body, actions);
   return el;
 }
 
@@ -164,8 +169,9 @@ export function setsPage() {
   if (state.scope === "common" && isOverridden("sets")) {
     parts.push(chip(`${projectTitle()}: 세트 ${sets.length}개`, "warn", { expose: "core.settings-tab.applied", command: "core.settings-tab.scope", params: { scope: "project" }, key: "applied:sets" }));
   }
-  const body = [group("세트", "사이드바에 보여 줄 섹션 묶음. 어느 변에 놓을지는 작업 공간과 플러그인에서 고른다.", parts)];
+  // The page description is drawn once, by the page head; the group carries no second copy of it.
+  const body = [group("세트", "", parts)];
   const edited = sets.find((set) => set.id === state.editing);
-  if (edited) body.push(group(`세트 편집: ${edited.title}`, "바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다.", [editor(edited)]));
+  if (edited) body.push(group(`세트 편집: ${edited.title}`, "", [editor(edited)]));
   return body;
 }

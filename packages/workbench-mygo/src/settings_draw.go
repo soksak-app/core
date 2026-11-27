@@ -307,7 +307,9 @@ func (s *Shell) drawSettingsGroup(c *ui.Context, group settingsGroup, pane setti
 	column.Children(func() {
 		size := s.textCaption()
 		ui.Text(c, group.name).Bold().FontSize(size).LetterSpacing(size*pane.tracking).TextColor(s.palette.Rail).Margin(0, 0, pane.nameGap, 0)
-		ui.Text(c, group.text).Wrap().LineHeight(pane.lineHeight).TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
+		if group.text != "" {
+			ui.Text(c, group.text).Wrap().LineHeight(pane.lineHeight).TextColor(s.palette.Muted).FontSize(s.textSmall()).Margin(0, 0, pane.captionGap, 0)
+		}
 		for _, row := range group.rows {
 			s.drawSettingsRow(c, row, pane)
 		}
