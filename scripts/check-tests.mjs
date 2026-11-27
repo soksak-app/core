@@ -17973,6 +17973,13 @@ const FEATURE_LINKS = [
     expected: "PNG persistence of the clipboard requires an explicit clipboard capability and returns an inert shell argument.",
     levels: ["unit"],
   },
+  {
+    id: "F1225",
+    implementation: [{ file: "scripts/check-tests.mjs", symbol: "export function auditGeneratedOutputTracking(paths, roots = [\"apps/tauriv2/gen/\"]) {" }],
+    tests: [{ file: "scripts/test/check-tests.test.mjs", id: "the generated Tauri schemas of apps/tauriv2/gen are not tracked or unignored" }],
+    expected: "A file under apps/tauriv2/gen that is tracked or not ignored is reported, and the repository's own file list reports none.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
@@ -18972,6 +18979,14 @@ export function auditFeatureKeys(features, checklistSource = readFileSync(`${ROO
     .map((feature) => `${feature.id}: feature link key names no item of docs/features.md`);
 }
 
+// Each path under a root is generated output: tauri_build writes apps/tauriv2/gen on every build, and the root is ignored by
+// apps/tauriv2/.gitignore, so a tracked or unignored file there is a stale copy of generated output.
+export function auditGeneratedOutputTracking(paths, roots = ["apps/tauriv2/gen/"]) {
+  return paths
+    .filter((path) => roots.some((root) => path.startsWith(root)))
+    .map((path) => `${path}: generated output of tauri_build is tracked or not ignored; the folder is build output`);
+}
+
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));
   const { errors, removed } = removalFollowUps(checklistSource.split("\n"));
@@ -19219,6 +19234,7 @@ export { MATRIX, repositoryFiles };
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   const { errors, warnings, uncoveredImplementations, uncoveredTests, featureErrors, featureLinks, requirementCoverage, trackCount, implementationCount, testCount } = auditInventory(repositoryFiles());
+  errors.push(...auditGeneratedOutputTracking(repositoryFiles()));
   const adapterManifestFile = `${ROOT}scripts/language-test-cases.json`;
   try {
     const adapterManifest = JSON.parse(readFileSync(adapterManifestFile, "utf8"));
