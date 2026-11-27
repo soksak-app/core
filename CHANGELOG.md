@@ -5,6 +5,9 @@
 
 ## 2026-11-27
 
+- Retired checklist entry `F1217-17-14`: it repeats F1217-17-3-1, which tracks the same defect.
+- Retired checklist entry `F1217-17-15`: it repeats F1217-17-3-2, which tracks the same defect.
+- Retired checklist entry `F1217-17-16`: it repeats F1217-17-3-3, which tracks the same defect.
 - F1217-12-8: The notice color test compares the icons with the palette tokens instead of literal values.
 - F1269: The default test host installs the probe plugin that the test environment names, so the missing-plugin notice no longer covers the card head.
 - F1274: Ship the current core event catalog in the window-check package.

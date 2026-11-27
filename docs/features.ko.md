@@ -293,9 +293,6 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
     - [ ] F1217-17-11 — 공통 행과 메뉴, 차이 44–48: 메뉴는 켜진 plugin만 보인다(S:impl). 범위 라벨은 project 이름과 개수를 보인다(S:impl). 초기화는 제목이 있고 project 값은 chip이다(S:impl). 전역 전용 표시가 mygo host에 없다(S:impl). 설정과 플러그인 머리글, 메뉴 표시(S:design).
     - [o] F1217-17-12 — P0, web host 사이드바 세트 스크린샷: 세트 행은 카드 하나다. 본문에 이름, 배치 badge, 쓰는 곳 줄, 섹션 chip과 경고 줄이 있고, 둘째 열에 편집과 삭제가 있다. settings-36 page 3의 세트 행을 우리 token으로 옮겼다(S:impl). 그룹은 페이지 설명의 두 번째 사본을 갖지 않고, 빈 그룹 문장은 그리지 않는다. 두 host 모두에서 그렇다(S:impl). Red: 웹 구조 테스트(packages/workbench/test/settings-sets-row.test.mjs)와 TestTheSetsPageDrawsItsDescriptionOnce(mygo, 설명이 2번 그려졌다). Green: 둘 다 통과하고, 수정 후 웹 페이지를 Chrome에서 캡처했다.
     - [ ] F1217-17-13 — mygo 사이드바 세트 행은 아직 카드가 아니다: mygo host는 세트 행을 일반 이름과 컨트롤 행으로 그리고, 디자인의 둘째 열 동작 카드가 아니다(S:impl). F1250에 속한다: 카드는 선언에서 두 host 모두 그리는 세트 행 component이며 page 코드가 아니다.
-    - [ ] F1217-17-14 — 사이드바 세트 편집기, 빈 이름: 이름 칸 아래의 `이름이 필요하다.` 줄을 두 host 모두 보이지 않는다. 저장소가 빈 이름을 거부하기 때문이다(S:impl, 두 host). 열림: 빈 이름이면 줄을 보이고, 저장의 거부는 그대로 두며, 두 host를 덮는 Red 시험을 둔다.
-    - [ ] F1217-17-15 — 사이드바 세트, 버튼 새 세트: 명세는 더하기 아이콘을 정하고 두 host 모두 그리지 않는다(S:impl, 두 host). 열림: 선언된 아이콘의 더하기를 두 host 모두에 그린다.
-    - [ ] F1217-17-16 — 사이드바 세트 편집기, select 섹션 추가…: 각 항목은 플러그인 id를 힌트로 보여야 한다(S:impl). web host는 `이름 · plugin id`를 보이고 mygo host는 이름만 보인다. 열림: mygo host에 힌트를 보인다.
   - [o] F1217-12 — P0, F1217-10 다음: mygo host가 같은 알림을 같은 글로 보인다. 모든 하위 항목이 닫혔다.
     - [o] F1217-12-1 — mygo에서 알림 경로가 오류 토스트를 대신한다. 토스트를 보이던 모든 오류는 오류 notice를 만들고, notice는 kind와 title로 합쳐지며, 세 모양의 토스트가 정해진 시간 동안 보이고, `core.toasts`와 `core.notices.close {id}`가 `core.workbench.error`와 `core.error.dismiss`를 대신한다.
     - [o] F1217-12-2 — 모든 화면의 제목줄 종과, 거르기·묶음·지우기·읽음을 가진 팝오버와 서랍의 notice center. 기록은 configuration directory의 `notices.json`에 둔다.
