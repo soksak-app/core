@@ -24,11 +24,13 @@ type toastStatus struct {
 
 func shownToasts(t *testing.T, f *shellFixture) []toastStatus {
 	t.Helper()
-	var toasts []toastStatus
-	if err := json.Unmarshal([]byte(f.status("core.toasts")), &toasts); err != nil {
+	var state struct {
+		Toasts []toastStatus `json:"toasts"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.toasts")), &state); err != nil {
 		t.Fatalf("core.toasts is %s: %v", f.status("core.toasts"), err)
 	}
-	return toasts
+	return state.Toasts
 }
 
 // An error that the application shows is an error notice of core.toasts, with its id, kind, title and count; with the automatic

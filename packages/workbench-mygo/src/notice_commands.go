@@ -23,6 +23,8 @@ func (s *Shell) registerNotices() {
 		return s.noticeChanged()
 	})
 	s.registry.Command("core.notices.filter", func(raw json.RawMessage) (any, error) { return s.noticeFilter(raw) })
+	s.registry.Command("core.notices.show", func(raw json.RawMessage) (any, error) { return s.noticeShow(raw) })
+	s.registry.Command("core.toasts.list", func(raw json.RawMessage) (any, error) { return s.toastsList(raw) })
 	s.registry.Command("core.notices.read-all", func(json.RawMessage) (any, error) {
 		s.errors.ReadAllNotices()
 		return s.noticeChanged()
@@ -257,5 +259,32 @@ func (s *Shell) noticeFilter(raw json.RawMessage) (any, error) {
 	if err := s.errors.SetNoticeFilter(filter); err != nil {
 		return nil, Refuse(InvalidParams, "%s", err)
 	}
+	return s.noticeChanged()
+}
+
+// noticeShow runs core.notices.show {id}: it opens the center on the entry of id, and an id that no entry has is refused with -32602.
+func (s *Shell) noticeShow(raw json.RawMessage) (any, error) {
+	var params struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &params); err != nil || params.ID == "" {
+		return nil, Refuse(InvalidParams, "core.notices.show requires an id")
+	}
+	if err := s.errors.ShowNotice(params.ID); err != nil {
+		return nil, Refuse(InvalidParams, "%s", err)
+	}
+	return s.noticeChanged()
+}
+
+// toastsList runs core.toasts.list {open}: it shows or hides the other toasts of the line form as a list; an open that is not a boolean
+// is refused with the text of the web command (packages/workbench/core-exposure.js).
+func (s *Shell) toastsList(raw json.RawMessage) (any, error) {
+	var params struct {
+		Open *bool `json:"open"`
+	}
+	if err := json.Unmarshal(raw, &params); err != nil || params.Open == nil {
+		return nil, Refuse(InvalidParams, "core.toasts.list takes open as a boolean")
+	}
+	s.errors.toastListOpen = *params.Open
 	return s.noticeChanged()
 }

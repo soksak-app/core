@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-12: 오류 토스트가 core.notices.show로 자세히를 제공하고, 토스트 개수가 core.toasts.list로 나머지 토스트를 보여 주며, core.toasts는 listOpen을 보고한다.
 - F1217-11-3: plugin-api 노출 목록에 토스트 표시와 목록 명령이 들어갑니다.
 - F1222: mygo 알림 아이콘은 선언된 아이콘이 없는 종류에서 실패하며, 진행 중은 고리를 그린다.
 - F1222-1: 객체가 아닌 accounts data 멤버는 reader 문구로 거부되며, accounts 검사는 data 멤버를 명시적으로 읽는다.

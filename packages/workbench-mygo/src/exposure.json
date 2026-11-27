@@ -167,20 +167,27 @@
       },
       {
         "name": "core.toasts",
-        "description": "The shown toasts in order, each with id, kind, title, count and its remaining time in milliseconds, or null while it waits for the person (docs/spec/notifications.md#commands-and-statuses).",
+        "description": "The shown toasts in order, each with id, kind, title, count and its remaining time in milliseconds, or null while it waits for the person, and listOpen, whether the line form shows the list of its other toasts (docs/spec/notifications.md#commands-and-statuses).",
         "schema": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "kind": { "enum": ["success", "info", "warning", "error", "progress"] },
-              "title": { "type": "string" },
-              "count": { "type": "integer" },
-              "remaining": { "type": ["integer", "null"] }
+          "type": "object",
+          "properties": {
+            "toasts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "kind": { "enum": ["success", "info", "warning", "error", "progress"] },
+                  "title": { "type": "string" },
+                  "count": { "type": "integer" },
+                  "remaining": { "type": ["integer", "null"] }
+                },
+                "required": ["id", "kind", "title", "count", "remaining"]
+              }
             },
-            "required": ["id", "kind", "title", "count", "remaining"]
-          }
+            "listOpen": { "type": "boolean" }
+          },
+          "required": ["toasts", "listOpen"]
         }
       },
       {
@@ -4799,6 +4806,26 @@
         "result": { "type": "null" }
       },
       {
+        "name": "core.notices.show",
+        "description": "Opens the notice center, scrolled to the entry of the notice id and marking that entry as the shown entry; an id that no entry has fails with -32602, which names the id.",
+        "params": {
+          "type": "object",
+          "properties": { "id": { "type": "string" } },
+          "required": ["id"]
+        },
+        "result": { "type": "null" }
+      },
+      {
+        "name": "core.toasts.list",
+        "description": "Shows (open true) or hides (open false) the other toasts of the line form as a column under the line; Escape and a second press on the count also hide it.",
+        "params": {
+          "type": "object",
+          "properties": { "open": { "type": "boolean" } },
+          "required": ["open"]
+        },
+        "result": { "type": "null" }
+      },
+      {
         "name": "core.notices.close",
         "description": "Closes the toast and the status line notice of the notice id and keeps its entry; an id that no shown notice has fails with -32602.",
         "params": {
@@ -5835,6 +5862,10 @@
       {
         "name": "core.notices.panel",
         "description": "The notice center, popover or drawer."
+      },
+      {
+        "name": "core.toasts.more",
+        "description": "The count of the other toasts: in the line form it runs core.toasts.list {open} with the opposite of the list state; in the card form it counts the rest."
       },
       {
         "name": "core.notices.toggle",

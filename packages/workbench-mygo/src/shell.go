@@ -656,7 +656,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.requests = NewRequests(s.registry, s.calls, options.Post, s.events.Error)
 	s.linkSurfaces()
 	s.registry.Status("core.toasts", func() any {
-		return s.errors.ToastStatuses()
+		return ToastState{Toasts: s.errors.ToastStatuses(), ListOpen: s.errors.toastListOpen}
 	})
 	s.sidebars, err = NewSidebars(SidebarsOptions{Declared: options.Declared, Registry: s.registry, Binder: s.binder,
 		Look:        func() (float32, float32) { return s.palette.BorderWidth, s.textCaption() },
@@ -731,6 +731,7 @@ func (s *Shell) shortcutConditions() map[string]func() bool {
 		"The project home is shown, a row is selected and no form field has focus": func() bool { return noForm() && len(s.homeRows()) > 0 },
 		"A picker layer is open":                                                   never,
 		"The notice center is open":                                                func() bool { return s.errors.noticeOpen },
+		"The toast list is open":                                                   func() bool { return s.errors.toastListOpen },
 		"A native modal menu is open and has keyboard focus":                       never,
 	}
 }

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-12: Error toasts offer 자세히 through core.notices.show, the toast count lists the other toasts through core.toasts.list, and core.toasts reports listOpen.
 - F1217-11-3: The plugin-api exposure list names the toast show and list commands.
 - F1222: The mygo notice glyph fails on a kind without a declared icon, and draws the progress ring.
 - F1222-1: A non-object data member of accounts is refused with the reader text, and the accounts check reads the data member explicitly.

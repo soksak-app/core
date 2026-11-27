@@ -318,6 +318,18 @@ func (e *ShownErrors) PersistableNotices() []map[string]any {
 var noticeFilters = []string{"all", "problems", "progress"}
 
 // ToggleNotices opens or closes the center. Opening drops the expired entries, so the file written after it holds no expired entry.
+// ShowNotice opens the notice center on the entry of id and marks that entry as the shown entry (core.notices.show). An id that no
+// entry has is an error that names the id; closed entries are entries too (docs/spec/notifications.md#commands-and-statuses).
+func (e *ShownErrors) ShowNotice(id string) error {
+	if !slices.ContainsFunc(e.toasts, func(toast *errorToast) bool { return toast.id == id }) {
+		return fmt.Errorf("no notice %s exists", id)
+	}
+	e.noticeOpen = true
+	e.shownNotice = id
+	e.ExpireNotices()
+	return nil
+}
+
 func (e *ShownErrors) ToggleNotices() {
 	e.noticeOpen = !e.noticeOpen
 	if e.noticeOpen {

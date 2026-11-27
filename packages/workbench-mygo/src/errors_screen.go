@@ -44,6 +44,8 @@ type ShownErrors struct {
 	noticeFilter string
 	// shownNotice is the entry that core.notices.show marked as the shown entry, or "" when none was shown.
 	shownNotice string
+	// toastListOpen is whether the line form shows the list of its other toasts (core.toasts.list).
+	toastListOpen bool
 }
 
 type errorOrigin struct {
@@ -289,6 +291,13 @@ type ToastStatus struct {
 	Remaining *int64 `json:"remaining"`
 }
 
+// ToastState is the value of core.toasts (docs/spec/notifications.md#commands-and-statuses): the shown toasts, newest first, and whether
+// the line form shows the list of its other toasts.
+type ToastState struct {
+	Toasts   []ToastStatus `json:"toasts"`
+	ListOpen bool          `json:"listOpen"`
+}
+
 // ToastStatuses returns the shown notices, newest first.
 func (e *ShownErrors) ToastStatuses() []ToastStatus {
 	shown := e.shownToasts()
@@ -450,28 +459,37 @@ func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
 	closeGlyph, closeHeight := ui.ShapeText("×", font, 0).Size()
 	closeWidth := closeGlyph + 2*m.toastMorePadX
 	textWidth := max(1, maxWidth-m.toastPadX-m.toastPadRight-closeWidth-m.toastGap)
-	rows := make([]toastRow, 0, shownCount)
-	for _, status := range statuses[:shownCount] {
+	// buildRows measures the rows of the statuses in the form rowStyle; the listed toasts of the line form are measured in the card form.
+	buildRows := func(rowStyle string, list []ToastStatus) []toastRow {
+		built := make([]toastRow, 0, len(list))
+		for _, status := range list {
 		toast := s.errors.toastByID(status.ID)
 		_, titleH := ui.ShapeRichTextWith([]ui.Span{{Text: status.Title}}, font, ui.TextShape{Direction: c.Direction(), KeepAll: true, Width: textWidth}).Size()
 		bodyH := float32(0)
-		if toast.text != "" && style != "line" {
+		if toast.text != "" && rowStyle != "line" {
 			_, bodyH = ui.ShapeRichTextWith([]ui.Span{{Text: toast.text}}, font, ui.TextShape{Direction: c.Direction(), KeepAll: true, Width: textWidth}).Size()
 		}
 		height := titleH + bodyH + m.toastPadTop + m.toastPadBottom
 		_, actionsHeight := ui.ShapeText("가", font, 0).Size()
-		if style == "line" {
+		if rowStyle == "line" {
 			height = m.toastLineH
 		}
 		actions := s.toastActions(toast)
-		if style == "line" && len(actions) > 1 {
+		if rowStyle == "line" && len(actions) > 1 {
 			actions = actions[:1]
 		}
-		if len(actions) > 0 && style != "line" {
+		if len(actions) > 0 && rowStyle != "line" {
 			height += actionsHeight + m.toastGap
 		}
-		rows = append(rows, toastRow{status: status, body: toast.text, actions: actions, width: maxWidth,
+		built = append(built, toastRow{status: status, body: toast.text, actions: actions, width: maxWidth, form: rowStyle,
 			height: max(height, closeHeight+m.toastPadTop+m.toastPadBottom)})
+	
+		}
+		return built
+	}
+	rows := buildRows(style, statuses[:shownCount])
+	if style == "line" && s.errors.toastListOpen {
+		rows = append(rows, buildRows("card", statuses[shownCount:])...)
 	}
 	stackHovered := false
 	drawRows := func() {
@@ -492,14 +510,14 @@ func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
 			box.Children(func() {
 				ui.Column(c).Width(textWidth).Shrink(0).Gap(m.toastGap).Children(func() {
 					drawErrorText(c, row.status.Title).Width(textWidth).Shrink(0).LineHeight(font.LineHeight).KeepAll()
-					if row.body != "" && style != "line" {
+					if row.body != "" && row.form != "line" {
 						ui.Text(c, row.body).Wrap().TextColor(s.palette.Muted).Label(row.body).Width(textWidth).Shrink(0).LineHeight(font.LineHeight).KeepAll()
 					}
-					if len(row.actions) > 0 && style != "line" {
+					if len(row.actions) > 0 && row.form != "line" {
 						ui.Row(c).Gap(m.toastGap).Children(func() { s.drawToastActions(c, row) })
 					}
 				})
-				if style == "line" {
+				if row.form == "line" {
 					s.drawToastActions(c, row)
 				}
 				close := s.binder.Press(c, "core.notices.close", "core.notices.close", row.status.ID, map[string]any{"id": row.status.ID})
@@ -532,7 +550,12 @@ func (s *Shell) drawErrorToasts(c *ui.Context, width float32) {
 	visibleHeight := min(stackHeight, height/2)
 	popup := ui.Box(c).Absolute().Top(m.toastTop).Right(m.toastRight).Size(maxWidth, visibleHeight)
 	if rest > 0 {
-		ui.Text(c, counterText(style, rest)).SingleLine().TextColor(s.palette.Muted).Absolute().Top(m.toastTop + stackHeight + m.toastGap)
+		// The count runs core.toasts.list with the opposite of the list state, so a second press hides the list (docs/spec/notifications.md#toasts).
+		more := s.binder.Press(c, "core.toasts.more", "core.toasts.list", "", map[string]any{"open": !s.errors.toastListOpen}).
+			Absolute().Top(m.toastTop + stackHeight + m.toastGap)
+		more.Children(func() {
+			ui.Text(c, counterText(style, rest)).SingleLine().TextColor(s.palette.Muted)
+		})
 	}
 	if stackHeight > visibleHeight {
 		popup.Children(func() {
@@ -549,8 +572,10 @@ type toastRow struct {
 	status  ToastStatus
 	body    string
 	actions []NoticeAction
-	width  float32
-	height float32
+	width   float32
+	height  float32
+	// form is the form in which the row is drawn: line for the one toast of the line form, card for its listed toasts.
+	form string
 }
 
 // toastStyle returns the toastStyle setting, which names the form of the toasts.
@@ -599,6 +624,10 @@ func (s *Shell) toastActions(toast *errorToast) []NoticeAction {
 	actions := append([]NoticeAction{}, toast.actions...)
 	if toast.source.Kind == "card" && toast.source.Card != s.focused && (toast.kind == "warning" || toast.kind == "error") {
 		actions = append(actions, NoticeAction{Label: "카드로 가기", Command: "core.card.focus", Params: map[string]any{"card": toast.source.Card}})
+	}
+	// An error toast offers 자세히, which opens the center at the notice (docs/spec/notifications.md#toasts).
+	if toast.kind == "error" {
+		actions = append(actions, NoticeAction{Label: "자세히", Command: "core.notices.show", Params: map[string]any{"id": toast.id}})
 	}
 	return actions
 }

@@ -406,11 +406,11 @@ func dismissNotice(t *testing.T, errors *workbench.ShownErrors, title string) bo
 // toasts returns the status core.toasts, newest first.
 func (f *shellFixture) toasts() []workbench.ToastStatus {
 	f.t.Helper()
-	var toasts []workbench.ToastStatus
-	if err := json.Unmarshal([]byte(f.status("core.toasts")), &toasts); err != nil {
+	var state workbench.ToastState
+	if err := json.Unmarshal([]byte(f.status("core.toasts")), &state); err != nil {
 		f.t.Fatalf("core.toasts is %s: %v", f.status("core.toasts"), err)
 	}
-	return toasts
+	return state.Toasts
 }
 
 // workbenchError returns the title of the newest shown notice as a JSON string, or null when no notice is shown.
@@ -448,10 +448,11 @@ func readWorkbenchErrorStatus(registry *workbench.Registry) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	statuses, ok := value.([]workbench.ToastStatus)
+	state, ok := value.(workbench.ToastState)
 	if !ok {
 		return nil, fmt.Errorf("core.toasts is %T", value)
 	}
+	statuses := state.Toasts
 	if len(statuses) == 0 {
 		return (*string)(nil), nil
 	}
