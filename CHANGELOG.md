@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1161: mygo formats the origin function of the outdated surface notices as gofmt does
 - F1161: A service that an older version holds shows its warning as a card notice on each of its surfaces in mygo
 - F1161: mygo merges a card notice only with a shown notice of the same card; app notices keep merging by kind and title
 - F1161: A service that an older version holds shows its warning as a card notice on each of its tabs

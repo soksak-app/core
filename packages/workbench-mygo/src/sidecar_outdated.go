@@ -27,7 +27,9 @@ type SurfaceTarget func(surface string) (NoticeSource, bool)
 func outdatedOrigin(sidecar string) string { return "sidecar-outdated:" + sidecar }
 
 // outdatedSurfaceOrigin is the origin of the card notice of a service on one of its surfaces.
-func outdatedSurfaceOrigin(sidecar, surface string) string { return outdatedOrigin(sidecar) + ":" + surface }
+func outdatedSurfaceOrigin(sidecar, surface string) string {
+	return outdatedOrigin(sidecar) + ":" + surface
+}
 
 // outdatedNotice returns the fields and the source of the notice of one outdated service. A service that sent no version is named
 // without one, and a sidecar that is no longer declared names its installed version as null, as the web notice does.
