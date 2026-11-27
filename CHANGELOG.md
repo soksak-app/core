@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3: The refused save case records the toast markup of the error notice with 자세히 and the line counter.
 - F1217-7: The set layout segments are the element core.settings-tab.layout, with the item layout:<set id>.
 - F1217-7: The undo toast names its change by kind, records theme changes, and undoes a new project override with a reset.
 - F1217-7: The undo toast of a settings change is drawn in the tab foot as core.settings-tab.toast, with the button core.settings-tab.undo.
