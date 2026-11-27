@@ -188,11 +188,11 @@ func TestTheAgentGroupShowsAndInstallsTheSetupParts(t *testing.T) {
 	}; !slices.Equal(labels, want) {
 		t.Fatalf("the rows are %q, not %q", labels, want)
 	}
-	if keys := modal.keys("core.settings-tab.setup-install"); !slices.Equal(keys, []string{"setup-install"}) {
+	if keys := modal.keys("core.settings-tab.setup-install-all"); !slices.Equal(keys, []string{"setup-install-all"}) {
 		t.Fatalf("설치 is %v", keys)
 	}
 	for _, control := range modal.Controls {
-		if control.Name == "core.settings-tab.setup-install" && !reflect.DeepEqual(control.Command.Params, map[string]any{"parts": []any{"skill", "mcp"}}) {
+		if control.Name == "core.settings-tab.setup-install-all" && !reflect.DeepEqual(control.Command.Params, map[string]any{"parts": []any{"skill", "mcp"}}) {
 			t.Fatalf("설치 runs %+v", control.Command)
 		}
 	}
@@ -202,8 +202,8 @@ func TestTheAgentGroupShowsAndInstallsTheSetupParts(t *testing.T) {
 		t.Fatalf("설치 sent %v", host.args)
 	}
 	status := f.setupStatus()
-	if status.Running != nil || len(status.Parts) != 4 || status.Parts[1].State != "ok" || f.has("core.settings-tab.setup-install", "") {
-		t.Fatalf("after the install the status is %+v and 설치 is shown: %v", status, f.has("core.settings-tab.setup-install", ""))
+	if status.Running != nil || len(status.Parts) != 4 || status.Parts[1].State != "ok" || !setupInstallDisabled(f) {
+		t.Fatalf("after the install the status is %+v and 모두 설치 is enabled", status)
 	}
 	// window-active and setup-changed read the parts again while the group is shown, and not after it is hidden.
 	f.shell.Event("window-active", nil)
@@ -270,10 +270,21 @@ func TestTheSetupFailuresAreShownAndKeepTheParts(t *testing.T) {
 	}
 	f.run("core.settings.close", map[string]any{})
 	f.click("core.chrome.settings", "")
-	if modal := f.modal(); len(modal.labels("core.settings-tab.setup")) != 0 || f.has("core.settings-tab.setup-install", "") || !f.has("core.settings-tab.setup-check", "") {
+	if modal := f.modal(); len(modal.labels("core.settings-tab.setup")) != 0 || !setupInstallDisabled(f) || !f.has("core.settings-tab.setup-check", "") {
 		t.Fatalf("a machine without parts shows %v", modal.labels("core.settings-tab.setup"))
 	}
 	if !slices.Contains(f.tester.Texts(), "이 컴퓨터에서 설정할 에이전트 항목이 없습니다.") {
 		t.Fatalf("a machine without parts does not say so: %q", f.tester.Texts())
 	}
+}
+
+// setupInstallDisabled reports whether the button 모두 설치 is drawn and disabled: it stays shown when no part is missing.
+func setupInstallDisabled(f *shellFixture) bool {
+	f.t.Helper()
+	for _, control := range f.modal().Controls {
+		if control.Name == "core.settings-tab.setup-install-all" {
+			return control.Disabled && f.has("core.settings-tab.setup-install-all", "")
+		}
+	}
+	return false
 }

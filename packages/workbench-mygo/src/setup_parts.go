@@ -275,10 +275,11 @@ func (s *Shell) buildSetup(b *settingsBuilder) {
 	if len(parts) == 0 {
 		rows = append(rows, settingsRow{description: "이 컴퓨터에서 설정할 에이전트 항목이 없습니다."})
 	}
-	actions := []*SettingsControl{}
-	if kinds := missingSetupKinds(parts); len(kinds) > 0 {
-		actions = append(actions, b.small("setup-install", "core.settings-tab.setup-install", "설치", "core.setup.install", map[string]any{"parts": kinds}))
-	}
+	// 모두 설치 is always shown and is disabled when no part of the skill and mcp kinds is not ok (docs/spec/settings.md#에이전트).
+	kinds := missingSetupKinds(parts)
+	install := b.small("setup-install-all", "core.settings-tab.setup-install-all", "모두 설치", "core.setup.install", map[string]any{"parts": kinds})
+	install.Disabled = len(kinds) == 0
+	actions := []*SettingsControl{install}
 	actions = append(actions, b.small("setup-check", "core.settings-tab.setup-check", "다시 확인", "core.setup.check", nil))
 	rows = append(rows, settingsRow{controls: actions, list: true})
 	b.group("에이전트", "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.", rows...)
