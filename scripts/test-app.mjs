@@ -216,19 +216,53 @@ async function startApplication(item, children) {
  * Quits an application by its item and waits for its exit and its lock release. `limitMs` is the limit of the quit step; runPlan
  * passes QUIT_LIMIT_MS, and a test passes its own limit so that the expiry is observed without a fake clock. A quit that fails while
  * the started process still runs ends that process with SIGKILL and waits for its exit, because a process that a check started ends
- * when the check ends; the step still fails, and its failure names that end.
+ * when the check ends; the step still fails, and its failure names that end. A host that relaunches itself replaces its process: the
+ * old process ends, so the handle names a process that already ended, and the replacement holds the configuration directory of the
+ * run without a handle. A failed quit whose handle already ended therefore ends every other process that holds that directory with
+ * SIGKILL, and its failure names each one (`processes` reads the process list of the platform).
  */
 export async function quitApplication(item, children, since, write, connectClient = connect, lockRelease = waitForLockRelease,
-  limitMs = QUIT_LIMIT_MS) {
+  limitMs = QUIT_LIMIT_MS, processes = listProcesses) {
   if (typeof limitMs !== 'number' || !Number.isFinite(limitMs) || limitMs <= 0) throw new Error(`quitApplication needs a limit of more than 0 ms, not ${limitMs}`);
   const child = children.get(item.app);
   try {
     await quitNormally(item, child, since, write, connectClient, lockRelease, limitMs);
   } catch (error) {
-    if (child.exitCode !== null || child.signalCode !== null) throw error;
-    child.kill('SIGKILL');
-    await exited(child);
-    throw new Error(`${error.message}; the application still ran and was ended with SIGKILL`);
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill('SIGKILL');
+      await exited(child);
+      throw new Error(`${error.message}; the application still ran and was ended with SIGKILL`);
+    }
+    let replaced;
+    try { replaced = await endRunProcesses(item, processes, limitMs); }
+    catch (sweepError) { throw new Error(`${error.message}; the processes of the run could not be ended: ${sweepError.message}`); }
+    if (replaced.length === 0) throw error;
+    throw new Error(`${error.message}; processes of the run that the handle did not name ended with SIGKILL: ${replaced.join(', ')}`);
+  }
+}
+
+/**
+ * Ends with SIGKILL each process of the platform list whose executable or arguments name the configuration directory of `item`, which
+ * only this run uses (the configuration root holds one directory per run), and returns their identifiers. The end of a process that is
+ * not a child of this run has no exit event, so the wait reads the process list until none of them is listed, bounded by `limitMs`.
+ */
+async function endRunProcesses(item, processes, limitMs) {
+  const { configDir } = item;
+  if (typeof configDir !== 'string' || configDir.length === 0) throw new Error(`quit ${item.app} has no configuration directory to end its processes by`);
+  const holds = ({ pid, executable, arguments: line }) => pid !== process.pid
+    && ((executable !== null && executable.includes(configDir)) || line.includes(configDir));
+  const found = (await processes({ platform: item.platform })).filter(holds).map(({ pid }) => pid);
+  for (const pid of found) {
+    try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+  }
+  if (found.length === 0) return found;
+  const bound = Date.now() + limitMs;
+  for (;;) {
+    // The process list is the event source of a process that this run does not wait on as a child, so the wait reads it again.
+    const listed = (await processes({ platform: item.platform })).filter(holds).map(({ pid }) => pid);
+    if (listed.length === 0) return found;
+    if (Date.now() >= bound) throw new Error(`the processes ${listed.join(', ')} of ${configDir} did not end in ${limitMs / 1000}s after SIGKILL`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
 
@@ -340,7 +374,7 @@ export async function runPlan(steps, { write, children = new Map(), interrupted,
       if (item.kind === 'run') await runCommand(item, item.phase === 'cleanup' ? undefined : interrupted);
       else if (item.kind === 'verify') await verifyApplicationArtifact(item.artifact, { platform: item.platform });
       else if (item.kind === 'start') await startApplication(item, children);
-      else if (item.kind === 'quit') await quitApplication(item, children, since, write, connectClient, lockRelease, quitLimitMs);
+      else if (item.kind === 'quit') await quitApplication(item, children, since, write, connectClient, lockRelease, quitLimitMs, processes);
       else if (item.kind === 'native') await runNative(item, item.phase === 'cleanup' ? undefined : interrupted);
       else if (item.kind === 'remaining') await checkRemaining(item, processes);
       else throw new Error(`unknown step kind ${JSON.stringify(item.kind)}`);

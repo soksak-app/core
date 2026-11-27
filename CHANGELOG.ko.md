@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1226: handle이 이미 끝난 application의 quit이 실패하면, 그 run의 configuration directory를 가진 각 process를 SIGKILL로 끝낸다.
 - F239-209: 선언된 검색 focus 명령의 기록이 F1217-8 이후 키인 cmd+o와 완료 당시 키인 Command-K를 함께 적는다.
 - F1217-8: 프로젝트 홈 검색 포커스의 테스트 주장이 선언된 키 cmd+o의 테스트 이름과 일치한다.
 - F1109: 메인 페이지를 다시 불러온 뒤 만든 view는 자기 표면으로 해석되며, Go와 Rust 호스트 테스트가 surface.view.reload-keeps-bindings 계약을 확인한다.

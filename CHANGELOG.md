@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1226: A failed quit whose application handle already ended ends each process that holds the configuration directory of its run.
 - F239-209: The record of the declared search-focus operation names cmd+o, the key since F1217-8, and Command-K, the key when completed.
 - F1217-8: The test claim of the project home search focus names the cmd+o test, the key the row declares.
 - F1109: A view created after a main page reload resolves to its own surface; the Go and Rust host tests check surface.view.reload-keeps-bindings.

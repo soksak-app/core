@@ -2,6 +2,7 @@
 // configuration root for each run, the report of each step, and the failure on a process that remains after the applications quit.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
@@ -209,6 +210,27 @@ test("a quit step quits through the platform operation of its platform and fails
   assert.deepEqual(player.requests, [], "a platform without the quit operation sends no request");
 });
 
+test("a quit step whose application handle already exited ends the processes of the run that its failed quit left running", { timeout: 30000 }, async (t) => {
+  const configDir = mkdtempSync(join(tmpdir(), "soksak-replacement-"));
+  t.after(() => rmSync(configDir, { recursive: true, force: true }));
+  // The handle of the start step names a process that ended, as after a host relaunch that replaced it.
+  const handle = spawn(process.execPath, ["-e", "process.exit(0)"], { stdio: "ignore" });
+  await once(handle, "exit");
+  // The replacement runs with the configuration directory of the run in its arguments, and no endpoint of that directory answers.
+  const replacement = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", configDir], { stdio: "ignore" });
+  t.after(() => replacement.kill("SIGKILL"));
+  await once(replacement, "spawn");
+  const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: process.platform, by: "key", app: "app",
+    configDir }], { write: () => {}, children: new Map([["app", handle]]) });
+  assert.equal(failures.length, 1, `the failed quit is reported once: ${JSON.stringify(failures)}`);
+  assert.match(failures[0], /^quit app: /);
+  // The exit of a process that the run ended arrives as an event after the signal, so the wait is bounded by the test limit.
+  const end = await Promise.race([once(replacement, "exit").then(([code, signal]) => ({ code, signal })),
+    new Promise((resolve) => setTimeout(() => resolve(null), 10000))]);
+  assert.ok(end !== null && end.signal === "SIGKILL", `the replacement process ${replacement.pid} of the run still runs after the failed quit: ${JSON.stringify(replacement.exitCode ?? replacement.signalCode)}`);
+  assert.match(failures[0], new RegExp(`SIGKILL: ${replacement.pid}`), `the failure names the ended process: ${failures[0]}`);
+});
+
 test("a native step and a remaining step fail with the named error on a platform without the operation, and are not skipped", { timeout: 10000 }, async () => {
   const { lines, write } = recorder();
   const failures = await runPlan([
@@ -353,7 +375,9 @@ test("quit deadline closes a pending RPC and runs the remaining quit and process
   assert.equal(nextClosed, 1);
   assert.ok(lines.some((line) => line.startsWith("passed quit next")), lines.join("\n"));
   assert.ok(lines.some((line) => line.startsWith("passed remaining processes")), lines.join("\n"));
-  assert.deepEqual(listed, ["darwin"]);
+  // The handle of this step exited, so the failed quit reads the process list once for the processes of the run (a relaunch replaces
+  // the process of the handle), and the remaining step reads it after that.
+  assert.deepEqual(listed, ["darwin", "darwin"]);
 });
 
 /** A started application that exits with status 0 on SIGTERM, as a host ends after its quit, once it handles the signal. */
