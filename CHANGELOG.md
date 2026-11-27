@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3: The web notice center marks the entry of core.notices.show as the shown entry and reports it in core.notices shown; the marked entry scrolls into view.
 - F1217-12-10: The workbench shortcut table is tied to the declared rows of the view-calls-shortcuts-read page-wire case; the plugin-api view host test reads those rows.
 - F1217-11-3, F1217-12: Escape closes the toast list through core.toasts.list {open: false}, before the notice center, in the web and the mygo workbench.
 - F1222-2: The mygo progress notice ring turns with its window frames and stops under reduced motion.

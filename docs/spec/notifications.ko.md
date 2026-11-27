@@ -106,7 +106,7 @@ Toast는 아이콘, title, text, action, 닫기 control을 보인다. 닫기 con
 
 | 이름 | 종류 | 계약 |
 | --- | --- | --- |
-| `core.notices` | status | `{open, style, filter, unread, problems, entries}`: 센터가 열렸는지, 모양, 필터, 읽지 않은 항목 수, 읽지 않은 항목 가운데 warning이나 error가 있는지, 센터 순서의 항목. 각 항목은 [notice](#알림-기록) 필드와 `read`, `source`를 가진다 |
+| `core.notices` | status | `{open, style, filter, unread, problems, shown, entries}`: 센터가 열렸는지, 모양, 필터, 읽지 않은 항목 수, 읽지 않은 항목 가운데 warning이나 error가 있는지, 표시된 항목의 `id`(`core.notices.show`가 표시한 항목이고, 표시한 항목이 없거나 그 항목이 제거되었으면 `null`), 센터 순서의 항목. 각 항목은 [notice](#알림-기록) 필드와 `read`, `source`를 가진다 |
 | `core.notices.add {card?, plugin?, kind, title, text?, action?, system?}` | command | 카드 `card`나 plugin `plugin`에 `tab.notify`의 필드로 notice를 주고 그 `id`를 돌려준다. `card`와 `plugin` 가운데 정확히 하나를 준다. 없는 카드나 plugin과 `tab.notify`가 거부하는 필드는 같은 글로 -32602 실패한다 |
 | `core.notices.progress {id, progress}` | command | `tab.progress`처럼 `progress` notice의 진행을 정한다 |
 | `core.notices.done {id, kind, title}` | command | `tab.done`처럼 `progress` notice를 `success`나 `error`로 끝낸다 |

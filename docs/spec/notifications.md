@@ -107,7 +107,7 @@ The commands create, read and remove notices as `tab.notify` does, so that an ag
 
 | Name | Kind | Contract |
 | --- | --- | --- |
-| `core.notices` | status | `{open, style, filter, unread, problems, entries}`: whether the center is open, its style, its filter, the number of unread entries, whether an unread entry is a warning or an error, and the entries in center order, each with the fields of the [notice](#notices), `read` and `source` |
+| `core.notices` | status | `{open, style, filter, unread, problems, shown, entries}`: whether the center is open, its style, its filter, the number of unread entries, whether an unread entry is a warning or an error, the `id` of the shown entry (the entry that `core.notices.show` marked, or `null` while none is marked or the marked entry is removed), and the entries in center order, each with the fields of the [notice](#notices), `read` and `source` |
 | `core.notices.add {card?, plugin?, kind, title, text?, action?, system?}` | command | Gives the card `card`, or the plugin `plugin`, a notice with the fields of `tab.notify` and returns its `id`; exactly one of `card` and `plugin` is given; a card or a plugin that does not exist and a field that `tab.notify` refuses fail with -32602 and the same text |
 | `core.notices.progress {id, progress}` | command | Sets the progress of a `progress` notice, as `tab.progress` |
 | `core.notices.done {id, kind, title}` | command | Ends a `progress` notice as `success` or `error`, as `tab.done` |

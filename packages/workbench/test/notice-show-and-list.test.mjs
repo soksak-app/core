@@ -16,6 +16,11 @@ function fixture(t, toastStyle = "card") {
   t.after(() => dom.window.close());
   const { document } = dom.window;
   Object.assign(globalThis, { window: dom.window, document });
+  // jsdom has no layout, so it has no scrollIntoView; the scroll is recorded here and its drawn position is left to a window check.
+  const scrolls = [];
+  dom.window.Element.prototype.scrollIntoView = function scrollIntoView(options) {
+    scrolls.push({ id: this.dataset.id, options });
+  };
   beginSettings({ common: { toastStyle }, projects: [] }, null);
   const store = notificationStore();
   store.clearAll();
@@ -23,7 +28,7 @@ function fixture(t, toastStyle = "card") {
   store.setFilter("all");
   store.setList(false);
   errorToasts(document);
-  return { document, store };
+  return { document, store, scrolls };
 }
 
 test("show opens the center and marks the entry as the shown entry", (t) => {
@@ -88,4 +93,25 @@ test("Escape closes the list before it closes the center", (t) => {
   assert.equal(store.status().open, true, "the center stays open while the list closes");
   document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape" }));
   assert.equal(store.status().open, false);
+});
+
+test("core.notices reports the shown entry, and null while no entry is marked or the marked entry is removed", (t) => {
+  const { store } = fixture(t);
+  const id = store.show({ kind: "error", title: "save failed" });
+  assert.equal(store.status().shown, null);
+  store.showEntry(id);
+  assert.equal(store.status().shown, id);
+  store.clearAll();
+  assert.equal(store.status().shown, null);
+});
+
+test("show marks the drawn entry of the center as the shown entry", (t) => {
+  const { document, store, scrolls } = fixture(t);
+  errorToasts(document).place(document.body);
+  const id = store.show({ kind: "error", title: "save failed" });
+  store.showEntry(id);
+  const entry = document.querySelector(`.notice-center__entry[data-id="${id}"]`);
+  assert.ok(entry, "the center draws the entry");
+  assert.equal(entry.dataset.shown, "true");
+  assert.deepEqual(scrolls.at(-1), { id, options: { block: "nearest" } }, "the center asks for the entry to scroll into view");
 });

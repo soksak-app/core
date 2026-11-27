@@ -151,7 +151,7 @@
       },
       {
         "name": "core.notices",
-        "description": "The notice center: whether it is open, its style and filter, the number of unread entries, whether an unread entry is a warning or an error, and the entries in center order, each with id, kind, title, text, source, actions, progress, at, count and read (docs/spec/notifications.md#notices).",
+        "description": "The notice center: whether it is open, its style and filter, the number of unread entries, whether an unread entry is a warning or an error, the id of the shown entry or null, and the entries in center order, each with id, kind, title, text, source, actions, progress, at, count and read (docs/spec/notifications.md#notices).",
         "schema": {
           "type": "object",
           "properties": {
@@ -160,9 +160,10 @@
             "filter": { "enum": ["all", "problems", "progress"] },
             "unread": { "type": "integer" },
             "problems": { "type": "boolean" },
+            "shown": { "type": ["string", "null"] },
             "entries": { "type": "array", "items": { "type": "object" } }
           },
-          "required": ["open", "style", "filter", "unread", "problems", "entries"]
+          "required": ["open", "style", "filter", "unread", "problems", "shown", "entries"]
         }
       },
       {

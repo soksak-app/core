@@ -308,7 +308,7 @@ export function mountNoticeView(document, store) {
     drawCenter();
     // core.notices.show scrolls the center to its entry and marks it as the shown entry.
     const shown = store.state.shown;
-    const target = shown === null ? null : center?.querySelector(`[data-notice="${shown}"]`);
+    const target = shown === null ? null : center?.querySelector(`.notice-center__entry[data-id="${shown}"]`);
     if (target) {
       target.dataset.shown = "true";
       target.scrollIntoView({ block: "nearest" });

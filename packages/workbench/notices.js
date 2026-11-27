@@ -464,6 +464,7 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
       return {
         open, style: settings("noticeCenterStyle"), filter, unread: unread.length,
         problems: unread.some((e) => e.kind === "warning" || e.kind === "error"),
+        shown: entries.some((e) => e.id === shownEntry) ? shownEntry : null,
         entries: entries.map(({ group: _group, seq: _seq, ...entry }) => entry),
       };
     },

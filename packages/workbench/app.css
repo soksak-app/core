@@ -727,6 +727,8 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .notice-center__close { width: var(--notice-glyph); height: var(--notice-glyph); }
 .notice-center__label { justify-content: space-between; color: var(--muted); font-size: var(--text-caption); }
 .notice-center__entry { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--toast-gap); padding: var(--notice-entry-pad) var(--notice-entry-pad) var(--notice-entry-pad) var(--toast-gap); border-radius: var(--r-xs); }
+/* The entry that core.notices.show marked as the shown entry (docs/spec/notifications.md#commands-and-statuses). */
+.notice-center__entry[data-shown="true"] { background: var(--bg); }
 .notice-center__entry[data-read="false"]::before { content: ""; position: absolute; left: 0; top: var(--notice-entry-pad); width: var(--notice-dot-size); height: var(--notice-dot-size); border-radius: var(--circle); background: var(--focus); }
 .notice-center__entry[data-read="false"][data-kind="error"]::before { background: var(--no); }
 .notice-center__entry[data-kind="error"] .notice-center__mark { color: var(--no); }
