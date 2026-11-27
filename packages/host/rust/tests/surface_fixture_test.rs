@@ -221,8 +221,9 @@ fn shown_surface_sends_drawing_state(phase: Phase) -> Result<(), String> {
     surface_fixture::install_probe_plugin(config.path());
     // The layout of a view surface reads the configuration directory of the host, which the application arguments name.
     soksak_host::set_arguments_for_tests(config.path());
-    // The view configuration runs the view channel script before its page; the script is the one of the bundled frontend.
-    soksak_host::documents::set_view_channel(include_str!("../../../plugin-api/view-start.js"))?;
+    // The view configuration runs the view channel script before its page. The test supplies an empty script, as the Go host test
+    // does for the bundled frontend of its start, so the test reads no file of another package.
+    soksak_host::documents::set_view_channel("")?;
     let (native, main) = surface_drawing::create_main_window()?;
     let (app, framework) = test_framework::application_with_queue();
     let frontend = Arc::new(test_framework::FixtureFrontend::with_main_webview(
