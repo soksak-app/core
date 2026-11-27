@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1108: 레이아웃 probe 고정물은 탭 뷰의 선언된 theme 모양을 scheme과 배경은 값으로, 나머지 필드는 형으로 판정한다.
 - F959-2: 수정된 verifier에서 claude 한 번 실행으로 mygo의 추적 agent layout 요청 네 개를 모두 충족한다.
 - F1217-7-2-5: mygo가 설정 거부의 값을 web workbench와 host처럼 <, >, &를 escape하지 않은 JSON으로 쓴다.
 - F1107: window-check 패키지가 docs/spec/events.json의 이벤트 목록을 싣고, 그 목록에 상태 읽기 이벤트가 있다.

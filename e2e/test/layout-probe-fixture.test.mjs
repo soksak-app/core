@@ -17,6 +17,21 @@ import { openDocumentProbe, storageKey } from "../fixtures/layout-probe/layoutpr
 import { startSecondProbe, TEXT_SIZE } from "../fixtures/layout-probe/layoutprobe2/ui/second-probe.js";
 import { openView, turn } from "@soksak/plugin-api/testing";
 
+// The theme of the tab view is the declared shape of layoutprobe.surface (F1108): the scheme and the body background are judged by value.
+// The text color, the button colors and the tokens are judged by their declared types only, because jsdom neither loads the stylesheet of
+// the page nor resolves a custom property. The real-browser reload check of F1108 (e2e/reload-view-theme.test.mjs) judges their values.
+function assertTheme(theme, scheme, background) {
+  assert.equal(theme.scheme, scheme);
+  assert.equal(theme.background, background);
+  assert.equal(typeof theme.text, "string");
+  assert.deepEqual(Object.keys(theme.button).sort(), ["background", "color"]);
+  assert.equal(typeof theme.button.color, "string");
+  assert.equal(typeof theme.button.background, "string");
+  assert.deepEqual(Object.keys(theme.tokens).sort(), ["--card", "--fg"]);
+  assert.equal(typeof theme.tokens["--fg"], "string");
+  assert.equal(typeof theme.tokens["--card"], "string");
+}
+
 const CASES = new URL("../../docs/spec/cases/view-wire/", import.meta.url);
 
 const folder = (plugin) => fileURLToPath(new URL(`../fixtures/layout-probe/${plugin}/`, import.meta.url));
@@ -137,10 +152,11 @@ test("the tab view reports its start values, declares its footer and loads its r
     project: { id: "prj-1", root: "/work/project" }, directory: "/work/project",
     settings: DEFAULT_SETTINGS, title: null, footer: FOOTER, reported: null, notice: null,
   });
-  assert.deepEqual(await view.status("layoutprobe.surface"), {
-    width: 640, height: 400, scale: 2, region: { x: 8, y: 8, width: 624, height: 384 }, visibility: "visible",
-    theme: { scheme: "dark", background: START_COLOR },
+  const surface = await view.status("layoutprobe.surface");
+  assert.deepEqual({ ...surface, theme: undefined }, {
+    width: 640, height: 400, scale: 2, region: { x: 8, y: 8, width: 624, height: 384 }, visibility: "visible", theme: undefined,
   });
+  assertTheme(surface.theme, "dark", START_COLOR);
   await view.close();
   // A tab opened from a tab that recorded a directory starts there, and a tab without params has no path.
   const opened = await startTab("layout-probe-fixture-tab-start-directory", { ...TAB_START, params: null, origin: { directory: "/work/project/sub" } });
@@ -241,7 +257,7 @@ test("the surface status follows a resize and a theme of the view", { timeout: 5
   assert.deepEqual((await view.status("layoutprobe.surface")).region, { x: 8, y: 8, width: 284, height: 384 });
   view.window.document.body.style.background = "rgb(250, 250, 250)";
   view.deliverNotice("theme", { scheme: "light", tokens: {} });
-  assert.deepEqual((await view.status("layoutprobe.surface")).theme, { scheme: "light", background: "rgb(250, 250, 250)" });
+  assertTheme((await view.status("layoutprobe.surface")).theme, "light", "rgb(250, 250, 250)");
   await view.close();
 });
 

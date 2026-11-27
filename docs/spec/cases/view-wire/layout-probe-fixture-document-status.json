@@ -5,6 +5,9 @@
   "replay": false,
   "reason": "The calls of this case other than runtime.log are answered by the page of the workbench, which only a running application has; the runtime.log steps are replayed by the cases log-clock and log-batch.",
   "variables": {
+    "theme-text-1": {"type": "string", "example": "rgb(230, 230, 230)", "source": "page"},
+    "theme-button-1": {"type": "object", "example": {"color": "rgb(230, 230, 230)", "background": "rgba(0, 0, 0, 0)"}, "source": "page"},
+    "theme-tokens-1": {"type": "object", "example": {"--fg": "#e6e6e6", "--card": "#252525"}, "source": "page"},
     "ts-us": {
       "type": "integer",
       "example": 1000000,
@@ -98,7 +101,7 @@
     {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1006,"result":{"url":"soksak://layoutprobe/ui/document.html?key=tab-7","reported":true,"scheme":"dark","document":"hidden","visibility":"hidden","changes":1,"stored":"kept","color":"rgb(0, 128, 96)"}}}}},
     {"reply":{"result":null}},
     {"notice":{"event":"exposure-request","data":{"id":1007,"method":"status.get","params":{"name":"layoutprobe.surface"}}}},
-    {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1007,"result":{"width":640,"height":400,"scale":2,"region":{"x":8,"y":8,"width":624,"height":384},"visibility":"hidden","theme":{"scheme":"dark","background":"rgb(30, 30, 30)"}}}}}},
+    {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1007,"result":{"width":640,"height":400,"scale":2,"region":{"x":8,"y":8,"width":624,"height":384},"visibility":"hidden","theme":{"scheme":"dark","background":"rgb(30, 30, 30)","text":"$theme-text-1","button":"$theme-button-1","tokens":"$theme-tokens-1"}}}}}},
     {"reply":{"result":null}},
     {"notice":{"event":"exposure-request","data":{"id":1008,"method":"status.get","params":{"name":"layoutprobe.document"}}}},
     {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1008,"result":{"url":"soksak://layoutprobe/ui/document.html?key=tab-7","reported":true,"scheme":"dark","document":"hidden","visibility":"hidden","changes":1,"stored":"kept","color":"rgb(0, 128, 96)"}}}}},
