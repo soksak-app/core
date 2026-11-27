@@ -95,21 +95,25 @@ func (r *sidecarRoutes) clear() {
 
 // viewSidecarMessage returns the message that the host posts to a view for a sidecar message:
 // {"sok":1,"event":"sidecar.message","data":{"id","body"}}, composed around the raw body that the sidecar sent, which is not parsed again.
-func viewSidecarMessage(id string, cids []string, body json.RawMessage) []byte {
-	// default: a string always marshals.
-	quoted, _ := json.Marshal(id)
+func viewSidecarMessage(id string, cids []string, body json.RawMessage) ([]byte, error) {
+	quoted, err := json.Marshal(id)
+	if err != nil {
+		return nil, fmt.Errorf("sidecar message %s: %w", id, err)
+	}
 	message := make([]byte, 0, len(body)+len(quoted)+64)
 	message = append(message, `{"sok":1,"event":"sidecar.message","data":{"id":`...)
 	message = append(message, quoted...)
 	if len(cids) > 0 {
-		// default: a list of strings always marshals.
-		listed, _ := json.Marshal(cids)
+		listed, err := json.Marshal(cids)
+		if err != nil {
+			return nil, fmt.Errorf("sidecar message %s: %w", id, err)
+		}
 		message = append(message, `,"cids":`...)
 		message = append(message, listed...)
 	}
 	message = append(message, `,"body":`...)
 	message = append(message, body...)
-	return append(message, "}}"...)
+	return append(message, "}}"...), nil
 }
 
 func nonEmpty(call, field, text string) error {

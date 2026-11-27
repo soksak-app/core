@@ -43,10 +43,12 @@ func ValidateNotification(request NotificationRequest, removal bool) error {
 }
 
 // notificationIdentifier is the identifier in the notification center. It returns the window name and the surface from a notification that was clicked.
-func notificationIdentifier(window, surface string) string {
-	// default: the JSON conversion of a list of strings does not fail, so the error value is not received.
-	identifier, _ := json.Marshal([]string{window, surface})
-	return string(identifier)
+func notificationIdentifier(window, surface string) (string, error) {
+	identifier, err := json.Marshal([]string{window, surface})
+	if err != nil {
+		return "", fmt.Errorf("notification identifier: %w", err)
+	}
+	return string(identifier), nil
 }
 
 // startNotifications starts using the notification center. Call it once after the application started.
@@ -157,8 +159,12 @@ func (h *Host) Notify(ctx context.Context, requestJSON json.RawMessage) error {
 	if err := ValidateNotification(request, false); err != nil {
 		return err
 	}
+	identifier, err := notificationIdentifier(s.name, request.Surface)
+	if err != nil {
+		return err
+	}
 	mainThreadStep(func() {
-		err = system.PostNotification(notificationIdentifier(s.name, request.Surface), request.Title, request.Body)
+		err = system.PostNotification(identifier, request.Title, request.Body)
 	})
 	return err
 }
@@ -176,8 +182,12 @@ func (h *Host) NotificationRemove(ctx context.Context, requestJSON json.RawMessa
 	if err := ValidateNotification(request, true); err != nil {
 		return err
 	}
+	identifier, err := notificationIdentifier(s.name, request.Surface)
+	if err != nil {
+		return err
+	}
 	mainThreadStep(func() {
-		err = system.RemoveNotification(notificationIdentifier(s.name, request.Surface))
+		err = system.RemoveNotification(identifier)
 	})
 	return err
 }

@@ -774,8 +774,12 @@ func (s *Surfaces) windowEvent(name string, data any) {
 func (s *Surfaces) DeliverSidecarMessage(message SidecarMessage) {
 	page, views := s.sidecarRoutes.targets(message.Sidecar, message.Surface)
 	if len(views) > 0 {
-		text := string(viewSidecarMessage(message.Surface, message.Cids, message.Body))
-		mainThreadPost(func() { s.postSidecarMessage(message.Sidecar, message.Surface, text, views) })
+		text, err := viewSidecarMessage(message.Surface, message.Cids, message.Body)
+		if err != nil {
+			LogError("view sidecar route", err)
+		} else {
+			mainThreadPost(func() { s.postSidecarMessage(message.Sidecar, message.Surface, string(text), views) })
+		}
 	}
 	if page {
 		s.Emit("sidecar-message", message)

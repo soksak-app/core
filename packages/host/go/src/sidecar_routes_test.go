@@ -88,7 +88,10 @@ func TestAMessageReachesThePageOnlyWhileItListensAndEachRoutedView(t *testing.T)
 
 // contract: sidecar.route.delivery
 func TestTheViewMessageWrapsTheRawBodyWithoutParsingItAgain(t *testing.T) {
-	text := viewSidecarMessage(`tab-"a`, nil, json.RawMessage(`{"event":"screen","rows":2}`))
+	text, err := viewSidecarMessage(`tab-"a`, nil, json.RawMessage(`{"event":"screen","rows":2}`))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if want := `{"sok":1,"event":"sidecar.message","data":{"id":"tab-\"a","body":{"event":"screen","rows":2}}}`; string(text) != want {
 		t.Fatalf("got %s, want %s", text, want)
 	}
@@ -96,7 +99,10 @@ func TestTheViewMessageWrapsTheRawBodyWithoutParsingItAgain(t *testing.T) {
 
 // contract: sidecars.protocol.reply-cids-reach-the-owner
 func TestTheViewMessageNamesTheIdentifiersOfTheRequestsThatItAnswers(t *testing.T) {
-	text := viewSidecarMessage("tab-1", []string{"b1.7", "view-a.1"}, json.RawMessage(`{"ack":true}`))
+	text, err := viewSidecarMessage("tab-1", []string{"b1.7", "view-a.1"}, json.RawMessage(`{"ack":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if want := `{"sok":1,"event":"sidecar.message","data":{"id":"tab-1","cids":["b1.7","view-a.1"],"body":{"ack":true}}}`; string(text) != want {
 		t.Fatalf("got %s, want %s", text, want)
 	}

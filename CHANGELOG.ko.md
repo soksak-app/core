@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1236-2: Wails host가 알림 identifier와 view sidecar message의 JSON encoding error를 버리지 않고 돌려준다.
 - F1235: agents와 진단 page head test의 이름과 주석을 영어로 바꿨다.
 - F1240: 동시 watch client test가 제거된 library 화면 대신, endpoint case가 담는 home 화면을 기다린다.
 - F1233-2: 테마 테스트는 로그 기록마다 기다리고 실패하면 host 오류 record를 출력한다.
