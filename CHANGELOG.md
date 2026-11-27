@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
+- F1236-4: The Go sources are gofmt-clean again: the Badge field of the plugin item struct in settings_tab_view.go is aligned as gofmt aligns it.
 - F1239-6: Every gear of the window is the settings icon at the size and stroke of the title bar gear, in web and mygo.
 - F1217-17-12: The web host draws each set row of 사이드바 세트 as one card with the actions in a second column, and the page description is drawn once in both hosts.
 - F1232-1-1: The settings comments of workbench-mygo name each UI label in English, and the reference to the Korean spec anchor names the spec file.

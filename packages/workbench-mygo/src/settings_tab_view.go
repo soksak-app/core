@@ -102,7 +102,7 @@ type SettingsControl struct {
 	// dot says that the item of the menu shows the dot of an enabled plugin (docs/spec/settings.md#menu).
 	dot bool
 	// Badge is the Off badge of a disabled plugin item of the menu (docs/spec/settings.md#menu).
-	Badge string `json:"badge,omitempty"`
+	Badge   string          `json:"badge,omitempty"`
 	Name    string          `json:"name"`
 	Index   int             `json:"index"`
 	Key     *string         `json:"key"`

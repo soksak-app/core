@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
+- F1236-4: plugin item struct의 Badge field 정렬을 gofmt 형식으로 고쳐 Go 소스가 다시 gofmt 형식이다.
 - F1239-6: window의 모든 ⚙는 title bar ⚙의 크기와 stroke로 그린 설정 icon이다. web과 mygo 모두.
 - F1217-17-12: web host의 사이드바 세트 행을 동작을 둘째 열에 둔 카드 하나로 그리고, 페이지 설명을 두 host 모두에서 한 번만 그린다.
 - F1232-1-1: workbench-mygo의 설정 comment가 UI 표시 이름을 영어로 적고, 한글 spec anchor 참조는 spec 파일을 가리킨다.
