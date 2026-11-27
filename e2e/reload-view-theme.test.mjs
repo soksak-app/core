@@ -70,27 +70,6 @@ function judged(theme) {
   };
 }
 
-/**
- * Waits until the main page of the window has started again and is complete. A status request that arrives while the page is not
- * ready is refused by the host (`the main page is not ready`, packages/host/rust/src/exposure.rs), and a request in flight when the
- * document closes ends with `the document closed before it replied`; the wait retries only those two refusals, until its limit, and
- * fails with any other error. The wait polls at 50 ms because the refused request is the only signal that the page is not ready yet: no
- * status or event names the end of a reload to a request that is refused.
- */
-async function untilReloaded(s, before) {
-  const deadline = Date.now() + 60000;
-  for (;;) {
-    try {
-      const workbench = await s.get("core.window.workbench");
-      if (workbench.start !== before && workbench.readyState === "complete") return workbench;
-    } catch (error) {
-      const transient = /the main page is not ready|the document closed before it replied/.test(error.message);
-      if (!transient || Date.now() > deadline) throw error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-}
-
 for (const app of Object.values(APPS)) {
   test(`${app.name}: a view that a reloaded main page creates applies the dark theme of the window`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
@@ -110,7 +89,17 @@ for (const app of Object.values(APPS)) {
     // The reload that the original report names: a plugin change applied by core.plugins.apply reloads the page with that cause
     // (packages/workbench/plugin-apply.js), and the reply comes before the reload ends the page.
     assert.deepEqual(await s.run("core.plugins.apply", {}), { reloaded: true }, "core.plugins.apply did not reload the page");
-    await untilReloaded(s, oldStart);
+    // The page answers its status requests with 1003 until host.windows reports the window ready (docs/spec/endpoint.md). The first
+    // value of host.windows can still show the window ready before the reload ends its page, because the reply of core.plugins.apply
+    // comes before the end (mygo). So the wait takes the transition: the window reports not ready, and then ready again.
+    let loading = false;
+    await s.until("host.windows", (list) => {
+      const ready = list.some((window) => window.window === s.window && window.ready);
+      if (!ready) loading = true;
+      return ready && loading;
+    }, "the reloaded main page did not report ready");
+    await s.until("core.window.workbench", (workbench) => workbench.start !== oldStart && workbench.readyState === "complete",
+      "the workbench did not start again");
     const shown = (item) => item.kind === "tab" && item.plugin === START_PLUGIN && item.visible && item.status?.phase === "ready";
     const views = (await s.until("core.surfaces", (list) => list.some(shown), "no view of the reloaded page became ready"))
       .filter(shown).map((item) => item.surface);

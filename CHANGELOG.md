@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1108: The reload window check waits on the host readiness of the window and on the new workbench start, without retrying refused status requests.
 - F1222-2: The turning ring of a progress notice is the element core.notices.ring in both workbenches, and the ring check samples that element.
 - F1217-7: The work screen status bar starts with the entry 홈, element core.statusbar.home, which runs core.home.show, in both hosts.
 - F1222-2: The open notice center panel is a window overlay cut out of the surface hosts with the error toasts, so a plugin surface does not cover it in the Wails and Tauri hosts.
