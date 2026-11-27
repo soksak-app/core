@@ -113,6 +113,9 @@
 
 ## 페이지
 
+설정 탭은 모든 페이지를 선언에서 그리며, [컴포넌트 집합](#컨트롤)으로만 구성한다. 어떤 페이지도 자체 마크업이나 코드 경로를 갖지 않는다. 핵심 페이지는 `packages/workbench/workbench.json`에, 플러그인 페이지는 `plugin.json`의 `settings`에 선언한다([선언](#선언)). 메뉴 순서는 선언의 순서를 따른다. 페이지, 섹션, 항목의 글은 선언된 글이며 사람에게 그대로 보인다.
+
+
 페이지는 메뉴의 순서를 따른다. 큰따옴표 안의 글은 사람이 보는 라벨이다.
 
 ### 모양
@@ -172,22 +175,6 @@
 
 묶음 `사이드바`, 설명 `위에 있는 줄부터 자리를 잡는다. 먼저 놓인 변이 그 변의 전체 길이를 쓰고, 다음 변은 그만큼 빠진다. 끈 변도 자기 순서를 지킨다.`
 
-묶음은 행 네 개의 목록을 보인다. 행 하나가 변 하나이며, 행 순서가 `sidebarOrder`에 저장된 배치 순서다. 각 행은 왼쪽부터 다음을 보인다.
-
-1. 행 번호(1–4).
-2. 변 이름 `왼쪽`, `오른쪽`, `위`, `아래`.
-3. 프로젝트 범위에서 프로젝트가 행의 값을 덮어썼으면 배지 `<project> 값`(acc).
-4. 변의 세트 셀렉트. 항목은 `사용 안 함`과 모든 세트다. 세트 항목은 힌트 `목록 · <n>` 또는 `탭 · <n>`을 보이며, `<n>`은 세트의 섹션 수다. 셀렉트는 `core.settings.link {place, plugin: null, set, scope}`를 실행하고, 변이 꺼져 있으면 비활성이다. 변이 꺼진 동안에도 저장된 연결은 남는다.
-5. 변의 켬/끔 스위치. `left`, `right`, `top`, `bottom`에 대해 `core.settings.change {key, value, scope}`를 실행한다.
-6. 제목 `위로`의 버튼 ↑. 행을 한 칸 위로 옮긴다. 첫 행에서는 비활성이다.
-7. 제목 `아래로`의 버튼 ↓. 행을 한 칸 아래로 옮긴다. 마지막 행에서는 비활성이다.
-
-6과 7의 버튼은 `core.settings.change {key: sidebarOrder, value, scope}`를 실행하며, `value`는 새 순서 전체다.
-
-목록 아래의 글은 행 순서와 상관없이 고정된 순서로 단축키를 보인다: `⌘B 왼쪽 · ⌥⌘B 오른쪽 · ⇧⌘J 위 · ⌘J 아래`.
-
-프로젝트 범위에서 프로젝트가 변 스위치, 전역 변 연결, `sidebarOrder`를 덮어쓰면 버튼 `<project> 값 지우기`(reset 아이콘)를 보인다. 버튼은 `core.settings.reset {key, scope: "project"}`를 이 키마다 한 번씩 실행한다.
-
 묶음 `사이드바 크기`, 설명 `처음 폭은 최소 폭과 최대 폭 사이여야 한다. 위·아래 사이드바에는 높이로 적용된다.`
 
 | 라벨 | 컨트롤 | 범위 | 기본값 | 설명 | 범위 구분 |
@@ -206,37 +193,6 @@
 ### 사이드바 세트
 
 페이지 사이드바 세트의 제목은 `사이드바 세트`, 설명은 `사이드바에 보여 줄 섹션 묶음. 어느 변에 놓을지는 작업 공간과 플러그인에서 고른다.`이다. 세트는 범위 규칙을 따르므로 범위 컨트롤을 보인다.
-
-페이지는 세트 목록을 보인다. 세트 행은 다음을 보인다.
-
-- 이름. 이름이 비면 `(이름 없음)`.
-- 배치 배지 `탭` 또는 `목록`(neutral).
-- 링크가 세트를 쓰면 줄 `· 쓰는 곳: <list>`. 목록은 변(`왼쪽`)과 플러그인 창(`<plugin name> 창 <side>`)을 적는다. 세트를 쓰는 링크가 없으면 줄이 없다.
-- 섹션 칩. 칩은 섹션 이름을 보인다. 불러오지 않은 플러그인의 섹션 칩은 흐린 점선 테두리와 취소선을 긋은 이름을 보이고, 툴팁은 `<name>(<id>) 플러그인 필요`다([없는 플러그인](plugins.ko.md#없는-플러그인)). 세트 줄은 칩 아래에 그런 플러그인마다 경고 줄 하나를 보인다([없는 플러그인](plugins.ko.md#없는-플러그인)). 섹션이 없는 세트는 `섹션 없음`을 보인다.
-- 버튼 `편집`(secondary, sm)은 `core.settings-tab.edit {set}`을 실행하고, 버튼 `삭제`(ghost, sm)가 있다.
-
-편집 중인 세트의 행은 `편집` 자리에 버튼 `완료`(primary, sm)를 보인다. `완료`는 `core.settings-tab.edit {set: null}`을 실행한다.
-
-`삭제`를 누르면 `core.settings-tab.confirm {kind: "set", id, answer: "ask"}`가 실행되고, 행 아래에 확인이 나온다. 링크가 세트를 쓰면 `쓰는 곳은 “사용 안 함”이 된다.`, 아니면 `삭제할까?`다. 버튼은 `취소`(ghost, sm)와 `삭제`(danger, sm)다. `취소`는 `answer: "no"`로 같은 명령을 실행한다. `삭제`는 `answer: "yes"`로 같은 명령을 실행하며, `yes` 답은 `core.settings.sets.delete {id, scope}`를 실행한다.
-
-버튼 `새 세트`(plus 아이콘)는 `core.settings.sets.create {scope}`를 실행한다. 이 명령은 제목 `새 세트`, 배치 `list`, 섹션 없는 세트를 더하고 그 세트의 편집기를 연다.
-
-세트의 편집기는 다음을 보인다.
-
-- `이름`: 글자 입력 칸. `core.settings.sets.update {id, title, scope}`를 실행한다. 이름이 비면 칸 아래에 `이름이 필요하다.` 줄을 보인다. 1–40자의 이름을 저장한다.
-- `배치`: 세그먼트 `목록`(`list`)과 `탭`(`tabs`). `core.settings.sets.update {id, layout, scope}`를 실행한다. 세그먼트는 세트의 요소 `core.settings-tab.layout`이다(항목은 `layout:<세트 id>`).
-- `섹션`: 세트의 섹션마다 칩 하나를 세트 순서대로 보인다. 칩은 섹션 이름과 버튼 × (`<section name> 빼기`)를 가진다. 불러오지 않은 플러그인의 섹션 칩은 흐린 점선 테두리와 취소선을 긋은 이름을 보이고, 툴팁은 `<name>(<id>) 플러그인 필요`다([없는 플러그인](plugins.ko.md#없는-플러그인)). 세트에 섹션이 없으면 `아직 섹션이 없다.` 줄을 보인다. 칩 뒤에는 셀렉트 `섹션 추가…`가 있다. 선택지는 세트가 가지지 않은 등록된 섹션이며, 각 선택지는 플러그인 id를 힌트로 보이고, 플러그인 순서와 선언 순서로 묶인다. 세트가 등록된 모든 섹션을 가지면 셀렉트는 비활성이다.
-- 줄 `바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다.`
-- 버튼 `완료`.
-
-섹션 컨트롤은 `core.settings.sets.row {id, action, index?, section?, scope}`를 실행한다.
-
-| 컨트롤 | 명령 | 효과 |
-| --- | --- | --- |
-| `index` 칩의 × | `remove`, `index`와 함께 | `index` 위치의 섹션을 뺀다 |
-| `섹션 추가…`의 선택지 | `add`, `section`과 함께 | `section`을 세트 끝에 더한다 |
-
-칩에는 순서를 바꾸는 컨트롤이 없다. 섹션의 순서는 추가한 순서이며, 섹션을 옮기려면 뺀 뒤 다시 더한다. 세트에 같은 섹션이 다시 들어가는 변경은 -32602(invalid params)와 "section <id> is already in set <id>" 오류로 실패하고 아무것도 바꾸지 않는다. 등록되지 않은 `section`을 가진 `add`는 -32602와 "unknown section <id>"로 실패한다. 모든 변경은 [범위 규칙](#컨트롤의-범위)이 주는 `sets` 범위에 바로 저장된다.
 
 ### 동작
 
@@ -264,42 +220,14 @@
 
 묶음 `알림`은 [알림](notifications.ko.md#설정)을 따른다. 이 묶음의 키는 `toastStyle`, `noticeCenterStyle`, `quietToasts`, `autoDismissProblemToasts`, `problemToastDismissSeconds`이며, 이 묶음의 행은 모두 전역 전용이다.
 
-### 에이전트
-
-<a id="agents"></a>페이지 에이전트 연동의 제목은 `에이전트 연동`, 설명은 `에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.`, 배지는 `전역 전용`이다.
-
-페이지는 컴퓨터의 에이전트가 애플리케이션을 배우고 그것에 연결하게 하는 setup part를 보인다([에이전트](cli.ko.md#에이전트)). 이 part는 프로젝트가 아니라 컴퓨터와 사람의 것이므로 페이지는 전역 전용이다. 페이지는 host call `setupState()`로 part를 읽는다. 이 call은 사람의 login shell 환경에서 사용자 PATH 등록과 다른 setup part를 보고한다. 페이지는 보일 때, 창이 key window가 될 때(`window-active`), 각 `setup-changed` 이벤트 뒤, `core.setup.check`를 실행할 때 part를 읽는다. 타이머는 다시 읽지 않는다.
-
-묶음 `에이전트 연동`에는 넓은 행 `연동 상태` 하나가 있다.
-
-- 요약은 배지 `<n>개 중 <m>개가 다름`(warn, 경고 아이콘)을 보인다. `<m>`은 `differs` 또는 `missing`인 part의 수다. 모든 part가 `ok`이면 `모두 설치됨`(ok, 확인 아이콘)을 보인다.
-- 버튼 `다시 확인`(refresh 아이콘, sm)은 `core.settings-tab.setup-check`를 실행하며, 이는 `core.setup.check`를 실행한다.
-- 버튼 `모두 설치`(primary, sm, 요소 `core.settings-tab.setup-install-all`)는 상태가 `ok`가 아닌 part가 있는 종류 `skill`과 `mcp`로 `core.setup.install {parts}`를 실행한다. 그런 part가 없으면 비활성이다.
-
-part마다 행이 하나이며 part 순서를 따른다(요소 이름 `core.settings-tab.setup`). 행은 이름, 파일, 상태를 보인다.
-
-| Part | 이름 | 파일 | 동작 |
-| --- | --- | --- | --- |
-| `path` | 명령 경로 | 애플리케이션 bundle의 `sok` | 켜져 있으면 `끄기`가 `core.settings-tab.setup-change {part: "path", enabled: false}`를 실행한다. 꺼져 있으면 상태에 `사용 안 함`을 보이고 `켜기`가 `enabled: true`로 같은 명령을 실행한다 |
-| `skill` | 스킬 | 스킬 파일 | 상태 `missing`이고 사유가 `differs`이면 `고치기`, 그 밖의 `missing`이면 `설치`(sm). 각각 요소 `core.settings-tab.setup-install`이며 `core.setup.install {parts: ["skill"]}`을 실행한다 |
-| `mcp` | MCP 등록 | 등록 파일 | `고치기` 또는 `설치`(sm). 각각 요소 `core.settings-tab.setup-install`이며 `core.setup.install {parts: ["mcp"]}`을 실행한다 |
-| `hook` | 훅 | 훅 파일 | 없음. 설치 명령은 훅을 받지 않는다 |
-
-상태 배지는 `설치됨`(ok, 상태 `ok`), `다름`(warn, 상태 `missing`과 사유 `differs` 또는 `<kind> differs`), `없음`(warn, 상태 `missing`과 사유 `absent`)이다. 상태가 `error`인 part는 [컨트롤](#컨트롤)의 오류 표시를 거쳐 오류 글을 보인다. 해당하지 않는 part에는 행이 없다. 행이 하나도 없으면 페이지는 `이 컴퓨터에서 설정할 에이전트 항목이 없습니다.`를 보인다.
-
-`core.setup.check`는 매개변수 없이 part를 다시 읽고 `{parts}`로 답한다. `core.setup.install`은 `{parts}`를 받는다. `{parts}`는 반복 없는 `skill`과 `mcp`의 비지 않은 목록이며, host call `setupInstall`을 실행하고 그 `{parts}`로 답한다. 다른 목록이면 -32602(invalid params)로 실패한다. 설치가 실패하거나 다른 작업이 실행 중이면 host 오류로, host가 없으면 "setup operations need a native host"로 실패한다. 명령 `core.setup.change {part, enabled}`는 `part: "path"`와 불리언 `enabled`를 받는다. 같은 매개변수로 `setupChange`를 실행하고, preference를 저장해 적용한 뒤 `{parts}`로 답한다. 실패한 읽기나 작업은 오류 표시로 보이며, 오류 표시는 그것을 애플리케이션 log에 쓴다.
-
 ### 진단
 
 페이지 진단의 제목은 `진단`, 설명은 `문제를 추적할 때만 켠다.`, 배지는 `전역 전용`이다.
-
-묶음 `진단`, 설명 `켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.` 행 `디버그 기록`은 `core.settings.debug {on}`을 실행하는 스위치 하나다. 스위치는 `diagnostics.performance`가 true이고 `diagnostics.log`의 모든 class가 `trace`일 때 켜져 보인다.
 
 `diagnostics.performance`는 영구 성능 트레이스([성능 트레이스](performance-trace.ko.md))의 스위치다. 불리언이며 기본값은 false이므로, 사람이 켜지 않는 한 release는 trace를 기록하지 않는다. false인 동안 어떤 계층도 성능 기록 작업을 하지 않는다. event를 만들지도 저장하지도 않는다. true로 바꾸면 계층이 trace의 event를 `logs/` 아래 event 파일에 저장하고, 다시 false로 돌리면 다음 이벤트 경계에서 저장이 멈춘다. event 파일과 회전은 설정이 아니라 [event 계약](logging.ko.md#파일)이 정한다.
 
 `diagnostics.log`는 event 로그의 [정책](logging.ko.md#정책)이다. `lifecycle`, `input`, `call`, `io`, `frame` 가운데 일부 class에 대해 저장할 가장 낮은 심각도(`off`, `error`, `warn`, `info`, `debug`, `trace`)를 이름 붙이는 객체다. 이름이 없는 class는 `error`만 저장하는 기본 정책을 따른다. 기본값 `{}`는 모든 class에서 `error`만 저장하므로, 표시 경로가 보이는 모든 오류의 기록이 남는다. 설정 파일로 지정하며, 다섯 class 밖의 이름과 여섯 수준 밖의 값은 설정 이름을 담은 오류로 거부된다. 페이지가 정책을 host에 보내면 host가 `<config-dir>/log-policy.json`을 쓰고, 모든 프로세스는 파일이 바뀔 때 이를 적용한다.
 
-명령 `core.settings.debug {on}`은 두 설정을 함께 켜고 끈다. 켜면 `diagnostics.performance`를 true로, `diagnostics.log`를 모든 class에서 `trace`로 둔다. 끄면 `diagnostics.performance`를 false로, `diagnostics.log`를 `{}`로 둔다. 둘이 모두 꺼져 있는 동안 어떤 계층도 trace의 event나 `error` 아래의 event를 만들거나 저장하지 않는다.
 
 ## 플러그인
 
@@ -404,7 +332,7 @@ part마다 행이 하나이며 part 순서를 따른다(요소 이름 `core.sett
 
 묶음 `섹션`은 플러그인이 선언한 섹션 이름을 읽기 전용 칩으로 보인다.
 
-묶음 `창 사이드바`의 설명은 `이 플러그인의 탭이 포커스 카드의 활성 탭인 동안 쓰는 창 사이드바. 세트를 고른 변만 바뀌고, 위에 있는 줄부터 자리를 잡는다.`다. 이 묶음은 스위치 없이 [작업 공간](#작업-공간)의 사이드바 묶음과 같은 행 네 개의 목록을 보인다. 번호, 변 이름, 프로젝트 배지, 세트 셀렉트, ↑와 ↓ 버튼이다. 세트 셀렉트는 `core.settings.link {place: "window-<side>", plugin, set, scope}`를 실행한다. 순서는 `core.settings.change {key: "<plugin>.win.order", value, scope}`를 실행하며 `value`는 새 순서 전체다. 프로젝트 범위의 배지와 지우기 버튼은 [작업 공간](#작업-공간) 사이드바 묶음의 규칙을 따른다. 프로젝트가 링크나 순서를 덮어쓴 행은 배지 `<project> 값`을 보이고, 버튼 `<project> 값 지우기`는 프로젝트가 덮어쓴 `links`와 `<plugin>.win.order`마다 `core.settings.reset {key, scope: "project"}`를 한 번씩 실행한다. 기본 순서는 `left`, `right`, `top`, `bottom`이다.
+묶음 `창 사이드바`의 설명은 `이 플러그인의 탭이 포커스 카드의 활성 탭인 동안 쓰는 창 사이드바. 세트를 고른 변만 바뀌고, 위에 있는 줄부터 자리를 잡는다.`다. 이 묶음은 스위치 없이 작업 공간 페이지의 사이드바 묶음과 같은 행 네 개의 목록을 보인다. 번호, 변 이름, 프로젝트 배지, 세트 셀렉트, ↑와 ↓ 버튼이다. 세트 셀렉트는 `core.settings.link {place: "window-<side>", plugin, set, scope}`를 실행한다. 순서는 `core.settings.change {key: "<plugin>.win.order", value, scope}`를 실행하며 `value`는 새 순서 전체다. 프로젝트 범위의 배지와 지우기 버튼은 작업 공간 페이지의 사이드바 묶음 규칙을 따른다. 프로젝트가 링크나 순서를 덮어쓴 행은 배지 `<project> 값`을 보이고, 버튼 `<project> 값 지우기`는 프로젝트가 덮어쓴 `links`와 `<plugin>.win.order`마다 `core.settings.reset {key, scope: "project"}`를 한 번씩 실행한다. 기본 순서는 `left`, `right`, `top`, `bottom`이다.
 
 묶음 `카드 사이드바`의 설명은 `카드 안쪽 네 변. 세트를 고른 변만 보이고, 위에 있는 줄부터 자리를 잡는다. 순서는 이 플러그인의 카드에만 적용된다.`다. `card-<side>` 연결과 키 `<plugin>.card.order`로 같은 방식으로 동작한다. 표면을 가진 플러그인에만 보인다.
 
@@ -428,32 +356,45 @@ part마다 행이 하나이며 part 순서를 따른다(요소 이름 `core.sett
 
 host가 없는 browser 애플리케이션에서는 페이지가 불러온 플러그인만 `loaded`로 보이며, 동작은 없다.
 
+## 선언
+
+설정 페이지는 JSON 선언이다. 핵심 페이지는 `packages/workbench/workbench.json`에, 플러그인 페이지는 `plugin.json`의 `settings`에 선언한다. `settings`는 페이지의 배열이다. 페이지의 형식은 다음과 같다.
+
+- 페이지: `{ "id", "label", "description", "scope"?, "sections" }`. `scope`가 `"global"`이면 페이지는 프로젝트가 아니라 컴퓨터의 것이며 `전역 전용` 배지를 보인다.
+- 섹션: `{ "id", "label", "description"?, "items" }`. 섹션의 라벨과 설명이 묶음 사이의 경계 라벨이다.
+- 항목: `{ "component", "label", "description"?, "key" | "source", "default"?, "values"?, "min"?, "max"?, "step"?, "unit"?, "dependsOn"?, "validate"?, "command"?, "commands"? }`.
+
+항목은 [컴포넌트 집합](#컨트롤)에서 컴포넌트를 고른다. 항목은 `key`(저장되는 설정) 또는 `source`(호스트 상태 또는 호스트가 계산하는 값)를 가지며 둘을 함께 갖지 않는다. 데이터 컴포넌트(Status, Badge, Chip)는 `source`가 필요하다. 리더는 다음 경우를 파일 이름을 담은 오류로 거부한다.
+
+- 컴포넌트 집합에 없는 컴포넌트;
+- 값이나 한계가 그 컴포넌트에 맞지 않는 경우([컨트롤](#컨트롤));
+- `source`가 없는 데이터 컴포넌트;
+- `key`와 `source`를 함께 가진 항목;
+- 설정 이름에서 선언으로 가는 평면 맵인 옛 형식의 `settings`. 오류는 파일 이름을 담고 평면 형식이 제거되었다고 말한다.
+
+선언에는 코드가 없다. 특별한 부분이 필요한 페이지는 집합의 컴포넌트를 이름 붙이고, 그 컴포넌트를 선언된 `source`와 선언된 `commands`로 채운다.
+
 ## 컨트롤
 
-창은 설정의 형식으로 정하는 고정된 컨트롤 묶음 가운데 하나로 모든 설정을 그린다([값](#값)과 [플러그인](plugins.ko.md)의 플러그인 설정 선언). 형식마다 컨트롤은 정확히 하나이며, 어떤 설정도 자기만의 컨트롤을 갖지 않는다. 컨트롤 선택은 다음 규칙을 따른다.
+설정 탭은 각 항목을 그 선언이 이름 붙인 컴포넌트로 그린다. 컴포넌트 집합은 고정이다. 각 컴포넌트는 아래 속성과 한계를 가지며, 모든 명령은 공유 binder를 거친다([노출](exposure.ko.md)).
 
-- 나열된 값이 둘이나 셋이면 세그먼트.
-- 나열된 값이 넷 이상이면 셀렉트.
-- 켬/끔이면 스위치.
-- 단위가 붙은 연속 정수이면 값과 단위를 옆에 둔 슬라이더.
-- 작은 정수이면 단위가 안에 붙은 스테퍼 `− value +`.
-- 문자열 값이면 한 줄 글자 입력. 식별자와 주소는 고정폭 글꼴을 쓴다.
+| 컴포넌트 | 속성 | 한계 | 명령 |
+| --- | --- | --- | --- |
+| Toggle | `key` 또는 `source`, `command` | 불리언 값 | `core.settings.change {key, value, scope}`, `source`가 있으면 `command` |
+| Segmented | `key`, `values` | 선언 순서의 두 개 또는 세 개 값 | `core.settings.change {key, value, scope}` |
+| Select | `key`, `values` 또는 `category` | 네 개 이상 값, 선언 순서대로 값마다 한 옵션. `category` 셀렉트는 그 범주의 로드되고 켜진 플러그인을 이름으로 나열한다([플러그인 범주](plugins.ko.md#plugin-categories)) | `core.settings.change {key, value, scope}` |
+| Text | `key`, `kind`(`text` 또는 `address`), `maxLength`? | 한 줄. Enter와 blur에서 값을 저장한다. `address`는 빈 값이거나 최대 2048자의 `http` 또는 `https` 주소다 | `core.settings.change {key, value, scope}` |
+| Number | `key`, `min`, `max`, `step`?, `unit`? | `min`부터 `max`까지의 정수 | `core.settings.change {key, value, scope}` |
+| Slider | `key`, `min`, `max`, `step`, `unit` | 네 가지 모두 필수. `min`은 `max`보다 작다. 값과 단위를 슬라이더 옆에 보이며, 드래그는 놓을 때 명령을 한 번 실행한다 | `core.settings.change {key, value, scope}` |
+| Search | `command` | 한 줄. 입력한 글과 함께 `command`를 실행한다 | 항목의 `command` |
+| Badge | `source` | `tone`은 `ok`, `warn`, `acc`, `neutral` 중 하나다. 상태 배지는 `err`가 아니다 | 없음 |
+| Chip | `values` 또는 `source`, `command` | 값마다 칩 하나 | 항목의 `command` |
+| Order | `key` | 네 방향, 각각 한 번 | 전체 새 목록과 함께 `core.settings.change {key, value, scope}` |
+| Theme | `key` | 카탈로그의 테마 | `core.settings.theme {name, scope}` |
+| Button | `command`, `label`, `variant`(`sm` 또는 `primary`), `disabled`? | variant가 높이를 정한다(아래 크기) | 항목의 `command` |
+| Status | `source`, `commands` | `source` 상태에서 온 행. 각 행은 선언된 명령으로 동작을 이름 붙인다 | 행이 이름 붙인 명령 |
 
-| 형식 | 컨트롤 | 명령 |
-| --- | --- | --- |
-| 불리언(`left`, `right`, `top`, `bottom`, `dim`, `memorySaver`, `autoDismissProblemToasts`) | 스위치 | `core.settings.change {key, value, scope}` |
-| 나열된 값 둘이나 셋(`projectOpening`, `mode`, `focusInd`, `fullRule`, `cardArrange`, `language`, `viewProcess`, 세트 배치, 값이 둘이나 셋인 플러그인 `enum`) | 세그먼트 | `core.settings.change {key, value, scope}` |
-| 나열된 값 넷 이상(`font`, `textSize`, `projectTabs`, 값이 넷 이상인 플러그인 `enum`) | 선언 순서대로 값마다 항목이 있는 셀렉트 | `core.settings.change {key, value, scope}` |
-| 카탈로그의 테마(`theme`) | 테마마다 그 테마의 색과 형태로 그린 견본 하나를 가진 견본 격자 | `core.settings.theme {name, scope}` |
-| 단위가 붙은 경계 정수(`gap`, `radius`, `memorySaverDelay`, [배치 값](#배치-값), 연속 범위의 플러그인 `integer`) | 경계 사이의 슬라이더. 값과 단위를 보인다. 끌기 동안 각 값을 슬라이더 옆에 보이고, 놓을 때의 값으로 명령을 한 번 실행한다 | `core.settings.change {key, value, scope}` |
-| 작은 경계 정수(`size`, `problemToastDismissSeconds`, 좁은 범위의 플러그인 `integer`) | 단위가 붙은 스테퍼 `− value +` | `core.settings.change {key, value, scope}` |
-| 폴더 경로(`projectsFolder`) | 폴더 컨트롤: 고정폭 글꼴의 경로와 찾아보기 버튼. 버튼은 `core.settings.choose-folder {key, scope}`를 실행하며, 이 명령은 시스템 폴더 대화상자를 띄우고 고른 폴더를 `key`의 설정으로 정한다. 대화상자를 취소하면 아무것도 바뀌지 않는다 | `core.settings.choose-folder {key, scope}` |
-| 문자열(플러그인 `string`) | 한 줄 글자 입력 | `core.settings.change {key, value, scope}` |
-| 주소(플러그인 `address`) | 고정폭 글꼴의 한 줄 글자 입력. 빈 값이나 `http://` 또는 `https://`로 시작하는 값을 받는다. 그 밖의 값은 칸 아래에 `http:// 또는 https:// 로 시작하는 주소여야 한다.`를 보인다 | `core.settings.change {key, value, scope}` |
-| 분류의 플러그인(플러그인 `plugin`, [플러그인 분류](plugins.ko.md#plugin-categories)) | 불러오고 켜진 해당 분류의 플러그인마다 이름을 붙인 항목 하나를 가진 셀렉트 | `core.settings.change {key, value, scope}` |
-| 세트 참조([사이드바 선택](#사이드바-선택)의 연결) | 항상 셀렉트. `사용 안 함`과 모든 세트, 세트마다 힌트 | `core.settings.link {place, plugin, set, scope}` |
-| 순서가 있는 변 목록(`sidebarOrder`, `<plugin>.win.order`, `<plugin>.card.order`) | 현재 순서대로 변마다 행 하나, 변 이름으로 이름 붙임. 첫 행에는 ↑가 없고 마지막 행에는 ↓가 없다 | 새 목록 전체를 `value`로 한 `core.settings.change {key, value, scope}` |
-| 계정 목록(플러그인의 [계정](plugins.ko.md#accounts)) | 계정마다 행 하나와 행 `새 계정` | `{plugin, ...}`를 받는 `core.accounts.add`, `core.accounts.rename`, `core.accounts.remove`, `core.accounts.login`, `core.accounts.login-cancel`, `core.accounts.logout` |
+모든 행의 배치는 디자인 파일의 규칙 표를 따른다. 컨트롤은 28 point, 작은 버튼은 24 point 높이, 행은 최소 36 point 높이이며, 행은 라벨과 설명, 범위 칩, 컨트롤을 260 point 열의 격자로 둔다. 넓은 컨트롤은 행 전체를 차지한다. Status 행은 배지를 78 point 열에 보이고, 제목을 경로 위에, 동작을 끝에 둔다.
 
 세트 편집기도 같은 컨트롤을 쓴다. 이름은 글자 입력, 배치는 세그먼트, 섹션 행은 셀렉트와 ▲ ▼ −다. 버튼(`편집`, `삭제`, `새 세트`, `완료`, `+ 섹션 추가`, `목록`, `찾아보기`, `설치`, `업데이트` 등)은 동작을 실행하며 설정 컨트롤이 아니다. 변 행의 ▲ ▼는 순서의 컨트롤이다. 범위 컨트롤의 칩은 범위를 고르며 설정이 아니다. `sets`, `diagnostics.performance`, `diagnostics.log`처럼 이 표에 컨트롤이 없는 설정은 자기 명령이나 설정 파일로 바꾼다.
 
@@ -476,6 +417,89 @@ host가 없는 browser 애플리케이션에서는 페이지가 불러온 플러
 - 다른 설정에 딸린 설정은 그 설정 아래에 들여 쓴다. 부모가 꺼지면 비활성이다. `memorySaverDelay`는 `memorySaver`에, `problemToastDismissSeconds`는 `autoDismissProblemToasts`에 딸린다.
 - 세트 이름 칸이 비면 `이름이 필요하다.`를 보인다. 계정 식별자 칸은 잘못된 식별자에 `소문자, 숫자, _ - 만 쓸 수 있다.`를, 중복된 식별자에 `이미 있는 식별자다.`를 보인다.
 - 변 이름은 `왼쪽`, `오른쪽`, `위`, `아래`다. `상단`과 `하단`은 쓰지 않는다.
+
+### 상태 행
+
+페이지 에이전트 연동의 제목은 `에이전트 연동`, 설명은 `에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.`, 배지는 `전역 전용`이다.
+
+페이지는 컴퓨터의 에이전트가 애플리케이션을 배우고 그것에 연결하게 하는 setup part를 보인다([에이전트](cli.ko.md#에이전트)). 이 part는 프로젝트가 아니라 컴퓨터와 사람의 것이므로 페이지는 전역 전용이다. 페이지는 host call `setupState()`로 part를 읽는다. 이 call은 사람의 login shell 환경에서 사용자 PATH 등록과 다른 setup part를 보고한다. 페이지는 보일 때, 창이 key window가 될 때(`window-active`), 각 `setup-changed` 이벤트 뒤, `core.setup.check`를 실행할 때 part를 읽는다. 타이머는 다시 읽지 않는다.
+
+묶음 `에이전트 연동`에는 넓은 행 `연동 상태` 하나가 있다.
+
+- 요약은 배지 `<n>개 중 <m>개가 다름`(warn, 경고 아이콘)을 보인다. `<m>`은 `differs` 또는 `missing`인 part의 수다. 모든 part가 `ok`이면 `모두 설치됨`(ok, 확인 아이콘)을 보인다.
+- 버튼 `다시 확인`(refresh 아이콘, sm)은 `core.settings-tab.setup-check`를 실행하며, 이는 `core.setup.check`를 실행한다.
+- 버튼 `모두 설치`(primary, sm, 요소 `core.settings-tab.setup-install-all`)는 상태가 `ok`가 아닌 part가 있는 종류 `skill`과 `mcp`로 `core.setup.install {parts}`를 실행한다. 그런 part가 없으면 비활성이다.
+
+part마다 행이 하나이며 part 순서를 따른다(요소 이름 `core.settings-tab.setup`). 행은 이름, 파일, 상태를 보인다.
+
+| Part | 이름 | 파일 | 동작 |
+| --- | --- | --- | --- |
+| `path` | 명령 경로 | 애플리케이션 bundle의 `sok` | 켜져 있으면 `끄기`가 `core.settings-tab.setup-change {part: "path", enabled: false}`를 실행한다. 꺼져 있으면 상태에 `사용 안 함`을 보이고 `켜기`가 `enabled: true`로 같은 명령을 실행한다 |
+| `skill` | 스킬 | 스킬 파일 | 상태 `missing`이고 사유가 `differs`이면 `고치기`, 그 밖의 `missing`이면 `설치`(sm). 각각 요소 `core.settings-tab.setup-install`이며 `core.setup.install {parts: ["skill"]}`을 실행한다 |
+| `mcp` | MCP 등록 | 등록 파일 | `고치기` 또는 `설치`(sm). 각각 요소 `core.settings-tab.setup-install`이며 `core.setup.install {parts: ["mcp"]}`을 실행한다 |
+| `hook` | 훅 | 훅 파일 | 없음. 설치 명령은 훅을 받지 않는다 |
+
+상태 배지는 `설치됨`(ok, 상태 `ok`), `다름`(warn, 상태 `missing`과 사유 `differs` 또는 `<kind> differs`), `없음`(warn, 상태 `missing`과 사유 `absent`)이다. 상태가 `error`인 part는 [컨트롤](#컨트롤)의 오류 표시를 거쳐 오류 글을 보인다. 해당하지 않는 part에는 행이 없다. 행이 하나도 없으면 페이지는 `이 컴퓨터에서 설정할 에이전트 항목이 없습니다.`를 보인다.
+
+`core.setup.check`는 매개변수 없이 part를 다시 읽고 `{parts}`로 답한다. `core.setup.install`은 `{parts}`를 받는다. `{parts}`는 반복 없는 `skill`과 `mcp`의 비지 않은 목록이며, host call `setupInstall`을 실행하고 그 `{parts}`로 답한다. 다른 목록이면 -32602(invalid params)로 실패한다. 설치가 실패하거나 다른 작업이 실행 중이면 host 오류로, host가 없으면 "setup operations need a native host"로 실패한다. 명령 `core.setup.change {part, enabled}`는 `part: "path"`와 불리언 `enabled`를 받는다. 같은 매개변수로 `setupChange`를 실행하고, preference를 저장해 적용한 뒤 `{parts}`로 답한다. 실패한 읽기나 작업은 오류 표시로 보이며, 오류 표시는 그것을 애플리케이션 log에 쓴다.
+
+### 순서 행
+
+묶음은 행 네 개의 목록을 보인다. 행 하나가 변 하나이며, 행 순서가 `sidebarOrder`에 저장된 배치 순서다. 각 행은 왼쪽부터 다음을 보인다.
+
+1. 행 번호(1–4).
+2. 변 이름 `왼쪽`, `오른쪽`, `위`, `아래`.
+3. 프로젝트 범위에서 프로젝트가 행의 값을 덮어썼으면 배지 `<project> 값`(acc).
+4. 변의 세트 셀렉트. 항목은 `사용 안 함`과 모든 세트다. 세트 항목은 힌트 `목록 · <n>` 또는 `탭 · <n>`을 보이며, `<n>`은 세트의 섹션 수다. 셀렉트는 `core.settings.link {place, plugin: null, set, scope}`를 실행하고, 변이 꺼져 있으면 비활성이다. 변이 꺼진 동안에도 저장된 연결은 남는다.
+5. 변의 켬/끔 스위치. `left`, `right`, `top`, `bottom`에 대해 `core.settings.change {key, value, scope}`를 실행한다.
+6. 제목 `위로`의 버튼 ↑. 행을 한 칸 위로 옮긴다. 첫 행에서는 비활성이다.
+7. 제목 `아래로`의 버튼 ↓. 행을 한 칸 아래로 옮긴다. 마지막 행에서는 비활성이다.
+
+6과 7의 버튼은 `core.settings.change {key: sidebarOrder, value, scope}`를 실행하며, `value`는 새 순서 전체다.
+
+목록 아래의 글은 행 순서와 상관없이 고정된 순서로 단축키를 보인다: `⌘B 왼쪽 · ⌥⌘B 오른쪽 · ⇧⌘J 위 · ⌘J 아래`.
+
+프로젝트 범위에서 프로젝트가 변 스위치, 전역 변 연결, `sidebarOrder`를 덮어쓰면 버튼 `<project> 값 지우기`(reset 아이콘)를 보인다. 버튼은 `core.settings.reset {key, scope: "project"}`를 이 키마다 한 번씩 실행한다.
+
+### 세트 편집기
+
+페이지는 세트 목록을 보인다. 세트 행은 다음을 보인다.
+
+- 이름. 이름이 비면 `(이름 없음)`.
+- 배치 배지 `탭` 또는 `목록`(neutral).
+- 링크가 세트를 쓰면 줄 `· 쓰는 곳: <list>`. 목록은 변(`왼쪽`)과 플러그인 창(`<plugin name> 창 <side>`)을 적는다. 세트를 쓰는 링크가 없으면 줄이 없다.
+- 섹션 칩. 칩은 섹션 이름을 보인다. 불러오지 않은 플러그인의 섹션 칩은 흐린 점선 테두리와 취소선을 긋은 이름을 보이고, 툴팁은 `<name>(<id>) 플러그인 필요`다([없는 플러그인](plugins.ko.md#없는-플러그인)). 세트 줄은 칩 아래에 그런 플러그인마다 경고 줄 하나를 보인다([없는 플러그인](plugins.ko.md#없는-플러그인)). 섹션이 없는 세트는 `섹션 없음`을 보인다.
+- 버튼 `편집`(secondary, sm)은 `core.settings-tab.edit {set}`을 실행하고, 버튼 `삭제`(ghost, sm)가 있다.
+
+편집 중인 세트의 행은 `편집` 자리에 버튼 `완료`(primary, sm)를 보인다. `완료`는 `core.settings-tab.edit {set: null}`을 실행한다.
+
+`삭제`를 누르면 `core.settings-tab.confirm {kind: "set", id, answer: "ask"}`가 실행되고, 행 아래에 확인이 나온다. 링크가 세트를 쓰면 `쓰는 곳은 “사용 안 함”이 된다.`, 아니면 `삭제할까?`다. 버튼은 `취소`(ghost, sm)와 `삭제`(danger, sm)다. `취소`는 `answer: "no"`로 같은 명령을 실행한다. `삭제`는 `answer: "yes"`로 같은 명령을 실행하며, `yes` 답은 `core.settings.sets.delete {id, scope}`를 실행한다.
+
+버튼 `새 세트`(plus 아이콘)는 `core.settings.sets.create {scope}`를 실행한다. 이 명령은 제목 `새 세트`, 배치 `list`, 섹션 없는 세트를 더하고 그 세트의 편집기를 연다.
+
+세트의 편집기는 다음을 보인다.
+
+- `이름`: 글자 입력 칸. `core.settings.sets.update {id, title, scope}`를 실행한다. 이름이 비면 칸 아래에 `이름이 필요하다.` 줄을 보인다. 1–40자의 이름을 저장한다.
+- `배치`: 세그먼트 `목록`(`list`)과 `탭`(`tabs`). `core.settings.sets.update {id, layout, scope}`를 실행한다. 세그먼트는 세트의 요소 `core.settings-tab.layout`이다(항목은 `layout:<세트 id>`).
+- `섹션`: 세트의 섹션마다 칩 하나를 세트 순서대로 보인다. 칩은 섹션 이름과 버튼 × (`<section name> 빼기`)를 가진다. 불러오지 않은 플러그인의 섹션 칩은 흐린 점선 테두리와 취소선을 긋은 이름을 보이고, 툴팁은 `<name>(<id>) 플러그인 필요`다([없는 플러그인](plugins.ko.md#없는-플러그인)). 세트에 섹션이 없으면 `아직 섹션이 없다.` 줄을 보인다. 칩 뒤에는 셀렉트 `섹션 추가…`가 있다. 선택지는 세트가 가지지 않은 등록된 섹션이며, 각 선택지는 플러그인 id를 힌트로 보이고, 플러그인 순서와 선언 순서로 묶인다. 세트가 등록된 모든 섹션을 가지면 셀렉트는 비활성이다.
+- 줄 `바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다.`
+- 버튼 `완료`.
+
+섹션 컨트롤은 `core.settings.sets.row {id, action, index?, section?, scope}`를 실행한다.
+
+| 컨트롤 | 명령 | 효과 |
+| --- | --- | --- |
+| `index` 칩의 × | `remove`, `index`와 함께 | `index` 위치의 섹션을 뺀다 |
+| `섹션 추가…`의 선택지 | `add`, `section`과 함께 | `section`을 세트 끝에 더한다 |
+
+칩에는 순서를 바꾸는 컨트롤이 없다. 섹션의 순서는 추가한 순서이며, 섹션을 옮기려면 뺀 뒤 다시 더한다. 세트에 같은 섹션이 다시 들어가는 변경은 -32602(invalid params)와 "section <id> is already in set <id>" 오류로 실패하고 아무것도 바꾸지 않는다. 등록되지 않은 `section`을 가진 `add`는 -32602와 "unknown section <id>"로 실패한다. 모든 변경은 [범위 규칙](#컨트롤의-범위)이 주는 `sets` 범위에 바로 저장된다.
+
+### 진단 스위치
+
+묶음 `진단`, 설명 `켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.` 행 `디버그 기록`은 `core.settings.debug {on}`을 실행하는 스위치 하나다. 스위치는 `diagnostics.performance`가 true이고 `diagnostics.log`의 모든 class가 `trace`일 때 켜져 보인다.
+
+
+명령 `core.settings.debug {on}`은 두 설정을 함께 켜고 끈다. 켜면 `diagnostics.performance`를 true로, `diagnostics.log`를 모든 class에서 `trace`로 둔다. 끄면 `diagnostics.performance`를 false로, `diagnostics.log`를 `{}`로 둔다. 둘이 모두 꺼져 있는 동안 어떤 계층도 trace의 event나 `error` 아래의 event를 만들거나 저장하지 않는다.
 
 ## 값
 
@@ -579,7 +603,7 @@ host가 없는 browser 애플리케이션에서는 페이지가 불러온 플러
 - 각 행은 라벨 영역과 컨트롤 영역을 가진다. 컨트롤 영역은 폭 260포인트이고 pane의 모든 행에서 같은 x에서 시작하며, 라벨 영역은 남은 폭을 쓴다. 라벨이 없는 행도 빈 라벨 영역을 둔다. pane의 폭은 layout pass마다 한 번 읽고 행은 측정하지 않으므로, 값이 바뀌어도 행이 움직이지 않는다. 브라우저 host는 `minmax(0,1fr)`과 260포인트 열의 CSS grid로 이를 지키고 `ResizeObserver`를 쓰지 않는다. 네이티브 host는 pane 폭으로 같은 x를 계산한다.
 - 변경은 바뀐 설정의 행과, 그 설정에 기대는 설정의 행, 그 설정을 읽는 행만 갱신한다. 기대는 행은 부모가 꺼져 있으면 꺼지고, debug 스위치는 diagnostics 설정을 읽기 때문이다. 여러 필드에 걸친 규칙은 그 group 전체를 다시 그린다. 오류 줄과 고치기 버튼이 group 아래에 있기 때문이다. 페이지는 창을 만들 때가 아니라 보일 때 만든다.
 - host는 설정, 계정, 언어, 보이는 페이지, 플러그인 상태, 애플리케이션 업데이트 상태, setup 상태가 바뀔 때만 설정 모델을 만든다. 설정, 계정, 플러그인 상태, 애플리케이션 업데이트 상태의 변경은 callback으로 입력을 올리고, 모델의 key는 페이지, 언어, setup 세대, 실행 중인 플러그인 작업만 담으며 인코딩된 상태는 담지 않는다. 설정 변경은 모델을 한 번 만든다. 쓰기 응답은 성공이든 실패든 모델을 만들지 않는다. 모델은 변경된 값을 보여주며, host가 거절한 쓰기는 저장된 값을 store와 control에 되돌리고, 오류는 하나의 표시 경로로 한 번 보여준다. 따라서 control은 host가 저장한 값을 보여준다. 변경이 없는 프레임은 아무것도 만들지 않으며, 프레임마다 모델을 만들지 않는다.
-- 타이머나 poll이 상태를 정하지 않는다. 아직 모르는 상태는 자리표시나 지연 상태로 보이지 않는다. setup 상태와 플러그인 상태는 [에이전트](#에이전트)와 [설치됨](#설치됨)이 정한 이벤트로 읽는다.
+- 타이머나 poll이 상태를 정하지 않는다. 아직 모르는 상태는 자리표시나 지연 상태로 보이지 않는다. setup 상태와 플러그인 상태는 [에이전트](#선언)와 [설치됨](#설치됨)이 정한 이벤트로 읽는다.
 - 되돌리기 토스트는 5초 동안 보인다. 이 시간은 사람이 보는 마감이며, 토스트는 기존 토스트 메커니즘을 쓴다.
 - 레이아웃 속성을 바꾸는 애니메이션은 없다. 그림자는 정적인 표면에만 쓴다.
 - 카탈로그 목록은 한 번에 30개 행을 보인다. 나머지는 사람이 요청할 때 더 불러온다.

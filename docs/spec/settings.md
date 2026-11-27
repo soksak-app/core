@@ -113,6 +113,9 @@ The result shows the heading `“<query>” 찾기`. The line under the heading 
 
 ## Pages
 
+The settings tab draws every page from its declaration and the [component set](#controls); no page has its own markup or code path. The core pages are declared in `packages/workbench/workbench.json` and the plugin pages in the `settings` of `plugin.json` ([declarations](#declarations)). The menu order follows the order of the declarations. The text of each page, section and item is the declared text, shown to the person.
+
+
 The pages follow the menu order. The text in quotation marks is the label shown to the person.
 
 ### 모양
@@ -172,22 +175,6 @@ Group `위치`, description `프로젝트 탭이 놓이는 위치. 바꾸면 카
 
 Group `사이드바`, description `위에 있는 줄부터 자리를 잡는다. 먼저 놓인 변이 그 변의 전체 길이를 쓰고, 다음 변은 그만큼 빠진다. 끈 변도 자기 순서를 지킨다.`
 
-The group shows a list of four rows. Each row is one side, and the row order is the placement order stored in `sidebarOrder`. Each row shows, from left to right:
-
-1. The number of the row (1 to 4).
-2. The side name `왼쪽`, `오른쪽`, `위` or `아래`.
-3. In the project scope, when the project overrides a value of the row, the badge `<project> 값` (acc).
-4. The set select of the side, with the options `사용 안 함` and every set. A set option shows a hint `목록 · <n>` or `탭 · <n>` with the number of sections of the set. The select runs `core.settings.link {place, plugin: null, set, scope}` and is disabled while the side is off. The stored link is kept while the side is off.
-5. The on/off switch of the side, which runs `core.settings.change {key, value, scope}` with `left`, `right`, `top` or `bottom`.
-6. The button ↑ titled `위로`, which moves the row one place up. The first row has it disabled.
-7. The button ↓ titled `아래로`, which moves the row one place down. The last row has it disabled.
-
-Each button of 6 and 7 runs `core.settings.change {key: sidebarOrder, value, scope}` with the whole new order as `value`.
-
-The text under the list shows the shortcuts in a fixed order that does not follow the rows: `⌘B 왼쪽 · ⌥⌘B 오른쪽 · ⇧⌘J 위 · ⌘J 아래`.
-
-In the project scope, when the project overrides a side switch, a side link of the general sides or `sidebarOrder`, the button `<project> 값 지우기` (reset icon) shows. The button runs `core.settings.reset {key, scope: "project"}` once for each of these keys.
-
 Group `사이드바 크기`, description `처음 폭은 최소 폭과 최대 폭 사이여야 한다. 위·아래 사이드바에는 높이로 적용된다.`
 
 | Label | Control | Range | Default | Description | Scope |
@@ -206,37 +193,6 @@ The group checks the effective values of the scope, because a project value can 
 ### 사이드바 세트
 
 The page 사이드바 세트 has the title `사이드바 세트` and the description `사이드바에 보여 줄 섹션 묶음. 어느 변에 놓을지는 작업 공간과 플러그인에서 고른다.` The scope control shows, because the sets follow the scope rule.
-
-The page lists the sets. Each set row shows:
-
-- The name, or `(이름 없음)` when the name is empty.
-- The layout badge `탭` or `목록` (neutral).
-- The line `· 쓰는 곳: <list>` when a link uses the set. The list names the sides (`왼쪽`) and the plugin windows (`<plugin name> 창 <side>`). The line is absent when no link uses the set.
-- The section chips. A chip shows the section name. A section of a plugin that is not loaded shows its chip with a dashed border in the muted tone and its name struck through, with the tooltip `<name>(<id>) 플러그인 필요` ([missing plugins](plugins.md#missing-plugins)). The set line shows, under the chips, one warning line for each such plugin ([missing plugins](plugins.md#missing-plugins)). A set without sections shows `섹션 없음`.
-- The button `편집` (secondary, sm), which runs `core.settings-tab.edit {set}`, and the button `삭제` (ghost, sm).
-
-While a set is edited its row shows the button `완료` (primary, sm) in place of `편집`. `완료` runs `core.settings-tab.edit {set: null}`.
-
-Pressing `삭제` runs `core.settings-tab.confirm {kind: "set", id, answer: "ask"}`, which shows a confirmation under the row: `쓰는 곳은 “사용 안 함”이 된다.` when a link uses the set, else `삭제할까?`. The buttons are `취소` (ghost, sm), which runs the same command with `answer: "no"`, and `삭제` (danger, sm), which runs it with `answer: "yes"`. A `yes` answer runs `core.settings.sets.delete {id, scope}`.
-
-The button `새 세트` (plus icon) runs `core.settings.sets.create {scope}`, which adds a set titled `새 세트` with layout `list` and no sections, and opens the editor for it.
-
-The editor of a set shows:
-
-- `이름`: a text field that runs `core.settings.sets.update {id, title, scope}`. An empty name shows the line `이름이 필요하다.` under the field. A name of 1 to 40 characters is stored.
-- `배치`: a segment `목록` (`list`) and `탭` (`tabs`), which runs `core.settings.sets.update {id, layout, scope}`. The segments are the element `core.settings-tab.layout` of the set (its item is `layout:<set id>`).
-- `섹션`: one chip per section of the set, in set order, each with the section name and the button × (`<section name> 빼기`);a section of a plugin that is not loaded shows its chip with a dashed border in the muted tone and its name struck through, with the tooltip `<name>(<id>) 플러그인 필요` ([missing plugins](plugins.md#missing-plugins)). When the set has no section, the line `아직 섹션이 없다.` shows. After the chips stands the select `섹션 추가…`, whose options are the registered sections that the set does not contain, each with the plugin id as its hint, grouped by plugin in plugin and declaration order; the select is disabled while the set contains every registered section.
-- The line `바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다.`
-- The button `완료`.
-
-The section controls run `core.settings.sets.row {id, action, index?, section?, scope}`:
-
-| Control | Action | Effect |
-| --- | --- | --- |
-| × of chip `index` | `remove` with `index` | Removes the section at `index` |
-| An option of `섹션 추가…` | `add` with `section` | Appends `section` to the set |
-
-The chips have no reorder control: the order of the sections is the order in which they were added, and a section is moved by removing it and adding it again. A change that would repeat a section in the set fails with -32602 (invalid params) and the error "section <id> is already in set <id>", and changes nothing; an `add` without a registered `section` fails with -32602 and "unknown section <id>". Every change is saved at once to the scope of `sets` that the [scope rule](#scope-of-a-control) gives.
 
 ### 동작
 
@@ -264,42 +220,14 @@ Group `메모리`, description `메모리 절약을 켜면 숨긴 지 정한 시
 
 Group `알림` (`id` `notices`) follows [notifications](notifications.md#settings). Its keys are `toastStyle`, `noticeCenterStyle`, `quietToasts`, `autoDismissProblemToasts` and `problemToastDismissSeconds`, and every row of the group is common only.
 
-### 에이전트
-
-<a id="agents"></a>The page 에이전트 연동 has the title `에이전트 연동`, the description `에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.` and the badge `전역 전용`.
-
-The page shows the setup parts that let an agent on the machine learn and connect to the application ([agents](cli.md#agents)). The parts belong to the machine and the person, so the page is common only. The page reads the parts through the host call `setupState()`, which reports the user PATH registration and the other setup parts in the environment of the person's login shell. The page reads the parts when it is shown, when the window becomes the key window (`window-active`), after each `setup-changed` event and when `core.setup.check` runs. No timer reads them again.
-
-The group 에이전트 연동 has one wide row `연동 상태`:
-
-- The summary shows the badge `<n>개 중 <m>개가 다름` (warn, with a warning icon), where `<m>` counts the parts that are `differs` or `missing`. When every part is `ok` the summary shows `모두 설치됨` (ok, with a check icon).
-- The button `다시 확인` (refresh icon, sm) runs `core.settings-tab.setup-check`, which runs `core.setup.check`.
-- The button `모두 설치` (primary, sm), element `core.settings-tab.setup-install-all`, runs `core.setup.install {parts}` with the kinds `skill` and `mcp` that have a part that is not `ok`. It is disabled when no such part exists.
-
-Each part is one row, in part order (element name `core.settings-tab.setup`). A row shows the name, the file and the state:
-
-| Part | Name | File | Actions |
-| --- | --- | --- | --- |
-| `path` | 명령 경로 | the `sok` of the application bundle | `끄기` runs `core.settings-tab.setup-change {part: "path", enabled: false}` while enabled. While disabled the state shows `사용 안 함` and `켜기` runs the same command with `enabled: true` |
-| `skill` | 스킬 | the skill file | `고치기` (state `missing` with reason `differs`) or `설치` (state `missing` with another reason), sm, each the element `core.settings-tab.setup-install`, which runs `core.setup.install {parts: ["skill"]}` |
-| `mcp` | MCP 등록 | the registration file | `고치기` or `설치`, sm, each the element `core.settings-tab.setup-install`, which runs `core.setup.install {parts: ["mcp"]}` |
-| `hook` | 훅 | the hook file | none; the install command does not take hooks |
-
-The state badge is `설치됨` (ok, state `ok`), `다름` (warn, state `missing` with reason `differs` or `<kind> differs`) or `없음` (warn, state `missing` with reason `absent`). A part in state `error` shows its error text through the error display path ([controls](#controls)). A part that does not apply has no row. When no row exists, the page shows `이 컴퓨터에서 설정할 에이전트 항목이 없습니다.`
-
-`core.setup.check` takes no parameters, reads the parts again and answers `{parts}`. `core.setup.install` takes `{parts}`, a non-empty list of `skill` and `mcp` without repetition, runs the host call `setupInstall` and answers its `{parts}`. It fails with -32602 (invalid params) for another list, with the host error when the installation fails or another operation runs, and with "setup operations need a native host" without a host. The command `core.setup.change {part, enabled}` accepts `part: "path"` and a boolean `enabled`. It runs `setupChange` with the same parameters and answers `{parts}` after it saves and applies the preference. A failed read or operation shows through the error display, which writes it to the application log.
-
 ### 진단
 
 The page 진단 has the title `진단`, the description `문제를 추적할 때만 켠다.` and the badge `전역 전용`.
-
-Group `진단`, description `켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.` It has one row `디버그 기록`, a switch that runs `core.settings.debug {on}`. The switch shows on when `diagnostics.performance` is true and every class of `diagnostics.log` is `trace`.
 
 `diagnostics.performance` is the permanent performance trace ([performance trace](performance-trace.md)). It is a boolean that defaults to false, so a release records no trace unless its person turns it on. While it is false no layer performs any performance logging work: no event is built and none is stored. Setting it true makes the layers store the events of the trace in the event files under `logs/`, and setting it back false stops the storing at the next event boundary. The event files and their rotation belong to the [event contract](logging.md#files), not to the setting.
 
 `diagnostics.log` is the [policy](logging.md#policy) of the event log: an object that names the least severe level (`off`, `error`, `warn`, `info`, `debug` or `trace`) that is stored for some of the classes `lifecycle`, `input`, `call`, `io` and `frame`. A class that it does not name takes the default policy, which stores only `error`, and it defaults to `{}`, which stores only `error` in every class, so the record of every error that the display path shows remains. It is set through the settings file; a class outside the five and a value outside the six levels are refused with an error that names the setting. The page sends the policy to the host, which writes `<config-dir>/log-policy.json`, and every process applies the file when it changes.
 
-The command `core.settings.debug {on}` turns both settings on and off together: on sets `diagnostics.performance` to true and `diagnostics.log` to `trace` in every class; off sets `diagnostics.performance` to false and `diagnostics.log` to `{}`. While both are off, no layer builds or stores an event of the trace or an event below `error`.
 
 ## Plugins
 
@@ -404,7 +332,7 @@ The group `설정` shows one row for each setting that the manifest declares, in
 
 The group `섹션` shows the names of the sections that the plugin declares as read-only chips.
 
-The group `창 사이드바` has the description `이 플러그인의 탭이 포커스 카드의 활성 탭인 동안 쓰는 창 사이드바. 세트를 고른 변만 바뀌고, 위에 있는 줄부터 자리를 잡는다.` It shows the four-row list of [the sidebar group](#작업-공간) without the switch: the number, the side name, the project badge, a set select and the buttons ↑ and ↓. The set select runs `core.settings.link {place: "window-<side>", plugin, set, scope}`. The order runs `core.settings.change {key: "<plugin>.win.order", value, scope}` with the whole new order. In the project scope the badges and the reset button follow the rule of [the sidebar group](#작업-공간): a row whose link or whose order the project overrides shows the badge `<project> 값`, and the button `<project> 값 지우기` runs `core.settings.reset {key, scope: "project"}` once for `links` and for `<plugin>.win.order` when the project overrides them. The default order is `left`, `right`, `top`, `bottom`.
+The group `창 사이드바` has the description `이 플러그인의 탭이 포커스 카드의 활성 탭인 동안 쓰는 창 사이드바. 세트를 고른 변만 바뀌고, 위에 있는 줄부터 자리를 잡는다.` It shows the four-row list of the sidebar group of the 작업 공간 page without the switch: the number, the side name, the project badge, a set select and the buttons ↑ and ↓. The set select runs `core.settings.link {place: "window-<side>", plugin, set, scope}`. The order runs `core.settings.change {key: "<plugin>.win.order", value, scope}` with the whole new order. In the project scope the badges and the reset button follow the rule of the sidebar group of the 작업 공간 page: a row whose link or whose order the project overrides shows the badge `<project> 값`, and the button `<project> 값 지우기` runs `core.settings.reset {key, scope: "project"}` once for `links` and for `<plugin>.win.order` when the project overrides them. The default order is `left`, `right`, `top`, `bottom`.
 
 The group `카드 사이드바` has the description `카드 안쪽 네 변. 세트를 고른 변만 보이고, 위에 있는 줄부터 자리를 잡는다. 순서는 이 플러그인의 카드에만 적용된다.` It works the same way with `card-<side>` links and the key `<plugin>.card.order`. It is shown for a plugin with a surface.
 
@@ -428,32 +356,45 @@ The host's plugin state reads and the outdated sidecar reads run when the page i
 
 Without a host, as in the browser application, the page has only the loaded plugins, each as `loaded`, and no action.
 
+## Declarations
+
+A settings page is a JSON declaration. Core pages are declared in `packages/workbench/workbench.json`, and plugin pages in `plugin.json` under `settings`, an array of pages. A page has this form:
+
+- page: `{ "id", "label", "description", "scope"?, "sections" }`. `scope` is `"global"` when the page belongs to the computer and not to a project; the page then shows the badge `전역 전용`.
+- section: `{ "id", "label", "description"?, "items" }`. The section label and its description are the boundary label between groups.
+- item: `{ "component", "label", "description"?, "key" | "source", "default"?, "values"?, "min"?, "max"?, "step"?, "unit"?, "dependsOn"?, "validate"?, "command"?, "commands"? }`.
+
+An item names its component from the [component set](#controls). An item has `key` (a stored setting) or `source` (a host status or a host-computed value), never both. A data component (Status, Badge, Chip) needs its `source`. The reader refuses each of these with an error that names the file:
+
+- a component outside the component set;
+- a component with values or limits that do not fit it ([controls](#controls));
+- a data component without `source`;
+- an item with both `key` and `source`;
+- the flat form of `settings`, a map of setting names to declarations. The error names the file and states that the flat form is removed.
+
+A declaration has no code: a page that needs a special part names a component of the set and feeds it from a declared `source` and declared `commands`.
+
 ## Controls
 
-The settings tab draws every setting with one control from a fixed set, chosen by the form of the setting ([values](#values) and the plugin declarations of [plugins](plugins.md)). Each form has exactly one control, and no setting has a control of its own. The choice of a control follows these rules:
+The settings tab draws each item with the component that its declaration names. The component set is fixed. Every component has one of the props and limits below, and every command runs through the shared binder ([exposure](exposure.md)).
 
-- Two or three listed values: a segment.
-- Four or more listed values: a select box.
-- On or off: a switch.
-- A continuous integer with a unit: a slider with the value and the unit beside it.
-- A small integer: a stepper `− value +` with the unit inside it.
-- A text value: a one-line text field, in a fixed-width font for identifiers and addresses.
+| Component | Props | Limits | Command |
+| --- | --- | --- | --- |
+| Toggle | `key` or `source`, `command` | a boolean value | `core.settings.change {key, value, scope}`, or `command` when `source` is set |
+| Segmented | `key`, `values` | two or three values, in the declared order | `core.settings.change {key, value, scope}` |
+| Select | `key`, `values` or `category` | four or more values, one option per value in the declared order; a `category` select lists the loaded and enabled plugins of the category by name ([plugin categories](plugins.md#plugin-categories)) | `core.settings.change {key, value, scope}` |
+| Text | `key`, `kind` (`text` or `address`), `maxLength`? | one line; stores its value on Enter and on blur; an `address` is empty or an `http` or `https` address of at most 2048 characters | `core.settings.change {key, value, scope}` |
+| Number | `key`, `min`, `max`, `step`?, `unit`? | an integer from `min` to `max` | `core.settings.change {key, value, scope}` |
+| Slider | `key`, `min`, `max`, `step`, `unit` | all four required; `min` is below `max`; the value and the unit show beside the slider, and a drag runs the command once at the release | `core.settings.change {key, value, scope}` |
+| Search | `command` | one line; runs `command` with the typed text | the item `command` |
+| Badge | `source` | `tone` is one of `ok`, `warn`, `acc` or `neutral`; a state badge is never `err` | none |
+| Chip | `values` or `source`, `command` | one chip per value | the item `command` |
+| Order | `key` | the four sides, each once | `core.settings.change {key, value, scope}` with the whole new list |
+| Theme | `key` | a theme of the catalog | `core.settings.theme {name, scope}` |
+| Button | `command`, `label`, `variant` (`sm` or `primary`), `disabled`? | the variant sets the height (see the sizes below) | the item `command` |
+| Status | `source`, `commands` | rows from the status of `source`; each row names its action by a declared command | the commands named by the rows |
 
-| Form | Control | Command |
-| --- | --- | --- |
-| A boolean (`left`, `right`, `top`, `bottom`, `dim`, `memorySaver`, `autoDismissProblemToasts`) | Switch | `core.settings.change {key, value, scope}` |
-| A choice of two or three listed values (`projectOpening`, `mode`, `focusInd`, `fullRule`, `cardArrange`, `language`, `viewProcess`, the set layout, a plugin `enum` of two or three values) | Segment | `core.settings.change {key, value, scope}` |
-| A choice of four or more listed values (`font`, `textSize`, `projectTabs`, a plugin `enum` of four or more values) | Select box with one option per value in the declared order | `core.settings.change {key, value, scope}` |
-| A theme of the catalog (`theme`) | Swatch grid with one swatch per theme, drawn with that theme's colors and shape | `core.settings.theme {name, scope}` |
-| A bounded integer with a unit (`gap`, `radius`, `memorySaverDelay`, the [layout values](#layout-values), a plugin `integer` with a continuous range) | Slider between the bounds, with the value and the unit; a drag shows each value beside the slider and runs the command once, with the value at its release | `core.settings.change {key, value, scope}` |
-| A small bounded integer (`size`, `problemToastDismissSeconds`, a plugin `integer` with a small range) | Stepper `− value +` with the unit | `core.settings.change {key, value, scope}` |
-| A folder path (`projectsFolder`) | Folder control: the path in a fixed-width font and a 찾아보기 button. The button runs `core.settings.choose-folder {key, scope}`, which shows the system folder dialog and sets the chosen folder through the setting of `key`; a cancelled dialog changes nothing | `core.settings.choose-folder {key, scope}` |
-| A string (a plugin `string`) | One-line text field | `core.settings.change {key, value, scope}` |
-| An address (a plugin `address`) | One-line text field in a fixed-width font; an empty value or a value that starts with `http://` or `https://` is accepted, and any other value shows `http:// 또는 https:// 로 시작하는 주소여야 한다.` under the field | `core.settings.change {key, value, scope}` |
-| A plugin of a category (a plugin `plugin`, [plugin categories](plugins.md#plugin-categories)) | Select box with one option per loaded and enabled plugin of the category, labelled with its name | `core.settings.change {key, value, scope}` |
-| A set reference (a link of [sidebar choices](#sidebar-choices)) | Select box of `사용 안 함` and every set, with the hint of each set | `core.settings.link {place, plugin, set, scope}` |
-| A list of sides in order (`sidebarOrder`, `<plugin>.win.order`, `<plugin>.card.order`) | One row per side in the current order, named by the side; the first row has no ↑, the last row has no ↓ | `core.settings.change {key, value, scope}` with the whole new list as `value` |
-| An account list (the [accounts](plugins.md#accounts) of a plugin) | One row per account, and the row 새 계정 | `core.accounts.add`, `core.accounts.rename`, `core.accounts.remove`, `core.accounts.login`, `core.accounts.login-cancel` and `core.accounts.logout` with `{plugin, ...}` |
+The layout of every row follows the rule table of the design file: a control is 28 points high, a small button 24 points, a row is at least 36 points high, and a row is a grid of the label with its description, and the scope chip, and the control in a column of 260 points. A wide control takes the full row. A Status row shows its badge in a column of 78 points, its title over its path, and its action at the end.
 
 The set editor uses the same controls: 이름 is a text field, 배치 a segment, the sections chips with × each, and `섹션 추가…` a select box. The buttons (`편집`, `삭제`, `새 세트`, `완료`, `찾아보기`, `설치`, `업데이트` and the rest) run actions and are not setting controls. The ▲ ▼ of a side row are the control of its order. The chips of the scope control select the scope and are not settings. A setting that has no control in this table, such as `sets`, `diagnostics.performance` and `diagnostics.log`, changes through its own command or through the settings file.
 
@@ -476,6 +417,89 @@ Sizes and keys of the controls:
 - A setting that depends on another is indented under it. It is disabled while its parent is off: `memorySaverDelay` depends on `memorySaver`, and `problemToastDismissSeconds` depends on `autoDismissProblemToasts`.
 - A text field of a set name with an empty value shows `이름이 필요하다.`. A text field of an account identifier shows `소문자, 숫자, _ - 만 쓸 수 있다.` for an invalid identifier and `이미 있는 식별자다.` for a repeated one.
 - Names of the sides are `왼쪽`, `오른쪽`, `위` and `아래`. The text `상단` and `하단` is not used.
+
+### Status rows
+
+The page 에이전트 연동 has the title `에이전트 연동`, the description `에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.` and the badge `전역 전용`.
+
+The page shows the setup parts that let an agent on the machine learn and connect to the application ([agents](cli.md#agents)). The parts belong to the machine and the person, so the page is common only. The page reads the parts through the host call `setupState()`, which reports the user PATH registration and the other setup parts in the environment of the person's login shell. The page reads the parts when it is shown, when the window becomes the key window (`window-active`), after each `setup-changed` event and when `core.setup.check` runs. No timer reads them again.
+
+The group 에이전트 연동 has one wide row `연동 상태`:
+
+- The summary shows the badge `<n>개 중 <m>개가 다름` (warn, with a warning icon), where `<m>` counts the parts that are `differs` or `missing`. When every part is `ok` the summary shows `모두 설치됨` (ok, with a check icon).
+- The button `다시 확인` (refresh icon, sm) runs `core.settings-tab.setup-check`, which runs `core.setup.check`.
+- The button `모두 설치` (primary, sm), element `core.settings-tab.setup-install-all`, runs `core.setup.install {parts}` with the kinds `skill` and `mcp` that have a part that is not `ok`. It is disabled when no such part exists.
+
+Each part is one row, in part order (element name `core.settings-tab.setup`). A row shows the name, the file and the state:
+
+| Part | Name | File | Actions |
+| --- | --- | --- | --- |
+| `path` | 명령 경로 | the `sok` of the application bundle | `끄기` runs `core.settings-tab.setup-change {part: "path", enabled: false}` while enabled. While disabled the state shows `사용 안 함` and `켜기` runs the same command with `enabled: true` |
+| `skill` | 스킬 | the skill file | `고치기` (state `missing` with reason `differs`) or `설치` (state `missing` with another reason), sm, each the element `core.settings-tab.setup-install`, which runs `core.setup.install {parts: ["skill"]}` |
+| `mcp` | MCP 등록 | the registration file | `고치기` or `설치`, sm, each the element `core.settings-tab.setup-install`, which runs `core.setup.install {parts: ["mcp"]}` |
+| `hook` | 훅 | the hook file | none; the install command does not take hooks |
+
+The state badge is `설치됨` (ok, state `ok`), `다름` (warn, state `missing` with reason `differs` or `<kind> differs`) or `없음` (warn, state `missing` with reason `absent`). A part in state `error` shows its error text through the error display path ([controls](#controls)). A part that does not apply has no row. When no row exists, the page shows `이 컴퓨터에서 설정할 에이전트 항목이 없습니다.`
+
+`core.setup.check` takes no parameters, reads the parts again and answers `{parts}`. `core.setup.install` takes `{parts}`, a non-empty list of `skill` and `mcp` without repetition, runs the host call `setupInstall` and answers its `{parts}`. It fails with -32602 (invalid params) for another list, with the host error when the installation fails or another operation runs, and with "setup operations need a native host" without a host. The command `core.setup.change {part, enabled}` accepts `part: "path"` and a boolean `enabled`. It runs `setupChange` with the same parameters and answers `{parts}` after it saves and applies the preference. A failed read or operation shows through the error display, which writes it to the application log.
+
+### Order rows
+
+The group shows a list of four rows. Each row is one side, and the row order is the placement order stored in `sidebarOrder`. Each row shows, from left to right:
+
+1. The number of the row (1 to 4).
+2. The side name `왼쪽`, `오른쪽`, `위` or `아래`.
+3. In the project scope, when the project overrides a value of the row, the badge `<project> 값` (acc).
+4. The set select of the side, with the options `사용 안 함` and every set. A set option shows a hint `목록 · <n>` or `탭 · <n>` with the number of sections of the set. The select runs `core.settings.link {place, plugin: null, set, scope}` and is disabled while the side is off. The stored link is kept while the side is off.
+5. The on/off switch of the side, which runs `core.settings.change {key, value, scope}` with `left`, `right`, `top` or `bottom`.
+6. The button ↑ titled `위로`, which moves the row one place up. The first row has it disabled.
+7. The button ↓ titled `아래로`, which moves the row one place down. The last row has it disabled.
+
+Each button of 6 and 7 runs `core.settings.change {key: sidebarOrder, value, scope}` with the whole new order as `value`.
+
+The text under the list shows the shortcuts in a fixed order that does not follow the rows: `⌘B 왼쪽 · ⌥⌘B 오른쪽 · ⇧⌘J 위 · ⌘J 아래`.
+
+In the project scope, when the project overrides a side switch, a side link of the general sides or `sidebarOrder`, the button `<project> 값 지우기` (reset icon) shows. The button runs `core.settings.reset {key, scope: "project"}` once for each of these keys.
+
+### Set editor
+
+The page lists the sets. Each set row shows:
+
+- The name, or `(이름 없음)` when the name is empty.
+- The layout badge `탭` or `목록` (neutral).
+- The line `· 쓰는 곳: <list>` when a link uses the set. The list names the sides (`왼쪽`) and the plugin windows (`<plugin name> 창 <side>`). The line is absent when no link uses the set.
+- The section chips. A chip shows the section name. A section of a plugin that is not loaded shows its chip with a dashed border in the muted tone and its name struck through, with the tooltip `<name>(<id>) 플러그인 필요` ([missing plugins](plugins.md#missing-plugins)). The set line shows, under the chips, one warning line for each such plugin ([missing plugins](plugins.md#missing-plugins)). A set without sections shows `섹션 없음`.
+- The button `편집` (secondary, sm), which runs `core.settings-tab.edit {set}`, and the button `삭제` (ghost, sm).
+
+While a set is edited its row shows the button `완료` (primary, sm) in place of `편집`. `완료` runs `core.settings-tab.edit {set: null}`.
+
+Pressing `삭제` runs `core.settings-tab.confirm {kind: "set", id, answer: "ask"}`, which shows a confirmation under the row: `쓰는 곳은 “사용 안 함”이 된다.` when a link uses the set, else `삭제할까?`. The buttons are `취소` (ghost, sm), which runs the same command with `answer: "no"`, and `삭제` (danger, sm), which runs it with `answer: "yes"`. A `yes` answer runs `core.settings.sets.delete {id, scope}`.
+
+The button `새 세트` (plus icon) runs `core.settings.sets.create {scope}`, which adds a set titled `새 세트` with layout `list` and no sections, and opens the editor for it.
+
+The editor of a set shows:
+
+- `이름`: a text field that runs `core.settings.sets.update {id, title, scope}`. An empty name shows the line `이름이 필요하다.` under the field. A name of 1 to 40 characters is stored.
+- `배치`: a segment `목록` (`list`) and `탭` (`tabs`), which runs `core.settings.sets.update {id, layout, scope}`. The segments are the element `core.settings-tab.layout` of the set (its item is `layout:<set id>`).
+- `섹션`: one chip per section of the set, in set order, each with the section name and the button × (`<section name> 빼기`);a section of a plugin that is not loaded shows its chip with a dashed border in the muted tone and its name struck through, with the tooltip `<name>(<id>) 플러그인 필요` ([missing plugins](plugins.md#missing-plugins)). When the set has no section, the line `아직 섹션이 없다.` shows. After the chips stands the select `섹션 추가…`, whose options are the registered sections that the set does not contain, each with the plugin id as its hint, grouped by plugin in plugin and declaration order; the select is disabled while the set contains every registered section.
+- The line `바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다.`
+- The button `완료`.
+
+The section controls run `core.settings.sets.row {id, action, index?, section?, scope}`:
+
+| Control | Action | Effect |
+| --- | --- | --- |
+| × of chip `index` | `remove` with `index` | Removes the section at `index` |
+| An option of `섹션 추가…` | `add` with `section` | Appends `section` to the set |
+
+The chips have no reorder control: the order of the sections is the order in which they were added, and a section is moved by removing it and adding it again. A change that would repeat a section in the set fails with -32602 (invalid params) and the error "section <id> is already in set <id>", and changes nothing; an `add` without a registered `section` fails with -32602 and "unknown section <id>". Every change is saved at once to the scope of `sets` that the [scope rule](#scope-of-a-control) gives.
+
+### Diagnostic switch
+
+Group `진단`, description `켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.` It has one row `디버그 기록`, a switch that runs `core.settings.debug {on}`. The switch shows on when `diagnostics.performance` is true and every class of `diagnostics.log` is `trace`.
+
+
+The command `core.settings.debug {on}` turns both settings on and off together: on sets `diagnostics.performance` to true and `diagnostics.log` to `trace` in every class; off sets `diagnostics.performance` to false and `diagnostics.log` to `{}`. While both are off, no layer builds or stores an event of the trace or an event below `error`.
 
 ## Values
 
@@ -579,7 +603,7 @@ The settings tab keeps these rules, which apply to every page:
 - Each row has a label area and a control area. The control area is 260 points wide and starts at the same x in every row of the pane, and the label area takes the remaining width; a row without a label keeps an empty label area. The width of the pane is read once per layout pass, and no row is measured, so a value change moves no row. The browser host meets this with a CSS grid of the columns `minmax(0,1fr)` and 260 points and uses no `ResizeObserver`; the native host computes the same x from the pane width.
 - A change updates the rows of the changed setting only, the rows of the settings that depend on it, because a dependent row is disabled while its parent is off, and the row that reads it, such as the debug switch of the diagnostics settings; a rule across several fields draws its whole group again, because its error line and its fix button stand under the group. The page is built when it is shown, not when the window is created.
 - The host builds the settings model only when a setting, an account, the language, the shown page, the plugin state, the application update state or the setup state changes; the changes of the settings, the accounts, the plugin state and the application update advance the inputs of the model through their callbacks, and the key holds the page, the language, the setup generation and the running plugin operation, never an encoded status. A change of a setting builds the model once. The answer of a write, successful or failed, builds nothing: the model shows the value of the change, and a write that the host refuses puts the stored value back in the store and in the control, and the error is shown once through the one display path, so the control shows the value that the host stores. A frame without a change builds nothing, and the model is never built per frame.
-- No timer or poll sets a status. A status that is not known yet shows no placeholder state and no delayed state. The setup state and the plugin state are read by the events of [Agents](#에이전트) and [설치됨](#설치됨).
+- No timer or poll sets a status. A status that is not known yet shows no placeholder state and no delayed state. The setup state and the plugin state are read by the events of [Agents](#declarations) and [설치됨](#설치됨).
 - The undo toast lasts 5 seconds. This duration is a deadline the person sees, and the toast uses the existing toast mechanism.
 - No animation changes a layout property. A shadow appears only on a static surface.
 - The catalog list shows 30 rows at once, and the page loads the rest when the person asks for it.

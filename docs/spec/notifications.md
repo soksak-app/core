@@ -84,7 +84,7 @@ The center keeps its entries in `notices.json` of the application configuration 
 
 ## Settings
 
-The group 알림 of the page 동작 ([settings](settings.md#동작)) has the description `알림은 세 곳에 나온다: 카드 상태줄(그 카드의 알림), 토스트(앱 알림), 알림 센터(전부).` Every row is common only.
+The group 알림 of the page 동작 ([settings](settings.md#declarations)) has the description `알림은 세 곳에 나온다: 카드 상태줄(그 카드의 알림), 토스트(앱 알림), 알림 센터(전부).` Every row is common only.
 
 | Key | Label | Control | Choices or range | Default |
 | --- | --- | --- | --- | --- |

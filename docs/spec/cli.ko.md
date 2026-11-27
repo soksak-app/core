@@ -119,7 +119,7 @@ Plugin과 sidecar 명령은 설정 폴더의 파일을 직접 바꾸므로 실�
 
 ## 에이전트
 
-Agent는 사람의 컴퓨터에서 사람을 위해 명령을 실행하고 도구를 호출하는 프로그램이다. Agent는 agent skill로 애플리케이션을 배우고, `sok`이나 MCP server `sok mcp`로 실행 중인 애플리케이션에 연결한다. 둘 다 자기 `sok`의 설정 폴더에 있는 [엔드포인트](endpoint.ko.md)를 읽는다. `sok`을 `PATH`에 두는 사용자 PATH 등록과 세 종류의 setup part가 누구도 agent에게 알려 주지 않아도 이것을 가능하게 한다. Setup part는 agent skill, MCP 등록, hook이다. `sok setup check`는 setup part마다 상태와 설치 단계를 보고하고, `sok setup install`은 빠진 것을 설치하며, 설정 탭은 같은 part를 보여 준다([설정 탭](settings.ko.md#에이전트)).
+Agent는 사람의 컴퓨터에서 사람을 위해 명령을 실행하고 도구를 호출하는 프로그램이다. Agent는 agent skill로 애플리케이션을 배우고, `sok`이나 MCP server `sok mcp`로 실행 중인 애플리케이션에 연결한다. 둘 다 자기 `sok`의 설정 폴더에 있는 [엔드포인트](endpoint.ko.md)를 읽는다. `sok`을 `PATH`에 두는 사용자 PATH 등록과 세 종류의 setup part가 누구도 agent에게 알려 주지 않아도 이것을 가능하게 한다. Setup part는 agent skill, MCP 등록, hook이다. `sok setup check`는 setup part마다 상태와 설치 단계를 보고하고, `sok setup install`은 빠진 것을 설치하며, 설정 탭은 같은 part를 보여 준다([설정 탭](settings.ko.md#선언)).
 
 이 절의 명령은 환경에서 `HOME`, `PATH`, `CLAUDE_CONFIG_DIR`를 읽는다. `<home>`은 `HOME`의 값이고, 그것이 필요한 명령은 그 값이 없거나 비면 `HOME is not set`으로 실패한다. `<sok>`은 symbolic link를 푼 실행 중인 `sok`의 절대 경로다(Go `os.Executable`과 `filepath.EvalSymlinks`, Rust `std::env::current_exe`와 `std::fs::canonicalize`). 사람이 shell에 입력하는 단계에서 `<sok>`은 `A-Z`, `a-z`, `0-9`, `/`, `.`, `_`, `-`만 가지면 그대로 쓰고, 그렇지 않으면 작은따옴표 사이에 쓰며 경로의 작은따옴표 하나는 `'\''`로 쓴다.
 
