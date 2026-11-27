@@ -19,6 +19,8 @@ type NoticeSource struct {
 	Kind   string `json:"kind"`
 	Card   string `json:"card,omitempty"`
 	Tab    string `json:"tab,omitempty"`
+	// Label is the title of the tab when the entry was added; the source chip shows it for a card entry.
+	Label  string `json:"label,omitempty"`
 	Plugin string `json:"plugin,omitempty"`
 }
 

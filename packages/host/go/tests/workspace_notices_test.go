@@ -34,7 +34,7 @@ func TestNoticesPutReplacesTheList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := host.Record{"format": float64(1), "notices": first}
+	want := host.Record{"format": float64(2), "notices": first}
 	if !reflect.DeepEqual(document, want) {
 		t.Fatalf("notices read %v, want %v", document, want)
 	}
@@ -46,7 +46,7 @@ func TestNoticesPutReplacesTheList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(document, host.Record{"format": float64(1), "notices": []any{}}) {
+	if !reflect.DeepEqual(document, host.Record{"format": float64(2), "notices": []any{}}) {
 		t.Fatalf("a replacing put left %v", document)
 	}
 }
@@ -56,18 +56,18 @@ func TestNoticesRejectOtherFormatAndNonListValues(t *testing.T) {
 	config := t.TempDir()
 	store := host.NewWorkspace(config)
 	path := filepath.Join(config, "notices.json")
-	if err := os.WriteFile(path, []byte(`{"format":2,"notices":[]}`), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"format":1,"notices":[]}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	_, err := store.Apply(host.WorkspaceRequest{Kind: "noticesPut", Notices: []any{}})
-	if want := path + ": notices.json: format must be 1"; err == nil || err.Error() != want {
-		t.Fatalf("a put into format 2 returned %v, want %q", err, want)
+	if want := path + ": notices.json: format must be 2"; err == nil || err.Error() != want {
+		t.Fatalf("a put into format 1 returned %v, want %q", err, want)
 	}
-	if data, _ := os.ReadFile(path); string(data) != `{"format":2,"notices":[]}` {
+	if data, _ := os.ReadFile(path); string(data) != `{"format":1,"notices":[]}` {
 		t.Fatalf("a refused put changed the file: %s", data)
 	}
-	if _, err := store.Apply(host.WorkspaceRequest{Kind: "notices"}); err == nil || err.Error() != path+": notices.json: format must be 1" {
-		t.Fatalf("a read of format 2 returned %v", err)
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "notices"}); err == nil || err.Error() != path+": notices.json: format must be 2" {
+		t.Fatalf("a read of format 1 returned %v", err)
 	}
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)

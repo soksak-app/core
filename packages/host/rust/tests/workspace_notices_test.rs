@@ -38,13 +38,13 @@ fn notices_put_replaces_the_list_and_another_store_reads_it() {
     let other = Workspace::new(config.path().into());
     assert_eq!(
         apply(&other, json!({"kind":"notices"})).unwrap(),
-        json!({"format":1, "notices":first})
+        json!({"format":2, "notices":first})
     );
     // A put replaces the whole list, so an empty list leaves no entry.
     apply(&store, json!({"kind":"noticesPut", "notices":[]})).unwrap();
     assert_eq!(
         apply(&store, json!({"kind":"notices"})).unwrap(),
-        json!({"format":1, "notices":[]})
+        json!({"format":2, "notices":[]})
     );
 }
 
@@ -54,8 +54,8 @@ fn notices_reject_other_format_and_non_list_values() {
     let config = folder::Folder::new();
     let store = Workspace::new(config.path().into());
     let path = config.path().join("notices.json");
-    fs::write(&path, r#"{"format":2,"notices":[]}"#).unwrap();
-    let want = format!("{}: notices.json: format must be 1", path.display());
+    fs::write(&path, r#"{"format":1,"notices":[]}"#).unwrap();
+    let want = format!("{}: notices.json: format must be 2", path.display());
     assert_eq!(
         apply(&store, json!({"kind":"noticesPut", "notices":[]})).unwrap_err(),
         want
@@ -63,7 +63,7 @@ fn notices_reject_other_format_and_non_list_values() {
     assert_eq!(apply(&store, json!({"kind":"notices"})).unwrap_err(), want);
     assert_eq!(
         fs::read_to_string(&path).unwrap(),
-        r#"{"format":2,"notices":[]}"#,
+        r#"{"format":1,"notices":[]}"#,
         "a refused put changed the file"
     );
     fs::remove_file(&path).unwrap();

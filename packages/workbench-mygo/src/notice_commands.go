@@ -129,7 +129,7 @@ func (s *Shell) noticeAdd(raw json.RawMessage) (any, error) {
 	if err != nil {
 		return nil, Refuse(InvalidParams, "%s", err)
 	}
-	source = NoticeSource{Kind: "card", Card: card, Tab: active.ID, Plugin: active.Plugin}
+	source = NoticeSource{Kind: "card", Card: card, Tab: active.ID, Label: active.Title, Plugin: active.Plugin}
 	return s.addNotice(fields, source)
 }
 

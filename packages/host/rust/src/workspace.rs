@@ -407,7 +407,7 @@ fn read_tab_state(path: &Path) -> Result<Value, String> {
 }
 
 /// The format of notices.json, the notice center store (docs/spec/notifications.md#notice-center).
-const NOTICES_FORMAT: u64 = 1;
+const NOTICES_FORMAT: u64 = 2;
 
 /// Returns the document of notices.json as stored, or null when the file does not exist; a document of another format is
 /// refused with the path of the file.

@@ -219,7 +219,7 @@ func TestEntriesAreWrittenToTheHostOnChange(t *testing.T) {
 
 func TestEntriesAreReadFromTheHostAtStart(t *testing.T) {
 	at := time.Now().Format(time.RFC3339)
-	f, _ := centerShell(t, map[string]any{"format": 1, "notices": []any{map[string]any{
+	f, _ := centerShell(t, map[string]any{"format": 2, "notices": []any{map[string]any{
 		"id": "notice-1", "kind": "error", "title": "Kept", "text": "", "source": map[string]any{"kind": "plugin", "plugin": "fieldprobe"},
 		"actions": []any{}, "at": at, "count": 1, "read": false}}})
 	if entry := entryTitled(t, f, "Kept"); entry.Kind != "error" || entry.Read {
@@ -229,7 +229,7 @@ func TestEntriesAreReadFromTheHostAtStart(t *testing.T) {
 
 func TestExpiredEntriesAreDroppedWhenTheHostIsRead(t *testing.T) {
 	old := time.Now().Add(-8 * 24 * time.Hour).Format(time.RFC3339)
-	f, _ := centerShell(t, map[string]any{"format": 1, "notices": []any{map[string]any{
+	f, _ := centerShell(t, map[string]any{"format": 2, "notices": []any{map[string]any{
 		"id": "notice-1", "kind": "info", "title": "Stale", "text": "", "source": map[string]any{"kind": "core"},
 		"actions": []any{}, "at": old, "count": 1, "read": true}}})
 	if n := len(noticesOf(t, f).Entries); n != 0 {
@@ -330,7 +330,7 @@ func TestFilterSetsTheFilterAndRefusesAnotherValue(t *testing.T) {
 // Opening the center drops the expired entries and writes notices.json without them.
 func TestOpeningTheCenterDropsExpiredEntriesAndWritesTheFile(t *testing.T) {
 	old := time.Now().Add(-8 * 24 * time.Hour).Format(time.RFC3339)
-	stored := map[string]any{"format": 1, "notices": []any{map[string]any{
+	stored := map[string]any{"format": 2, "notices": []any{map[string]any{
 		"id": "notice-1", "kind": "info", "title": "Stale", "text": "", "source": map[string]any{"kind": "core"},
 		"actions": []any{}, "at": old, "count": 1, "read": true}}}
 	f, host := centerShell(t, stored)

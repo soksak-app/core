@@ -194,11 +194,11 @@ func (s *Shell) drawNoticeEntry(c *ui.Context, toast *errorToast) {
 	}
 }
 
-// sourceChip is the chip of an entry's source: the card, the plugin, 설정 or soksak (packages/workbench/notice-view.js).
+// sourceChip is the chip of an entry's source: the tab label of a card, the plugin, 설정 or soksak (packages/workbench/notice-view.js).
 func sourceChip(source NoticeSource) string {
 	switch source.Kind {
 	case "card":
-		return source.Card
+		return source.Label
 	case "plugin":
 		return source.Plugin
 	case "settings":

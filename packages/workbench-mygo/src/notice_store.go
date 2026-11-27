@@ -278,14 +278,17 @@ func (e *ShownErrors) RestoreNotices(document any) error {
 		Format  int            `json:"format"`
 		Notices []storedNotice `json:"notices"`
 	}
-	if err := json.Unmarshal(encoded, &stored); err != nil || stored.Format != 1 {
-		return fmt.Errorf("notices.json holds no notices of format 1: %s", encoded)
+	if err := json.Unmarshal(encoded, &stored); err != nil || stored.Format != 2 {
+		return fmt.Errorf("notices.json holds no notices of format 2: %s", encoded)
 	}
 	restored := make([]*errorToast, 0, len(stored.Notices))
 	for _, notice := range stored.Notices {
 		at, err := time.Parse(time.RFC3339, notice.At)
 		if err != nil {
 			return fmt.Errorf("notices.json: notice %s has no valid time", notice.ID)
+		}
+		if notice.Source.Kind == "card" && notice.Source.Label == "" {
+			return fmt.Errorf("notices.json: notice %s is a card notice without its tab label", notice.ID)
 		}
 		e.seq++
 		restored = append(restored, &errorToast{id: fmt.Sprintf("notice-%d", e.seq), kind: notice.Kind, title: notice.Title, text: notice.Text,

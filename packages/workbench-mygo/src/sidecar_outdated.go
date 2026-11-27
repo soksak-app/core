@@ -90,9 +90,15 @@ func (o *OutdatedNotices) Reconcile(outdated []OutdatedSidecar, target SurfaceTa
 // goes through it, so the notices follow the list at start and at each change of the services.
 func (s *Shell) refreshOutdated(done func()) {
 	s.pluginOperations.RefreshOutdated(func() {
-		s.outdatedNotices.Reconcile(s.pluginOperations.Status().Outdated, s.surfaceNoticeTarget)
+		s.reconcileOutdatedNotices()
 		done()
 	})
+}
+
+// reconcileOutdatedNotices shows the notices of the outdated services of the list that the plugin operation state holds, with the card
+// notices of their surfaces on the tabs that the shown plane holds.
+func (s *Shell) reconcileOutdatedNotices() {
+	s.outdatedNotices.Reconcile(s.pluginOperations.Status().Outdated, s.surfaceNoticeTarget)
 }
 
 // surfaceNoticeTarget returns the card, tab and plugin of a surface whose tab the window shows. A tab that a card holds but that cannot be
@@ -107,5 +113,5 @@ func (s *Shell) surfaceNoticeTarget(surface string) (NoticeSource, bool) {
 		s.fail(err)
 		return NoticeSource{}, false
 	}
-	return NoticeSource{Kind: "card", Card: card, Tab: tab.ID, Plugin: tab.Plugin}, true
+	return NoticeSource{Kind: "card", Card: card, Tab: tab.ID, Label: tab.Title, Plugin: tab.Plugin}, true
 }

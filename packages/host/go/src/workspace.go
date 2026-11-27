@@ -477,7 +477,7 @@ func putTabState(path, tab string, entry Record) (any, error) {
 }
 
 // noticesFormat is the format of notices.json, the notice center store (docs/spec/notifications.md#notice-center).
-const noticesFormat = 1
+const noticesFormat = 2
 
 // readNotices returns the document of notices.json as stored, or nil when the file does not exist; a document of another
 // format is refused with the path of the file.

@@ -72,11 +72,11 @@ Toast는 아이콘, title, text, action, 닫기 control을 보인다. 닫기 con
 - 머리에는 `알림`, 버튼 `모두 읽음`(`core.notices.read-all`), 버튼 ⚙, 닫기 control(element `core.notices.toggle`, `core.notices.toggle`을 실행)이 있다. ⚙은 `core.settings-tab.nav {page: "behavior", group: "notices"}`를 실행해 동작 페이지의 알림 묶음이 보이는 설정 탭을 연다.
 - 필터 세그먼트는 `전체 <n>`, `오류·경고 <n>`, `진행 중 <n>`을 보이며(`core.notices.filter {filter}`, 값은 `all`, `problems`, `progress`), 그 옆에 스위치 조용히가 있다(element `core.notices.quiet`, `core.settings.set {patch: {quietToasts}}`를 실행한다).
 - 목록은 항목을 묶는다. `진행 중`이 먼저 오며 각 항목에 진행 막대가 있다. 그다음 `오늘`, `어제`, 그리고 그 이전의 날마다 묶음이 온다. 각 묶음에는 버튼 `지우기`(`core.notices.clear {group}`)가 있다.
-- 항목은 아이콘, 수가 붙은 title, text, source chip(card 이름, plugin 이름, `설정` 또는 `soksak`), 시간, action을 보인다. 읽지 않은 항목은 왼쪽에 점이 있으며, error의 점은 error token이다. Card notice 항목을 누르면 `core.card.focus {card}`를 실행한다.
+- 항목은 아이콘, 수가 붙은 title, text, source chip(항목이 보관한 tab 이름, plugin 이름, `설정` 또는 `soksak`), 시간, action을 보인다. 읽지 않은 항목은 왼쪽에 점이 있으며, error의 점은 error token이다. Card notice 항목을 누르면 `core.card.focus {card}`를 실행한다.
 - 바닥글은 `오류는 지울 때까지, 나머지는 7일 동안 남는다.`와 버튼 `모두 지우기`(`core.notices.clear-all`)를 보인다.
 - 센터가 열린 동안 도착한 항목은 1초 동안 그 묶음의 맨 위에서 강조된다.
 
-알림 센터는 항목을 애플리케이션 설정 디렉터리의 `notices.json`에 보관한다([프로젝트 식별](projects.ko.md#프로젝트-식별)). 설계상 notice는 며칠 남아야 하므로 재시작이 이를 지우면 안 된다. 파일은 `{format: 1, notices}`를 담으며, 현재 형식으로만 읽는다. 다른 형식은 파일 이름과 발견한 형식을 밝히는 오류로 거부한다. 재시작 뒤 card나 tab이 더 없는 항목은 글과 source chip을 유지하며, action과 focus 누르기가 없다. 워크벤치는 파일을 읽을 때, 쓸 때, 센터를 열 때 만료된 항목을 제거하므로 만료를 위한 timer가 돌지 않는다.
+알림 센터는 항목을 애플리케이션 설정 디렉터리의 `notices.json`에 보관한다([프로젝트 식별](projects.ko.md#프로젝트-식별)). 설계상 notice는 며칠 남아야 하므로 재시작이 이를 지우면 안 된다. 파일은 `{format: 2, notices}`를 담으며, 현재 형식으로만 읽는다. 다른 형식은 파일 이름과 발견한 형식을 밝히는 오류로 거부한다. Card 항목은 추가될 때 tab의 제목을 `source.label`에 보관하며, chip은 그 이름을 보인다. label이 없는 card 항목은 거부한다. 재시작 뒤 card나 tab이 더 없는 항목은 글과 source chip을 유지하며, action과 focus 누르기가 없다. 워크벤치는 파일을 읽을 때, 쓸 때, 센터를 열 때 만료된 항목을 제거하므로 만료를 위한 timer가 돌지 않는다.
 
 ## 설정
 

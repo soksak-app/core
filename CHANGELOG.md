@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-12-9: notices.json is format 2; a card entry keeps its tab label, which the source chip shows.
 - F1217-7: The section seat and plan tests read the head row and the status bar heights from the declarations.
 - F1217-11-7: The save tests of the debug view are one file per case, and the page log clock of each file is its own.
 - F1217-6: A test checks that the set select of a side keeps its width when the settings page widens.
