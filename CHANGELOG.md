@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1190-3: A mygo restart with a restored tab whose owned session ended records that tab's error once in the log and sends no session request to the tab.
 - F1161: mygo shows an outdated surface's card notice when its plane is shown, on the card that holds the tab
 - F1217-6: A test checks that a choice of three values is a segment and a choice of more is a select box.
 - F1161: The page refuses an outdated entry without its surfaces, naming the sidecar, and reports it as the read failure

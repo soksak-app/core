@@ -214,3 +214,28 @@ func TestARequestBeforeTheMountOfItsOwnerWaitsForTheMount(t *testing.T) {
 		t.Fatalf("the view sent %+v, want one open of %s with generation 9", sent, opened)
 	}
 }
+
+// A restart of the window whose restored tab names a session that the service no longer holds states the session that did not
+// return, records it in the log and shows no view for that tab (docs/spec/plugins.md#owned-sessions, F1190).
+func TestARestartWithATabWhoseSessionEndedRecordsItAndShowsNoView(t *testing.T) {
+	owned := &ownedHost{}
+	stale := tab("tab-stale", "term")
+	stale["params"] = map[string]any{"session": "s-missing"}
+	// startFails: the start shows the error of the restored tab, which the case waits for instead of auditing the start.
+	stored := &storedHost{installed: sessionPlugins, extra: owned.table(), startFails: true,
+		projects: []map[string]any{gridProject(oneCard(stale))}}
+	f := newTabShell(t, stored)
+	records := stored.written("workbench.record.error")
+	if len(records) != 1 {
+		t.Fatalf("the restart wrote %d record errors, want 1: %v", len(records), records)
+	}
+	fields := records[0]["fields"].(map[string]any)
+	equal(t, fields["where"], "restored tab tab-stale")
+	equal(t, fields["text"], `the session s-missing of tab "tab-stale" ended before the restart`)
+	for _, sent := range owned.sent() {
+		if sent.surface == "tab-stale" {
+			t.Fatalf("the tab whose session ended was sent %+v", sent)
+		}
+	}
+	equal(t, f.status("core.sessions"), `[]`)
+}

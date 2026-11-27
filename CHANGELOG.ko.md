@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1190-3: session이 끝난 복원 탭이 있는 mygo 재시작은 그 탭의 오류를 log에 한 번 기록하고 그 탭의 surface로 session 요청을 보내지 않습니다.
 - F1161: mygo는 plane이 표시될 때 outdated surface의 card notice를 그 tab을 가진 card에 보인다
 - F1217-6: 세 값 선택은 세그먼트, 더 많은 값은 select 상자로 그려짐을 확인하는 테스트를 추가한다.
 - F1161: 페이지는 surfaces가 없는 outdated 항목을 sidecar 이름과 함께 거부하고 읽기 실패로 보고한다
