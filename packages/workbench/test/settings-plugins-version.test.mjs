@@ -1,4 +1,4 @@
-// The version text of a catalog row leaves out a version that is not known (docs/spec/settings.md#찾아보기).
+// The version text of a catalog row leaves out a version that is not known (docs/spec/settings.md#plugins).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { versionText } from "../settings-plugins.js";

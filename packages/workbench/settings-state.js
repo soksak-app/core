@@ -11,9 +11,9 @@ export const state = {
   find: "",
   /** The text of the installed-plugin search. */
   query: "",
-  /** The filter of 설치됨: all, active, disabled, updates or problems. */
+  /** The filter of Installed: all, active, disabled, updates or problems. */
   filter: "all",
-  /** The search text, the switch and the number of catalog rows shown in 찾아보기. */
+  /** The search text, the switch and the number of catalog rows shown in Browse. */
   browse: { query: "", hideInstalled: false, shown: 30 },
   /** The plugin whose page is shown, or null. */
   plugin: null,
@@ -23,7 +23,7 @@ export const state = {
   editing: null,
   /** The removal that waits for the answer of the person: {kind, id} with kind set or plugin, or null (docs/spec/settings.md#status). */
   confirm: null,
-  /** The fields of the group 계정 of the shown plugin page (docs/spec/settings.md#plugin-page). */
+  /** The fields of the group Accounts of the shown plugin page (docs/spec/settings.md#plugin-page). */
   account: { plugin: null, name: "", kind: null, edit: null, editName: "" },
 };
 

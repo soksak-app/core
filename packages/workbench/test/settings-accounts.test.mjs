@@ -1,4 +1,4 @@
-// The group 계정 of the plugin page of the settings tab (docs/spec/plugins.md#accounts, docs/spec/settings.md#plugin-page). The host calls
+// The group Accounts of the plugin page of the settings tab (docs/spec/plugins.md#accounts, docs/spec/settings.md#plugin-page). The host calls
 // are answered by the page-wire case settings-accounts-draw.
 import assert from "node:assert/strict";
 import test from "node:test";

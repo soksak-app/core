@@ -1,4 +1,4 @@
-// The undo toast of the settings tab (docs/spec/settings.md#saving-and-undo). A change of a setting shows its text with the button 되돌리기 for
+// The undo toast of the settings tab (docs/spec/settings.md#saving-and-undo). A change of a setting shows its text with the button Undo for
 // five seconds. The toast has no close control and it is not an error: it uses no error color and no error display path.
 import { mark } from "./commands.js";
 import { element } from "./settings-controls.js";
@@ -55,7 +55,7 @@ export function undoElement() {
   return el;
 }
 
-/** The command and parameters that the button 되돌리기 runs, or null. */
+/** The command and parameters that the button Undo runs, or null. */
 export const undoAction = () => (current === null ? null : { command: current.command, params: current.params });
 
 /** The toast of the status: {key, label, old, new}, or null. */

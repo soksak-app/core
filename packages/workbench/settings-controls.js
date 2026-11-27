@@ -6,7 +6,7 @@ import { icon } from "./icons.js";
 import { isOverridden, commonOnly, projectSelected, projectTitle, state, writeScope } from "./settings-state.js";
 import { scopedValue } from "./settings.js";
 
-/** The text of a value in a badge or a chip: a switch shows 켬 or 끔, a choice shows its label, and a number shows its unit. */
+/** The text of a value in a badge or a chip: a switch shows on or off, a choice shows its label, and a number shows its unit. */
 export function valueText(value, labels = null, unit = "") {
   if (typeof value === "boolean") return value ? "켬" : "끔";
   if (labels && Object.hasOwn(labels, value)) return labels[value];
@@ -186,7 +186,7 @@ export function resetButton(key, label) {
 
 /**
  * The scope marks of the row of key, in the scope that the tab shows (docs/spec/settings.md#scope-of-a-control):
- * the project scope shows the badge `<project> 값` and the reset control of an override, or the badge `전역 전용` of a common-only setting;
+ * the project scope shows the badge `<project> value` and the reset control of an override, or the badge `global only` of a common-only setting;
  * the common scope shows the chip `<project>: <value>` of an override, which opens the project scope.
  */
 export function scopeMarks(key, label, valueLabels = null, unit = "") {

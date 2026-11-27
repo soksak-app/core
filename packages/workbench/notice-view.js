@@ -234,7 +234,7 @@ export function mountNoticeView(document, store) {
       filters.append(button);
     }
     const quiet = settingValue("quietToasts") === true;
-    // The switch 조용히 runs core.settings.set with the patch of quietToasts (docs/spec/notifications.md#notice-center).
+    // The switch Quiet runs core.settings.set with the patch of quietToasts (docs/spec/notifications.md#notice-center).
     const quietButton = control(document, "button", "notice-center__quiet", "조용히", "core.notices.quiet", "core.settings.set", { patch: { quietToasts: !quiet }, scope: "common" });
     quietButton.setAttribute("aria-pressed", String(quiet));
     filters.append(quietButton);

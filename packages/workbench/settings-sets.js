@@ -1,5 +1,5 @@
-// The page 사이드바 세트 of the settings tab: the list of the sets, the confirmation of a removal, and the editor of one set
-// (docs/spec/settings.md#사이드바-세트). Every change runs a declared core command of the sets, and the scope of a change is the scope the tab shows.
+// The page Sidebar sets of the settings tab: the list of the sets, the confirmation of a removal, and the editor of one set
+// (docs/spec/settings.md#stored-sets-and-links). Every change runs a declared core command of the sets, and the scope of a change is the scope the tab shows.
 import { pluginUnits } from "./environment.js";
 import { missingChipNode, missingGroups, missingLineNode, pluginRowsNow } from "./missing-plugins.js";
 import { hasSection, section, sectionNames } from "./registry.js";
@@ -8,7 +8,7 @@ import { badge, button, chip, element, row, textField } from "./settings-control
 import { group } from "./settings-pages.js";
 import { state, shownValue, writeScope, isOverridden, projectTitle } from "./settings-state.js";
 
-/** The names of the places that use a set: the sides and the plugin windows, in link order (docs/spec/settings.md#사이드바-세트). */
+/** The names of the places that use a set: the sides and the plugin windows, in link order (docs/spec/settings.md#stored-sets-and-links). */
 function usesOf(setId) {
   const names = [];
   for (const link of shownValue("links")) {
@@ -18,7 +18,7 @@ function usesOf(setId) {
   return names;
 }
 
-/** The name of a link's place for the line 쓰는 곳 (docs/spec/settings.md#사이드바-세트). */
+/** The name of a link's place for the line Used by (docs/spec/settings.md#stored-sets-and-links). */
 const SIDE_LABEL = { left: "왼쪽", right: "오른쪽", top: "위", bottom: "아래" };
 function linkName(link) {
   // default: a place without a side label is shown as its place.
@@ -33,7 +33,7 @@ function linkName(link) {
 // default: a plugin that is not loaded is named by its id.
 const pluginNameOf = (id) => pluginUnits().find((unit) => unit.id === id)?.name ?? id;
 
-/** The sections of a set with the badge 불러오지 않음 for a section of a plugin that is not loaded (docs/spec/settings.md#사이드바-세트). */
+/** The sections of a set with the badge Not loaded for a section of a plugin that is not loaded (docs/spec/settings.md#stored-sets-and-links). */
 function sectionChips(set, { removable }) {
   const wrap = element("span", "set-chips");
   if (set.sections.length === 0) {
@@ -56,7 +56,7 @@ function sectionChips(set, { removable }) {
   return wrap;
 }
 
-/** The row of one set in the list (docs/spec/settings.md#사이드바-세트). */
+/** The row of one set in the list (docs/spec/settings.md#stored-sets-and-links). */
 export function setRow(set) {
   const title = set.title === "" ? "(이름 없음)" : set.title;
   const head = element("span", "set-set__head");
@@ -84,7 +84,7 @@ export function setRow(set) {
   return el;
 }
 
-/** The confirmation under the row of a set: the buttons 취소 (answer no) and 삭제 (answer yes) (docs/spec/settings.md#사이드바-세트). */
+/** The confirmation under the row of a set: the buttons Cancel (answer no) and Delete (answer yes) (docs/spec/settings.md#stored-sets-and-links). */
 function confirmation(set, uses) {
   const wrap = element("div", "set-confirm");
   const text = uses.length ? "쓰는 곳은 “사용 안 함”이 된다." : "삭제할까?";
@@ -94,7 +94,7 @@ function confirmation(set, uses) {
   return wrap;
 }
 
-/** The select box of the sections that the set does not contain, grouped by plugin in plugin and declaration order (docs/spec/settings.md#사이드바-세트). */
+/** The select box of the sections that the set does not contain, grouped by plugin in plugin and declaration order (docs/spec/settings.md#stored-sets-and-links). */
 function addSection(set) {
   const contained = new Set(set.sections);
   const wrap = element("span", "select-field");
@@ -125,7 +125,7 @@ function addSection(set) {
   return wrap;
 }
 
-/** The editor of one set: its name, its layout, its sections as chips with ×, the select 섹션 추가… and the line on saving (docs/spec/settings.md#사이드바-세트). */
+/** The editor of one set: its name, its layout, its sections as chips with ×, the select Add section… and the line on saving (docs/spec/settings.md#stored-sets-and-links). */
 function editor(set) {
   const name = textField(`title:${set.id}`, {
     command: "core.settings.sets.update", params: { id: set.id, scope: writeScope() }, now: set.title, maxLength: 40,
@@ -152,7 +152,7 @@ function editor(set) {
   return wrap;
 }
 
-/** The page 사이드바 세트: the list of the sets, the button 새 세트, and the editor of the set in edit (docs/spec/settings.md#사이드바-세트). */
+/** The page Sidebar sets: the list of the sets, the button New set, and the editor of the set in edit (docs/spec/settings.md#stored-sets-and-links). */
 export function setsPage() {
   const sets = shownValue("sets");
   if (state.editing !== null && !sets.some((set) => set.id === state.editing)) state.editing = null;

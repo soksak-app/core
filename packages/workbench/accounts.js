@@ -1,7 +1,7 @@
 // The accounts of the plugins of this window (docs/spec/plugins.md#accounts): the records of the plugin key accounts, the state that
 // the status program of each account reports, the runs of the account programs through the host commands accountRun and
 // accountRunCancel, and the homes through accountHomes, accountHomeCreate and accountHomeRemove. The settings tab draws the group
-// 계정 from this state, and the core.accounts commands and status read and change it.
+// Accounts from this state, and the core.accounts commands and status read and change it.
 
 /** The form of the identifier of an account. */
 const ACCOUNT_ID = /^[a-z][a-z0-9-]{0,39}$/;

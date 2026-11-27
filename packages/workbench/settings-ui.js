@@ -35,13 +35,13 @@ import { showTabError } from "./settings-errors.js";
 /** The pages that the menu shows, in order, and the two plugin pages that are not core pages. */
 const CORE_PAGES = PAGES.map((page) => page.id);
 const PLUGIN_LIST_PAGES = ["installed", "browse"];
-/** The filters of 설치됨 (docs/spec/settings.md#설치됨). */
+/** The filters of Installed (docs/spec/settings.md#plugins). */
 const FILTERS = ["all", "active", "disabled", "updates", "problems"];
-/** The rows that one press of 더 보기 adds to 찾아보기 (docs/spec/settings.md#찾아보기). */
+/** The rows that one press of More adds to Browse (docs/spec/settings.md#plugins). */
 const BROWSE_PAGE = 30;
 /** The keys of the sides, whose switches show a toast with the side name (docs/spec/settings.md#saving-and-undo). */
 const SIDE_KEYS = ["left", "right", "top", "bottom"];
-/** The keys that the debug switch row shows (docs/spec/settings.md#진단). */
+/** The keys that the debug switch row shows (docs/spec/settings.md#pages). */
 const DEBUG_KEYS = ["diagnostics.performance", "diagnostics.log"];
 
 /** The element of the tab, or null while the tab is not mounted. */
@@ -208,7 +208,7 @@ function agentsBadge() {
   return count ? badge(String(count), "warn", { title: `${count}개가 다름` }) : null;
 }
 
-/** The menu: the search field, the group 설정, the group 플러그인, and the plugins that declare settings or accounts (docs/spec/settings.md#menu). */
+/** The menu: the search field, the group Settings, the group plugin, and the plugins that declare settings or accounts (docs/spec/settings.md#menu). */
 function menuEl() {
   const nav = element("nav", "set-menu");
   nav.setAttribute("aria-label", "설정 메뉴");
@@ -283,7 +283,7 @@ function mainEl() {
   return main;
 }
 
-/** Starts or stops the reads of the pages that show them, and only while the tab is in front (docs/spec/settings.md#에이전트). */
+/** Starts or stops the reads of the pages that show them, and only while the tab is in front (docs/spec/settings.md#pages). */
 function syncReads() {
   const shown = front && state.find.trim() === "";
   setupParts.show(shown && state.page === "agents");
@@ -398,7 +398,7 @@ function oneOf(name, value, choices) {
   return value;
 }
 
-/** The plugin ids that the status rows list (docs/spec/settings.md#설치됨). */
+/** The plugin ids that the status rows list (docs/spec/settings.md#plugins). */
 const listedPlugin = (id) => {
   if (typeof id !== "string" || id === "") throw invalid("plugin must be a non-empty string");
   if (!pluginOperations.status().plugins.some((row) => row.id === id)) throw invalid(`plugin ${id} is not listed`);
@@ -413,7 +413,7 @@ function labelOf(key) {
   return definition ? definition.label : key;
 }
 
-/** The text of a value in a toast: a switch shows 켬 or 끔, a choice shows its label, and a number shows its unit. */
+/** The text of a value in a toast: a switch shows on or off, a choice shows its label, and a number shows its unit. */
 function textOf(key, value) {
   if (typeof value === "boolean") return value ? "켬" : "끔";
   const choices = CHOICE_KEYS.includes(key) ? Object.fromEntries(choicesOf(key)) : null;
@@ -449,7 +449,7 @@ function toastOf(keys, before, after) {
   return { text, command: "core.settings.change", params: { key, value: before[key].shown, scope: state.scope }, detail };
 }
 
-/** The sidebar sizes: their rows share one group, which also shows the error of the sizes (docs/spec/settings.md#작업-공간). */
+/** The sidebar sizes: their rows share one group, which also shows the error of the sizes (docs/spec/settings.md#pages). */
 const SIZE_KEYS = ["sidebarMinWidth", "sidebarMaxWidth", "sidebarWidth"];
 
 /** A plugin order key: <plugin>.win.order or <plugin>.card.order. */
@@ -720,7 +720,7 @@ export function installSettingsTab(sink) {
     state.account = { ...state.account, editName: name };
     draw();
   });
-  // A finished add clears the name of the row 새 계정, and a finished rename ends the edit (docs/spec/settings.md#plugin-page).
+  // A finished add clears the name of the row New account, and a finished rename ends the edit (docs/spec/settings.md#plugin-page).
   accounts.onFinished((command, plugin) => {
     if (state.account.plugin !== plugin) return;
     state.account = command === "core.accounts.add" ? { ...state.account, name: "" } : { ...state.account, edit: null, editName: "" };
@@ -730,7 +730,7 @@ export function installSettingsTab(sink) {
   onUndoChange(() => { if (root !== null) drawFoot(); publish(); });
 }
 
-/** The account page: the fields of the group 계정 exist only on a plugin page with accounts (docs/spec/settings.md#plugin-page). */
+/** The account page: the fields of the group Accounts exist only on a plugin page with accounts (docs/spec/settings.md#plugin-page). */
 function accountPage() {
   if (state.page !== "plugin" || pluginAccounts(state.plugin)?.accounts === undefined || pluginAccounts(state.plugin)?.accounts === null) {
     throw invalid("no page of a plugin with accounts shows");

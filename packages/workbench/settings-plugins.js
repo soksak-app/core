@@ -1,4 +1,4 @@
-// The plugin pages of the settings tab: 설치됨, 찾아보기 and one page for each plugin (docs/spec/settings.md#plugins). The state of the
+// The plugin pages of the settings tab: Installed, Browse and one page for each plugin (docs/spec/settings.md#plugins). The state of the
 // plugins comes from the plugin operations of installed-plugins.js, and every action runs a declared plugin command.
 import { appUpdate, pluginOperations } from "./installed-plugins.js";
 import { pluginAccounts, pluginCategories, pluginUnits } from "./environment.js";
@@ -15,12 +15,12 @@ import { hideTabError, showTabError } from "./settings-errors.js";
 import { mark } from "./commands.js";
 import { compareVersions } from "@soksak/plugin-api";
 
-/** The rows of the plugin state, in the order the page shows them: installed and loaded plugins only, for 설치됨 (docs/spec/settings.md#설치됨). */
+/** The rows of the plugin state, in the order the page shows them: installed and loaded plugins only, for Installed (docs/spec/settings.md#plugins). */
 const statusRows = () => pluginOperations.status().plugins;
 const installedRows = () => statusRows().filter((row) => row.state !== "available");
 const catalogRows = () => statusRows();
 
-/** Whether a row has a problem: a missing dependency, the state requires, or the state refused (docs/spec/settings.md#설치됨). */
+/** Whether a row has a problem: a missing dependency, the state requires, or the state refused (docs/spec/settings.md#plugins). */
 function problemOf(row) {
   return row.state === "requires" || row.state === "refused" || missingDependencies(row).length > 0;
 }
@@ -33,10 +33,10 @@ function missingDependencies(row) {
   return Object.keys(unit.dependencies).filter((id) => listed.has(id) && listed.get(id).installed === null && listed.get(id).state === "available");
 }
 
-/** Whether the installed version is newer than the newest published version (docs/spec/settings.md#설치됨). */
+/** Whether the installed version is newer than the newest published version (docs/spec/settings.md#plugins). */
 const developmentBuild = (row) => row.installed !== null && row.latest !== null && compareVersions(row.installed.version, row.latest) > 0;
 
-/** The badges of a row in their order (docs/spec/settings.md#설치됨). */
+/** The badges of a row in their order (docs/spec/settings.md#plugins). */
 function badgesOf(row) {
   const out = [];
   if (row.installed && !row.installed.enabled) out.push(badge("꺼짐", "neutral"));
@@ -52,14 +52,14 @@ function badgesOf(row) {
 /** The letter icon of a plugin: the first letter of its name in the accent token. */
 const letter = (name) => element("span", "plug-letter", [...name][0]);
 
-/** The meta line of a plugin: its plugin categories, its key and its version (docs/spec/settings.md#설치됨). A category is listed when the window loads the plugin in it. */
+/** The meta line of a plugin: its plugin categories, its key and its version (docs/spec/settings.md#plugins). A category is listed when the window loads the plugin in it. */
 function metaOf(row) {
   const version = row.installed ? `v${row.installed.version}` : row.latest ? `v${row.latest}` : "";
   const category = Object.entries(pluginCategories()).filter(([, plugins]) => plugins.some((plugin) => plugin.id === row.id)).map(([name]) => name).join(", ");
   return [category, row.id, version].filter(Boolean).join(" · ");
 }
 
-/** The disabled state of every plugin action while an operation runs (docs/spec/settings.md#설치됨). */
+/** The disabled state of every plugin action while an operation runs (docs/spec/settings.md#plugins). */
 const busy = () => pluginOperations.status().operation?.state === "running";
 
 /** One action button of a plugin row. Its key names the plugin and the action, and it is in the status actions list. */
@@ -67,10 +67,10 @@ function action(plugin, name, label, command, params, variant = "sm") {
   return button(label, { expose: "core.settings-tab.plugins.action", command, params, key: `${plugin}:${name}`, disabled: busy(), variant });
 }
 
-/** The labels of the actions that a held operation runs (docs/spec/settings.md#설치됨). */
+/** The labels of the actions that a held operation runs (docs/spec/settings.md#plugins). */
 const HELD_ACTIONS = { install: "설치", update: "업데이트", enable: "사용" };
 
-/** The held operation of a plugin, or null; it shows its error through the error display and its action (docs/spec/settings.md#설치됨). */
+/** The held operation of a plugin, or null; it shows its error through the error display and its action (docs/spec/settings.md#plugins). */
 function heldOf(id) {
   // default: a plugin with no held operation has no held entry.
   const held = pluginOperations.status().held.find((entry) => entry.plugin === id) ?? null;
@@ -79,7 +79,7 @@ function heldOf(id) {
   return held;
 }
 
-/** The action that ends the sessions of a held operation and runs it with end; absent while a sessions count is unknown (docs/spec/settings.md#설치됨). */
+/** The action that ends the sessions of a held operation and runs it with end; absent while a sessions count is unknown (docs/spec/settings.md#plugins). */
 function heldAction(id) {
   const held = heldOf(id);
   if (held === null || held.sidecars.some((sidecar) => sidecar.sessions === null)) return null;
@@ -90,7 +90,7 @@ function heldAction(id) {
   });
 }
 
-/** One row of 설치됨 (docs/spec/settings.md#설치됨). The search draws the same row. */
+/** One row of Installed (docs/spec/settings.md#plugins). The search draws the same row. */
 export function installedRow(row) {
   const el = element("div", "set-plugin-row");
   el.dataset.plugin = row.id;
@@ -113,7 +113,7 @@ export function installedRow(row) {
   return el;
 }
 
-/** The switch of a plugin: on runs core.plugins.disable and off runs core.plugins.enable (docs/spec/settings.md#설치됨). */
+/** The switch of a plugin: on runs core.plugins.disable and off runs core.plugins.enable (docs/spec/settings.md#plugins). */
 function enableSwitch(item) {
   const el = toggle(`plugin:${item.id}`, item.installed.enabled, {
     expose: "core.settings-tab.plugins.switch", command: item.installed.enabled ? "core.plugins.disable" : "core.plugins.enable",
@@ -139,7 +139,7 @@ function pluginOperation(id) {
 const rank = (row) => (problemOf(row) ? 0 : hasUpdate(row) ? 1 : 2);
 const byRank = (a, b) => (rank(a) !== rank(b) ? rank(a) - rank(b) : a.name.localeCompare(b.name));
 
-/** The filter of 설치됨 that a row passes (docs/spec/settings.md#설치됨). */
+/** The filter of Installed that a row passes (docs/spec/settings.md#plugins). */
 const FILTERS = {
   all: () => true,
   active: (row) => row.state === "loaded",
@@ -148,7 +148,7 @@ const FILTERS = {
   problems: (row) => problemOf(row),
 };
 
-/** The core update row of 설치됨 with its notices, drawn above the other lines when a newer core release is listed (docs/spec/settings.md#plugins). */
+/** The core update row of Installed with its notices, drawn above the other lines when a newer core release is listed (docs/spec/settings.md#plugins). */
 function appRows() {
   const app = appUpdate.status();
   if (app.available === null) return [];
@@ -172,14 +172,14 @@ function appRows() {
 }
 
 /** The rows of the outdated persistent services, in sidecar order: the versions, and the action that ends their sessions and replaces the service,
- * or ends it when the sidecar is no longer declared (docs/spec/settings.md#설치됨). */
+ * or ends it when the sidecar is no longer declared (docs/spec/settings.md#plugins). */
 function outdatedRows() {
   return pluginOperations.status().outdated.map((item) => {
     const declared = item.installed !== null;
     const el = element("div", "set-plugin-row set-outdated");
     el.dataset.expose = "core.settings-tab.plugins.outdated";
     el.dataset.sidecar = item.sidecar;
-    // default: docs/spec/settings.md#plugins, a running side that the service did not report shows 이전 버전.
+    // default: docs/spec/settings.md#plugins, a running side that the service did not report shows the label previous version.
     el.append(element("p", "set-caption", `${item.sidecar}: ${item.running ?? "이전 버전"} → ${declared ? item.installed : "선언 없음"}`));
     el.append(button(`세션 ${item.sessions}개를 끝내고 ${declared ? "적용" : "종료"}`, {
       expose: "core.settings-tab.plugins.replace", command: "core.plugins.replace", params: { sidecar: item.sidecar }, key: item.sidecar, disabled: busy(), variant: "sm",
@@ -188,7 +188,7 @@ function outdatedRows() {
   });
 }
 
-/** The page 설치됨: the update lines, the search, the filter, the rows and the card that opens 찾아보기 (docs/spec/settings.md#설치됨). */
+/** The page Installed: the update lines, the search, the filter, the rows and the card that opens Browse (docs/spec/settings.md#plugins). */
 export function installedPage() {
   const rows = installedRows().toSorted(byRank);
   const counts = Object.fromEntries(Object.keys(FILTERS).map((name) => [name, rows.filter(FILTERS[name]).length]));
@@ -219,7 +219,7 @@ export function installedPage() {
   return [group("설치된 플러그인", "켜고 끄기, 업데이트, 문제 고치기. 하나를 누르면 그 플러그인의 정보와 설정이 한 페이지에 있다. 새로 찾는 일은 ‘찾아보기’ 화면에서 한다.", [...appRows(), ...outdatedRows(), ...head, list, browse])];
 }
 
-/** The count of the menu badge of 설치됨: a problem count (warn), else an update count (acc), else the installed count (plain). */
+/** The count of the menu badge of Installed: a problem count (warn), else an update count (acc), else the installed count (plain). */
 export function installedBadge() {
   const rows = installedRows();
   const problems = rows.filter(problemOf).length;
@@ -229,7 +229,7 @@ export function installedBadge() {
   return { text: String(rows.length), tone: null, title: null };
 }
 
-/** The page 찾아보기: the search, the switch, the rows of the catalog that are not installed or that match, and the list of 30 rows (docs/spec/settings.md#찾아보기). */
+/** The page Browse: the search, the switch, the rows of the catalog that are not installed or that match, and the list of 30 rows (docs/spec/settings.md#plugins). */
 export function browsePage() {
   const query = state.browse.query.trim().toLowerCase();
   const hide = state.browse.hideInstalled;
@@ -275,7 +275,7 @@ export function versionText(item) {
   return item.installed === null ? "" : `v${item.installed.version}`;
 }
 
-/** One row of 찾아보기 (docs/spec/settings.md#찾아보기). */
+/** One row of Browse (docs/spec/settings.md#plugins). */
 function catalogRow(item) {
   const el = element("div", "set-plugin-row");
   el.dataset.plugin = item.id;
@@ -294,7 +294,7 @@ function catalogRow(item) {
   return el;
 }
 
-/** The page of one plugin: its info card, then the groups 계정, 설정, 섹션, 창 사이드바 and 카드 사이드바 (docs/spec/settings.md#plugin-page). */
+/** The page of one plugin: its info card, then the groups Accounts, Settings, Sections, window sidebar and card sidebar (docs/spec/settings.md#plugin-page). */
 export function pluginPage(id) {
   const item = statusRows().find((row) => row.id === id);
   if (!item) throw new Error(`plugin ${id} is not in the plugin state`);
@@ -355,7 +355,7 @@ function infoCard(item, unit) {
   return card;
 }
 
-/** The removal control: the description, the button 제거…, and after it the buttons 취소 and 제거 (docs/spec/settings.md#plugin-page). */
+/** The removal control: the description, the button Remove…, and after it the buttons Cancel and Remove (docs/spec/settings.md#plugin-page). */
 function removal(item) {
   const wrap = element("div", "set-removal");
   wrap.append(element("p", "set-caption", "설정 값은 남겨 두고, 다시 설치하면 이어서 쓴다."));
@@ -377,7 +377,7 @@ function sectionChips(unit) {
   return wrap;
 }
 
-/** The group 설정 with one row for each declared setting (docs/spec/settings.md#plugin-page). */
+/** The group Settings with one row for each declared setting (docs/spec/settings.md#plugin-page). */
 function settingsGroup(unit) {
   const defs = Object.entries(settingDefinitions()).filter(([, def]) => unit && def.plugin === unit.id);
   if (!unit || defs.length === 0) return group("설정", "플러그인이 선언한 설정.", [element("p", "set-caption", "이 플러그인에는 설정이 없다.")]);
@@ -396,7 +396,7 @@ export function declaredRow(key, def) {
   else if (def.type === "string" || def.type === "address") control = textField(key, { command: "core.settings.change", params: { key, scope: writeScope() }, now: String(now), maxLength: def.maxLength, mono: def.type === "address" });
   else if (def.type === "plugin") {
     const options = [...(now === undefined ? [["", "선택"]] : []), ...pluginsOfCategory(def.category).map(({ id, name }) => [id, name])];
-    // default: docs/spec/settings.md#plugins, a plugin setting without a value shows the empty choice 선택.
+    // default: docs/spec/settings.md#plugins, a plugin setting without a value shows the empty choice labelled Choose.
     control = select(key, options, now ?? "", { disabled });
   } else throw new Error(`setting ${key} has an unknown type ${def.type}`);
   const marks = scopeMarks(key, def.label);
@@ -406,7 +406,7 @@ export function declaredRow(key, def) {
   return [el];
 }
 
-/** The group 계정 of a plugin that declares accounts (docs/spec/plugins.md#accounts). */
+/** The group Accounts of a plugin that declares accounts (docs/spec/plugins.md#accounts). */
 function accountsGroup(unit) {
   const declared = pluginAccounts(unit.id).accounts;
   const listed = accounts.list(unit.id);

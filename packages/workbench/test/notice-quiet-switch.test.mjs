@@ -1,4 +1,4 @@
-// The switch 조용히 beside the filter of the notice center (docs/spec/notifications.md#notice-center): the element core.notices.quiet, which
+// The switch Quiet beside the filter of the notice center (docs/spec/notifications.md#notice-center): the element core.notices.quiet, which
 // runs core.settings.set with the patch of quietToasts and the scope common, and shows its state as pressed.
 import assert from "node:assert/strict";
 import { test } from "node:test";

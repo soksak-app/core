@@ -56,7 +56,7 @@ test("the agent page reads the parts when it shows, shows the PATH preference, a
     ["MCP 등록", "없음", "/Users/person/.claude.json"],
     ["훅", "없음", "/Users/person/.claude/settings.json"],
   ]);
-  // A skill file that differs is a missing part whose reason is differs (docs/spec/cli.md#setup-parts): its badge is 다름 and its button is 고치기.
+  // A skill file that differs is a missing part whose reason is differs (docs/spec/cli.md#setup-parts): its badge is differs and its button is Fix.
   const fix = document.querySelector('[data-expose="core.settings-tab.setup-install"]');
   assert.deepEqual([fix.textContent, fix.dataset.command, params(fix)], ["고치기", "core.setup.install", { parts: ["skill"] }]);
   const pathToggle = control("core.settings-tab.setup-change");

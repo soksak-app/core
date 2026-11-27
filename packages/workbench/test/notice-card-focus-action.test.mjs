@@ -1,4 +1,4 @@
-// A warning or error of a card that does not have the focus shows as a toast with the action 카드로 가기, which runs
+// A warning or error of a card that does not have the focus shows as a toast with the action Go to card, which runs
 // core.card.focus {card} (docs/spec/notifications.md#toasts). The focused card and the app notices have no such action.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

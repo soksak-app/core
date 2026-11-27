@@ -1,5 +1,5 @@
 // The accounts of this window (accounts.js) and their exposed entries: the core.accounts status and the core.accounts commands
-// (docs/spec/plugins.md#accounts). The settings tab draws the group 계정 from the same accounts.
+// (docs/spec/plugins.md#accounts). The settings tab draws the group Accounts from the same accounts.
 import { host } from "@soksak/runtime";
 import { registry } from "./exposure.js";
 import { createAccounts } from "./accounts.js";

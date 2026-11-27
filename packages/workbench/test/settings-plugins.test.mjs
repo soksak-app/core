@@ -33,7 +33,7 @@ const ctx = await startSettingsTab(null, {
 test("the installed page lists the loaded plugins by name", async () => {
   await openSettingsTab(ctx);
   await ctx.run("core.settings-tab.nav", { page: "installed" });
-  // The rows are in the order of their names, 베타 before 알파 by the code points of the Korean text.
+  // The rows are in the order of their names, beta before alpha by the code points of the Korean text.
   const rows = [...document.querySelectorAll('[data-expose="core.settings-tab.plugin-row"]')];
   assert.deepEqual(rows.map((row) => row.dataset.plugin), ["beta", "alpha"]);
   assert.deepEqual((await ctx.status("core.settings-tab")).listed, ["beta", "alpha"], "the status lists the rows in their order");

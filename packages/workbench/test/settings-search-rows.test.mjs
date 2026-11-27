@@ -26,6 +26,6 @@ test("a query matches the settings, the installed plugins and the catalog of the
 
 test("the table is read from the rows section of the workbench declaration", () => {
   assert.equal(PAGES.length, 6);
-  // The group 알림 has five rows, which replace the two problem toast rows of the earlier declaration.
+  // The group Notifications has five rows, which replace the two problem toast rows of the earlier declaration.
   assert.equal(ALL_ROWS.length, 27);
 });

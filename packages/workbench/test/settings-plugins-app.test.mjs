@@ -1,4 +1,4 @@
-// The core update row of 설치됨 and its notices (docs/spec/settings.md#plugins). The host calls are answered by the page-wire case
+// The core update row of Installed and its notices (docs/spec/settings.md#plugins). The host calls are answered by the page-wire case
 // library-app-update-operations, whose first state read finds the release 0.0.9 for the running core 0.0.8.
 import assert from "node:assert/strict";
 import test from "node:test";

@@ -59,7 +59,7 @@ test("the project scope marks an override with its badge and a reset control, an
   const reset = document.querySelector('[data-expose="core.settings-tab.reset"][data-key="mode"]');
   assert.ok(reset, "the overridden mode has no reset control");
   assert.deepEqual([reset.dataset.command, JSON.parse(reset.dataset.params)], ["core.settings.reset", { key: "mode", scope: "project" }]);
-  // The badge names the project: "<project> 값", here the title "a" of the project.
+  // The badge names the project: "<project> value", here the title "a" of the project.
   assert.ok([...document.querySelectorAll('[data-expose="core.settings-tab.override"]')].some((el) => el.textContent === "a 값"),
     "the overridden mode has no badge of its project");
   // The declared parameters of core.settings.reset name the key only, and the reset writes the project scope (settings.js reset).

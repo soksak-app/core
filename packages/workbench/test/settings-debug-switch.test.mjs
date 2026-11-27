@@ -1,5 +1,5 @@
-// The diagnostics page of the settings tab draws the switch 디버그 기록 that runs core.settings.debug. The switch is on only when the
-// performance trace and every class of the log policy are at trace (docs/spec/settings.md#진단).
+// The diagnostics page of the settings tab draws the switch debug record that runs core.settings.debug. The switch is on only when the
+// performance trace and every class of the log policy are at trace (docs/spec/settings.md#pages).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { startSettingsTab, openSettingsTab } from "./support/settings-tab-window.mjs";
