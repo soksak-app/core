@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1122: The services step of the runner ends the persistent services of a run before the remaining-processes step, and the hidden-view-reload check passes with no service left.
 - F1222-2: The test claims of scripts/check-tests.mjs name the reduced motion tests of the Go, Rust and mygo hosts and link them to the item.
 - F1222-2: The progress notice ring check records its Red and Green results, and the gpuikit reduced motion override is held by F914.
 - F959-1: The agent layout requests and their verifier judge the layouts that core.grid reports, with a test for each predicate.
