@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1256: 이 항목의 체크리스트 줄은 체크리스트의 최상위 목록에 있다.
 - F1258: check-preflight가 CI job의 lockfile 거부를 make 대상 check-lockfiles로 실행한다.
 - F1217-9-1: host가 plugin folder 수를 세고 바뀔 때마다 plugins-folders-changed로 알린다.
 - F1250: 체크리스트에 검증기, 읽기 경로와 남은 선언 단위를 기록한다.

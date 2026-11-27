@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1256: The checklist line of this item is in the top-level list of the checklist.
 - F1258: check-preflight runs the lockfile rejection of the CI jobs as the make target check-lockfiles.
 - F1217-9-1: The host counts plugin folders and reports each change through plugins-folders-changed.
 - F1250: The checklist records the validator, its read paths and the remaining declaration units.
