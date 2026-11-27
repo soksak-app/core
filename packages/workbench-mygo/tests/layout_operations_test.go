@@ -1189,6 +1189,20 @@ func TestADividerDoubleClickRunsTheCentreCommand(t *testing.T) {
 	}
 }
 
+// A surface of a status request must be a string: a number names no surface, so the request is refused with the value that it sent.
+func TestARoleStatusRefusesASurfaceThatIsNotAString(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	r := f.shell.Registry()
+	done := make(chan error, 1)
+	r.Reply("status.get", json.RawMessage(`{"name":"core.tab.role","surface":5}`), nil, func(value any, err error) {
+		done <- err
+	})
+	err := <-done
+	if err == nil || err.Error() != "surface must be a string: got 5" {
+		t.Fatalf("a numeric surface gave %v, want the refusal naming the value 5", err)
+	}
+}
+
 // The role status of a tab is read with the surface of its request and a watch of it answers the state of that tab alone
 // (docs/spec/agent-roles.md#tab-role-state).
 func TestTheRoleStatusIsReadWithTheSurfaceOfItsRequest(t *testing.T) {

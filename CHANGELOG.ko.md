@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1107-5: 문자열이 아닌 status surface 요청은 빈 surface로 읽지 않고 보낸 값과 함께 거부한다.
 - F1217-7: 설정 버튼의 명령을 core.setup.install로 스펙에 적었다.
 - F1108-6: 드롭 구획 check가 머리와 발을 모두 그리는 카드만 재므로, status 줄이 없는 창 사이드바 때문에 window check가 실패하지 않는다. 검증: 없는 export로 verify-drop-band-cards.test.mjs가 실패했고(Red), 이 테스트와 window-sidebar-place-verification.test.mjs가 5개 중 5개 통과한다(Green). window check 실행은 남아 있다.
 - 설정 스크롤 모달 사례를 제거했다: settings-scroll.test.mjs가 스크롤 조항을 고정한다.

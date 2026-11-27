@@ -461,8 +461,9 @@ func (r *Registry) dispatch(method string, params json.RawMessage, changed Chang
 	}
 	surface := ""
 	if held, has := fields["surface"]; has {
-		if json.Unmarshal(held, &surface) != nil {
-			surface = ""
+		// A surface that is not a string names no surface, so the request is refused with the value that it sent.
+		if err := json.Unmarshal(held, &surface); err != nil {
+			return nil, Refuse(InvalidParams, "surface must be a string: got %s", held)
 		}
 	}
 	r.mu.Lock()
