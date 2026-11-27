@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1245-3: reduceMotionValue of packages/workbench/host.js states the reason of its default, the last site of the fallback check, which now passes.
 - F1250-1: The settings pages are declared in JSON with a fixed component set; the flat plugin settings form is refused.
 - F1256: The checklist line of this item is present in both checklist files.
 - F1239-7-1: The stepper box of F1250-4 and the workbench.json copy sync of F1256 are restored after the F1239-7 commit removed them.

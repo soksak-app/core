@@ -157,6 +157,7 @@ export const native = Boolean(bridge);
 
 // The reduced motion of the page: the override of the application when one is set by a diagnostic build, else the platform value.
 export function reduceMotionValue(override, platformReduces) {
+  // default: a null override is the platform value, per the reduced motion override of docs/spec/endpoint.md: "`null` restores the platform value".
   return override ?? platformReduces;
 }
 

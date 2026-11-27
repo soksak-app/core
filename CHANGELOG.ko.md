@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1245-3: packages/workbench/host.js의 reduceMotionValue가 기본값의 이유를 적어, fallback 검사의 마지막 위치가 해결되고 검사가 통과한다.
 - F1250-1: 설정 페이지는 고정된 컴포넌트 집합의 JSON 선언으로 정해지며, 플러그인 설정의 평면 형식은 거부된다.
 - F1256: 이 항목의 체크리스트 줄이 두 체크리스트 파일에 다시 있다.
 - F1239-7-1: F1239-7 commit이 지운 F1250-4의 stepper box와 F1256의 workbench.json 사본 동기화를 되살린다.
