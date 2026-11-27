@@ -495,15 +495,17 @@ func (s *Shell) buildPluginTab(b *settingsBuilder) error {
 		info = append(info, settingsRow{name: "설치", controls: []*SettingsControl{s.pluginAction(b, busy, item.ID, "install", "설치", "core.plugins.install", map[string]any{"plugin": item.ID})}})
 	} else {
 		use := settingsRow{name: "사용", description: fmt.Sprintf("설치 %s", item.Installed.Version)}
-		if pluginUpdate, err := hasUpdate(*item); err != nil {
+		pluginUpdate, err := hasUpdate(*item)
+		if err != nil {
 			return err
-		} else if pluginUpdate {
+		}
+		if pluginUpdate {
 			use.description = fmt.Sprintf("설치 %s · 배포 %s", item.Installed.Version, *item.Latest)
 		} else {
 			use.description += " · 최신"
 		}
 		use.controls = []*SettingsControl{pluginSwitch(b, *item, busy)}
-		if pluginUpdate, _ := hasUpdate(*item); pluginUpdate {
+		if pluginUpdate {
 			use.controls = append(use.controls, s.pluginAction(b, busy, item.ID, "update", *item.Latest+"로 업데이트", "core.plugins.update", map[string]any{"plugin": item.ID}))
 		}
 		info = append(info, use)

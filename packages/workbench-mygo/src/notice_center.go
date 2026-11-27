@@ -75,8 +75,8 @@ func plainObject(raw json.RawMessage, allowed []string, name string) (map[string
 // and system are optional.
 func checkNoticeFields(raw map[string]json.RawMessage) (noticeFields, error) {
 	var fields noticeFields
-	kind, _ := decodeString(raw["kind"])
-	if !slices.Contains(noticeKinds, kind) {
+	kind, ok := decodeString(raw["kind"])
+	if !ok || !slices.Contains(noticeKinds, kind) {
 		return fields, fmt.Errorf("a notice kind must be success, info, warning, error or progress")
 	}
 	title, ok := decodeString(raw["title"])

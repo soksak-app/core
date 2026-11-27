@@ -175,8 +175,8 @@ func (s *Shell) noticeDone(raw json.RawMessage) (any, error) {
 	if !ok || id == "" {
 		return nil, Refuse(InvalidParams, "a notice id must be a non-empty string")
 	}
-	kind, _ := decodeString(object["kind"])
-	if kind != "success" && kind != "error" {
+	kind, ok := decodeString(object["kind"])
+	if !ok || (kind != "success" && kind != "error") {
 		return nil, Refuse(InvalidParams, "a finished notice must be success or error")
 	}
 	fields, err := checkNoticeFields(map[string]json.RawMessage{"kind": json.RawMessage(`"info"`), "title": object["title"]})

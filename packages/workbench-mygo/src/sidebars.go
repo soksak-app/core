@@ -571,6 +571,7 @@ func (s *Sidebars) fill(frame *SidebarFrame, set *SidebarSet) {
 	for _, id := range set.Sections {
 		loaded, ok := s.sections[id]
 		if !ok {
+			// silent: a section id is `<plugin id>.<name>` (docs/spec/plugins.md#sections); an id without a dot is shown as its own plugin in the missing line.
 			plugin, _, _ := strings.Cut(id, ".")
 			frame.Missing = append(frame.Missing, MissingSection{ID: id, Plugin: plugin})
 			continue

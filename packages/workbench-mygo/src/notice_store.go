@@ -336,6 +336,7 @@ func (e *ShownErrors) SetNoticeFilter(filter string) error {
 
 // bellTitle is the tooltip of the bell: the notice center, with the number of unread entries while there are some.
 func (s *Shell) bellTitle() string {
+	// silent: the tooltip counts the unread notices, and the badge of chrome.go reads the problem flag.
 	unread, _ := s.errors.UnreadNotices()
 	if unread == 0 {
 		return "알림 센터"

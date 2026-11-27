@@ -122,6 +122,7 @@ func (s *Shell) sectionChips(b *settingsBuilder, set StoredSet, scope string) []
 	for index, id := range set.Sections {
 		chip := SettingsControl{Name: "core.settings-tab.chip", Key: text(fmt.Sprintf("chip:%s:%d", set.ID, index)), Label: s.sectionNames([]string{id})[0], kind: controlChip}
 		if !s.sectionLoaded(id) {
+			// silent: a section id is `<plugin id>.<name>` (docs/spec/plugins.md#sections); an id without a dot is shown as its own plugin in the missing line.
 			plugin, _, _ := strings.Cut(id, ".")
 			line := s.missingPluginLine(plugin)
 			chip.missingTip = fmt.Sprintf("%s(%s) 플러그인 필요", line.Name, plugin)
@@ -197,6 +198,7 @@ func (s *Shell) missingLineRows(b *settingsBuilder, set StoredSet) []settingsRow
 	var frame SidebarFrame
 	for _, id := range set.Sections {
 		if !s.sectionLoaded(id) {
+			// silent: a section id is `<plugin id>.<name>` (docs/spec/plugins.md#sections); an id without a dot is shown as its own plugin in the missing line.
 			plugin, _, _ := strings.Cut(id, ".")
 			frame.Missing = append(frame.Missing, MissingSection{ID: id, Plugin: plugin})
 		}

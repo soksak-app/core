@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222: The notice decoders and the plugin page check their discarded results, and the sections and switch state their reasons.
 - F1222: Four settings files state the defaults of labels, ranges, captions, scroll, indexes and groups for the fallback check.
 - F1222: Five workbench files state their defaults, and two boolean states use forms that the fallback check reads as conditions.
 - F1222: Four workbench files state the defaults of missing plugin groups, notice tabs, search labels and chips for the fallback check.
