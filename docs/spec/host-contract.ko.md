@@ -1670,6 +1670,21 @@ fn invalid_json_closes_connection() {
 | `account.home.creates-a-private-folder` | `accountHomeCreate`는 `accounts/<id>`를 mode 0700으로 만들고, `accountHomeRemove`는 그것을 내용과 함께 지우며 없으면 아무것도 바꾸지 않는다. | all |
 | `account.home.refuses-an-identifier` | `id`가 `^[a-z][a-z0-9-]{0,39}$`에 맞지 않는 account home은 `account home <id> is not an account identifier`로, plugin 식별자가 아닌 `plugin`은 `account home: plugin <plugin> is not a plugin identifier`로 거부된다. | all |
 | `sidecars.environment.start-records-the-sok-folder` | 설치된 sidecar의 sidecar channel의 시작은 level `info`의 event `host.sidecar.path` 하나를 기록하고, 그 `folder`는 host 실행 파일의 폴더이며 `sok`은 그 폴더의 `sok`이다. | all |
+| `diagnostics.motion.sets-the-override-and-publishes-it` | `reduce`가 true인 `diagnostics.motion`은 창의 동작 줄이기 재정의를 true로 정하고, 마지막 이벤트로 `reduce`가 true인 `motion` 이벤트를 창에 게시하며, `reduce`가 null이면 재정의를 플랫폼 값으로 되돌린다. | all |
+| `diagnostics.motion.refuses-other-values` | `diagnostics.motion`은 불리언도 null도 아닌 `reduce`와 `reduce`가 없는 요청을 `reduce must be a boolean or null` 오류로 거부하고, 재정의를 바꾸지 않는다. | all |
+| `cli.positional-window.refused-with-option-form` | `describe`, `commands`, `exposures`, `mcp`에 위치 인자를 주면 상태 2로 끝나고 표준 오류에 `sok: <command> takes no argument besides --window <name> or --project <directory>`를 출력하며, 표준 출력에는 아무것도 쓰지 않는다. | all |
+| `plugins.category.case-file-lists-the-categories` | `sok`가 보고하는 plugin 카테고리는 같은 순서로 `docs/spec/cases/plugin-categories.json`의 카테고리와 같다. | all |
+| `plugins.manifest.accepts-categories-and-requires` | `categories` 또는 `requires` 멤버가 core의 plugin 카테고리 목록이고 각 이름이 한 번씩만 나오거나 빈 목록인 plugin.json은 검증을 통과한다. | all |
+| `plugins.manifest.refuses-invalid-categories-and-requires` | core의 plugin 카테고리 목록이 아니거나, 같은 카테고리를 두 번 이름 대거나, `requires`가 `categories`에 나온 카테고리를 이름 대거나, surface나 sections가 없는 `categories` 또는 `requires` 멤버는 `plugin <id>: <member> <reason>`로 거부되며, 사유는 [plugin 카테고리](plugins.md#plugin-categories)가 정한 것이다. | all |
+| `plugins.setting.accepts-a-plugin-category` | `type`이 `plugin`이고 core가 정의한 `category`, `label`, `description`을 가진 설정은 검증을 통과한다. | all |
+| `plugins.setting.refuses-a-default-or-unknown-category` | `default`가 있는 `plugin` 타입 설정은 `plugin <id>.<key>: unknown field default`로 거부되고, `category`가 없거나 core의 plugin 카테고리가 아닌 설정은 `plugin <id>.<key>: category <name> is not a plugin category of core`로 거부되며, 없는 category는 `undefined`로 적는다. | all |
+| `plugins.install.refuses-a-required-category-without-a-plugin` | 필요한 카테고리에 설치되고 활성화된 plugin이 없는 plugin의 `sok plugin install`은 상태 1로 끝나고 표준 오류에 `sok: plugin <id> requires a <category> plugin, and no installed and enabled plugin is one`을 출력하며, 설치 상태를 바꾸지 않는다. | all |
+| `plugins.install.refuses-a-required-category-with-a-disabled-provider` | 그 카테고리의 유일한 plugin이 설치되고 비활성화된 경우에도 `plugins.install.refuses-a-required-category-without-a-plugin`의 거부가 적용되며, `installed.json`은 내용을 유지한다. | all |
+| `plugins.enable.refuses-a-required-category-without-a-plugin` | 필요한 카테고리에 다른 설치되고 활성화된 plugin이 없는 비활성 plugin의 `sok plugin enable`은 상태 1로 끝나고 설치 거부와 같은 메시지를 출력하며, `installed.json`은 내용을 유지한다. | all |
+| `plugins.disable.refuses-the-last-plugin-of-a-required-category` | 활성화된 plugin이 필요로 하는 카테고리의 마지막 활성 plugin에 대한 `sok plugin disable`과 `sok plugin remove`는 상태 1로 끝나고 `sok: plugin <id> is the last <category> plugin, which <requirers> requires`를 출력하며, 필요자는 id 순서로 나열하고, 아무것도 바꾸지 않는다. 비활성 필요자는 세지 않으며, 필요자를 모두 비활성화하면 그 plugin을 비활성화할 수 있다. | all |
+| `plugins.disable.allows-the-last-plugin-of-a-category-without-requirers` | 활성화된 plugin이 필요로 하지 않는 카테고리의 마지막 활성 plugin에 대한 `sok plugin disable`은 성공한다. | all |
+| `plugins.update.refuses-a-drop-of-a-required-category` | 활성화된 plugin이 필요로 하는 카테고리의 마지막 활성 plugin을 그 카테고리를 더 이상 나열하지 않는 버전으로 `sok plugin update`하면 상태 1로 끝나고 비활성화 거부와 같은 메시지를 출력하며 `installed.json`을 유지한다. 카테고리를 유지하는 버전으로의 update는 성공한다. | all |
+| `plugins.update.refuses-a-new-requirement-without-a-plugin` | 필요한 카테고리에 다른 설치되고 활성화된 plugin이 없는 버전으로 `sok plugin update`하면 상태 1로 끝나고 설치 거부와 같은 메시지를 출력하며 `installed.json`을 유지한다. 그 카테고리의 plugin을 설치한 뒤에는 update가 성공한다. | all |
 
 ## Workbench cases
 

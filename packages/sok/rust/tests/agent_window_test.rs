@@ -585,6 +585,7 @@ fn context_takes_only_the_configuration_directory() {
 
 // A view and mcp refuse a positional argument before they connect, and name the option form of the window (cli.md, the window
 // is the --window or --project option).
+// contract: cli.positional-window.refused-with-option-form
 #[test]
 fn a_positional_window_is_refused_with_the_option_form() {
     let config = Folder::new("positional-window");

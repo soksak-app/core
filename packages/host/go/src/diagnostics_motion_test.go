@@ -8,6 +8,7 @@ import (
 )
 
 // The override is set by diagnostics.motion, published with the motion event, and cleared by null.
+// contract: diagnostics.motion.sets-the-override-and-publishes-it
 func TestDiagnosticMotionSetsTheOverrideAndPublishesIt(t *testing.T) {
 	e, s, window := heldEndpoint(t)
 	conn := endpointConnection(t)
@@ -35,6 +36,7 @@ func TestDiagnosticMotionSetsTheOverrideAndPublishesIt(t *testing.T) {
 }
 
 // A value that is not a boolean or null is refused, and the override does not change.
+// contract: diagnostics.motion.refuses-other-values
 func TestDiagnosticMotionRefusesAnyOtherValue(t *testing.T) {
 	e, s, _ := heldEndpoint(t)
 	conn := endpointConnection(t)

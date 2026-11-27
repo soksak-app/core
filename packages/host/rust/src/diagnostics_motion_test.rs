@@ -2,6 +2,7 @@ use super::*;
 
 // The parameter accepts a boolean and null, and refuses any other value and an absent parameter.
 #[cfg(feature = "diagnostics")]
+// contract: diagnostics.motion.refuses-other-values
 #[test]
 fn diagnostics_motion_accepts_a_boolean_or_null_and_refuses_any_other_value() {
     assert_eq!(parse_reduce(Some(&json!(true))), Ok(Some(true)));
@@ -22,6 +23,7 @@ fn diagnostics_motion_accepts_a_boolean_or_null_and_refuses_any_other_value() {
 }
 
 // The motion event and the motion command carry {reduce}, with null for the platform value.
+// contract: diagnostics.motion.sets-the-override-and-publishes-it
 #[test]
 fn the_motion_payload_carries_reduce_with_null_for_the_platform_value() {
     assert_eq!(payload(Some(true)), json!({"reduce": true}));

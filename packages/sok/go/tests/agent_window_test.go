@@ -388,6 +388,7 @@ func TestAQueryKeepsTheEntriesThatHoldEachWord(t *testing.T) {
 
 // A view and mcp refuse a positional argument before they connect, and name the option form of the window (cli.md, the window
 // is the --window or --project option).
+// contract: cli.positional-window.refused-with-option-form
 func TestAPositionalWindowIsRefusedWithTheOptionForm(t *testing.T) {
 	config := t.TempDir()
 	const option = "--window <name> or --project <directory>"

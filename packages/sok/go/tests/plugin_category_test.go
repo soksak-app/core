@@ -48,6 +48,7 @@ func settingManifest(declaration map[string]any) map[string]any {
 	return surfaceManifest(map[string]any{"settings": map[string]any{"key": declaration}})
 }
 
+// contract: plugins.category.case-file-lists-the-categories
 func TestPluginCategoriesMatchTheCaseFile(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	data, err := os.ReadFile(filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "docs", "spec", "cases", "plugin-categories.json"))
@@ -68,6 +69,7 @@ func TestPluginCategoriesMatchTheCaseFile(t *testing.T) {
 	}
 }
 
+// contract: plugins.manifest.accepts-categories-and-requires
 func TestValidateManifestAcceptsThePluginCategoryMembers(t *testing.T) {
 	for name, manifest := range map[string]map[string]any{
 		"categories": surfaceManifest(map[string]any{"categories": []any{"terminal"}}),
@@ -80,6 +82,7 @@ func TestValidateManifestAcceptsThePluginCategoryMembers(t *testing.T) {
 	}
 }
 
+// contract: plugins.manifest.refuses-invalid-categories-and-requires
 func TestValidateManifestRefusesTheInvalidPluginCategoryMembers(t *testing.T) {
 	for _, c := range []struct {
 		name     string
@@ -113,6 +116,7 @@ func TestValidateManifestRefusesTheInvalidPluginCategoryMembers(t *testing.T) {
 	}
 }
 
+// contract: plugins.setting.accepts-a-plugin-category
 func TestValidateManifestAcceptsThePluginSettingDeclaration(t *testing.T) {
 	manifest := settingManifest(map[string]any{"type": "plugin", "category": "terminal", "label": "Shell", "description": "Choose."})
 	if err := sok.ValidateManifest(manifest); err != nil {
@@ -120,6 +124,7 @@ func TestValidateManifestAcceptsThePluginSettingDeclaration(t *testing.T) {
 	}
 }
 
+// contract: plugins.setting.refuses-a-default-or-unknown-category
 func TestValidateManifestRefusesTheInvalidPluginSettingDeclaration(t *testing.T) {
 	for _, c := range []struct {
 		name        string
@@ -189,6 +194,7 @@ var (
 	terminalBeta  = categoryPlugin{"beta", "1.0.0", nil, []string{"terminal"}}
 )
 
+// contract: plugins.install.refuses-a-required-category-without-a-plugin
 func TestPluginInstallRefusesARequiredCategoryWithoutAPlugin(t *testing.T) {
 	config := t.TempDir()
 	useRegistry(t, config, categoryRegistry(t, terminalShell, terminalAlpha))
@@ -203,6 +209,7 @@ func TestPluginInstallRefusesARequiredCategoryWithoutAPlugin(t *testing.T) {
 	succeeds(t, "plugin", "install", "alpha", "--config-dir", config)
 }
 
+// contract: plugins.install.refuses-a-required-category-with-a-disabled-provider
 func TestPluginInstallRefusesARequiredCategoryWhoseProviderIsDisabled(t *testing.T) {
 	config := t.TempDir()
 	useRegistry(t, config, categoryRegistry(t, terminalShell, terminalAlpha))
@@ -218,6 +225,7 @@ func TestPluginInstallRefusesARequiredCategoryWhoseProviderIsDisabled(t *testing
 	}
 }
 
+// contract: plugins.enable.refuses-a-required-category-without-a-plugin
 func TestPluginEnableRefusesARequiredCategoryWithoutAPlugin(t *testing.T) {
 	config := t.TempDir()
 	useRegistry(t, config, categoryRegistry(t, terminalShell, terminalAlpha))
@@ -236,6 +244,7 @@ func TestPluginEnableRefusesARequiredCategoryWithoutAPlugin(t *testing.T) {
 }
 
 // and name the requirers in the order of their ids.
+// contract: plugins.disable.refuses-the-last-plugin-of-a-required-category
 func TestPluginDisableAndRemoveRefuseTheLastPluginOfARequiredCategory(t *testing.T) {
 	config := t.TempDir()
 	useRegistry(t, config, categoryRegistry(t, terminalShell, terminalAlpha, terminalBeta))
@@ -266,6 +275,7 @@ func TestPluginDisableAndRemoveRefuseTheLastPluginOfARequiredCategory(t *testing
 	}
 }
 
+// contract: plugins.disable.allows-the-last-plugin-of-a-category-without-requirers
 func TestPluginDisableAllowsTheLastPluginOfACategoryWithoutRequirers(t *testing.T) {
 	config := t.TempDir()
 	useRegistry(t, config, categoryRegistry(t, terminalShell, terminalAlpha))
@@ -278,6 +288,7 @@ func TestPluginDisableAllowsTheLastPluginOfACategoryWithoutRequirers(t *testing.
 	}
 }
 
+// contract: plugins.update.refuses-a-drop-of-a-required-category
 func TestPluginUpdateRefusesADropOfARequiredCategory(t *testing.T) {
 	config := t.TempDir()
 	shellWithoutCategory := categoryPlugin{"shell", "2.0.0", []string{}, nil}
@@ -301,6 +312,7 @@ func TestPluginUpdateRefusesADropOfARequiredCategory(t *testing.T) {
 	}
 }
 
+// contract: plugins.update.refuses-a-new-requirement-without-a-plugin
 func TestPluginUpdateRefusesANewRequirementWithoutAPlugin(t *testing.T) {
 	config := t.TempDir()
 	extV1 := categoryPlugin{"ext", "1.0.0", nil, nil}

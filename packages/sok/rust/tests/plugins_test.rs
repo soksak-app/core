@@ -1658,6 +1658,7 @@ fn manifest_declaring_migrations_is_refused_as_an_unknown_member() {
 
 // A plugin that requires a category that no installed and enabled plugin serves is refused at install, before anything is
 // extracted; once a plugin of the category is installed, the requirer installs.
+// contract: plugins.install.refuses-a-required-category-without-a-plugin
 #[test]
 fn plugin_install_refuses_a_plugin_whose_required_category_no_enabled_plugin_serves() {
     let config = Folder::new("plugins");
@@ -1684,6 +1685,7 @@ fn plugin_install_refuses_a_plugin_whose_required_category_no_enabled_plugin_ser
 
 // Disabling or removing the last enabled plugin of a category that an enabled plugin requires is refused, and the refusal
 // names the requirers in the order of their ids. The provider leaves once the requirers are disabled.
+// contract: plugins.disable.refuses-the-last-plugin-of-a-required-category
 #[test]
 fn plugin_remove_and_disable_refuse_the_last_plugin_of_a_required_category() {
     let config = Folder::new("plugins");
@@ -1731,6 +1733,7 @@ fn plugin_remove_and_disable_refuse_the_last_plugin_of_a_required_category() {
 
 // Enabling a disabled plugin that requires a category with no other enabled plugin of it is refused, and the state keeps the
 // disabled plugin.
+// contract: plugins.enable.refuses-a-required-category-without-a-plugin
 #[test]
 fn plugin_enable_refuses_a_plugin_whose_required_category_no_enabled_plugin_serves() {
     let config = Folder::new("plugins");
@@ -1762,6 +1765,7 @@ fn plugin_enable_refuses_a_plugin_whose_required_category_no_enabled_plugin_serv
 
 // An update that removes the category of the last enabled plugin that a plugin requires is refused, and an update that keeps
 // the category is accepted.
+// contract: plugins.update.refuses-a-drop-of-a-required-category
 #[test]
 fn plugin_update_refuses_to_remove_the_last_plugin_of_a_required_category() {
     let config = Folder::new("plugins");
@@ -1803,6 +1807,7 @@ fn plugin_update_refuses_to_remove_the_last_plugin_of_a_required_category() {
 }
 
 // An update to a version that requires a category with no other enabled plugin of it is refused at update.
+// contract: plugins.update.refuses-a-new-requirement-without-a-plugin
 #[test]
 fn plugin_update_refuses_a_version_whose_required_category_no_enabled_plugin_serves() {
     let config = Folder::new("plugins");
@@ -1827,4 +1832,48 @@ fn plugin_update_refuses_a_version_whose_required_category_no_enabled_plugin_ser
         )
     );
     assert_eq!(installed_of(&config).plugins["shell"].version, "1.0.0");
+}
+
+// A plugin that requires a category whose only plugin is disabled is refused at install, and installed.json keeps its content.
+// contract: plugins.install.refuses-a-required-category-with-a-disabled-provider
+#[test]
+fn plugin_install_refuses_a_required_category_whose_provider_is_disabled() {
+    let config = Folder::new("plugins");
+    let registry = dependency_registry(&[
+        category_plugin("shell", "1.0.0", &["terminal"], &[]),
+        category_plugin("alpha", "1.0.0", &[], &["terminal"]),
+    ]);
+    use_registry(&config, &registry);
+    succeeds(&["plugin", "install", "shell", "--config-dir", config.text()]);
+    succeeds(&["plugin", "disable", "shell", "--config-dir", config.text()]);
+    let before = read_text(&config.path().join("plugins/installed.json"));
+    let (code, _, stderr) = run(&["plugin", "install", "alpha", "--config-dir", config.text()]);
+    assert_eq!(
+        (code, stderr.as_str()),
+        (
+            1,
+            "sok: plugin alpha requires a terminal plugin, and no installed and enabled plugin is one\n"
+        )
+    );
+    assert_eq!(
+        read_text(&config.path().join("plugins/installed.json")),
+        before
+    );
+}
+
+// Disabling the last enabled plugin of a category that no enabled plugin requires succeeds.
+// contract: plugins.disable.allows-the-last-plugin-of-a-category-without-requirers
+#[test]
+fn plugin_disable_allows_the_last_plugin_of_a_category_without_requirers() {
+    let config = Folder::new("plugins");
+    let registry = dependency_registry(&[
+        category_plugin("shell", "1.0.0", &["terminal"], &[]),
+        category_plugin("alpha", "1.0.0", &[], &["terminal"]),
+    ]);
+    use_registry(&config, &registry);
+    succeeds(&["plugin", "install", "shell", "--config-dir", config.text()]);
+    succeeds(&["plugin", "install", "alpha", "--config-dir", config.text()]);
+    succeeds(&["plugin", "disable", "alpha", "--config-dir", config.text()]);
+    succeeds(&["plugin", "disable", "shell", "--config-dir", config.text()]);
+    assert!(!installed_of(&config).plugins["shell"].enabled);
 }

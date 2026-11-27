@@ -33,6 +33,7 @@ fn sections_with(members: Value) -> Value {
 }
 
 /// The plugin categories of core are the list of the case file docs/spec/cases/plugin-categories.json.
+// contract: plugins.category.case-file-lists-the-categories
 #[test]
 fn plugin_categories_are_the_list_of_the_case_file() {
     let text = std::fs::read_to_string(concat!(
@@ -54,12 +55,14 @@ fn plugin_categories_are_the_list_of_the_case_file() {
     assert_eq!(constant, listed);
 }
 
+// contract: plugins.manifest.accepts-categories-and-requires
 #[test]
 fn categories_and_requires_that_are_valid_are_accepted() {
     validate_manifest(&view_with(json!({"categories": ["terminal"]}))).unwrap();
     validate_manifest(&sections_with(json!({"requires": ["terminal"]}))).unwrap();
 }
 
+// contract: plugins.manifest.refuses-invalid-categories-and-requires
 #[test]
 fn categories_and_requires_refuse_each_invalid_value_with_its_reason() {
     let cases = [
@@ -105,6 +108,7 @@ fn categories_and_requires_refuse_each_invalid_value_with_its_reason() {
     }
 }
 
+// contract: plugins.setting.accepts-a-plugin-category
 #[test]
 fn plugin_setting_accepts_a_category_of_core_with_label_and_description() {
     let manifest = view_with(json!({"settings": {"shell": {
@@ -116,6 +120,7 @@ fn plugin_setting_accepts_a_category_of_core_with_label_and_description() {
     validate_manifest(&manifest).unwrap();
 }
 
+// contract: plugins.setting.refuses-a-default-or-unknown-category
 #[test]
 fn plugin_setting_refuses_an_unknown_category_a_default_and_an_unknown_type() {
     let unknown = view_with(json!({"settings": {"shell": {
