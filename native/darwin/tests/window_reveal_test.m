@@ -152,5 +152,18 @@ int main(void) { @autoreleasepool {
     [failed close];
     [failing release];
     [failed release];
+
+    // A window whose main webview finished its load before the reveal is prepared: the observer of the load starts with the load
+    // already ended, so its first notification is judged inside the registration.
+    WKWebView *loaded = nil;
+    NSWindow *ready = makeWindow(&loaded);
+    [ready orderFrontRegardless];
+    [loaded loadHTMLString:@"<body style='margin:0;background:rgb(0,0,255)'></body>" baseURL:[NSURL URLWithString:@"https://localhost/"]];
+    eventWait(@"the webview of the window finishes its load", ^BOOL{ return !loaded.loading && loaded.URL != nil; });
+    check(sp_window_reveal_after_load(ready, &error) && error == NULL, @"a window whose page already loaded is prepared without an exception");
+    check(waitRevealed(ready, loaded, &loading), @"a window whose page already loaded becomes opaque");
+    [ready close];
+    [loaded release];
+    [ready release];
     return failures ? 1 : 0;
 }}

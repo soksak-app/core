@@ -41,14 +41,16 @@ static void runRevealWaiters(NSWindow *window) {
 
 - (void)start {
     _observing = YES;
-    // Initial also reports a load that already ended at registration.
-    sp_observe_key_path("window_reveal.loading", SP_OBSERVE_RECORD, _webview, self, @"loading", NSKeyValueObservingOptionInitial, NULL);
+    sp_observe_key_path("window_reveal.loading", SP_OBSERVE_RECORD, _webview, self, @"loading", 0, NULL);
+    // A load that already ended at registration is judged here, after the observer is registered. Judging it inside the
+    // initial notification of the observer would remove the observer before addObserver returns, which raises an NSException.
+    [self judgeLoad];
 }
 
-- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+// Ends the observation and reveals the window when the load that the observer waits for has ended.
+- (void)judgeLoad {
     // Wait until a load starts. A load that already ended at registration still has its URL. A failed load
     // clears the URL when it ends, so the end is judged as an end that follows an observed start.
-    sp_observe_delivered("window_reveal.loading");
     if (!_observing) return;
     if (_webview.loading) {
         _started = YES;
@@ -62,6 +64,11 @@ static void runRevealWaiters(NSWindow *window) {
         runRevealWaiters(self->_window);
         [self release];
     }];
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+    sp_observe_delivered("window_reveal.loading");
+    [self judgeLoad];
 }
 
 - (void)dealloc {
