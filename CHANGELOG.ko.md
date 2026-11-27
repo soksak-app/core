@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1250: 체크리스트에 검증기, 읽기 경로와 남은 선언 단위를 기록한다.
 - F1239: F1239-5를 다시 완료로 표시한다. F1239-4는 F1239-7의 일부로, F1239-8은 F1250으로 옮겨 닫는다.
 - F1248: 기능 증거 표가 Rust surface fixture의 sidecar OS key를 platform audit 시험에 연결한다.
 - F1245-3: packages/workbench/host.js의 reduceMotionValue가 기본값의 이유를 적어, fallback 검사의 마지막 위치가 해결되고 검사가 통과한다.
