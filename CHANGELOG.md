@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1236-6: The mygo surface tests without sidebars keep the workspace of the test environment, and two tests install the sidebar plugin.
 - F1268: Store `native.observe.removed` for each local monitor removal, paired with its registration by count.
 - F1217-17-10: The account group description is declared once in workbench.json and read by both workbenches.
 - F1266: The mygo host reports the plugin folder count as `folders` and reads the state again on `plugins-folders-changed`.

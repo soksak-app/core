@@ -41,6 +41,10 @@ const installedDocument = `{"plugins": [
 				{"id": "boxprobe.network", "name": "네트워크", "composition": {"kind": "view", "page": "ui/section.html"}, "height": "fill"}]}}
 ]}`
 
+// installedWithSidebarPlugin is installedDocument with fieldprobe, which holds the sections of the left window sidebar of the test
+// environment, so no warning of a missing plugin stands in the banner of a test that reads it.
+var installedWithSidebarPlugin = strings.Replace(installedDocument, "\n]}", ",\n"+fieldprobeEntry+"\n]}", 1)
+
 // surfaceHost records the surface calls of the workbench.
 type surfaceHost struct {
 	storedHost
@@ -377,12 +381,27 @@ func surfaceShellOf(t testing.TB, document string) (*shellFixture, *surfaceHost)
 	return surfaceShellOn(t, document, stored), stored
 }
 
-// surfaceShellWithoutSidebars is surfaceShell with the environment of the notice tests (noSidebarsEnvironment): a sidebar of a plugin that
+// surfaceShellWithoutSidebars is surfaceShell with the test environment without its sidebars (withoutSidebars): a sidebar of a plugin that
 // is not loaded shows its warning as a toast, which the error tests do not count.
 func surfaceShellWithoutSidebars(t *testing.T) (*shellFixture, *surfaceHost) {
 	t.Helper()
-	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}, storedHost: storedHost{environment: []byte(noSidebarsEnvironment)}}
+	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}, storedHost: storedHost{environment: withoutSidebars(t, environment(t))}}
 	return surfaceShellOn(t, installedDocument, stored), stored
+}
+
+// withoutSidebars is the environment with no sidebar set and no link, and with its workspace, whose tabs the surface tests place.
+func withoutSidebars(t testing.TB, environment []byte) []byte {
+	t.Helper()
+	var read map[string]any
+	if err := json.Unmarshal(environment, &read); err != nil {
+		t.Fatal(err)
+	}
+	read["sidebars"] = map[string]any{"sets": []any{}, "links": []any{}}
+	text, err := json.Marshal(read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return text
 }
 
 // surfaceEnvironment is the environment that a surface shell reads: the one that the host stores, or the test environment.
@@ -915,7 +934,7 @@ func TestTheGrabAreaOfABoundaryTakesThePointerOverTheEdgesOfAView(t *testing.T) 
 	// over the edge of the view of each card beside it. The plane takes the gap as it opens.
 	stored := &surfaceHost{window: workbench.WindowView{Visible: true, Scale: 2, Width: 1200, Height: 800}}
 	stored.common = map[string]any{"theme": "slate", "gap": 0.0}
-	f := surfaceShellOn(t, installedDocument, stored)
+	f := surfaceShellOn(t, installedWithSidebarPlugin, stored)
 	stored.elements, stored.ownViews = true, true
 	// The frame has the backing scale of the window, at whose device pixels the framework stands each view.
 	f.tester.SetScale(float32(stored.window.Scale))
@@ -1318,7 +1337,7 @@ func TestARecoveredPlacementWithdrawsItsError(t *testing.T) {
 
 // A window that returns to the lines of the last placement before the next frame recovers as well.
 func TestAFaultOfTheSameLinesIsWithdrawnByTheNextPlacement(t *testing.T) {
-	f, stored := surfaceShell(t)
+	f, stored := surfaceShellOf(t, installedWithSidebarPlugin)
 	f.tester.SetSize(1160, 800)
 	f.settle()
 	f.shell.Registry().Reply("diagnostics.layout.fail", json.RawMessage(`{}`), nil, func(any, error) {})
@@ -1372,8 +1391,7 @@ func TestAFailureStaysUntilTheSurfacesPresent(t *testing.T) {
 		}
 		return 0, nil
 	}}
-	// fieldprobe holds the sections of the left window sidebar of the test environment, so no warning of a missing plugin stands in the banner.
-	f := surfaceShellOn(t, strings.Replace(installedDocument, "\n]}", ",\n"+fieldprobeEntry+"\n]}", 1), stored)
+	f := surfaceShellOn(t, installedWithSidebarPlugin, stored)
 	stored.presentFailure = errors.New("the current image raster did not present")
 	f.tester.SetSize(1160, 800)
 	f.shownErrors()

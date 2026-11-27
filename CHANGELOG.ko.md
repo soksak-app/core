@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1236-6: sidebar 없는 mygo surface 테스트는 테스트 environment의 workspace를 유지하고, 두 테스트는 sidebar plugin을 설치한다.
 - F1268: local monitor 제거마다 `native.observe.removed`를 저장하고, 등록과 짝을 제거 수로 맞춘다.
 - F1217-17-10: 계정 그룹 설명을 workbench.json에 한 번 선언하고 두 워크벤치가 읽는다.
 - F1266: mygo 호스트가 plugin folder 수를 `folders`로 보고하고, `plugins-folders-changed`를 받으면 상태를 다시 읽는다.
