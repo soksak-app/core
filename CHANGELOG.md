@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-17-1-2: The look preview rules of the settings stylesheet read chrome metrics instead of literal lengths and ratios.
 - F1257: The comments of packages/workbench that held Hangul are English, and the comment-language check lists none.
 - F1252: The checklist line of this item is in the top-level list of the checklist.
 - F1239-3: The settings tab comes to the front on the project home, and the window reports the work screen while it is in front.

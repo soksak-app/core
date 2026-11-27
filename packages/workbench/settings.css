@@ -392,8 +392,8 @@
 
 .set-preview {
   display: flex;
-  gap: calc(var(--half-gap) * 2);
-  padding: calc(var(--half-gap) * 2);
+  gap: calc(var(--half-gap) + var(--half-gap));
+  padding: calc(var(--half-gap) + var(--half-gap));
   background: var(--bg);
   border: var(--bw) solid var(--edge);
   border-radius: var(--r);
@@ -413,15 +413,15 @@
 
 /* The cards share one line when the gap is 0 (docs/spec/settings.md#look): root carries the seam, set on every change. */
 :root[data-seam="line"] .set-preview__card + .set-preview__card {
-  margin-left: calc(var(--bw) * -1);
+  margin-left: calc(0px - var(--bw));
 }
 
 .set-preview__head {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: 28px;
-  padding: 0 10px;
+  height: var(--set-preview-head-h);
+  padding: 0 var(--set-preview-head-pad);
   border-bottom: var(--bw) solid var(--edge);
   font-size: var(--text-caption);
   color: var(--muted);
@@ -429,17 +429,17 @@
 
 .set-preview__head::before {
   content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  width: var(--set-preview-dot);
+  height: var(--set-preview-dot);
+  border-radius: var(--circle);
   background: var(--rail);
 }
 
 .set-preview__body {
-  padding: 10px 12px;
+  padding: var(--set-preview-pad-y) var(--space-3);
   font-family: var(--font);
   font-size: var(--size);
-  line-height: 1.65;
+  line-height: var(--set-preview-line-height);
   color: var(--fg);
   white-space: pre;
   overflow: hidden;
