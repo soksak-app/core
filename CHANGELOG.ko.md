@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7-2-6: mygo가 NaN처럼 JSON으로 쓸 수 없는 값을 fmt.Sprint 글 대신 jsonText의 각 호출 지점에서 encoding error로 보고한다.
 - F1217-17-1: 설정 명세의 모양 page를 디자인에 맞춘다: 시스템 모드, 고정 형태 기본값, 폰트와 글자 크기 행이다.
 - F1217: sok watch 테스트는 케이스가 재생하는 home 화면을 기대하며, library 화면은 제거되었다.
 - F1217-17: 설정 디자인 비교의 차이 48개를 page별 sub-item으로 기록하며, 각각 Red와 Green 시험으로 고친다.

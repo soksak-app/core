@@ -495,7 +495,11 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 	case "runtime.settings.read":
 		answer(s.viewSettings(unit), nil)
 	case "runtime.settings.on":
-		view.settings, view.settingValues = true, jsonText(s.viewSettings(unit))
+		text, err := jsonText(s.viewSettings(unit))
+		if err != nil {
+			return fmt.Errorf("view call %s: %w", call.Command, err)
+		}
+		view.settings, view.settingValues = true, text
 		done()
 	case "runtime.data.get", "runtime.data.set", "runtime.data.replace", "runtime.data.on":
 		return s.runDataCall(call, unit, view, answer)

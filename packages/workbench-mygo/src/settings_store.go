@@ -503,7 +503,11 @@ func (s *SettingsStore) checkPluginPatch(patch map[string]any) error {
 		}
 		id, ok := patch[key].(string)
 		if !ok {
-			return fmt.Errorf("Invalid setting %s: %s is not a plugin id", key, jsonText(patch[key]))
+			text, err := jsonText(patch[key])
+			if err != nil {
+				return fmt.Errorf("Invalid setting %s: %w", key, err)
+			}
+			return fmt.Errorf("Invalid setting %s: %s is not a plugin id", key, text)
 		}
 		if !s.servesCategory(definition.Category, id) {
 			return fmt.Errorf("%s: plugin %s is not a %s plugin", key, id, definition.Category)
@@ -563,15 +567,37 @@ func isOrder(value any, values []string) bool {
 }
 
 // jsonText writes value as JSON without escaping <, > and &, the text that the web workbench and the hosts write
-// (docs/spec/settings.md#values).
-func jsonText(value any) string {
+// (docs/spec/settings.md#values). A value that JSON cannot write, such as NaN, returns the encoding error.
+func jsonText(value any) (string, error) {
 	var text bytes.Buffer
 	encoder := json.NewEncoder(&text)
 	encoder.SetEscapeHTML(false)
 	if err := encoder.Encode(value); err != nil {
-		return fmt.Sprint(value)
+		return "", err
 	}
-	return strings.TrimSuffix(text.String(), "\n")
+	return strings.TrimSuffix(text.String(), "\n"), nil
+}
+
+// jsonTexts writes each item as jsonText does and joins them with commas.
+func jsonTexts[T any](items []T) (string, error) {
+	named := make([]string, len(items))
+	for i, item := range items {
+		text, err := jsonText(item)
+		if err != nil {
+			return "", err
+		}
+		named[i] = text
+	}
+	return strings.Join(named, ", "), nil
+}
+
+// refusal returns the refusal of value for key with reason, or the encoding error when JSON cannot write value.
+func refusal(key string, value any, reason string) error {
+	text, err := jsonText(value)
+	if err != nil {
+		return fmt.Errorf("Invalid setting %s: %w", key, err)
+	}
+	return fmt.Errorf("Invalid setting %s: %s%s", key, text, reason)
 }
 
 func integer(value any) (float64, bool) {
@@ -586,22 +612,22 @@ func (s *SettingsStore) validate(key string, value any) error {
 	if choices := catalog.choices(key); choices != nil && key != "textSize" {
 		text, ok := value.(string)
 		if !ok || !slices.Contains(choices, text) {
-			named := make([]string, len(choices))
-			for i, choice := range choices {
-				named[i] = jsonText(choice)
+			named, err := jsonTexts(choices)
+			if err != nil {
+				return fmt.Errorf("Invalid setting %s: %w", key, err)
 			}
-			return fmt.Errorf("Invalid setting %s: %s is not one of %s", key, jsonText(value), strings.Join(named, ", "))
+			return refusal(key, value, " is not one of "+named)
 		}
 	}
 	if key == "textSize" {
 		number, ok := value.(float64)
 		if !ok || !slices.Contains(catalog.Settings.TextSteps, number) {
-			return fmt.Errorf("Invalid setting %s: %s is not a text size step", key, jsonText(value))
+			return refusal(key, value, " is not a text size step")
 		}
 	}
 	if slices.Contains(catalog.Settings.Switches, key) {
 		if _, ok := value.(bool); !ok {
-			return fmt.Errorf("Invalid setting %s: %s is not a boolean", key, jsonText(value))
+			return refusal(key, value, " is not a boolean")
 		}
 	}
 	values, ordered := catalog.Settings.Orders[key]
@@ -609,11 +635,11 @@ func (s *SettingsStore) validate(key string, value any) error {
 		values, ordered = catalog.Settings.Orders["sidebarOrder"], true
 	}
 	if ordered && !isOrder(value, values) {
-		named := make([]string, len(values))
-		for i, item := range values {
-			named[i] = jsonText(item)
+		named, err := jsonTexts(values)
+		if err != nil {
+			return fmt.Errorf("Invalid setting %s: %w", key, err)
 		}
-		return fmt.Errorf("Invalid setting %s: %s is not an order of %s", key, jsonText(value), strings.Join(named, ", "))
+		return refusal(key, value, " is not an order of "+named)
 	}
 	if key == "diagnostics.log" {
 		if err := validateLogPolicy(value); err != nil {
@@ -626,13 +652,13 @@ func (s *SettingsStore) validate(key string, value any) error {
 	if key == "memorySaverDelay" {
 		number, ok := integer(value)
 		if bounds := catalog.Settings.MemorySaverDelay; !ok || number < bounds[0] || number > bounds[1] {
-			return fmt.Errorf("Invalid setting memorySaverDelay: %s", jsonText(value))
+			return refusal(key, value, "")
 		}
 	}
 	if bounds, ok := catalog.bounds(key); ok {
 		number, whole := integer(value)
 		if !whole || number < bounds[0] || number > bounds[1] {
-			return fmt.Errorf("Invalid setting %s: %s is not an integer from %v to %v", key, jsonText(value), bounds[0], bounds[1])
+			return refusal(key, value, fmt.Sprintf(" is not an integer from %v to %v", bounds[0], bounds[1]))
 		}
 	}
 	for _, definition := range s.Definitions {
@@ -647,7 +673,7 @@ func (s *SettingsStore) validate(key string, value any) error {
 func validateProjectsFolder(value any) error {
 	text, ok := value.(string)
 	if !ok || !(filepath.IsAbs(text) || strings.HasPrefix(text, "~/")) {
-		return fmt.Errorf("Invalid setting projectsFolder: %s is not an absolute path or a path that starts with ~/", jsonText(value))
+		return refusal("projectsFolder", value, " is not an absolute path or a path that starts with ~/")
 	}
 	return nil
 }
@@ -655,14 +681,22 @@ func validateProjectsFolder(value any) error {
 func validateLogPolicy(value any) error {
 	policy, err := decode[map[string]any](value)
 	if err != nil || policy == nil {
-		return fmt.Errorf("%s is not an object", jsonText(value))
+		text, err := jsonText(value)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("%s is not an object", text)
 	}
 	for name, level := range policy {
 		if !slices.Contains(eventClasses, name) {
 			return fmt.Errorf("the class %s is not one of %s", name, strings.Join(eventClasses, ", "))
 		}
 		if text, ok := level.(string); !ok || !slices.Contains(logLevels, text) {
-			return fmt.Errorf("the level %s of the class %s is not one of %s", jsonText(level), name, strings.Join(logLevels, ", "))
+			text, err := jsonText(level)
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("the level %s of the class %s is not one of %s", text, name, strings.Join(logLevels, ", "))
 		}
 	}
 	return nil

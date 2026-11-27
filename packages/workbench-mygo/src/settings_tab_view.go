@@ -958,7 +958,9 @@ func (s *Shell) settingsChanged() error {
 		return err
 	}
 	s.followScale()
-	s.followSettings()
+	if err := s.followSettings(); err != nil {
+		return err
+	}
 	if err := s.followDiagnostics(); err != nil {
 		return err
 	}
@@ -987,11 +989,19 @@ func (s *Shell) applySettings() error {
 	// The toast deadline follows the automatic-dismissal settings on every load and change of the settings.
 	auto, ok := s.settings.Value("autoDismissProblemToasts").(bool)
 	if !ok {
-		return fmt.Errorf("settings: autoDismissProblemToasts is %s, not a switch", jsonText(s.settings.Value("autoDismissProblemToasts")))
+		text, err := jsonText(s.settings.Value("autoDismissProblemToasts"))
+		if err != nil {
+			return fmt.Errorf("settings: autoDismissProblemToasts: %w", err)
+		}
+		return fmt.Errorf("settings: autoDismissProblemToasts is %s, not a switch", text)
 	}
 	seconds, ok := s.settings.Value("problemToastDismissSeconds").(float64)
 	if !ok {
-		return fmt.Errorf("settings: problemToastDismissSeconds is %s, not a number", jsonText(s.settings.Value("problemToastDismissSeconds")))
+		text, err := jsonText(s.settings.Value("problemToastDismissSeconds"))
+		if err != nil {
+			return fmt.Errorf("settings: problemToastDismissSeconds: %w", err)
+		}
+		return fmt.Errorf("settings: problemToastDismissSeconds is %s, not a number", text)
 	}
 	s.errors.ConfigureToastDeadline(auto, int64(seconds)*1000)
 	s.syncPluginChoices()
@@ -1598,7 +1608,11 @@ func (s *Shell) followDiagnostics() error {
 			classes[name] = level
 		}
 	}
-	if text := jsonText(classes); text != s.diagnostics.policy && s.settings.saving == 0 {
+	text, err := jsonText(classes)
+	if err != nil {
+		return fmt.Errorf("diagnostics.log: %w", err)
+	}
+	if text != s.diagnostics.policy && s.settings.saving == 0 {
 		s.diagnostics.policy = text
 		// A settings operation changes this policy itself. Its completed
 		// workspace call must reach the host before either producer or writer
