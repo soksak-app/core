@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1107: sok records each status read with its window, status name, surface, and result as sok.status.read in the Go and Rust tools.
 - F1217-7: The sidebar size group shows the first-width error and its fix button core.settings-tab.fix, and the minimum error.
 - F1217-7: A stored first width outside the minimum and maximum loads as stored, and only a change that leaves it outside is refused.
 - F1217-7: The width test of a long select reads the set layout segments as core.settings-tab.layout.

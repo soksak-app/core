@@ -426,6 +426,52 @@
       },
       "description": "One run of the command line tool: the command word, the arguments and the error text cut to 1024 bytes (`truncated` is true when either was cut), the microseconds, the exit status, and the first line of its standard error for a status other than 0."
     },
+    "sok.status.read": {
+      "layer": "sok",
+      "class": "call",
+      "level": [
+        "debug",
+        "warn"
+      ],
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "surface": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "micros": {
+            "type": "number"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "window",
+          "name",
+          "surface",
+          "micros",
+          "ok"
+        ]
+      },
+      "description": "One status read that the command line tool sends with status.get: the window, the status name, the surface that the command named (null when it named none), the microseconds, and for a failed read the error text cut to 1024 bytes (`truncated` is true when it was cut)."
+    },
     "sok.exec": {
       "layer": "sok",
       "class": "lifecycle",

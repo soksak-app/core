@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // Usage is the usage text.
@@ -540,6 +541,27 @@ func compactLine(raw json.RawMessage) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// recordStatusRead stores one status read that the command line tool sent with status.get, as sok.status.read. The record names the
+// window, the status and the surface that the command named (null when it named none). A failed read is stored at the level warn
+// with its error text cut to callTextBytes.
+func recordStatusRead(params map[string]any, started time.Time, err error) {
+	log := runLog.Load()
+	if log == nil {
+		return
+	}
+	fields := map[string]any{"window": params["window"], "name": params["name"], "surface": params["surface"], "micros": time.Since(started).Microseconds(), "ok": err == nil}
+	level := LevelDebug
+	if err != nil {
+		level = LevelWarn
+		text, cut := CutText(err.Error(), callTextBytes)
+		fields["error"] = text
+		if cut {
+			fields["truncated"] = true
+		}
+	}
+	log.Emit(level, "sok.status.read", fields)
+}
+
 // watch prints the status value and each later change, one per line. A status.ended of the watch ends it with the error
 // `status <name> ended: <reason>`. On SIGINT or SIGTERM the routine that receives the signal closes the connection and
 // ends the run itself (interrupted), so a command that waits in a write to its standard output ends too.
@@ -621,7 +643,9 @@ func watch(client *Client, params map[string]any, stdout io.Writer) error {
 	if surface, ok := params["surface"]; ok {
 		target["surface"] = surface
 	}
+	started := time.Now()
 	value, err := client.Request("status.get", target)
+	recordStatusRead(target, started, err)
 	if err != nil {
 		return finish(err)
 	}
@@ -774,7 +798,11 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 	if req.params != nil {
 		params = req.params
 	}
+	started := time.Now()
 	result, err := c.Request(req.method, params)
+	if req.method == "status.get" {
+		recordStatusRead(req.params, started, err)
+	}
 	if err != nil {
 		return err
 	}

@@ -188,6 +188,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "sok.panic" => Some(Class::Lifecycle),
         "sok.replay.divergence" => Some(Class::Frame),
         "sok.skill" => Some(Class::Lifecycle),
+        "sok.status.read" => Some(Class::Call),
         "workbench.background.session" => Some(Class::Lifecycle),
         "workbench.call" => Some(Class::Call),
         "workbench.command" => Some(Class::Call),

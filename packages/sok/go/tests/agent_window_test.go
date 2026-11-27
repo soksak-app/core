@@ -101,6 +101,43 @@ func TestTheOwnSurfaceSelectsItsWindow(t *testing.T) {
 	}
 }
 
+// contract: cli.status.read-recorded
+func TestEachStatusReadIsRecorded(t *testing.T) {
+	player := playCase(t, "sok-status-value")
+	support.StoreEveryLevel(t, player.configDir)
+	if code, _, stderr := loggedRun(player.configDir, sok.Run, "status", "core.screen", "--window", "main"); code != 0 {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	reads := storedEvents(t, player.configDir, "sok.status.read")
+	if len(reads) != 1 {
+		t.Fatalf("sok.status.read events %v", reads)
+	}
+	read := reads[0]
+	if read["window"] != "main" || read["name"] != "core.screen" || read["ok"] != true {
+		t.Fatalf("event: %v", read)
+	}
+	if _, ok := read["micros"].(float64); !ok {
+		t.Fatalf("event has no micros: %v", read)
+	}
+	if surface, present := read["surface"]; !present || surface != nil {
+		t.Fatalf("event names surface %v, want null", surface)
+	}
+}
+
+// contract: cli.status.read-recorded
+func TestWatchRecordsItsStatusRead(t *testing.T) {
+	player := playCase(t, "sok-watch-changes")
+	support.StoreEveryLevel(t, player.configDir)
+	code, _, stderr := loggedRun(player.configDir, sok.Run, "status", "core.screen", "--window", "main", "--watch")
+	if code != 1 || stderr != "sok: endpoint connection closed\n" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	reads := storedEvents(t, player.configDir, "sok.status.read")
+	if len(reads) != 1 || reads[0]["window"] != "main" || reads[0]["name"] != "core.screen" || reads[0]["ok"] != true {
+		t.Fatalf("sok.status.read events %v", reads)
+	}
+}
+
 // contract: cli.window.surface-in-no-window-fails
 func TestASurfaceInNoWindowFails(t *testing.T) {
 	player := playCase(t, "sok-surface-in-no-window")

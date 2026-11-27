@@ -602,3 +602,68 @@ fn describe_summary_holds_summary_statuses_and_full_holds_every_status() {
         "full lacks the tab statuses: {stderr} {full}"
     );
 }
+
+// contract: cli.status.read-recorded
+#[test]
+fn each_status_read_is_recorded() {
+    let player = play_case("sok-status-value");
+    let dir = player.dir();
+    policy::store_every_level(Path::new(&dir));
+    let (code, _, stderr) = run_with(
+        true,
+        &["status", "core.screen", "--window", "main"],
+        Some(&dir),
+    );
+    assert_eq!(code, 0, "{stderr}");
+    let recorded = events(Path::new(&dir));
+    let reads = named(&recorded, "sok.status.read");
+    assert_eq!(reads.len(), 1, "{recorded:?}");
+    let fields = &reads[0]["fields"];
+    assert!(
+        fields["window"] == "main"
+            && fields["name"] == "core.screen"
+            && fields["ok"] == true
+            && fields["micros"].is_u64()
+            && fields["surface"].is_null(),
+        "{}",
+        reads[0]
+    );
+}
+
+// contract: cli.status.read-recorded
+#[test]
+fn a_watch_records_its_status_read() {
+    let player = play_case("sok-watch-ends-after-change");
+    let dir = player.dir();
+    policy::store_every_level(Path::new(&dir));
+    let (code, _, stderr) = run_with(
+        true,
+        &[
+            "status",
+            "core.screen",
+            "--window",
+            "main",
+            "--surface",
+            "tab-1",
+            "--watch",
+        ],
+        Some(&dir),
+    );
+    assert_eq!(
+        (code, stderr.as_str()),
+        (1, "sok: status core.screen ended: surface-closed\n"),
+        "{stderr}"
+    );
+    let recorded = events(Path::new(&dir));
+    let reads = named(&recorded, "sok.status.read");
+    assert_eq!(reads.len(), 1, "{recorded:?}");
+    let fields = &reads[0]["fields"];
+    assert!(
+        fields["window"] == "main"
+            && fields["name"] == "core.screen"
+            && fields["surface"] == "tab-1"
+            && fields["ok"] == true,
+        "{}",
+        reads[0]
+    );
+}

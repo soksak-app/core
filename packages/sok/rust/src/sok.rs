@@ -755,6 +755,34 @@ fn compact_line(raw: &str) -> Result<String, String> {
 /// Prints the status value and each later change on its own line. `status.ended` of the watch ends it with the error
 /// `status <name> ended: <reason>`. On SIGINT or SIGTERM the routine of the signal closes the connection, stores the command with
 /// the result of the close and ends the process, also while this thread waits in a write to its standard output.
+/// Stores one status read that the command line tool sent with status.get, as sok.status.read. The record names the window, the
+/// status and the surface that the command named (null when it named none). A failed read is stored at the level warn with its
+/// error text cut to CALL_TEXT_BYTES.
+fn record_status_read(
+    params: &Map<String, Value>,
+    started: std::time::Instant,
+    sent: &Result<String, Failure>,
+) {
+    let mut fields = serde_json::json!({
+        "window": params.get("window").cloned().unwrap_or(Value::Null),
+        "name": params.get("name").cloned().unwrap_or(Value::Null),
+        "surface": params.get("surface").cloned().unwrap_or(Value::Null),
+        "micros": started.elapsed().as_micros() as u64,
+        "ok": sent.is_ok(),
+    });
+    let mut level = crate::event_log::Level::Debug;
+    if let Err(failure) = sent {
+        level = crate::event_log::Level::Warn;
+        let (text, cut) =
+            crate::event_bounds::cut_text(&failure.to_string(), crate::logged::CALL_TEXT_BYTES);
+        fields["error"] = serde_json::json!(text);
+        if cut {
+            fields["truncated"] = serde_json::json!(true);
+        }
+    }
+    crate::replay::emit_run_event(level, "sok.status.read", &fields);
+}
+
 fn watch(
     client: &mut Client,
     params: Map<String, Value>,
@@ -830,7 +858,14 @@ fn watch(
             target.insert(key.into(), value.clone());
         }
     }
-    let value = match client.request("status.get", Some(Value::Object(target)), &mut notify) {
+    let started = std::time::Instant::now();
+    let sent = client.request(
+        "status.get",
+        Some(Value::Object(target.clone())),
+        &mut notify,
+    );
+    record_status_read(&target, started, &sent);
+    let value = match sent {
         Ok(value) => value,
         Err(failure) => return finish(failure.into()),
     };
@@ -1064,11 +1099,19 @@ fn send(client: &mut Client, request: Request, stdout: &mut dyn Write) -> Result
             return Ok(());
         }
     }
-    let mut result = client.request(
+    let status_params = (request.method == "status.get")
+        .then(|| request.params.clone())
+        .flatten();
+    let started = std::time::Instant::now();
+    let sent = client.request(
         request.method,
         request.params.map(Value::Object),
         &mut no_notify,
-    )?;
+    );
+    if let Some(params) = status_params {
+        record_status_read(&params, started, &sent);
+    }
+    let mut result = sent?;
     if let Some(field) = request.field {
         let fields: HashMap<String, Box<RawValue>> = serde_json::from_str(&result)
             .map_err(|_| format!("{} returned no {field}", request.method))?;

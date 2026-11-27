@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1107: Go와 Rust sok가 보내는 status 읽기마다 window, 상태 이름, surface, 결과를 sok.status.read로 기록한다.
 - F1217-7: 사이드바 크기 그룹은 처음 폭 오류와 범위 맞추기 버튼 core.settings-tab.fix, 그리고 최소 폭 오류를 보인다.
 - F1217-7: 최소와 최대 밖의 저장된 처음 폭은 저장된 대로 열리고, 그대로 두는 변경만 거부된다.
 - F1217-7: 긴 선택지 너비 테스트는 세트 배치 세그먼트를 core.settings-tab.layout으로 읽는다.
