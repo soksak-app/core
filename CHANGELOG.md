@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: The web Red of the home status line fails at import, because its module exports no createHomeStatusBar.
 - F1234: The copy list of the exposure check and the common-only keys test name the copies and keys that the declarations hold on main, so both tests pass.
 - F1217-7-2-2: The common setting projectsFolder, default ~/Projects, refuses a value that is not an absolute path or a path that starts with ~/ in mygo and the web workbench.
 - F1232: The checklist records the Hangul comment item F1232 with its sub-items F1232-1 to F1232-4, one per package folder.
