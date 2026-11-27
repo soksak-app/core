@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7-2-5: mygo writes the value of a settings refusal as JSON without escaping <, > and &, the text of the web workbench and the hosts.
 - F1107: The window-check package ships the event catalog of docs/spec/events.json, which holds the status read events.
 - F1217-7-2-2: The 작업 공간 page draws the group 프로젝트 폴더 with the folder row of projectsFolder and its 찾아보기 button, which runs core.settings.choose-folder in both hosts.
 - F1107: The scripted status-get cases of F1107 run through the scripted page runner, which plays every scripted case.

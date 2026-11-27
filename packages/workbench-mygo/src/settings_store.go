@@ -1,6 +1,7 @@
 package workbench
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -561,12 +562,16 @@ func isOrder(value any, values []string) bool {
 	return true
 }
 
+// jsonText writes value as JSON without escaping <, > and &, the text that the web workbench and the hosts write
+// (docs/spec/settings.md#values).
 func jsonText(value any) string {
-	text, err := json.Marshal(value)
-	if err != nil {
+	var text bytes.Buffer
+	encoder := json.NewEncoder(&text)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
 		return fmt.Sprint(value)
 	}
-	return string(text)
+	return strings.TrimSuffix(text.String(), "\n")
 }
 
 func integer(value any) (float64, bool) {
