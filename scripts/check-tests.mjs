@@ -18076,6 +18076,17 @@ const FEATURE_LINKS = [
     expected: "The declaration copies of the exposure check and the common-only keys of the parity check match the declarations on main, so both tests pass.",
     levels: ["unit"],
   },
+  {
+    id: "F1248",
+    implementation: [
+      { file: "packages/host/rust/tests/support/platform/platform.rs", symbol: "pub const SIDECAR_OS: &str = \"darwin\";" },
+    ],
+    tests: [
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "platform audit finds no selectors outside platform directories" },
+    ],
+    expected: "The Rust surface test fixture reads the sidecar OS key from platform/<os>/ and no cfg of the fixture selects it, so the platform audit reports no selector outside platform directories.",
+    levels: ["unit"],
+  },
 ];
 
 // Generated output is checked for agreement with its source and is not counted as an independent implementation.
