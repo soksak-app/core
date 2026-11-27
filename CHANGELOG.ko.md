@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1240: 동시 watch client test가 제거된 library 화면 대신, endpoint case가 담는 home 화면을 기다린다.
 - F1233-2: 테마 테스트는 로그 기록마다 기다리고 실패하면 host 오류 record를 출력한다.
 - F1217-17-9: 플러그인 페이지가 설치 전 사이드카와 더하는 것 행을 보이고, 필요 행에 필요한 플러그인 이름을 쓰며, 개발 빌드 배지를 보이고, 비어 있는 섹션 묶음을 그리지 않는다.
 - F1236-1: layout 테스트 fixture가 테스트 environment의 왼쪽 창 사이드바 플러그인 fieldprobe를 설치하고, notice 테스트의 environment가 새 space의 grid를 선언해서, F1231-1 이후 실패하던 mygo 테스트 6개가 다시 통과한다.

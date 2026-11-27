@@ -146,11 +146,11 @@ test("concurrent watches of one name unwatch only after the last one ends", asyn
   t.after(() => client.close());
   const unwatched = requested(server, (m) => m.method === "status.unwatch");
   const home = client.watch("main", "core.screen", screenIs("workspace"));
-  const later = client.watch("main", "core.screen", screenIs("library"));
+  const later = client.watch("main", "core.screen", screenIs("home"));
   assert.equal((await home).screen, "workspace");
   await client.request("windows.list");
   assert.ok(!server.requests.some((m) => m.method === "status.unwatch"));
-  assert.equal((await later).screen, "library");
+  assert.equal((await later).screen, "home");
   await unwatched;
   assert.equal(server.requests.filter((m) => m.method === "status.watch").length, 1);
 });

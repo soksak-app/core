@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1240: The client watch test waits for the home screen that the endpoint case holds instead of the removed library screen.
 - F1233-2: The theme test waits on each log write and prints the host error records when it fails.
 - F1217-17-9: The plugin page shows the sidecar and contribution rows before installation, names the required plugin in its row, shows the development build badge, and draws no empty sections group.
 - F1236-1: The layout test fixture installs fieldprobe, the plugin of the left window sidebar of the test environment, and the environment of the notice tests declares the grid of a new space, so six mygo tests pass again after F1231-1.
