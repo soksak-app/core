@@ -565,3 +565,11 @@ func TestTheShortcutAsksTheRemovalOfTheSelectedRow(t *testing.T) {
 		t.Fatal("cmd+Backspace in the search field asks the removal of a row")
 	}
 }
+
+// The search field shows the shortcut of its focus command as a caption after the field (docs/spec/projects.md#project-home).
+func TestTheSearchFieldShowsItsShortcut(t *testing.T) {
+	f := newShell(t, &storedHost{})
+	if !f.tester.HasText("⌘O") {
+		t.Fatalf("the search field shows no caption ⌘O: %q", f.tester.Texts())
+	}
+}

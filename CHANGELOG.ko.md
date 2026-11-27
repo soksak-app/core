@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-8: 프로젝트 홈 검색 칸이 두 host 모두에서 칸 뒤에 ⌘O 글을 보인다.
 - F1107: status read 기록은 resolved surface가 보여 주는 owned session을 이름으로 적는다.
 - F1217-8: 프로젝트 홈 키 안내 줄이 두 host 모두에서 제거 키 cmd+Backspace를 적는다.
 - F1217-8: cmd+Backspace는 두 host에서 선택한 프로젝트 홈 줄의 제거를 묻고, core.home.confirm은 선택한 줄에 project를 받지 않는다.

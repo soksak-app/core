@@ -55,7 +55,7 @@ export function createHome(root) {
     <main class="home">
       <div class="home__panel">
         <div class="home__brand"><span class="home__logo" aria-hidden="true"></span><span class="home__name">SOKSAK</span><span class="home__question">어디서 시작할까?</span></div>
-        <label class="home__search"><span class="sr-only">프로젝트 찾기</span><input class="text-field" type="search" data-expose="core.home.search" data-command="core.home.search" data-value="query" data-live placeholder="프로젝트 찾기 또는 폴더 경로 붙여넣기" autocomplete="off"></label>
+        <label class="home__search"><span class="sr-only">프로젝트 찾기</span><input class="text-field" type="search" data-expose="core.home.search" data-command="core.home.search" data-value="query" data-live placeholder="프로젝트 찾기 또는 폴더 경로 붙여넣기" autocomplete="off"><span class="home__search-key">⌘O</span></label>
         <div class="home__actions"></div>
         <div class="home__form" hidden></div>
         <div class="home__list" role="list"></div>

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-8: The project home search field shows the caption ⌘O after it in both hosts.
 - F1107: The status-read record names the owned session that the resolved surface shows.
 - F1217-8: The project home key hint names the removal key cmd+Backspace in both hosts.
 - F1217-8: cmd+Backspace asks the removal of the selected project home row in both hosts, and core.home.confirm takes no project for the selected row.

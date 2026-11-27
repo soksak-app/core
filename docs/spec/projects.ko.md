@@ -17,7 +17,7 @@
 프로젝트 홈은 탭이 없고 플러그인 항목이 없는 런처 화면 하나다. 플러그인은 [설정 탭](settings.ko.md#플러그인)에서 관리한다. 홈은 위에서 아래로 다음 요소를 보여 주며, 동작하는 요소는 각각 자기 선언된 명령을 이름으로 적는다.
 
 1. SOKSAK 로고와 줄 어디서 시작할까?. 이 글은 명령이 없다.
-2. 자리 표시(placeholder) 문구 프로젝트 찾기 또는 폴더 경로 붙여넣기를 가진 검색 칸(element `core.home.search`). 홈이 보이면 칸이 포커스를 받는다. 입력하면 `core.home.search {query}`를 실행하며, 목록은 각 프로젝트를 이름과 경로로 맞춘다. `core.home.search.focus`는 칸에 포커스를 두며 `cmd+o`에 묶여 있다([exposure](exposure.ko.md)). Escape는 검색어가 비어 있지 않으면 `core.home.search {query: ""}`를 실행한다. 묶인 단축키가 없는 동안 검색 칸은 단축키 안내를 보이지 않는다.
+2. 자리 표시(placeholder) 문구 프로젝트 찾기 또는 폴더 경로 붙여넣기를 가진 검색 칸(element `core.home.search`). 홈이 보이면 칸이 포커스를 받는다. 입력하면 `core.home.search {query}`를 실행하며, 목록은 각 프로젝트를 이름과 경로로 맞춘다. `core.home.search.focus`는 칸에 포커스를 두며 `cmd+o`에 묶여 있다([exposure](exposure.ko.md)). Escape는 검색어가 비어 있지 않으면 `core.home.search {query: ""}`를 실행한다. 묶인 `core.home.search.focus`의 단축키 ⌘O를 칸 뒤의 글로 보이며, 묶인 단축키가 없는 동안에는 글을 보이지 않는다.
 3. 버튼 두 개가 있는 줄. 기본 버튼인 새 프로젝트(element `core.home.add`)는 `core.home.form.open {mode: "create"}`를 실행한다. 폴더 열기는 `core.home.form.open {mode: "open"}`을 실행하며, 이는 기존 폴더를 받아들이는 폼을 연다. Git clone 버튼은 보이지 않는다.
 4. 프로젝트 목록. 고정한 프로젝트가 먼저 묶음 제목 고정 아래에 나온다. 나머지 프로젝트는 묶음 제목 최근 아래에 나오며, 최근 묶음 제목은 고정한 프로젝트가 있는 동안에만 보인다. 각 묶음 안의 순서는 마지막으로 연 시각의 최신순이다. 목록에는 정렬 컨트롤이 없다. 줄의 어느 곳을 누르든 `core.home.open {project}`를 실행하며, 프로젝트를 그 자리에서 연다. 각 줄은 한 줄에 다음을 보여 준다:
    - 이름의 첫 글자를 담은 문자 정사각형. 적용된 테마의 text 토큰과 함께 accent 토큰을 쓴다.

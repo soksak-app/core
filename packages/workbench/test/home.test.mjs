@@ -242,3 +242,9 @@ test("the key hint of the project home names the bound keys: the arrows, Enter, 
   await settled();
   assert.equal(root.querySelector(".home__hint").textContent, "↑↓ 이동Enter 열기⌘⌫ 목록에서 빼기⌘, 설정");
 });
+
+test("the search field shows the shortcut of its focus command after the field", async () => {
+  const { root } = mount([project("a", "alpha")]);
+  await settled();
+  assert.equal(root.querySelector(".home__search .home__search-key")?.textContent, "⌘O", "the search field shows no caption ⌘O");
+});
