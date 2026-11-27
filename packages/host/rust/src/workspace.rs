@@ -247,10 +247,10 @@ fn put_plugin_data(path: &Path, req: Request) -> Result<Value, String> {
         ));
     };
     if let (Some(base), Some(default)) = (&req.base, &req.default) {
-        // default: a key that stores no entry stands at the default of its declaration, which the request carries.
         let standing = keys
             .get(&key)
             .and_then(|stored| stored.get("value"))
+            // default: a key that stores no entry stands at the default of its declaration, which the request carries.
             .unwrap_or(default);
         if !same_value(standing, base) {
             return Ok(false.into());
