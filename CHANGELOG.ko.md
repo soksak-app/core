@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
+- F1244: window-check 패키지가 배포하는 event catalog를 docs/spec/events.json과 다시 같게 맞춘다.
 - F1237-2: 데이터 store가 없는 directory의 store close는 그 directory를 이름으로 든 오류로 거부하고, store는 정규 경로로 키를 둔다.
 - F1240: 클라이언트 watch test 시간 초과의 원인을 기록에 맞게 고쳤다. 원인은 watch 코드가 아니라 F1217 디자인 작업이 바꾼 case 값이다.
 - F1217-17-1-1: 모양 page의 글자 크기 단계 행 표시 이름이 web과 mygo host의 선언 사본에 있으며, 명세와 mygo 표시 이름은 설정 선언과 함께 들어간다.

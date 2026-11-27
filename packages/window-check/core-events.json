@@ -3652,6 +3652,37 @@
       },
       "description": "The memory saver unloaded a hidden tab after host.place replied; trigger is delay, pressure or command."
     },
+    "workbench.tab.hold.skipped": {
+      "layer": "workbench",
+      "class": "lifecycle",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string"
+          },
+          "plugin": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "enum": ["unit-nil", "no-composition", "background", "stopped", "detach-pending", "unloaded"]
+          },
+          "hiddenDue": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "tab",
+          "plugin",
+          "reason",
+          "hiddenDue"
+        ]
+      },
+      "description": "A hidden tab that holdHiddenTabs leaves without a surface, with the reason: its plugin unit is not loaded, the plugin has no composition or a background session, its surface stopped or its image detach is pending, or the memory saver unloaded it. hiddenDue is the flag that started the pass."
+    },
     "workbench.tab.restored": {
       "layer": "workbench",
       "class": "lifecycle",
