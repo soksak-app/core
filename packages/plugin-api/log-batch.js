@@ -161,6 +161,13 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     // A batch carries at most BATCH_EVENTS queued events. The rest stays queued, and the chain after this call sends it at once.
     const events = queue.slice(0, BATCH_EVENTS);
     queue = queue.slice(BATCH_EVENTS);
+    // The queued events of this batch, and their bytes, are the ones a refusal loses; the records that the batch adds below are not counted.
+    const queued = events.length;
+    const queuedBytes = events.reduce((sum, entry) => sum + entry.charge, 0);
+    let carried = new Map();
+    let refused = false;
+    // The statement of the anchor that this batch carries: a refused batch loses it, so it is counted with the queued events.
+    let clockStated = 0;
     for (const entry of events) queueBytes -= entry.charge;
     // The waits end with the batch that carries their record, so each record names its own waiter.
     const mine = events.filter((entry) => entry.waiter !== undefined).map((entry) => entry.waiter);
@@ -170,6 +177,8 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
         // events: page.log.dropped, workbench.log.dropped
         events.unshift(ownRecord(now(), "warn", own.dropped, { count, bytes, reason }));
       }
+      // The counts of this batch are kept until it is relayed, so that a refusal can carry them again.
+      carried = lost;
       lost = new Map();
       // The events that the gate refused are reported with the exact count for each class and level; the report passes every gate.
       if (reportGated) {
@@ -188,6 +197,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
         // half of it, which a reader needs to order the events of the page among those of the host.
         if (!base.stated) {
           base.stated = true;
+          clockStated = 1;
           // events: page.log.clock, workbench.log.clock
           events.unshift(ownRecord(base.at, "info", own.clock,
             { trip_us: Math.round(base.trip * 1000), resolution_us: base.resolution_us }));
@@ -203,12 +213,22 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
         await call({ action: "batch", events: stamped });
       } catch (error) {
         report(new Error(`page event batch of ${events.length} events failed: ${error.message}`, { cause: error }));
+        refused = true;
+        // The counts that this batch carried are kept for the next batch, and the refused queued events are added to them. A refusal does
+        // not send again at once: the next send starts from a new event or from the next interval, so the sends stay bounded.
+        const lostEvents = queued + clockStated;
+        const reasons = lostEvents > 0 ? [...carried, ["the host refused the batch", { count: lostEvents, bytes: queuedBytes }]] : carried;
+        for (const [reason, { count, bytes }] of reasons) {
+          const held = lost.get(reason) ?? { count: 0, bytes: 0 };
+          lost.set(reason, { count: held.count + count, bytes: held.bytes + bytes });
+        }
       }
     })();
     await sending;
     sending = null;
     for (const end of mine) end();
-    if (queue.length > 0 || lost.size > 0 || gatedIsDue(now())) await send();
+    // After a refusal the counts wait for the next batch, which an event or the next interval starts, so a refusal sends nothing again at once.
+    if (queue.length > 0 || (lost.size > 0 && !refused) || gatedIsDue(now())) await send();
     awaitGated();
   };
 

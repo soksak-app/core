@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1220: The page event batcher counts the events of a batch that the host refused as dropped with the reason `the host refused the batch` and states them in the next batch, and a refusal sends nothing again at once (Red: the 9 refused events were lost without a count).
 - F1161: A persistent service whose `hello` version differs from `installed.json` writes the warn event `host.sidecar.outdated` (name, running, installed) once per connection in the Go and the Rust host (Red: no record was written).
 - F1160: `core.app.update` refuses an executable that runs from a macOS App Translocation folder before the candidate is downloaded or the application quits, with an error that names the path and the quarantine step; setup and the update share one path rule in each host (Red: the stage call took no executable).
 - F1217-1, F1217-2: The specification shows the settings as a tab of the main window with the pages of the design, the project home as a launcher, the window tools of the front screen, and one standard control set with a row grid that measures no row.
