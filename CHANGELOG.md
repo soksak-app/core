@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-17-1: The look page of the settings specification follows the design: the system mode, fixed shape defaults and the font and size rows.
 - F1217: The sok watch test expects the home screen that its case plays, as the library screen is removed.
 - F1217-17: The settings design comparison of 48 differences is recorded as sub-items by page, to be fixed with Red and Green tests.
 - F1232-2: The comments of the 28 files of packages/workbench in the unit are English, and the controls they name carry their command identifiers.
