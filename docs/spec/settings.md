@@ -124,7 +124,9 @@ Group `테마`, description `테마가 색과 형태의 기본값을 정하고, 
 | Label | Control | Choices | Default | Scope |
 | --- | --- | --- | --- | --- |
 | `테마` | Swatches | The ten themes `midnight`, `nord`, `solar`, `forest`, `ember`, `slate`, `mist`, `grape`, `sand` and `paper`; each swatch shows the theme colors and its name | `midnight` | common and project |
-| `모드` | Select | `어두움` (`dark`), `밝음` (`light`), `시스템 따름` (`system`, the appearanGroup `형태`, description `테마가 준 값에서 시작한다.`
+| `모드` | Select | `어두움` (`dark`), `밝음` (`light`), `시스템 따름` (`system`, the appearance of the system) | `어두움` | common and project |
+
+Group `형태`, description `테마가 준 값에서 시작한다.`
 
 | Label | Control | Range | Default | Scope |
 | --- | --- | --- | --- | --- |
@@ -134,7 +136,6 @@ Group `테마`, description `테마가 색과 형태의 기본값을 정하고, 
 | `글자 크기` | Number input with unit `px` | 10–20 | 13 | common and project |
 
 The page has no group `표시` and no text size row: the design does not show the focus indicator, the window rule, the dimming of unfocused areas or the text size steps.
-ues, because the page declares no label for them.
 
 ### 작업 공간
 

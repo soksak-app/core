@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-17-1: The look page of the settings specification is restored whole in both languages after an edit cut its text.
 - F1217-7-2-6: mygo reports a value that JSON cannot write, such as NaN, with the encoding error at each caller of jsonText instead of a fmt.Sprint text.
 - F1217-17-1: The look page of the settings specification follows the design: the system mode, fixed shape defaults and the font and size rows.
 - F1217: The sok watch test expects the home screen that its case plays, as the library screen is removed.
