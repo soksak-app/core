@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1231: The record of the count test notes its observed Red in a scratch copy.
 - F1217-10-1: The hidden view check reads core.toasts in place of the removed status core.workbench.error, and it passes on three applications.
 - F1215: The accounts declaration closes with the evidence of its sub-items in the checklist; no code changed.
 - F1231: The status line of each card and window sidebar shows the warning of its newest missing plugin in place of a line above its sections, and core.sidebars reports status and warning.
