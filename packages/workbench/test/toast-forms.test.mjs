@@ -69,3 +69,27 @@ test("the pointer or the focus on a toast holds its notice while it is over, and
   node.dispatchEvent(new window.Event("focusout"));
   assert.equal(store.notice(id).holds, 0);
 });
+
+// The deck stack spreads under the pointer, and the toasts have no enter or leave animation: the bar of a toast is the only one, and
+// reduced motion stops it (docs/spec/notifications.md#toasts).
+test("the deck stack spreads on hover, and reduced motion stops the bar and leaves no toast animation", () => {
+  const css = readFileSync(new URL("../app.css", import.meta.url), "utf8");
+  assert.match(css, /#toasts\[data-style="deck"\]:hover \.toast:not\(:first-child\) \{ transform: none;/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.toast__bar \{ animation: none; \} \}/);
+  assert.doesNotMatch(css, /\.toast(?:\[[^\]]*\])?\s*\{[^}]*animation:/, "a toast has no animation of its own");
+});
+
+test("running an action closes its toast and runs its command", async (t) => {
+  const { document, store } = fixture(t, "card");
+  const { registry } = await import("../exposure.js");
+  const ran = [];
+  registry.command("core.card.focus", (params) => { ran.push(params); });
+  const id = store.show({ kind: "info", title: "saved", actions: [{ label: "카드로 가기", command: "core.card.focus", params: { card: "c1" } }] });
+  const button = document.querySelector(`#toasts > .toast[data-notice="${id}"] .toast__action`);
+  assert.equal(button.dataset.expose, "core.notices.action");
+  assert.equal(button.dataset.command, "core.card.focus");
+  button.click();
+  assert.equal(store.toasts().some((toast) => toast.id === id), false, "the action closes the toast");
+  await registry.commandsEnded();
+  assert.deepEqual(ran, [{ card: "c1" }], "the action runs its command with its parameters");
+});

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3: The toast tests pin the deck spread on hover, the reduced-motion stop of the toast bar, and the close of a toast by its action.
 - F1224: The clipboard test names its grant a clipboard capability, which is a grant and not a plugin category.
 - F1225: The Tauri gen output is build output: git no longer tracks apps/tauriv2/gen, which tauri-build recreates on each build.
 - F1217-7: The settings menu lists each loaded plugin with settings or accounts as core.settings-tab.plugin-item, under the group 설정이 있는 플러그인.

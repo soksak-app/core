@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3: 토스트 테스트는 덱의 마우스 오버 펼침, 동작 줄이기 설정의 막대 정지, 동작으로 닫힘을 고정한다.
 - F1224: 클립보드 테스트 이름이 권한을 clipboard capability로 쓴다. 이 이름은 plugin category가 아닌 권한을 가리킨다.
 - F1225: Tauri gen 출력은 빌드 산출물이어서, git은 apps/tauriv2/gen을 더 이상 추적하지 않습니다. tauri-build가 빌드마다 다시 만듭니다.
 - F1217-7: 설정 메뉴는 설정이나 계정이 있는 불러온 플러그인을 core.settings-tab.plugin-item 항목으로 설정이 있는 플러그인 묶음에 나열한다.
