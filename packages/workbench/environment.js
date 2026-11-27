@@ -217,6 +217,8 @@ export function installEnvironment(environmentDocument, installedDocument) {
     // default: dependencies is an optional field of plugin.json; without it there are no sidecars.
     dependencies: manifest.dependencies ?? {},
     // default: accounts is an optional field of plugin.json; without it the plugin keeps no accounts (docs/spec/plugins.md#accounts).
+    // default: categories is optional; without it the plugin serves no category (docs/spec/plugins.md#plugin-categories).
+    categories: manifest.categories ?? [],
     accounts: manifest.accounts ?? null,
     // default: programs is an optional field of plugin.json; without it the plugin runs no program.
     programs: manifest.programs ?? {},

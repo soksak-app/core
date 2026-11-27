@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-17-10: 설정 검색과 설치됨 검색은 플러그인의 분류 이름으로도 플러그인을 찾는다.
 - F1270: 복제 이벤트는 모든 gate를 통과하는 명명된 예외라서 진단 빌드가 기본 정책에서도 저장한다.
 - F1236-6: sidebar 없는 mygo surface 테스트는 테스트 environment의 workspace를 유지하고, 두 테스트는 sidebar plugin을 설치한다.
 - F1268: local monitor 제거마다 `native.observe.removed`를 저장하고, 등록과 짝을 제거 수로 맞춘다.

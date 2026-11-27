@@ -93,13 +93,14 @@ func installedMatches(entry pluginEntry, filter string) bool {
 	return true
 }
 
-// installedQueryMatches reports whether a row matches the search text of Installed: its name, its id or its description.
-func installedQueryMatches(entry pluginEntry, query string) bool {
+// installedQueryMatches reports whether a row matches the search text of Installed: its name, its id, its description or the name of one
+// of its plugin categories (docs/spec/settings.md#plugins).
+func installedQueryMatches(entry pluginEntry, categories []string, query string) bool {
 	query = strings.ToLower(strings.TrimSpace(query))
 	if query == "" {
 		return true
 	}
-	for _, text := range []string{entry.row.Name, entry.row.ID, entry.row.Description} {
+	for _, text := range append([]string{entry.row.Name, entry.row.ID, entry.row.Description}, categories...) {
 		if strings.Contains(strings.ToLower(text), query) {
 			return true
 		}
@@ -244,7 +245,12 @@ func (s *Shell) buildInstalled(b *settingsBuilder) error {
 	rows = append(rows, settingsRow{name: "", controls: []*SettingsControl{search}}, settingsRow{name: "거르기", controls: chips})
 	shown := 0
 	for _, entry := range entries {
-		if !installedMatches(entry, w.filter) || !installedQueryMatches(entry, w.query) {
+		// default: a row of a plugin that is not loaded has no categories.
+		var categories []string
+		if loaded := s.loadedPlugin(entry.row.ID); loaded != nil {
+			categories = loaded.Categories
+		}
+		if !installedMatches(entry, w.filter) || !installedQueryMatches(entry, categories, w.query) {
 			continue
 		}
 		shown++

@@ -287,7 +287,12 @@ func (s *Shell) matchSettings(store *SettingsStore, query string) settingsMatch 
 		}
 	}
 	for _, row := range s.pluginOperations.Status().Plugins {
-		if !contains(row.Name, row.ID, row.Description) {
+		texts := []string{row.Name, row.ID, row.Description}
+		// A row matches by the categories of its loaded plugin (docs/spec/settings.md#plugins); a row without a loaded plugin has none.
+		if loaded := s.loadedPlugin(row.ID); loaded != nil {
+			texts = append(texts, loaded.Categories...)
+		}
+		if !contains(texts...) {
 			continue
 		}
 		if row.State == "available" {
