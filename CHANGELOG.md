@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1252: The checklist line of this item is in the top-level list of the checklist.
 - F1239-3: The settings tab comes to the front on the project home, and the window reports the work screen while it is in front.
 - F1249: The host file audit records the sok category test pair as an allowed difference of the Rust private test placement.
 - F959-4: The Tauri run passed on a bundle built before later commits changed the request path; F959-4 waits for the final verification batch.
