@@ -43,17 +43,7 @@ func TestAViewCreatedAfterAReloadReceivesTheCurrentTheme(t *testing.T) {
 	}
 	before := probe.waitCall(t, "probe.opened")["theme"]
 
-	s := probe.s
-	s.host.relay = &Relay[relayTarget]{waiting: map[uint64]*relayWaiter[relayTarget]{}}
-	s.reloadCancelLayout = func() error { return nil }
-	s.reloadKeysPageEnded = func() {}
-	s.reloadHideSurface = func(unsafe.Pointer, bool) {}
-	s.reloadCloseImage = func(unsafe.Pointer) {}
-	probe.main(func() {
-		if _, err := s.reloadSurfaceDocuments(); err != nil {
-			t.Errorf("reload the surface documents: %v", err)
-		}
-	})
+	reloadSurfaceDocumentsOf(t, probe)
 
 	if err := probe.attach(t, nullOriginStart(), "ui/page.html"); err != nil {
 		t.Fatalf("attach the view after the reload: %v", err)
@@ -70,4 +60,21 @@ func TestAViewCreatedAfterAReloadReceivesTheCurrentTheme(t *testing.T) {
 	if !reflect.DeepEqual(after, before) {
 		t.Fatalf("the view after the reload read the theme %v, want the theme before the reload %v", after, before)
 	}
+}
+
+// reloadSurfaceDocumentsOf runs the reload of the surface documents of the probe on the main thread, with the reload steps of the
+// window stubbed, as a main page reload runs it (docs/spec/native-host.md#page-reload).
+func reloadSurfaceDocumentsOf(t *testing.T, probe *viewProbe) {
+	t.Helper()
+	s := probe.s
+	s.host.relay = &Relay[relayTarget]{waiting: map[uint64]*relayWaiter[relayTarget]{}}
+	s.reloadCancelLayout = func() error { return nil }
+	s.reloadKeysPageEnded = func() {}
+	s.reloadHideSurface = func(unsafe.Pointer, bool) {}
+	s.reloadCloseImage = func(unsafe.Pointer) {}
+	probe.main(func() {
+		if _, err := s.reloadSurfaceDocuments(); err != nil {
+			t.Errorf("reload the surface documents: %v", err)
+		}
+	})
 }

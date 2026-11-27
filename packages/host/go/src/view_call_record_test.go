@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -579,5 +580,52 @@ func TestViewRuntimeLogStoresTheAppliedThemeWithTheSurfaceOfTheView(t *testing.T
 	command.Env = append(os.Environ(), viewLogDeliveryChild+"="+config)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("child theme record: %v: %s", err, output)
+	}
+}
+
+// A view that the reloaded page creates writes its applied theme as a record, the same as the view before the reload.
+// contract: view.theme.first-script
+func TestAViewCreatedAfterAReloadRecordsTheAppliedTheme(t *testing.T) {
+	theme := Theme{Scheme: "dark", Tokens: map[string]string{"surface": "#101010"}}
+	probe := newViewProbe(t, theme)
+	config := probe.s.host.configDir
+	record := startViewRecordWriter(t, config)
+	// The host holds the event writer of its run, which the runtime.log calls of its views write to.
+	probe.s.host.events = record
+	if err := probe.attach(t, nullOriginStart(), "ui/page.html"); err != nil {
+		t.Fatalf("attach the view before the reload: %v", err)
+	}
+	// The view before the reload has loaded its page when its first call arrives, so the reload ends a loaded view.
+	probe.waitCall(t, "probe.opened")
+	reloadSurfaceDocumentsOf(t, probe)
+	if err := probe.attach(t, nullOriginStart(), "ui/page.html"); err != nil {
+		t.Fatalf("attach the view after the reload: %v", err)
+	}
+	// Each view writes the theme that its first script read, so both views leave one record of the same theme.
+	want := []any{
+		map[string]any{"scheme": "dark", "source": "start", "surface": "probe-surface"},
+		map[string]any{"scheme": "dark", "source": "start", "surface": "probe-surface"},
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if err := record.Flush(); err != nil {
+			t.Fatal(err)
+		}
+		var stored []any
+		for _, event := range viewRecordEvents(t, config) {
+			if event["event"] == "page.theme.applied" {
+				stored = append(stored, event["fields"])
+			}
+		}
+		if reflect.DeepEqual(stored, want) {
+			return
+		}
+		if len(stored) > len(want) || time.Now().After(deadline) {
+			probe.mu.Lock()
+			events := append([]hostEvent(nil), probe.events...)
+			probe.mu.Unlock()
+			t.Fatalf("page.theme.applied records %v, want %v; probe events %v", stored, want, events)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

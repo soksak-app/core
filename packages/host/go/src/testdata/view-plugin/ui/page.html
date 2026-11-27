@@ -11,6 +11,9 @@ let calls = 0;
 // The first call reports the address of the page and what its first script reads: the theme and the start values of its surface.
 send({ sok: 1, id: ++calls, command: 'probe.opened', params: { href: location.href, theme: window.sokTheme ?? null, surface: window.sokSurface ?? null, channel: window.sokChannel ?? null } });
 send({ event: 'view.ready', plugin: 'probe', document: 'doc-1', time_origin: performance.timeOrigin });
+// The theme that the first script read is written as the record page.theme.applied through the runtime log call of the channel.
+const now = performance.now();
+send({ sok: 1, id: ++calls, command: 'runtime.log', params: { action: 'batch', events: [{ ts_us: Math.round((performance.timeOrigin + now) * 1000), mono_ns: Math.round(now * 1000000), page: 'doc-1', level: 'info', event: 'page.theme.applied', fields: { scheme: window.sokTheme?.scheme ?? null, source: 'start' } }] } });
 // Each message that the host posts to the document is reported back as a call with the message as its params.
 window.addEventListener('message', (event) => send({ sok: 1, id: ++calls, command: 'probe.received', params: event.data }));
 </script>

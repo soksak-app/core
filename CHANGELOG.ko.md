@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1108: 메인 페이지 reload로 만들어진 view가 적용한 theme을 page.theme.applied 기록으로 남기며, Go 호스트 테스트가 probe view로 reload를 실행해 이를 확인한다.
 - F1217-7: sok 감시 테스트는 endpoint case의 값 home을 기대한다.
 - F1107-5: 문자열이 아닌 status surface 요청은 빈 surface로 읽지 않고 보낸 값과 함께 거부한다.
 - F1217-7: 설정 버튼의 명령을 core.setup.install로 스펙에 적었다.
