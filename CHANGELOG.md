@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1254: The checklist line of this item is in the top-level list of the checklist.
 - F1258-1: The F1258 record states the environment that the six tests need, because they pass on main with the installed dependencies.
 - F1256: The checklist line of this item is in the top-level list of the checklist.
 - F1258: check-preflight runs the lockfile rejection of the CI jobs as the make target check-lockfiles.
