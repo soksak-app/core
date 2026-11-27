@@ -15,6 +15,8 @@ type pluginEntry struct {
 	row     PluginRow
 	problem bool
 	update  bool
+	// development is true when the installed version is newer than the newest published version.
+	development bool
 	// missing lists the dependencies of the loaded plugin that no installed plugin provides, sorted by id.
 	missing []string
 }
@@ -50,9 +52,13 @@ func (s *Shell) installedEntries(rows []PluginRow) ([]pluginEntry, error) {
 		if err != nil {
 			return nil, err
 		}
+		development, err := developmentBuild(row)
+		if err != nil {
+			return nil, err
+		}
 		missing := s.missingDependencies(row.ID, rows)
 		problem := row.State == "requires" || row.State == "refused" || len(missing) > 0
-		entries = append(entries, pluginEntry{row: row, problem: problem, update: update, missing: missing})
+		entries = append(entries, pluginEntry{row: row, problem: problem, update: update, development: development, missing: missing})
 	}
 	rank := func(entry pluginEntry) int {
 		switch {
@@ -149,6 +155,16 @@ func pluginMeta(row PluginRow, category string) string {
 	return strings.Join(parts, " · ")
 }
 
+// developmentBuild reports whether the installed version is newer than the newest published version, which the badge 개발 빌드 shows
+// (docs/spec/settings.md#plugins).
+func developmentBuild(row PluginRow) (bool, error) {
+	if row.Installed == nil || row.Latest == nil {
+		return false, nil
+	}
+	order, err := CompareVersions(row.Installed.Version, *row.Latest)
+	return order > 0, err
+}
+
 // installedRows builds the rows of one installed plugin in Installed and the line of its last operation, when it has one.
 func (s *Shell) installedRows(b *settingsBuilder, entry pluginEntry, status PluginsStatus, busy bool) []settingsRow {
 	row := entry.row
@@ -157,17 +173,20 @@ func (s *Shell) installedRows(b *settingsBuilder, entry pluginEntry, status Plug
 		category = loaded.Categories[0]
 	}
 	content := settingsRow{name: row.Name, description: pluginMeta(row, category), plugin: row.ID}
-	if entry.problem {
-		content.controls = append(content.controls, pluginBadge(b, "필요한 플러그인 없음", "warn"))
-	}
 	if row.Installed != nil && !row.Installed.Enabled {
 		content.controls = append(content.controls, pluginBadge(b, "꺼짐", "neutral"))
 	}
 	if entry.update {
 		content.controls = append(content.controls, pluginBadge(b, "업데이트 "+*row.Latest, "acc"))
 	}
+	if entry.development {
+		content.controls = append(content.controls, pluginBadge(b, "개발 빌드", "warn"))
+	}
 	for _, dependency := range entry.missing {
 		content.controls = append(content.controls, pluginBadge(b, dependency+" 필요", "warn"))
+	}
+	if row.State == "requires" {
+		content.controls = append(content.controls, pluginBadge(b, "필요한 플러그인 없음", "warn"))
 	}
 	if row.State == "reload" {
 		content.controls = append(content.controls, pluginBadge(b, "창을 다시 불러오면 적용", "warn"))
