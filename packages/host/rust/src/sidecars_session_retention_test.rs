@@ -644,6 +644,35 @@ fn a_send_of_the_host_in_a_window_with_no_project_leaves_no_session() {
     );
 }
 
+// contract: sidecars.request.root-present
+// A window that shows no project sends its host request with the empty root, so the request line always names the root of its
+// window (docs/spec/sidecars.md, messages).
+#[test]
+fn a_send_of_the_host_in_a_window_with_no_project_sends_an_empty_root() {
+    const SURFACE: &str = "tab-of-a-closed-project";
+    let executable = Folder::new();
+    let config = Folder::new();
+    let window = ShownOwner(Arc::new(Mutex::new(String::new())));
+    let lines = lines_of_a_retain(
+        config.path(),
+        executable.path(),
+        &window,
+        |sidecars, window, name| {
+            sidecars
+                .send(window, name, SURFACE, &raw(r#"{"operation":"open"}"#))
+                .unwrap();
+        },
+    );
+    let request = lines
+        .iter()
+        .find(|line| line["surface"] == SURFACE)
+        .expect("the send of the host reached the service");
+    assert_eq!(
+        request["root"], "",
+        "the request of a window without a project names no root: {request}"
+    );
+}
+
 // contract: sidecars.native-view-removal.retains-persistent-layout-session
 #[test]
 fn native_view_removal_does_not_close_a_persistent_layout_session() {
