@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
+- F1247: The Rust host tests that a region attached while its surface is hidden draws when the surface is shown.
 - F1217-17-1: The web look preview draws its cards with the applied radius, font, font size and seam.
 - F1239-1: The settings tab draws its menu beside the content, and the theme swatches of the page 모양 fill the width of the pane.
 - F1245-1: Name the reason of the three status read defaults of sok.rs, quoting the spec of sok.status.read.

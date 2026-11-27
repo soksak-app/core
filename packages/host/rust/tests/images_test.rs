@@ -1895,3 +1895,47 @@ fn a_frame_of_an_older_native_raster_requests_the_current_raster_configuration()
         .expect("recovery was not requested");
     assert!(next.raster > configured.raster && next.width == 900);
 }
+
+// contract: images.drawing.shown-surface
+#[test]
+fn a_region_attached_while_its_surface_is_hidden_draws_when_the_surface_is_shown() {
+    let images = Images::default();
+    images.set_surface_visible("shown-surface", false);
+    let key = attached_drawing_image(&images, "shown-surface");
+    images.set_visible(&key, true).unwrap();
+    images.set_on_screen(true);
+    let hidden = sent_drawing_changes(&images);
+    assert_eq!(
+        drawing_values(hidden),
+        vec!["view=false hidden".to_string()],
+        "the region of a hidden surface drew before the surface was shown"
+    );
+    // A layout that shows the surface sends the region its drawing state, with no window change.
+    images.set_surface_visible(&key.0, true);
+    let shown = sent_drawing_changes(&images);
+    assert_eq!(
+        drawing_values(shown),
+        vec!["view=true".to_string()],
+        "showing the surface sent its region no drawing state that draws"
+    );
+}
+
+// contract: images.drawing.shown-surface
+#[test]
+fn a_restarted_region_of_a_hidden_surface_draws_when_the_surface_is_shown() {
+    let images = Images::default();
+    images.set_surface_visible("shown-surface", false);
+    let key = attached_drawing_image(&images, "shown-surface");
+    images.set_visible(&key, true).unwrap();
+    images.set_on_screen(true);
+    sent_drawing_changes(&images);
+    // The page of a hidden tab restarts: its surface begins a new generation while the surface is hidden.
+    images.begin_generation(&key.0);
+    images.set_surface_visible(&key.0, true);
+    let shown = sent_drawing_changes(&images);
+    assert_eq!(
+        drawing_values(shown),
+        vec!["view=true".to_string()],
+        "the restarted region of a shown surface sent no drawing state that draws"
+    );
+}
