@@ -83,7 +83,9 @@ function loadServing(plugins) {
   const left = new Map();
   let candidates = plugins;
   for (;;) {
+    // default: a manifest without categories serves no category (docs/spec/plugins.md, categories is optional).
     const served = new Set(candidates.flatMap((plugin) => plugin.manifest.categories ?? []));
+    // default: a manifest without requires needs no category (docs/spec/plugins.md, requires is optional).
     const missing = candidates.filter((plugin) => (plugin.manifest.requires ?? []).some((category) => !served.has(category)));
     if (missing.length === 0) return { plugins: candidates, unserved: left };
     for (const plugin of missing) {
@@ -97,6 +99,7 @@ function loadServing(plugins) {
 /** The loaded plugins that serve each plugin category of core, {category: [{id, name}]}, in the order of their ids (docs/spec/plugins.md#plugin-categories). */
 function servingPlugins(plugins) {
   return Object.fromEntries(PLUGIN_CATEGORIES.map((category) => [category, plugins
+    // default: a manifest without categories serves no category (docs/spec/plugins.md, categories is optional).
     .filter((plugin) => (plugin.manifest.categories ?? []).includes(category))
     .toSorted((a, b) => a.manifest.id.localeCompare(b.manifest.id))
     .map((plugin) => ({ id: plugin.manifest.id, name: plugin.manifest.name }))]));
