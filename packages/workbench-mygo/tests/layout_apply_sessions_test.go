@@ -232,6 +232,11 @@ func TestARestartWithATabWhoseSessionEndedRecordsItAndShowsNoView(t *testing.T) 
 	fields := records[0]["fields"].(map[string]any)
 	equal(t, fields["where"], "restored tab tab-stale")
 	equal(t, fields["text"], `the session s-missing of tab "tab-stale" ended before the restart`)
+	// The drawn toast of the restored tab states the same text (docs/spec/notifications.md#toasts).
+	const toast = `the session s-missing of tab "tab-stale" ended before the restart`
+	if !hasStatusLabel(f.tester.ElementTree(), toast) || !f.tester.HasText(toast) {
+		t.Fatalf("the frame shows no toast for %q", toast)
+	}
 	for _, sent := range owned.sent() {
 		if sent.surface == "tab-stale" {
 			t.Fatalf("the tab whose session ended was sent %+v", sent)
