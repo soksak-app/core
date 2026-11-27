@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: The width test of a long select reads the set layout segments as core.settings-tab.layout.
 - F1107: A status read of a surface is stored as workbench.status.read with the requested surface, the resolved surface and the owned session it reached.
 - F1217-11-3: The notice tests pin that a source retry is the first action of its error toast and that core adds no retry.
 - F1217-11-3: The toast tests pin the deck spread on hover, the reduced-motion stop of the toast bar, and the close of a toast by its action.

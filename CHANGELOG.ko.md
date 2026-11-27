@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: 긴 선택지 너비 테스트는 세트 배치 세그먼트를 core.settings-tab.layout으로 읽는다.
 - F1107: surface의 status read는 요청한 surface, 응답한 surface, 도달한 owned session과 함께 workbench.status.read로 저장된다.
 - F1217-11-3: 알림 테스트는 원천의 다시 시도가 오류 토스트의 첫 동작이고 코어가 다시 시도를 더하지 않음을 고정한다.
 - F1217-11-3: 토스트 테스트는 덱의 마우스 오버 펼침, 동작 줄이기 설정의 막대 정지, 동작으로 닫힘을 고정한다.

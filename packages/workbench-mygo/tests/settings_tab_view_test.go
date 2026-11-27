@@ -1383,7 +1383,7 @@ func TestASelectWithALongChoiceKeepsTheWidthOfItsColumn(t *testing.T) {
 	f.run("core.settings-tab.edit", map[string]any{"set": "set-1"})
 	f.settle()
 	title, ok := exposedNode(f.tester.ElementTree(), "core.settings-tab.set-title", "title:set-1")
-	_, found = exposedNode(f.tester.ElementTree(), "core.settings-tab.choice", "layout:set-1:list")
+	_, found = exposedNode(f.tester.ElementTree(), "core.settings-tab.layout", "layout:set-1:list")
 	if !ok || !found {
 		t.Fatalf("the set editor is not drawn in %q", f.tester.Texts())
 	}
