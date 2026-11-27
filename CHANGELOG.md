@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
+- F1241: The shortcut table check reads a code comparison of a letter key, such as event.code === "KeyB", as the key of that letter.
 - F1217-17-5: The agent group summary names the check icon of settings-36 for the state where every setup part is ok.
 - F1217-17: The settings tab is compared page by page with the settings-36 design, and its look preview missing from both hosts is recorded as a defect.
 - F1236-2: The Wails host returns the errors of the JSON encodings of the notification identifier and of the view sidecar message instead of discarding them.

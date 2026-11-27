@@ -32,12 +32,18 @@ function specRows(markdown, heading) {
 }
 
 /**
- * The key names that the key comparisons of one source text test: `e.key === "Enter"` and `event.key.toLowerCase() === "n"`,
- * lower-cased. A `typeof x.key` test compares a type name, not a key, so it is not a key comparison.
+ * The key names that the key comparisons of one source text test, lower-cased: `e.key === "Enter"` and
+ * `event.key.toLowerCase() === "n"` test the key, and `event.code === "KeyB"` tests the physical key B, which is the key `b`.
+ * A handler reads the physical key when the letter must not depend on the keyboard layout or the Option key
+ * (packages/workbench/window-sidebars.js). A `typeof x.key` test compares a type name, not a key, so it is not a key comparison.
  */
 function keyComparisons(source) {
   const pattern = /(?<!typeof\s+[\w$.]*)\.key(?:\.toLowerCase\(\))?\s*[!=]==?\s*["']([^"']+)["']/g;
-  return new Set([...source.matchAll(pattern)].map((match) => match[1].toLowerCase()));
+  const codePattern = /\.code\s*[!=]==?\s*["']Key([A-Za-z])["']/g;
+  return new Set([
+    ...[...source.matchAll(pattern)].map((match) => match[1].toLowerCase()),
+    ...[...source.matchAll(codePattern)].map((match) => match[1].toLowerCase()),
+  ]);
 }
 
 /** Key comparisons of the workbench key handlers. */
@@ -120,6 +126,11 @@ test("an arrow-key comparison without a workbench row is reported, and the table
 test("a typeof test of a key property is not a key comparison", () => {
   const source = 'if (typeof params.key !== "string" || params.key === "") throw new TypeError("requires a key");\nif (event.key === "Enter") run();';
   assert.deepEqual([...keyComparisons(source)], ["enter"]);
+});
+
+test("a code comparison of a letter key is the key of that letter", () => {
+  const source = 'if (event.code === "KeyB" && !event.shiftKey) return "left";';
+  assert.deepEqual([...keyComparisons(source)], ["b"]);
 });
 
 test("the exposure spec table lists every shortcut and nothing else", () => {
