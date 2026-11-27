@@ -168,6 +168,7 @@
     "docs/spec/cases/group-look.json",
     "docs/spec/cases/layout/",
     "docs/spec/cases/log-contract/query/",
+    "docs/spec/cases/page-wire/view-calls-shortcuts-read.json",
     "docs/spec/cases/project-data/",
     "docs/spec/events.json",
     "docs/spec/example-model.md"

@@ -14,22 +14,12 @@ import { createTestHost } from "../view-host.js";
 const CASES = new URL("../../../docs/spec/cases/page-wire/", import.meta.url);
 
 const START_PROJECT = { id: "p1", root: "/projects/p1" };
-const SHORTCUT_ROWS = [
-  { key: "shift+cmd+n", owner: "workbench", command: "core.window.new" },
-  { key: "cmd+k", owner: "workbench", command: "core.home.search.focus" },
-  { key: "ArrowUp", owner: "workbench", command: "core.home.select" },
-  { key: "ArrowDown", owner: "workbench", command: "core.home.select" },
-  { key: "Escape", owner: "workbench", command: "core.home.search" },
-  { key: "Enter", owner: "workbench", command: "core.rename.commit" },
-  { key: "Escape", owner: "workbench", command: "core.rename.cancel" },
-  { key: "Enter", owner: "workbench", command: "core.home.form.submit" },
-  { key: "Enter", owner: "workbench", command: "core.home.open" },
-  { key: "Escape", owner: "workbench", command: "core.picker.close" },
-  { key: "Escape", owner: "workbench", command: "core.notices.toggle" },
-  { key: "Escape", owner: "workbench", command: "core.modal.dismiss" },
-  { key: "Escape", owner: "view", command: "none" },
-  { key: "text input keys", owner: "view", command: "none" },
-];
+// The shortcut rows of the workbench that the view reads. The page-wire case declares them as the reply of its read (the rows of the
+// shortcut table of packages/workbench/shortcuts.json, which packages/workbench/test/shortcuts-case.test.mjs ties to the case).
+function declaredShortcutRows(kase) {
+  const reply = kase.steps.find((step) => step.call?.name === "viewReply" && step.call.payload.id === 1);
+  return reply.call.payload.result.map(({ key, owner, command }) => ({ key, owner, command }));
+}
 const plugin = (id, manifest) => ({ id, package: `@scope/plugin-${id}`, version: "0.1.0", folder: "/installed/plugin", manifest: { id, name: id, ...manifest } });
 // The installed plugins: probe declares the extension point language, and one and two contribute to it. Entry 0 of two names a range that
 // the point does not accept, so only its entry 1 is connected.
@@ -158,9 +148,9 @@ const FIXTURES = {
     return { ...base(), state: { read: () => stored, write: (value) => { stored = value; } } };
   },
   "view-calls-settings": () => ({ ...base(), settings: { home: "https://example.test" } }),
-  "view-calls-shortcuts-read": () => ({
+  "view-calls-shortcuts-read": (_releases, kase) => ({
     ...base(),
-    shortcuts: [...SHORTCUT_ROWS, { key: "cmd+x", owner: "page", command: "core.none" }],
+    shortcuts: [...declaredShortcutRows(kase), { key: "cmd+x", owner: "page", command: "core.none" }],
   }),
   "view-calls-sidecar-send": () => ({ ...base(), sidecar: { "fixture-sidecar": () => null } }),
   "view-calls-subscription-calls": () => base(),
@@ -269,7 +259,7 @@ const flush = async () => {
 async function replay(name) {
   const kase = JSON.parse(readFileSync(new URL(`${name}.json`, CASES), "utf8"));
   const releases = [];
-  const views = FIXTURES[name]?.(releases) ?? base();
+  const views = FIXTURES[name]?.(releases, kase) ?? base();
   // One test host for each view of the case, by surface id. A host event that names no view goes to the first view.
   const hosts = new Map((Array.isArray(views) ? views : [views]).map((fixtures) => [fixtures.surface, createTestHost(fixtures)]));
   const [first] = hosts.values();

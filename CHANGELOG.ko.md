@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-12-10: 워크벤치 단축키 표는 view-calls-shortcuts-read page-wire 케이스가 선언한 행과 묶이며, plugin-api 뷰 호스트 테스트는 그 선언된 행을 읽습니다.
 - F1217-11-3, F1217-12: Escape는 toast 목록을 core.toasts.list {open: false}로 닫고, 알림 센터보다 먼저 닫는다. 웹과 mygo workbench 모두에 적용된다.
 - F1222-2: mygo 진행 중 알림 고리는 창 프레임에 맞춰 돌며, 동작 줄이기에서는 멈춘다.
 - F1217-12: 오류 토스트가 core.notices.show로 자세히를 제공하고, 토스트 개수가 core.toasts.list로 나머지 토스트를 보여 주며, core.toasts는 listOpen을 보고한다.
