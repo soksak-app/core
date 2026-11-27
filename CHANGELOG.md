@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-17: The duplicate follow-up lines of F1217-17-3 are removed from the checklist; the breaks are F1217-17-3-1 to F1217-17-3-3.
 - F1239-7: The settings menu follows the menu of the settings design, with the search icon, group labels, item icons and counts, in web and mygo.
 - F1250-4: A declared settings page lowers its sections and items through the component set, and an unknown component refuses it by name.
 - F1245-3: Name the reason of eight workbench defaults, quoting the spec line each follows, and make one absence default an explicit branch.
