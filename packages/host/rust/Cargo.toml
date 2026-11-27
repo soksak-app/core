@@ -48,6 +48,13 @@ name = "surface_fixture_test"
 harness = false
 required-features = ["host-test"]
 
+# The view that a main page reload creates applies the theme of the window in a real window with the view channel, so this target runs
+# its test on the main thread of its process; it answers --list and --exact as the harness does.
+[[test]]
+name = "view_theme_reload_test"
+harness = false
+required-features = ["host-test"]
+
 # The close of a window ends its native layout transactions, which run only on the main thread, so this target runs its tests on the
 # main thread of its process with a real window; it answers --list and --exact as the harness does.
 [[test]]

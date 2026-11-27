@@ -4,5 +4,29 @@
 <meta charset="utf-8">
 <title>probe</title>
 </head>
-<body></body>
+<body>
+<script>
+// With the view channel of the application, the page writes the theme that its start script read as the record
+// page.theme.applied through the log call of the channel (docs/spec/native-surfaces.md#view-surfaces). Without the channel the
+// page writes nothing, so the surface tests that run without it are unchanged.
+if (window.sokView !== undefined) {
+  const now = performance.now();
+  window.webkit.messageHandlers["sok-view"].postMessage({
+    id: 1,
+    command: "runtime.log",
+    params: {
+      action: "batch",
+      events: [{
+        ts_us: Math.round((performance.timeOrigin + now) * 1000),
+        mono_ns: Math.round(now * 1000000),
+        page: window.sokView.page,
+        level: "info",
+        event: "page.theme.applied",
+        fields: { scheme: window.sokTheme.scheme, source: "start" },
+      }],
+    },
+  });
+}
+</script>
+</body>
 </html>

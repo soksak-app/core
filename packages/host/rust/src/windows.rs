@@ -449,6 +449,13 @@ pub(crate) fn end_page_layout(
     }
 }
 
+/// Ends the surface documents of the window as a main page reload does (docs/spec/native-host.md#page-reload). The host tests
+/// run the reload with the platform of their process through this function.
+#[cfg(feature = "host-test")]
+pub fn reload_surface_documents_for_test(window: &Window) -> Result<(), String> {
+    reload_surface_documents(window)
+}
+
 /// Tauri calls this from the main-webview `PageLoadEvent::Started` callback. The cleanup here is deliberately
 /// synchronous: while the previous image handle waits for removal in the same AppKit run loop, the replacement page
 /// must not attach a new native image.
