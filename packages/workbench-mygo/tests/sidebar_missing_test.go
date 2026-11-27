@@ -15,7 +15,7 @@ func TestTheMissingSectionOfAWindowSidebarShowsItsLine(t *testing.T) {
 	f := newTabShell(t, &storedHost{installed: sidebarsInstalled, environment: []byte(sidebarsEnvironment),
 		projects: []map[string]any{gridProject(oneCard(tab("tab-aaaaaa", "plain")))}})
 	f.open(t)
-	if !f.tester.HasText("gone(gone) · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+	if !f.tester.HasText("gone · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
 		t.Fatalf("the sidebar shows %q", f.tester.Texts())
 	}
 }
@@ -42,7 +42,7 @@ func TestTheMissingLineOfAWindowSidebarStandsInItsStatusLine(t *testing.T) {
 	if _, ok := exposedNode(set.Children, "core.sidebar.missing", "gone"); ok {
 		t.Fatal("a warning line stands above the sections of the sidebar")
 	}
-	if !tt.HasText("gone(gone) · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+	if !tt.HasText("gone · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
 		t.Fatalf("the sidebar shows %q", tt.Texts())
 	}
 }

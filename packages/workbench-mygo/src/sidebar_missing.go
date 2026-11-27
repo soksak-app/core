@@ -91,7 +91,12 @@ func hasMissingLine(state string) bool {
 
 // missingLine builds the warning of a plugin with the title, the text and the button of its state (docs/spec/plugins.md#missing-plugins).
 func missingLine(id string, state PluginLine, count int) MissingLine {
-	line := MissingLine{Plugin: id, Count: count, Title: fmt.Sprintf("%s(%s)", state.Name, id)}
+	// The title names the plugin by its name and its id, and shows the id alone when the name is the id, so the id is not repeated.
+	title := id
+	if state.Name != "" && state.Name != id {
+		title = fmt.Sprintf("%s(%s)", state.Name, id)
+	}
+	line := MissingLine{Plugin: id, Count: count, Title: title}
 	params := map[string]any{"plugin": id}
 	switch state.State {
 	case "":

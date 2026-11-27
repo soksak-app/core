@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
+- F1217-18-4: 창 사이드바의 빠진 플러그인 제목에 플러그인 id가 한 번만 나온다.
 - F1236-3: 추적되는 Go 소스가 gofmt 기준을 지킨다. packages/workbench-mygo의 errors_screen.go와 sidebar_missing_notice_test.go를 서식에 맞췄다.
 - F1239-2: 인자 없는 ordered host call이 전송되어, window resize가 error 없이 window button 영역을 읽는다.
 - F1217-17-5: 에이전트 연동 요약은 web과 mygo에서 settings-36의 경고 아이콘을 보이며, mygo는 다르거나 없는 항목 수 배지를 보인다.

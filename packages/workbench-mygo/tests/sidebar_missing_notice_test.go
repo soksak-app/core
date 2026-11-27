@@ -53,7 +53,7 @@ func TestTheMissingPluginOfAWindowSidebarIsAWarningNoticeOnItsStatusLine(t *test
 	state := ""
 	f := newSidebarsWithPlugin(t, &state, workbench.NewShownErrors(func(string) {}))
 	tt := drawLeftSidebar(t, f)
-	if !tt.HasText("gone(gone) · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+	if !tt.HasText("gone · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
 		t.Fatalf("the status line shows %q", tt.Texts())
 	}
 	set := element(t, tt, "core.sidebar", "left")
@@ -61,13 +61,13 @@ func TestTheMissingPluginOfAWindowSidebarIsAWarningNoticeOnItsStatusLine(t *test
 		t.Fatal("a warning line stands above the sections of the sidebar")
 	}
 	entries := f.notices.EntryStatuses()
-	if len(entries) != 1 || entries[0]["title"] != "gone(gone)" || entries[0]["kind"] != "warning" {
+	if len(entries) != 1 || entries[0]["title"] != "gone" || entries[0]["kind"] != "warning" {
 		t.Fatalf("the notice center holds %+v", entries)
 	}
 	if source := entries[0]["source"].(workbench.NoticeSource); source.Kind != "sidebar" || source.Sidebar != "left" {
 		t.Fatalf("the source of the notice is %+v", source)
 	}
-	if toasts := f.notices.ToastStatuses(); len(toasts) != 1 || toasts[0].Title != "gone(gone)" {
+	if toasts := f.notices.ToastStatuses(); len(toasts) != 1 || toasts[0].Title != "gone" {
 		t.Fatalf("the toasts are %+v", toasts)
 	}
 }
@@ -85,7 +85,7 @@ func TestTheMissingPluginNoticeIsWithdrawnWhenThePluginReloads(t *testing.T) {
 	}
 	state = "reload"
 	tt = drawLeftSidebar(t, f)
-	if tt.HasText("gone(gone) · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+	if tt.HasText("gone · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
 		t.Fatal("the status line still shows the withdrawn notice")
 	}
 	if toasts := notices.ToastStatuses(); len(toasts) != 0 {
