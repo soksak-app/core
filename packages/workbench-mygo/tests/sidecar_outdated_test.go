@@ -17,7 +17,7 @@ func strptr(s string) *string { return &s }
 func TestAnOutdatedServiceShowsOneWarningWithTheWebTitleTextAndAction(t *testing.T) {
 	store := workbench.NewShownErrors(func(string) {})
 	notices := workbench.NewOutdatedNotices(store)
-	notices.Reconcile([]workbench.OutdatedSidecar{{Sidecar: "@fixture/echo", Running: strptr("0.0.6"), Installed: strptr("0.0.7"), Sessions: 2}})
+	notices.Reconcile([]workbench.OutdatedSidecar{{Sidecar: "@fixture/echo", Running: strptr("0.0.6"), Installed: strptr("0.0.7"), Sessions: 2}}, noSurfaces)
 	toasts := store.ToastStatuses()
 	if len(toasts) != 1 || toasts[0].Kind != "warning" {
 		t.Fatalf("toasts = %+v, want one warning", toasts)
@@ -44,7 +44,7 @@ func TestAnOutdatedServiceShowsOneWarningWithTheWebTitleTextAndAction(t *testing
 // A service that sent no version is named without a version.
 func TestAServiceThatSentNoVersionIsNamedWithoutOne(t *testing.T) {
 	store := workbench.NewShownErrors(func(string) {})
-	workbench.NewOutdatedNotices(store).Reconcile([]workbench.OutdatedSidecar{{Sidecar: "@fixture/echo", Installed: strptr("0.0.7"), Sessions: 0}})
+	workbench.NewOutdatedNotices(store).Reconcile([]workbench.OutdatedSidecar{{Sidecar: "@fixture/echo", Installed: strptr("0.0.7"), Sessions: 0}}, noSurfaces)
 	if got, want := store.ToastStatuses()[0].Title, "@fixture/echo 서비스가 버전 없이 실행 중이고 설치된 버전은 0.0.7다"; got != want {
 		t.Fatalf("title = %q, want %q", got, want)
 	}
@@ -58,8 +58,8 @@ func TestARepeatedListShowsNoNewNoticeForAShownService(t *testing.T) {
 		{Sidecar: "@fixture/echo", Running: strptr("0.0.6"), Installed: strptr("0.0.7"), Sessions: 2},
 		{Sidecar: "@fixture/other", Installed: strptr("1.0.0"), Sessions: 0},
 	}
-	notices.Reconcile(list)
-	notices.Reconcile(list)
+	notices.Reconcile(list, noSurfaces)
+	notices.Reconcile(list, noSurfaces)
 	if n := len(store.ToastStatuses()); n != 2 {
 		t.Fatalf("toasts = %d, want one per service", n)
 	}
@@ -76,8 +76,8 @@ func TestAServiceThatLeavesTheListIsWithdrawnAndItsEntryStays(t *testing.T) {
 	notices := workbench.NewOutdatedNotices(store)
 	echo := workbench.OutdatedSidecar{Sidecar: "@fixture/echo", Running: strptr("0.0.6"), Installed: strptr("0.0.7"), Sessions: 2}
 	other := workbench.OutdatedSidecar{Sidecar: "@fixture/other", Running: strptr("0.1.0"), Installed: strptr("0.2.0"), Sessions: 1}
-	notices.Reconcile([]workbench.OutdatedSidecar{echo, other})
-	notices.Reconcile([]workbench.OutdatedSidecar{other})
+	notices.Reconcile([]workbench.OutdatedSidecar{echo, other}, noSurfaces)
+	notices.Reconcile([]workbench.OutdatedSidecar{other}, noSurfaces)
 	toasts := store.ToastStatuses()
 	if len(toasts) != 1 || toasts[0].Title != "@fixture/other 0.1.0이 실행 중이고 설치된 버전은 0.2.0다" {
 		t.Fatalf("toasts = %+v, want only the notice of the other service", toasts)
@@ -153,5 +153,44 @@ func TestASidecarsChangedWithANewSessionCountRewritesTheNoticeText(t *testing.T)
 	entries := f.outdatedEntries()
 	if len(entries) != 1 || entries[0].Count != 1 || !strings.HasPrefix(entries[0].Text, "세션 3개가 이 서비스를 쓰고 있다.") {
 		t.Fatalf("core.notices entries are %+v, want one entry with count 1 and the text of 3 sessions", entries)
+	}
+}
+
+// noSurfaces names no tab for any surface, so a service shows no card notice.
+var noSurfaces = func(string) (workbench.NoticeSource, bool) { return workbench.NoticeSource{}, false }
+
+// cardsShown returns the cards of the unread card notices of the center; a withdrawn notice keeps its entry, read.
+func cardsShown(store *workbench.ShownErrors) []string {
+	var cards []string
+	for _, entry := range store.EntryStatuses() {
+		source := entry["source"].(workbench.NoticeSource)
+		if source.Kind == "card" && entry["read"] != true {
+			cards = append(cards, source.Card)
+		}
+	}
+	return cards
+}
+
+// A service that holds a session on a surface shows its warning as a card notice on the card of that surface, and the notice is
+// withdrawn when the surface leaves the service's surfaces.
+func TestAServiceOnASurfaceShowsItsWarningAsACardNoticeOnItsCard(t *testing.T) {
+	store := workbench.NewShownErrors(func(string) {})
+	notices := workbench.NewOutdatedNotices(store)
+	targets := func(surface string) (workbench.NoticeSource, bool) {
+		if surface == "surface-1" {
+			return workbench.NoticeSource{Kind: "card", Card: "card-a", Tab: "surface-1", Plugin: "plugin"}, true
+		}
+		return workbench.NoticeSource{}, false
+	}
+	service := workbench.OutdatedSidecar{Sidecar: "@fixture/echo", Running: strptr("0.0.6"), Installed: strptr("0.0.7"), Sessions: 2,
+		Surfaces: []string{"surface-1", "surface-2"}}
+	notices.Reconcile([]workbench.OutdatedSidecar{service}, targets)
+	if got := cardsShown(store); len(got) != 1 || got[0] != "card-a" {
+		t.Fatalf("card notices = %v, want one on card-a; surface-2 has no tab", got)
+	}
+	service.Surfaces = []string{"surface-2"}
+	notices.Reconcile([]workbench.OutdatedSidecar{service}, targets)
+	if got := cardsShown(store); len(got) != 0 {
+		t.Fatalf("card notices after surface-1 left = %v, want none", got)
 	}
 }

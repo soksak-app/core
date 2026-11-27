@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1161: mygo도 이전 버전 서비스를 쓰는 surface마다 같은 경고를 card notice로 보인다
 - F1161: mygo는 card notice를 같은 card의 떠 있는 notice하고만 합치고, app notice는 kind와 title로 계속 합친다
 - F1161: 이전 버전 서비스를 쓰는 tab에는 같은 경고가 card notice로 보인다
 - F1217-12-6: 알림 센터에 조용히 스위치를 두고, core.settings.set으로 quietToasts를 설정한다.

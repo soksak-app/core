@@ -56,10 +56,11 @@ type PluginUpdate struct {
 // OutdatedSidecar is an entry of `outdated` of `core.plugins`. Running is nil for a service that sent no version, and
 // Installed is nil for a sidecar that is no longer declared.
 type OutdatedSidecar struct {
-	Sidecar   string  `json:"sidecar"`
-	Running   *string `json:"running"`
-	Installed *string `json:"installed"`
-	Sessions  int     `json:"sessions"`
+	Sidecar   string   `json:"sidecar"`
+	Running   *string  `json:"running"`
+	Installed *string  `json:"installed"`
+	Sessions  int      `json:"sessions"`
+	Surfaces  []string `json:"surfaces"`
 }
 
 // PluginFailure is why the plugin state or the registry index could not be read. Kind is `state` or `index`.
