@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-7: The refused-save case of the debug view records the overlay calls of a failed save shown as a notice.
 - F1161: A card notice merges only with a shown notice of the same card; app notices keep merging by kind and title
 - F1217-16: Rename the settings window to the settings tab, with settings_modal.go moved to settings_tab_view.go.
 - F1161: The workbench package files list names sidecar-outdated.js, so the staged frontend holds the module that core-exposure.js imports.

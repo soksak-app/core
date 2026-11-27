@@ -83,8 +83,9 @@ test("a save while one writes is refused and shown, and a failure of the write i
     assert.match(ui.debugState().error, /a save of the logs folder is running/);
     // The shown error is written to the application log in a batch, which leaves after the ordered calls of the view.
     await calls();
-    await flushEvents();
     wire.deliverNotice();
+    await calls();
+    await flushEvents();
     assert.equal(ui.debugState().operation.state, "failed");
     assert.match(ui.debugState().error, /disk full/);
     await calls();
