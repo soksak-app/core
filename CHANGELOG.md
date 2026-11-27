@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1223: A refused view status watch rejects the ready promise of its stop function with the refusal code and text.
 - F1222: A progress notice draws a declared turning ring that reduced motion stops, and an unknown notice kind fails.
 - F1217-11-1: The toast bar keeps its first width on a later redraw, and time that passes notifies no toast watcher, pinned on the page clock.
 - F1222: The settings tab leaves out an unknown plugin version, refuses an invalid string setting declaration, and states the states of plugin setting values.

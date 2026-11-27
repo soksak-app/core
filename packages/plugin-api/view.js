@@ -201,7 +201,7 @@ export function createViewBridge({ handler, report }) {
       });
     }
     let watching = true;
-    return () => {
+    const stop = () => {
       if (!watching) return;
       watching = false;
       const set = listeners.get(key);
@@ -211,6 +211,11 @@ export function createViewBridge({ handler, report }) {
       subscriptions.delete(key);
       calls.request("runtime.status.unwatch", params).catch(recordError(`status ${name}`));
     };
+    // ready is read at the watch call of this key: it resolves when the page accepts the watch and rejects with the refusal (its code and
+    // message). It is derived on each read, so a caller that does not read ready creates no promise that could stay unhandled.
+    const started = subscriptions.get(key);
+    Object.defineProperty(stop, "ready", { get: () => started.then(() => undefined) });
+    return stop;
   };
   // Records the refusal of a call that the view makes on its own as an error line of the view at the place where.
   const recordError = (where) => (error) => {
