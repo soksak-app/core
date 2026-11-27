@@ -6,11 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
-- F1251: Rust surface test fixture plugin이 surface에 필요한 icon을 선언한다.
-- F1251: Rust surface와 view theme 테스트의 Go 대응 항목을 기록한다. Go 대응 실행 결과와 TestMain 실패를 적는다.
-- F1248: Rust surface test fixture가 sidecar folder OS key를 platform 모듈에서 읽고, 시험은 cfg로 고르지 않는다.
-- F1238: clean worktree 점검은 audit 테스트를 제외하고 main의 Go 패키지를 실행한다. 6회 중 6회 통과하며, F1238 기록에 관찰된 수를 적는다.
-- F1217-17-5: 에이전트 연동 페이지 기록을 닫는다. 남은 행 배치는 F1250으로 옮기고, 여섯 행 디자인, 제거 버튼, hook 설치 버튼, 없음의 err 톤, 확인 타이머는 채택하지 않는다.
+- F1217-17-1-1: 모양 page의 글자 크기 단계 행 표시 이름이 web과 mygo host의 선언 사본에 있으며, 명세와 mygo 표시 이름은 설정 선언과 함께 들어간다.
 - F1217-17-5: 에이전트 배지 아이콘의 주석과 시험 글은 디자인 파일 이름 없이 디자인 요소를 가리킨다.
 - F1217-18-3: 설정 메뉴의 검색 칸이 자기 높이를 유지해, 첫 메뉴 항목이 검색 칸과 겹치지 않는다.
 - F1247: 표시된 surface drawing 항목에 Red와 Green 결과를 기록하고 완료로 표시한다.
@@ -23,6 +19,7 @@
 - F1217-17-5: 에이전트 연동 요약은 web과 mygo에서 settings-36의 경고 아이콘을 보이며, mygo는 다르거나 없는 항목 수 배지를 보인다.
 - F1247: Rust host 테스트가 숨겨졌던 surface의 region이 표시될 때 drawing 상태를 받는지 검사한다.
 - F1217-17-1: 웹 모양 미리보기는 카드를 적용된 모서리, 글꼴, 글자 크기와 이음선으로 그린다.
+- F1217-17-1-1: 모양 page의 글자 크기 단계 행 표시 이름이 web과 mygo host의 선언 사본에 있으며, 명세와 mygo 표시 이름은 설정 선언과 함께 들어간다.
 - F1239-1: 설정 탭은 menu를 content 옆에 그리고, 모양 page의 theme swatch는 pane 너비를 채운다.
 - F1245-1: sok.rs의 status read 기본값 3곳에 명세를 인용한 이유를 적는다.
 - F1217-9: registry index 형식 3이 maker, categories, updated를 가지며, plugin.json은 maker를 요구한다. index 작성기와 page는 이어서 바꾼다.
