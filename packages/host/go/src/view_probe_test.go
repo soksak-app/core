@@ -203,6 +203,10 @@ func TestTheEndOfTheViewStoresLetsTheirFolderBeRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 	nested := filepath.Join(folder, "config", documentData)
+	// The document of the nested store needs its parent folder, which the store of the outer document does not create.
+	if err := os.MkdirAll(filepath.Dir(nested), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	other, err := os.MkdirTemp("", "soksak-view-store-other-")
 	if err != nil {
 		t.Fatal(err)
