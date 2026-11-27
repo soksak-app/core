@@ -51,7 +51,7 @@ import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
 import { foldSection, onSectionsChange, sectionDrawn, selectSection, sidebarsState, sizeSections } from "./sidebar-sections.js";
-import { notificationStore, onTabReports, reportPageNotice, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
+import { notificationStore, onTabReports, reportPageNotice, tabError, tabFooter, tabLabel, tabModified } from "./tab-reports.js";
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { followOutdatedSidecars } from "./sidecar-outdated.js";
 import { pageIdentity } from "./page-identity.js";

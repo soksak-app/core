@@ -670,7 +670,7 @@ test("tab.notify, tab.progress, tab.done and tab.keep refuse the params that the
     "view call tab.keep requires an object",
   ];
   for (const message of refusals) assert.equal((await h.call()).error.message, message);
-  assert.deepEqual([reports.tabNotice(h.id), reports.tabKeeps(h.id)], [null, []]);
+  assert.deepEqual(reports.tabKeeps(h.id), []);
   await h.close();
 });
 

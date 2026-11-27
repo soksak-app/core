@@ -46,7 +46,7 @@ import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, setTabError, surfaceErrorText } from "./surface-status.js";
 import { imageDetachHold } from "./image-detach-waits.js";
 import { clearVisibleNotices, missingOriginRecords, onTabReports, recordOrigin, reportError, setVisibleTab, storedLayoutState, tabButtonData, tabError, tabFooter,
-  tabLabel, tabModified, tabNotice, tabOrigin, reportFocusedCard, setCardOfTab, notificationStore } from "./tab-reports.js";
+  tabLabel, tabModified, tabOrigin, reportFocusedCard, setCardOfTab, notificationStore } from "./tab-reports.js";
 import { cardNoticeLine } from "./notice-view.js";
 import { errorToasts, hideError, showError } from "./shown-errors.js";
 import { registry } from "./exposure.js";

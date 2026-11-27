@@ -5838,6 +5838,10 @@
         "description": "The close control of the notice center, which runs core.notices.toggle."
       },
       {
+        "name": "core.notices.quiet",
+        "description": "The switch 조용히 beside the filter of the notice center, which runs core.settings.set with the patch of quietToasts."
+      },
+      {
         "name": "core.notices.filter",
         "description": "A filter button of the notice center, with the parameter filter."
       },

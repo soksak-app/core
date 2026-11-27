@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { clearVisibleNotices, forgetTab, onTabReports, recordOrigin, reportDirectory, reportError, reportModified, reportNotice, reportTitle,
-  reportTabState, setVisibleTab, tabButtonData, tabError, tabMemoryState, tabLabel, tabModified, tabNotice, tabNotices, tabOrigin } from "../tab-reports.js";
+  reportTabState, setVisibleTab, tabButtonData, tabError, tabMemoryState, tabLabel, tabModified, tabNotices, tabOrigin } from "../tab-reports.js";
 
 test("a reported title is the tab label until it is removed, and changes notify once", () => {
   let notified = 0;
@@ -46,25 +46,14 @@ test("a new tab's origin is the directory its source tab recorded at that moment
 test("a card notice never marks its tab, whether the tab is in view or not", () => {
   let visible = "tab-shown";
   setVisibleTab((id) => id === visible);
-  let notified = 0;
-  const off = onTabReports(() => notified++);
+  const off = onTabReports(() => {});
   reportNotice("tab-shown", { kind: "info", title: "build complete", text: "" });
-  assert.equal(tabNotice("tab-shown"), null, "a card notice does not change the dot of its tab");
-  assert.equal(notified, 0);
   reportNotice("tab-hidden", { kind: "info", title: "first", text: "" });
   reportNotice("tab-hidden", { kind: "info", title: "build complete", text: "" });
-  assert.equal(tabNotice("tab-hidden"), null);
-  assert.equal(notified, 2);
-  clearVisibleNotices();
-  assert.equal(tabNotice("tab-hidden"), null);
+  assert.deepEqual(tabNotices(), [], "a card notice is not a system notice, so no tab keeps it");
   visible = "tab-hidden";
   clearVisibleNotices();
-  assert.equal(tabNotice("tab-hidden"), null);
-  assert.equal(notified, 3);
-  visible = null;
-  reportNotice("tab-closed", { kind: "info", title: "x", text: "" });
-  forgetTab("tab-closed");
-  assert.equal(tabNotice("tab-closed"), null);
+  assert.deepEqual(tabNotices(), []);
   for (const invalid of ["", "x".repeat(121), "line\n", null, 1]) {
     assert.throws(() => reportNotice("tab-hidden", { kind: "info", title: invalid, text: "" }),
       { name: "TypeError", message: "a notice title must be 1 to 120 characters without control characters" });
@@ -75,7 +64,6 @@ test("a card notice never marks its tab, whether the tab is in view or not", () 
 test("a system notification policy hides the tab dot but exposes the notice to the notification center", () => {
   setVisibleTab(() => false);
   reportNotice("tab-system", { kind: "info", title: "system body", text: "", system: true });
-  assert.equal(tabNotice("tab-system"), null);
   assert.deepEqual(tabNotices(), [["tab-system", "system body"]]);
   assert.throws(() => reportNotice("tab-invalid-policy", { kind: "info", title: "body", text: "", system: "other" }), { message: "a notice system must be true or false" });
   forgetTab("tab-system");

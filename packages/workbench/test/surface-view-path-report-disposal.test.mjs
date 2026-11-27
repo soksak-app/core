@@ -103,10 +103,10 @@ test("an unload dispose keeps the tab reports of a view except its error, and a 
     await h.modules.disposeSurface(id, mode === undefined ? undefined : { mode });
   }
   assert.deepEqual([reports.tabLabel("view-unload-reports"), reports.tabFooter("view-unload-reports"),
-    reports.tabNotice("view-unload-reports"), reports.tabError("view-unload-reports")], ["Doc", "foot", "done", null]);
+    reports.tabError("view-unload-reports")], ["Doc", "foot", null]);
   assert.deepEqual(reports.tabOrigin("view-unload-reports"), { directory: null });
   assert.deepEqual([reports.tabLabel("view-close-reports"), reports.tabFooter("view-close-reports"),
-    reports.tabNotice("view-close-reports"), reports.tabError("view-close-reports")], [null, null, null, null]);
+    reports.tabError("view-close-reports")], [null, null, null]);
   await assert.rejects(h.modules.disposeSurface("view-unload-reports", { mode: "other" }), /unknown dispose mode: other/);
   await h.close();
   // The page sends the batch of the events of this test before the case ends, so the flush is the end of the test's own events.
