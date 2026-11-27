@@ -3121,3 +3121,84 @@ func TestAPluginOperationEndsTheHoldingServiceAndStartsTheNextAfterIt(t *testing
 		t.Fatalf("the service of the planned version still holds: %+v", services)
 	}
 }
+
+// outdatedEvents flushes log and returns the fields of each host.sidecar.outdated record of the event log in config.
+func outdatedEvents(t *testing.T, log *host.EventLog, config string) []map[string]any {
+	t.Helper()
+	if err := log.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := filepath.Glob(filepath.Join(config, "logs", "host-*.jsonl"))
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("host event logs %v, %v", paths, err)
+	}
+	fields := []map[string]any{}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(strings.TrimSuffix(string(data), "\n"), "\n") {
+			var event map[string]any
+			if err := json.Unmarshal([]byte(line), &event); err != nil {
+				t.Fatalf("event log %s holds the line %q: %v", path, line, err)
+			}
+			if event["event"] == "host.sidecar.outdated" {
+				fields = append(fields, event["fields"].(map[string]any))
+			}
+		}
+	}
+	return fields
+}
+
+// contract: sidecars-transport.hello.records-an-outdated-connection
+func TestAnOutdatedServiceConnectionRecordsItsEvent(t *testing.T) {
+	old := "0.0.6"
+	cases := []struct {
+		name    string
+		version *string
+		want    []map[string]any
+	}{
+		{"another version", &old, []map[string]any{{"name": "fixture-service", "running": old, "installed": "0.0.7"}}},
+		{"no version", nil, []map[string]any{{"name": "fixture-service", "running": nil, "installed": "0.0.7"}}},
+		{"the installed version", text("0.0.7"), []map[string]any{}},
+	}
+	for _, item := range cases {
+		t.Run(item.name, func(t *testing.T) {
+			root := t.TempDir()
+			host.UseHostEventLog(nil)
+			log, err := host.StartEventLog(support.EventLogOptions(filepath.Join(root, "logs")))
+			if err != nil {
+				t.Fatal(err)
+			}
+			support.StoreEveryLevel(t, log)
+			host.UseHostEventLog(log)
+			t.Cleanup(func() { host.UseHostEventLog(nil); log.Close() })
+			socket := filepath.Join(support.SocketParent(t), "s.sock")
+			listener, err := net.Listen("unix", socket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer listener.Close()
+			writeHarnessEndpoint(t, root, socket)
+			serveHelloVersion(t, listener, item.version)
+			declarations := support.HarnessDeclarations(t.TempDir())
+			declarations[0].Version = "0.0.7"
+			sidecars, err := NewSidecars(declarations, root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer sidecars.Stop()
+			owner := support.NewSidecarRecorder(t, "/outdated-event")
+			if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+				t.Fatal(err)
+			}
+			owner.Next(t)
+			got, _ := json.Marshal(outdatedEvents(t, log, root))
+			want, _ := json.Marshal(item.want)
+			if string(got) != string(want) {
+				t.Fatalf("host.sidecar.outdated fields = %s, want %s", got, want)
+			}
+		})
+	}
+}

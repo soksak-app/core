@@ -1228,6 +1228,23 @@ func (c *Sidecars) outdatedLocked() []OutdatedSidecar {
 	return list
 }
 
+// recordOutdatedConnection writes the event host.sidecar.outdated when the hello version of a persistent service differs from
+// the version that installed.json records, or when it has none (docs/spec/persistent-services.md#updates). It is called without
+// the lock. An undeclared sidecar has no installed version to compare; the declaration check refuses its start before the connection.
+func (c *Sidecars) recordOutdatedConnection(name string, running *string) {
+	c.declarations.RLock()
+	installed := c.installedLocked(name)
+	c.declarations.RUnlock()
+	if installed == nil || (running != nil && *running == *installed) {
+		return
+	}
+	var version any
+	if running != nil {
+		version = *running
+	}
+	EmitHost(LevelWarn, "host.sidecar.outdated", map[string]any{"name": name, "running": version, "installed": *installed})
+}
+
 // sessionsLocked counts the sessions of the service process: the open surfaces of the application that have sent
 // to it, and each surface of the layouts of a plugin that listed it while the process ran, which may hold a session that an earlier
 // application left. Call it with c.mu held.
@@ -2595,6 +2612,7 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival, attach
 		return nil, fmt.Errorf("sidecar %s: service protocol mismatch in hello response", name)
 	}
 	EmitHost(LevelInfo, "host.sidecar.connect", map[string]any{"name": name, "pid": endpoint.PID, "spawned": cmd != nil})
+	c.recordOutdatedConnection(name, response.Version)
 	PerformanceProcessAdd("sidecar", name, endpoint.PID)
 	process := &sidecar{
 		name: name, cmd: cmd, conn: conn, persistent: true, version: response.Version, servicePID: endpoint.PID, spawnedAt: spawnedAt,

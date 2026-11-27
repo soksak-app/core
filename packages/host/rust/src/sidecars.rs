@@ -4652,6 +4652,17 @@ impl<O: Owner> Core<O> {
             .get("version")
             .and_then(|v| v.as_str())
             .map(str::to_string);
+        // A connection whose hello version differs from installed.json writes the event host.sidecar.outdated, and a service that
+        // sends no version differs too (docs/spec/persistent-services.md#updates). The start runs without the state lock.
+        if let Some(installed) = core.installed(name)
+            && version.as_deref() != Some(installed.as_str())
+        {
+            crate::event_record::emit_host(
+                crate::event_log::Level::Warn,
+                "host.sidecar.outdated",
+                serde_json::json!({"name": name, "running": version, "installed": installed}),
+            );
+        }
 
         let reader_stream = response_reader.into_inner();
         let (tx, rx) = sync_channel::<Outgoing>(256);

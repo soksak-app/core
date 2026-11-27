@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1161: A persistent service whose `hello` version differs from `installed.json` writes the warn event `host.sidecar.outdated` (name, running, installed) once per connection in the Go and the Rust host (Red: no record was written).
 - F1160: `core.app.update` refuses an executable that runs from a macOS App Translocation folder before the candidate is downloaded or the application quits, with an error that names the path and the quarantine step; setup and the update share one path rule in each host (Red: the stage call took no executable).
 - F1217-1, F1217-2: The specification shows the settings as a tab of the main window with the pages of the design, the project home as a launcher, the window tools of the front screen, and one standard control set with a row grid that measures no row.
 - F1216: `plugin.json` declares `categories` and `requires`; `sok` refuses operations that leave a requirer without a plugin of its category, the workbenches leave such a plugin unloaded with the state `requires`, report `core.plugin-categories`, and draw a setting of type `plugin` as a select of the plugins of its category.

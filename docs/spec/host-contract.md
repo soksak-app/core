@@ -925,6 +925,7 @@ Items:
 | `sidecars-transport.hello.declares-protocol-one` | The hello request declares protocol 1. | all |
 | `sidecars-transport.reconnect.after-connection-loss-preserves-owner` | After the service drops the connection, the next send reconnects and events are still delivered to the owner and surface. | all |
 | `sidecars-transport.hello.reports-a-service-of-another-version` | A persistent service whose hello reply has another `version` than `installed.json` records, or no `version`, is listed in `host.sidecars` `outdated` with the running version or `null`, the installed version and its open surfaces; a service of the installed version is not. | all |
+| `sidecars-transport.hello.records-an-outdated-connection` | The connection whose `hello` reply names another version than `installed.json` records writes the event `host.sidecar.outdated` with `name`, `running` and `installed` at the level `warn` once; a service of the installed version writes no such event. | all |
 | `sidecars-transport.hello.client-is-the-configuration-directory` | The `hello` message that the host sends to a persistent service carries the configuration directory of the application as `client`. | all |
 | `sidecars-transport.hello.rejects-auth-failure` | A failed hello reply makes the send fail with "authentication handshake failed". | all |
 | `sidecars-transport.hello.rejects-unsupported-protocol-without-replacing-endpoint` | A hello reply with another protocol fails the send and leaves endpoint.json unchanged. | all |

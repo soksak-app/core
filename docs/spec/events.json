@@ -4287,6 +4287,35 @@
       },
       "description": "The host connected to a persistent service."
     },
+    "host.sidecar.outdated": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "warn",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "running": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "installed": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "running",
+          "installed"
+        ]
+      },
+      "description": "The host connected to a persistent service whose hello version differs from the version that installed.json records: running is the version of the hello reply or null when it has none, and installed the recorded version (docs/spec/persistent-services.md#updates)."
+    },
     "host.sidecar.disconnect": {
       "layer": "host",
       "class": "lifecycle",

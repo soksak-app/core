@@ -53,6 +53,9 @@ fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
 
 const ECHO: &str = "@fixture/sidecar-echo";
 
+/// The sidecar of the test of the outdated connection event, whose records no other test writes.
+const OUTDATED: &str = "@fixture/sidecar-outdated-event";
+
 // contract: sidecars.display-name.is-not-injected-into-child-environment
 #[test]
 fn sidecar_process_does_not_receive_its_display_name_from_the_host() {
@@ -4136,4 +4139,97 @@ fn a_plugin_operation_ends_the_holding_service_and_starts_the_next_after_it() {
         "the service of the planned version still holds: {services:?}"
     );
     sidecars.stop();
+}
+
+/// The `host.sidecar.outdated` records of the event log of `config` after its writer flushed, as their fields.
+fn outdated_fields(config: &Path, writer: &soksak_host::event_log::EventLog) -> Vec<serde_json::Value> {
+    writer.flush().unwrap();
+    records::read_events(&records::event_log_path(config))
+        .into_iter()
+        .filter(|event| event["event"] == "host.sidecar.outdated" && event["fields"]["name"] == OUTDATED)
+        .map(|event| event["fields"].clone())
+        .collect()
+}
+
+// contract: sidecars-transport.hello.records-an-outdated-connection
+#[test]
+fn an_outdated_service_connection_records_its_event() {
+    use soksak_host::event_record::use_host_event_log;
+    let cases: [(Option<&str>, Vec<serde_json::Value>); 3] = [
+        (
+            Some("0.0.6"),
+            vec![serde_json::json!({"name": OUTDATED, "running": "0.0.6", "installed": "0.0.7"})],
+        ),
+        (
+            None,
+            vec![serde_json::json!({"name": OUTDATED, "running": null, "installed": "0.0.7"})],
+        ),
+        (Some("0.0.7"), vec![]),
+    ];
+    for (version, want) in cases {
+        let executable_directory = folder::Folder::new();
+        let config_directory = folder::Folder::new();
+        let service_directory = config_directory.path().join("services/echo");
+        std::fs::create_dir_all(&service_directory).unwrap();
+        let socket_path = service_directory.join("version.sock");
+        let listener = UnixListener::bind(&socket_path).unwrap();
+        let endpoint = serde_json::json!({
+            "protocol": 1,
+            "pid": std::process::id(),
+            "socket": socket_path,
+            "token": "version-token"
+        });
+        std::fs::write(
+            service_directory.join("endpoint.json"),
+            serde_json::to_vec(&endpoint).unwrap(),
+        )
+        .unwrap();
+        // The service answers hello with the version of the case and echoes each surface request.
+        let reply_version = version.map(str::to_string);
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            while reader.read_line(&mut line).unwrap_or(0) > 0 {
+                let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                let reply = if request["operation"] == "hello" {
+                    let mut answer =
+                        serde_json::json!({"operation": "hello", "protocol": 1, "ok": true});
+                    if let Some(version) = &reply_version {
+                        answer["version"] = serde_json::json!(version);
+                    }
+                    answer.to_string()
+                } else {
+                    line.trim_end().to_string()
+                };
+                if writeln!(stream, "{reply}").is_err() {
+                    return;
+                }
+                line.clear();
+            }
+        });
+        let writer = records::start_writer(config_directory.path());
+        // The sidecar has its own name, because the writer is process-wide and the records of the other tests of this file reach it.
+        let fixture: Files = vec![(
+            OUTDATED,
+            r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#.to_string(),
+        )];
+        let mut declarations = declare(&fixture, executable_directory.path());
+        declarations[0].version = "0.0.7".to_string();
+        let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf()).unwrap();
+        let (owner, events) = owner("version-event", "/projects/version-event");
+        sidecars
+            .send_as(&owner, OUTDATED, "surface", &raw(r#"{"operation":"open"}"#))
+            .unwrap();
+        events.recv().unwrap();
+        assert_eq!(
+            outdated_fields(config_directory.path(), &writer),
+            want,
+            "hello version {version:?}"
+        );
+        sidecars.stop();
+        use_host_event_log(None);
+    }
 }
