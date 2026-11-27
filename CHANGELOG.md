@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- Removed the duplicate exposure trace case: exposure-registry-dropped-trace plays the same record.
 - F1222: The feature links of F1222 to F1224 name their implementation and tests, and the glyph test of the notice center is claimed by the test inventory.
 - F1217-7: The element declaration core.settings-tab.confirm, which no build draws, is removed from both exposure declarations.
 - F1107-1-1: The forward comment of the page exposure is placed on forward, not on the status read record.
