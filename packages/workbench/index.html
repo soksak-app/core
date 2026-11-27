@@ -565,6 +565,9 @@ const statusBar = createStatusBar(document.getElementById("statusBar"), {
   mode: () => value("mode"),
 });
 
+// The entry 홈 of the status bar runs core.home.show (docs/spec/external-sidebars.md#status-bar).
+bind(document.querySelector('[data-expose="core.statusbar.home"]'), "core.home.show", {});
+
 const home = createHome(document.getElementById("home"));
 
 /* First screen. The start document applies the button margin and the settings, and the plane of the project that the window opens or the project home is drawn before the first await.

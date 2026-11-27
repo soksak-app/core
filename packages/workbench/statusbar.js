@@ -8,13 +8,16 @@
 export function createStatusBar(root, { project, cards, theme, mode }) {
   root.className = "statusbar";
   root.innerHTML = [
+    '<button class="statusbar__item statusbar__home" type="button" data-expose="core.statusbar.home">홈</button>',
     '<span class="statusbar__item" data-expose="core.statusbar.project"></span>',
     '<span class="statusbar__item" data-expose="core.statusbar.cards"></span>',
     '<span class="statusbar__item" data-expose="core.statusbar.theme"></span>',
     '<span class="statusbar__spacer"></span>',
     '<span class="statusbar__key">⌘, 설정</span>',
   ].join("");
-  const [projectItem, cardsItem, themeItem] = root.querySelectorAll(".statusbar__item");
+  const projectItem = root.querySelector('[data-expose="core.statusbar.project"]');
+  const cardsItem = root.querySelector('[data-expose="core.statusbar.cards"]');
+  const themeItem = root.querySelector('[data-expose="core.statusbar.theme"]');
   return {
     draw(visible) {
       root.hidden = !visible;

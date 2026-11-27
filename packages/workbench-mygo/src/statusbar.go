@@ -36,6 +36,10 @@ func (s *Shell) drawStatusBar(c *ui.Context, width float32) {
 	mode := fmt.Sprint(s.settings.Value("mode"))
 	ui.Row(c).Size(width, height).Padding(0, m.spacePad, 0, m.spacePad).AlignItems(ui.Center).Gap(s.frameLength(m.chromeGap)).
 		Background(s.palette.Card).BorderWidth(topLine, 0, 0, 0).BorderColor(s.palette.Edge).Role(ui.RoleGroup).Label("core.statusbar").Children(func() {
+		// The entry 홈 runs core.home.show, which shows the project home in the window (docs/spec/external-sidebars.md#status-bar).
+		s.binder.Press(c, "core.statusbar.home", "core.home.show", "", nil).Role(ui.RoleButton).Label("홈").Children(func() {
+			ui.Text(c, "홈").SingleLine().FontSize(size).TextColor(s.palette.Muted)
+		})
 		ui.Text(s.binder.Name(c, "core.statusbar.project", ""), project.Title).SingleLine().FontSize(size).TextColor(s.palette.Fg)
 		ui.Text(s.binder.Name(c, "core.statusbar.cards", ""), fmt.Sprintf("카드 %d", len(s.planes.Cards()))).SingleLine().FontSize(size).TextColor(s.palette.Muted)
 		ui.Text(s.binder.Name(c, "core.statusbar.theme", ""), theme+" · "+mode).SingleLine().FontSize(size).TextColor(s.palette.Muted)

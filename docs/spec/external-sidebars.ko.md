@@ -44,7 +44,7 @@ SOKSAK 로고는 모든 화면에서 제목줄의 첫 element `core.chrome.proje
 
 ## 상태줄
 
-메인 창은 작업 화면이나 설정 탭이 앞에 있는 동안 아래 가장자리에 상태줄이 있다. 프로젝트 홈에는 없다. 상태줄은 왼쪽부터 창의 프로젝트 이름(element `core.statusbar.project`, 상태 `core.project`에서), `카드 n` 형식의 그리드 카드 수(element `core.statusbar.cards`, 상태 `core.grid`에서. 네 변 이름은 카드가 아니므로 뺀다), `·`로 나눈 창의 테마와 모드(element `core.statusbar.theme`, 설정 `theme`과 `mode`에서), 오른쪽의 단축키 안내 `⌘, 설정`을 보인다. 단축키 안내는 요소가 아니라 글자이며, 화면마다 설정 입구가 하나이기 때문이다([설정](settings.ko.md#열기와-닫기)). 상태줄은 그릴 때 값을 읽고, 높이는 토큰 `statusbar-h`다.
+메인 창은 작업 화면이나 설정 탭이 앞에 있는 동안 아래 가장자리에 상태줄이 있다. 프로젝트 홈에는 없다. 상태줄은 왼쪽부터 항목 홈(element `core.statusbar.home`, `core.home.show`를 실행해 창에 프로젝트 홈을 보인다), 창의 프로젝트 이름(element `core.statusbar.project`, 상태 `core.project`에서), `카드 n` 형식의 그리드 카드 수(element `core.statusbar.cards`, 상태 `core.grid`에서. 네 변 이름은 카드가 아니므로 뺀다), `·`로 나눈 창의 테마와 모드(element `core.statusbar.theme`, 설정 `theme`과 `mode`에서), 오른쪽의 단축키 안내 `⌘, 설정`을 보인다. 단축키 안내는 요소가 아니라 글자이며, 화면마다 설정 입구가 하나이기 때문이다([설정](settings.ko.md#열기와-닫기)). 상태줄은 그릴 때 값을 읽고, 높이는 토큰 `statusbar-h`다.
 
 ## 사이드바 머리와 가장자리
 

@@ -5966,6 +5966,10 @@
         "description": "The open button of the settings hint on the work screen; it runs core.settings.open."
       },
       {
+        "name": "core.statusbar.home",
+        "description": "The entry 홈 of the work status bar. Runs core.home.show."
+      },
+      {
         "name": "core.statusbar.project",
         "description": "The project name in the status bar of the main window."
       },

@@ -53,3 +53,18 @@ func TestTheStatusBarNamesItsProjectCardsAndThemeElements(t *testing.T) {
 		t.Fatalf("the element core.statusbar.theme is %q, want the theme and mode with ·", theme.Text)
 	}
 }
+
+// The work screen status bar starts with the entry 홈, element core.statusbar.home, which runs core.home.show and shows the project home
+// in the window (docs/spec/external-sidebars.md#status-bar).
+func TestTheStatusBarHasTheHomeEntryOnTheWorkScreen(t *testing.T) {
+	f := projectWithPlugins(t)
+	f.settle()
+	if !f.has("core.statusbar.home", "") {
+		t.Fatalf("the status bar has no entry 홈: %q", f.tester.Texts())
+	}
+	f.click("core.statusbar.home", "")
+	f.settle()
+	if !f.has("core.home.search", "") {
+		t.Fatal("the entry 홈 does not show the project home")
+	}
+}

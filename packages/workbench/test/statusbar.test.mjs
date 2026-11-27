@@ -24,7 +24,7 @@ test("the status bar shows the project, the card count, the theme and the mode o
   const { root, bar, texts } = build({ project: { title: "project1" }, cards: 2, theme: "midnight", mode: "dark" });
   bar.draw(true);
   assert.equal(root.hidden, false);
-  assert.deepEqual(texts(), ["project1", "카드 2", "midnight · dark"]);
+  assert.deepEqual(texts(), ["홈", "project1", "카드 2", "midnight · dark"]);
   assert.equal(root.querySelector('[data-expose="core.statusbar.project"]').textContent, "project1");
   assert.equal(root.querySelector('[data-expose="core.statusbar.cards"]').textContent, "카드 2");
   assert.equal(root.querySelector('[data-expose="core.statusbar.theme"]').textContent, "midnight · dark");
@@ -39,13 +39,20 @@ test("the status bar follows each change of its statuses on the next draw", () =
   values.theme = "slate";
   values.project = { title: "soksak" };
   bar.draw(true);
-  assert.deepEqual(texts(), ["soksak", "카드 3", "slate · dark"]);
+  assert.deepEqual(texts(), ["홈", "soksak", "카드 3", "slate · dark"]);
 });
 
 test("the status bar holds no project name without a project and is hidden when it is not drawn", () => {
   const { root, bar, texts } = build({ project: null, cards: 0, theme: "midnight", mode: "dark" });
   bar.draw(true);
-  assert.deepEqual(texts(), ["카드 0", "midnight · dark"], "a window without a project shows a project name");
+  assert.deepEqual(texts(), ["홈", "카드 0", "midnight · dark"], "a window without a project shows a project name");
   bar.draw(false);
   assert.equal(root.hidden, true, "the bar stays visible on the project home");
+});
+
+test("the status bar starts with the entry 홈, element core.statusbar.home", () => {
+  const { root } = build({ project: { title: "project1" }, cards: 2, theme: "midnight", mode: "dark" });
+  const entry = root.querySelector('[data-expose="core.statusbar.home"]');
+  assert.equal(entry?.textContent, "홈", "the status bar has no entry 홈");
+  assert.equal(root.firstElementChild, entry, "the entry 홈 is not the first item of the status bar");
 });
