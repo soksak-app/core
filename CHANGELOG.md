@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1232-4: The record states that the whole comment-language gate waits for F1232-2, which owns the Hangul comments of packages/workbench.
 - F1254: The mygo copy of shortcuts.json equals its source again, the mygo condition map names the parameter texts that F1242 gave the side keys and cmd+Backspace, and the side-key test expects the text of the specification.
 - F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
 - F1236-4: The Go sources are gofmt-clean again: the Badge field of the plugin item struct in settings_tab_view.go is aligned as gofmt aligns it.
