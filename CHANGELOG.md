@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-12-8: The notice color test compares the icons with the palette tokens instead of literal values.
 - F1269: The default test host installs the probe plugin that the test environment names, so the missing-plugin notice no longer covers the card head.
 - F1274: Ship the current core event catalog in the window-check package.
 - F1217-18-5: The closed settings hint of mygo stands above the status line.

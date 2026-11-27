@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-12-8: 알림 색 테스트가 리터럴 값 대신 palette 토큰과 비교한다.
 - F1269: 기본 시험 host가 시험 환경이 이름 붙인 probe plugin을 설치하여, 없는 plugin의 알림이 카드 머리를 더 이상 가리지 않는다.
 - F1274: window-check package가 현재 core event catalog를 내보낸다.
 - F1217-18-5: mygo의 설정 닫힘 안내가 상태줄 위에 선다.
