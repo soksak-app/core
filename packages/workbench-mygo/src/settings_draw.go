@@ -798,7 +798,8 @@ func (s *Shell) drawStepper(c *ui.Context, control *SettingsControl, pane settin
 		return
 	}
 	s.binder.Control(c, control.Name, control.Command.Name, control.item())
-	ui.Row(c).Shrink(0).Gap(pane.segGap).Padding(pane.segPad).AlignItems(ui.Center).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
+	// The box of the stepper is one input of the field height, exposed as core.settings-tab.stepper (docs/spec/settings.md#controls).
+	s.exposedBox(c, "core.settings-tab.stepper", "", control.item()).Row().Shrink(0).Role(ui.RoleGroup).Label(control.Label).Height(pane.fieldH).Gap(pane.segGap).Padding(pane.segPad).AlignItems(ui.Center).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusSmall()).Background(s.palette.Bg).Children(func() {
 		s.drawStepButton(c, control, "−", "down", math.Max(control.lo, value-1), pane)
 		ui.Text(c, *control.Value+" "+control.unit).NoWrap().FontSize(s.textSmall()).TextColor(s.palette.Fg)
 		s.drawStepButton(c, control, "+", "up", math.Min(control.hi, value+1), pane)

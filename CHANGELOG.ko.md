@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1250-4: 작은 정수의 stepper는 입력 높이의 한 상자이며 core.settings-tab.stepper로 노출된다.
 - F1232-4: 전체 comment-language 게이트가 packages/workbench의 한글 주석을 맡은 F1232-2를 기다린다는 점을 기록했다.
 - F1254: shortcuts.json의 mygo copy가 다시 source와 같고, mygo 조건 map이 F1242가 side key와 cmd+Backspace에 준 매개변수 글을 가리키며, side-key 테스트가 명세의 글을 기대한다.
 - F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.

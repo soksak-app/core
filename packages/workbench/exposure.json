@@ -6753,6 +6753,10 @@
         "description": "The − and + buttons of the steppers of the setting rows, bound to core.settings.change."
       },
       {
+        "name": "core.settings-tab.stepper",
+        "description": "The box of a stepper of the setting rows, with the value and the unit between its − and + buttons."
+      },
+      {
         "name": "core.settings-tab.text",
         "description": "The text fields of the setting rows, bound to core.settings.change on Enter and on blur."
       },

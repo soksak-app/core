@@ -159,6 +159,9 @@ export function slider(key, [min, max], now, { unit = "", command = "core.settin
 /** A stepper − value + of an integer range, with its unit inside (docs/spec/settings.md#controls). */
 export function stepper(key, [min, max], now, { unit = "", command = "core.settings.change", scope = writeScope(), disabled = false } = {}) {
   const wrap = element("span", "set-step");
+  // The box of the stepper is one exposed element of the value and its buttons (docs/spec/settings.md#controls).
+  wrap.dataset.expose = "core.settings-tab.stepper";
+  wrap.dataset.key = key;
   const down = button("−", { expose: "core.settings-tab.step", command, params: { key, value: now - 1, scope }, key, disabled: disabled || now <= min, variant: "icon", title: "줄이기" });
   const out = element("output", "set-step__value", `${now}${unit}`);
   const up = button("+", { expose: "core.settings-tab.step", command, params: { key, value: now + 1, scope }, key, disabled: disabled || now >= max, variant: "icon", title: "늘리기" });

@@ -96,7 +96,8 @@ test("the sizes are sliders or steppers and the memory delay is bounded in minut
   assert.ok(delay, "the memory delay has no control");
   assert.deepEqual([delay.type, delay.min, delay.max], ["range", "5", "720"]);
   assert.equal((await controlOf("memorySaverDelay")).name, "core.settings-tab.set");
-  assert.equal((await controlOf("problemToastDismissSeconds")).name, "core.settings-tab.step");
+  // The stepper is one exposed box, core.settings-tab.stepper; its buttons keep core.settings-tab.step (docs/spec/settings.md#controls).
+  assert.equal((await controlOf("problemToastDismissSeconds")).name, "core.settings-tab.stepper");
 });
 
 test("a plugin page shows its declared settings with their controls", async () => {
