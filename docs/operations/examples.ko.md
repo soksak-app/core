@@ -424,7 +424,7 @@ Cargo compile 또는 metadata discovery가 실패하면 Rust owner runner는 com
 
 Stall sampling과 launchd process 조회는 각 process에 10초 제한을 둔 비동기 child process를 사용한다. 제한에 이른 process는 실패가 그 순간의 system volume 여유 공간과 load를 읽는 동안 최대 6초 더 실행되고, 멈춘 `sample`은 자기 file 옆에 자기 stack도 기록한다. Sample 실행 중에도 검사는 endpoint message를 계속 읽는다. Host와 page sample은 함께 시작하고 page 실패는 각각 보고하며 host 실패는 sample operation을 실패시킨다. Stall sample은 녹화처럼 검사의 기록이다. Session은 각 sample을 기록한 thread나 host를 sample하지 못한 이유와 함께 `stall sample:` 진단으로 알리고, 기계나 sample 도구가 끝내지 못한 sample은 검사를 실패시키지 않는다. 검사의 결과는 그 검사가 판정한 것의 결과로 남는다.
 
-IME window 검사는 capture stop 후 artifact 복사 또는 visual 분석 전에 소유 terminal status observer를 끝낸다. 모든 입력 단계와 terminal sequence boundary는 이미 저장돼 있다. Cleanup은 stop을 다시 안전하게 호출할 수 있으며 이전 해제에 실패한 구독만 재시도한다.
+IME window 검사는 capture stop 후 artifact 복사 또는 visual 분석 전에 소유 세션 status observer를 끝낸다. 모든 입력 단계와 terminal sequence boundary는 이미 저장돼 있다. Cleanup은 stop을 다시 안전하게 호출할 수 있으며 이전 해제에 실패한 구독만 재시도한다.
 
 Terminal view benchmark는 process 및 one-shot layout 증거에 전체 performance trace를 유지하고 continuous drag 구간에서 `diagnostics.performance`만 끈다. Source-frame event는 독립적인 `diagnostics.log.frame` 정책을 쓰며 capture, clock과 error 감사는 유지한다. Gesture 시각 측정 전에 설정 전파가 완료되어야 하며 host가 sampler 종료를 기다릴 수 있다. Drag가 실패해도 reclaim sampling 전에 이전 설정을 복원한다. Phase mode는 기록한 결과에 포함한다. 전체 profiling은 cadence 증거가 아닌 진단 맥락이며 측정 gesture 내내 유지하면 무관한 host 관측 작업을 더한다. 모든 debug 설정을 끄는 대안은 필요한 frame record도 없애므로 거부한다. 앞선 layout은 적용된 native placement 증거에 필요하므로 trace를 유지한다. Source cadence·captured-paint convergence의 명시된 시간 한도는 40 ms 이하이며, 2 pt·two-frame 기준은 그대로 유지한다.
 
