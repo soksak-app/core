@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1239: F1239-5 is marked complete again; F1239-4 is closed as part of F1239-7 and F1239-8 as moved to F1250.
 - F1248: The feature evidence table links the sidecar OS key of the Rust surface fixture to the platform audit test.
 - F1245-3: reduceMotionValue of packages/workbench/host.js states the reason of its default, the last site of the fallback check, which now passes.
 - F1250-1: The settings pages are declared in JSON with a fixed component set; the flat plugin settings form is refused.

@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1239: F1239-5를 다시 완료로 표시한다. F1239-4는 F1239-7의 일부로, F1239-8은 F1250으로 옮겨 닫는다.
 - F1248: 기능 증거 표가 Rust surface fixture의 sidecar OS key를 platform audit 시험에 연결한다.
 - F1245-3: packages/workbench/host.js의 reduceMotionValue가 기본값의 이유를 적어, fallback 검사의 마지막 위치가 해결되고 검사가 통과한다.
 - F1250-1: 설정 페이지는 고정된 컴포넌트 집합의 JSON 선언으로 정해지며, 플러그인 설정의 평면 형식은 거부된다.
