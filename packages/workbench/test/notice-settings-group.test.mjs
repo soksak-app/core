@@ -1,4 +1,4 @@
-// The group 알림 of the page 동작 (docs/spec/notifications.md#settings): five common-only rows in the declared order, the delay indented
+// The group Notifications of the page Behavior (docs/spec/notifications.md#settings): five common-only rows in the declared order, the delay indented
 // and disabled while its switch is off, and its stepper bounded to 1 to 60 seconds with the default 5.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

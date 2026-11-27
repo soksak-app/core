@@ -1,4 +1,4 @@
-// The core pages of the settings tab: 모양, 작업 공간, 동작, 에이전트 연동 and 진단 (docs/spec/settings.md#pages). Each row is drawn from the
+// The core pages of the settings tab: Appearance, Workspace, Behavior, Agent integration and Diagnostics (docs/spec/settings.md#pages). Each row is drawn from the
 // declaration of settings-rows.js, and each control runs the declared command of its form (docs/spec/settings.md#controls).
 import { debugOn, overridden, THEMES } from "./settings.js";
 import { GROUPS, choicesOf, rangeOf, rowsOf } from "./settings-rows.js";
@@ -102,7 +102,7 @@ function rowsOfGroup(page, name) {
   return groupOf(page, name).rows.map((def) => coreRowFor(def));
 }
 
-/** The debug switch: on when the performance trace is on and every log class is at trace (docs/spec/settings.md#진단). */
+/** The debug switch: on when the performance trace is on and every log class is at trace (docs/spec/settings.md#pages). */
 function debugRow() {
   const el = element("input", "set-switch");
   el.type = "checkbox";
@@ -127,17 +127,17 @@ export function lookPage() {
   ];
 }
 
-/** The window sidebar rows of 작업 공간, the set select of the side and the on/off switch (docs/spec/settings.md#작업-공간). */
+/** The window sidebar rows of Workspace, the set select of the side and the on/off switch (docs/spec/settings.md#pages). */
 function sidebarGroup() {
   const sides = sideList({ order: "sidebarOrder", place: (side) => side, sideSwitch: (side) => side, title: "사이드바" });
-  // The shortcuts follow a fixed order, not the rows (docs/spec/settings.md#작업-공간).
+  // The shortcuts follow a fixed order, not the rows (docs/spec/settings.md#pages).
   const shortcuts = element("p", "set-caption", "⌘B 왼쪽 · ⌥⌘B 오른쪽 · ⇧⌘J 위 · ⌘J 아래");
   const declared = groupOf("workspace", "사이드바");
   return group("사이드바", declared.description, [sides, shortcuts], declared.id);
 }
 
 /**
- * The size rules of the sidebar widths in the effective values of the shown scope (docs/spec/settings.md#작업-공간). A failing rule shows its
+ * The size rules of the sidebar widths in the effective values of the shown scope (docs/spec/settings.md#pages). A failing rule shows its
  * line through the error display and, when a fix exists, the fix button under the group.
  */
 export function sizeGroup() {
@@ -158,7 +158,7 @@ export function sizeGroup() {
   return group(sizes.name, sizes.description, children, sizes.id);
 }
 
-/** The workspace page: the project and position groups, the four-row sidebar list, and the sizes (docs/spec/settings.md#작업-공간). */
+/** The workspace page: the project and position groups, the four-row sidebar list, and the sizes (docs/spec/settings.md#pages). */
 export function workspacePage() {
   return [
     ...["프로젝트", "프로젝트 폴더", "위치"].map((name) => group(name, groupOf("workspace", name).description, rowsOfGroup("workspace", name), groupOf("workspace", name).id)),
@@ -172,7 +172,7 @@ export function behaviorPage() {
   return GROUPS.behavior.map((item) => group(item.name, item.description, rowsOfGroup("behavior", item.name), item.id));
 }
 
-/** The diagnostics page (docs/spec/settings.md#진단). */
+/** The diagnostics page (docs/spec/settings.md#pages). */
 export function diagPage() {
   return GROUPS.diag.map((item) => group(item.name, item.description, rowsOfGroup("diag", item.name), item.id));
 }
@@ -231,7 +231,7 @@ export function agentsPage() {
   return [group("연동 상태", "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목.", [...rows, actions])];
 }
 
-/** The keys of a page that a project can override: its rows, the sidebar keys of 작업 공간, and the sets of 사이드바 세트 (docs/spec/settings.md#scope-of-a-control). */
+/** The keys of a page that a project can override: its rows, the sidebar keys of Workspace, and the sets of Sidebar sets (docs/spec/settings.md#scope-of-a-control). */
 const PAGE_KEYS = {
   look: () => rowsOf("look").map((def) => def.key),
   workspace: () => [...rowsOf("workspace").map((def) => def.key), "left", "right", "top", "bottom", "links"],
@@ -242,8 +242,8 @@ const PAGE_KEYS = {
 };
 
 /**
- * The scope control of the page head (docs/spec/settings.md#page-head): the segment 전역 | <project> · <n> while a project is selected and the page
- * has a setting that a project can override, the badge 전역 전용 when the page has settings but none that a project can override, and null otherwise.
+ * The scope control of the page head (docs/spec/settings.md#page-head): the segment global | <project> · <n> while a project is selected and the page
+ * has a setting that a project can override, the badge global only when the page has settings but none that a project can override, and null otherwise.
  */
 export function headScope(page) {
   const overridable = PAGE_KEYS[page]().filter((key) => !commonOnly(key));
@@ -251,7 +251,7 @@ export function headScope(page) {
   return projectSelected() ? scopeSegment(overridable) : null;
 }
 
-/** The scope segment 전역 | <project> · <n>; n counts the keys of the page that the selected project overrides. */
+/** The scope segment global | <project> · <n>; n counts the keys of the page that the selected project overrides. */
 export function scopeSegment(keys) {
   const wrap = element("span", "set-seg set-scope");
   wrap.setAttribute("role", "group");

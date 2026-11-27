@@ -1,6 +1,6 @@
 // The missing plugins of a set (docs/spec/plugins.md#missing-plugins): a section whose plugin is not loaded is kept in the set, its chip
 // is dashed and struck through, a set line and a sidebar show one warning line per plugin with the button of its state, and a tab of a
-// tab layout keeps its place in the set order, dimmed and struck through, and never shows the word 불러오지 않음.
+// tab layout keeps its place in the set order, dimmed and struck through, and never shows the word Not loaded.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";

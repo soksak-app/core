@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1232-2: packages/workbench 파일 28개의 주석을 영어로 바꿨고, 주석이 가리키는 조작 대상에 command 식별자를 붙였다.
 - F1108: 레이아웃 probe 고정물은 탭 뷰의 선언된 theme 모양을 scheme과 배경은 값으로, 나머지 필드는 형으로 판정한다.
 - F959-2: 수정된 verifier에서 claude 한 번 실행으로 mygo의 추적 agent layout 요청 네 개를 모두 충족한다.
 - F1217-7-2-5: mygo가 설정 거부의 값을 web workbench와 host처럼 <, >, &를 escape하지 않은 JSON으로 쓴다.

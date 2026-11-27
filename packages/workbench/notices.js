@@ -488,8 +488,8 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
     // default: a notice id that no notice holds has no notice.
     notice(id) { return notices.find((n) => n.id === id) ?? null; },
 
-    /** The actions that a shown toast offers: the notice's own actions, then 카드로 가기 for a warning or error of a card that does not
-     * have the focus, then 자세히 for an error (docs/spec/notifications.md#toasts). The center and the status line keep the notice's own actions. */
+    /** The actions that a shown toast offers: the notice's own actions, then the Go to card action (core.card.focus) for a warning or error of a card that does not
+     * have the focus, then the Details action (core.notices.show) for an error (docs/spec/notifications.md#toasts). The center and the status line keep the notice's own actions. */
     toastActions(id) {
       const n = notices.find((x) => x.id === id);
       if (!n) return [];
@@ -501,7 +501,7 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
       if (n.source.kind === "sidebar" && n.source.card !== null && n.source.card !== focusedCard && (n.kind === "warning" || n.kind === "error")) {
         extra.push({ label: "카드로 가기", command: "core.card.focus", params: { card: n.source.card } });
       }
-      // An error toast offers 자세히, which opens the center at the notice (docs/spec/notifications.md#toasts).
+      // An error toast offers the Details action (core.notices.show), which opens the center at the notice (docs/spec/notifications.md#toasts).
       if (n.kind === "error") extra.push({ label: "자세히", command: "core.notices.show", params: { id: n.id } });
       return [...n.actions, ...extra];
     },

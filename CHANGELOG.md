@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1232-2: The comments of the 28 files of packages/workbench in the unit are English, and the controls they name carry their command identifiers.
 - F1108: The layout probe fixture judges the declared theme shape of its tab view by value for the scheme and background and by type for the other fields.
 - F959-2: One claude run on mygo meets all four tracked agent layout requests with the corrected verifier.
 - F1217-7-2-5: mygo writes the value of a settings refusal as JSON without escaping <, > and &, the text of the web workbench and the hosts.

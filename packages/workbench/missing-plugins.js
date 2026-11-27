@@ -83,7 +83,7 @@ export function missingLineNode(document, group) {
   return node;
 }
 
-/** The chip of a missing section in the set editor: dashed and struck through, with the tooltip `<name>(<id>) 플러그인 필요`. */
+/** The chip of a missing section in the set editor: dashed and struck through, with the tooltip `<name>(<id>) plugin required`. */
 export function missingChipNode(document, sectionId, group) {
   const chip = document.createElement("span");
   chip.className = "set-chip set-chip--missing";
