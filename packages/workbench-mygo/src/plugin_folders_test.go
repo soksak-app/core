@@ -6,7 +6,7 @@ import (
 )
 
 // The answer of pluginsState carries the number of plugin folders as folders, the same name as the other hosts
-// (docs/spec/installation.md#plugin-folders). The shell reads it into its plugin state.
+// (docs/spec/installation.md#plugin-operations-in-the-application). The shell reads it into its plugin state.
 // contract: plugins.folders.count-follows-a-folder-added-or-removed
 func TestThePluginStateReadsTheFolderCount(t *testing.T) {
 	var state PluginsState

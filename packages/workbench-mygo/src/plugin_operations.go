@@ -26,7 +26,7 @@ type PluginsState struct {
 	Registry  *string            `json:"registry"`
 	Index     *PluginIndex       `json:"index"`
 	Installed sok.InstalledState `json:"installed"`
-	// Folders is the number of plugin folders that the host watches (docs/spec/installation.md#plugin-folders).
+	// Folders is the number of plugin folders that the host watches (docs/spec/installation.md#plugin-operations-in-the-application).
 	Folders  int             `json:"folders"`
 	FirstRun bool            `json:"firstRun"`
 	Starter  *sok.StarterJob `json:"starter"`
