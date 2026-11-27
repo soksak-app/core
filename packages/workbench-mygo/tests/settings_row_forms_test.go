@@ -105,6 +105,23 @@ func TestTheSettingsSearchFillsTheMenuWidth(t *testing.T) {
 	}
 }
 
+// The search field of the settings menu ends above the first menu item: the field keeps its own height, so the items below it
+// do not overlap the field (docs/spec/settings.md#menu).
+func TestTheSettingsSearchFieldEndsAboveTheFirstMenuItem(t *testing.T) {
+	f := opened(t)
+	f.tester.SetSize(1200, 3200)
+	f.settle()
+	nodes := f.tester.ElementTree()
+	field, ok := exposedNode(nodes, "core.settings-tab.find", "")
+	if !ok {
+		t.Fatal("no search field of the settings menu")
+	}
+	nav := exposedNodeOf(f, "core.settings-tab.nav", "nav:look").Bounds
+	if bottom := field.Bounds.Y + field.Bounds.H; bottom > nav.Y+0.5 {
+		t.Fatalf("the search field ends at y %v, below the first menu item that starts at %v", bottom, nav.Y)
+	}
+}
+
 // Two adjacent theme swatches are one theme-grid-gap (8 points) apart, as the grid .th-grid (docs/spec/settings.md#pages).
 func TestTheThemeSwatchesAreOneGridGapApart(t *testing.T) {
 	f := settingsMetricsPage(t, "look")

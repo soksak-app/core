@@ -124,8 +124,9 @@ func (p PlainControls) search(c *ui.Context, field ui.Element) ui.Element {
 }
 
 // searchBox is the box of a search, which takes the free width of its row as the input does in its grid column.
+// searchBox is the frame of a search field in a column: it keeps the height of the field, so the items after it stay below the field.
 func (p PlainControls) searchBox(c *ui.Context) ui.Element {
-	return ui.Box(c).Grow(1).Basis(0)
+	return ui.Box(c).FillWidth().Height(p.Height).Shrink(0)
 }
 
 // drawSearchCancel draws the cancel of a search with a text, and reports its press. It takes no focus, as that of the browser.
