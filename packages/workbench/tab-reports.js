@@ -47,10 +47,10 @@ const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 
 // The state of the shown toasts that the toast watchers draw: the id, kind, title, count, text and actions of each. The remaining time is
 // left out, because the store changes it without a change of the toasts.
-const toastState = () => JSON.stringify(noticeStore.toasts().map((toast) => {
+const toastState = () => JSON.stringify([noticeStore.toastStatus().listOpen, noticeStore.toasts().map((toast) => {
   const notice = noticeStore.notice(toast.id);
   return [toast.id, toast.kind, toast.title, toast.count, notice.text, noticeStore.toastActions(toast.id)];
-}));
+})]);
 
 function notify() {
   for (const listener of listeners) listener();

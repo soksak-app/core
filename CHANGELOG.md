@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-3: An error toast opens the notice center at its notice with 자세히 (core.notices.show), and the line form lists its other toasts (core.toasts.list).
 - F1221: The Rust accounts refusal test is formatted as cargo fmt writes it.
 - F999-6: Each drawing phase of the surface fixture test is its own test, so the hidden tab phase can fail alone.
 - F1221: The sok Rust host refuses accounts without a programs declaration with the Go text, and its contract test is declared.

@@ -41,6 +41,9 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
   const origins = new Map();
   let seq = 0;
   let open = false;
+  // The entry that core.notices.show opened the center on, and whether the line form shows the list of its other toasts.
+  let shownEntry = null;
+  let listOpen = false;
   let filter = "all";
   let focusedCard = null;
 
@@ -340,6 +343,22 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
       }
     },
 
+    /** Opens the center on the entry of id, which it marks as the shown entry (core.notices.show). An unknown id is a RangeError. */
+    showEntry(id) {
+      if (!notices.some((n) => n.id === id)) throw new RangeError(`no notice ${id} exists`);
+      open = true;
+      shownEntry = id;
+      expireEntries();
+      changed();
+    },
+
+    /** Shows or hides the list of the other toasts of the line form (core.toasts.list). */
+    setList(next) {
+      if (typeof next !== "boolean") throw new RangeError("core.toasts.list takes open as a boolean");
+      listOpen = next;
+      changed();
+    },
+
     /** Opens or closes the center. */
     toggle() {
       open = !open;
@@ -425,6 +444,9 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
       }));
     },
 
+    /** The status of core.toasts: the shown toasts and whether the line form shows their list. */
+    toastStatus() { return { toasts: this.toasts(), listOpen }; },
+
     /** The notices that the views draw, the newest first, as the entries of the center. */
     entries() {
       expireEntries();
@@ -447,7 +469,7 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
     },
 
     /** Whether the center is open, and its filter. */
-    get state() { return { open, filter }; },
+    get state() { return { open, filter, shown: shownEntry }; },
     /** Each notice record, for the views that draw the entries with their group. */
     records() { return notices.slice(); },
     /** The notice by id, or null. */
@@ -455,12 +477,17 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
     notice(id) { return notices.find((n) => n.id === id) ?? null; },
 
     /** The actions that a shown toast offers: the notice's own actions, then 카드로 가기 for a warning or error of a card that does not
-     * have the focus (docs/spec/notifications.md#toasts). The center and the status line keep the notice's own actions. */
+     * have the focus, then 자세히 for an error (docs/spec/notifications.md#toasts). The center and the status line keep the notice's own actions. */
     toastActions(id) {
       const n = notices.find((x) => x.id === id);
       if (!n) return [];
-      if (n.source.kind !== "card" || n.source.card === focusedCard || (n.kind !== "warning" && n.kind !== "error")) return n.actions;
-      return [...n.actions, { label: "카드로 가기", command: "core.card.focus", params: { card: n.source.card } }];
+      const extra = [];
+      if (n.source.kind === "card" && n.source.card !== focusedCard && (n.kind === "warning" || n.kind === "error")) {
+        extra.push({ label: "카드로 가기", command: "core.card.focus", params: { card: n.source.card } });
+      }
+      // An error toast offers 자세히, which opens the center at the notice (docs/spec/notifications.md#toasts).
+      if (n.kind === "error") extra.push({ label: "자세히", command: "core.notices.show", params: { id: n.id } });
+      return [...n.actions, ...extra];
     },
   };
   return store;

@@ -51,7 +51,7 @@ test("core.window.workbench, core.toasts and core.workbench.audit describe the w
       skipped: [{ name: "V7c", note: "b" }],
     } }, "a skipped check is neither a row nor a failure");
 
-    assert.deepEqual(await get("core.toasts"), { result: [] }, "a workbench that shows no toast reports an empty list");
+    assert.deepEqual(await get("core.toasts"), { result: { toasts: [], listOpen: false } }, "a workbench that shows no toast reports no toast and a closed list");
     assert.equal((await get("core.workbench.error")).error?.code, 1001, "the replaced status core.workbench.error is not declared");
     for (const text of ["", "an unknown error"]) {
       const refusal = await registry.handle({ method: "command.run", params: {

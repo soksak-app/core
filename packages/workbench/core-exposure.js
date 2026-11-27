@@ -533,7 +533,7 @@ export function installErrorExposure() {
     }
   };
   status("core.notices", () => store.status());
-  status("core.toasts", () => store.toasts());
+  status("core.toasts", () => store.toastStatus());
   registry.command("core.notices.toggle", () => store.toggle());
   registry.command("core.notices.filter", ({ filter }) => invalid(() => store.setFilter(filter)));
   registry.command("core.notices.read-all", () => store.readAll());
@@ -541,6 +541,8 @@ export function installErrorExposure() {
   registry.command("core.notices.clear-all", () => store.clearAll());
   registry.command("core.notices.close", ({ id }) => invalid(() => store.close(id)));
   registry.command("core.notices.read", ({ id }) => invalid(() => store.read(id)));
+  registry.command("core.notices.show", ({ id }) => invalid(() => store.showEntry(id)));
+  registry.command("core.toasts.list", ({ open }) => invalid(() => store.setList(open)));
   // The notice commands run the one path of tab.notify, tab.progress and tab.done: a refused field is -32602 with the text of the check.
   const refusedNotice = (action) => {
     try {

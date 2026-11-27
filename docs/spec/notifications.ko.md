@@ -52,10 +52,10 @@ Toast는 종 아래, 창의 오른쪽 가장자리에 있으며, 모든 card와 
 | 값 | 라벨 | 모양 |
 | --- | --- | --- |
 | `card` | 카드 | 오른쪽 위의 열. 새것이 위에 온다. 토스트 셋을 보이고, `+<n>개 더` 줄이 나머지를 센다. 스스로 닫히는 토스트는 남은 시간을 아래쪽의 얇은 막대로 보인다 |
-| `line` | 한 줄 | 위쪽 가운데의 반전 색 한 줄. Notice 하나를 보이고, 빨간 수가 나머지 수를 보인다. 수를 누르면 목록으로 연다. 줄은 action 하나를 보인다 |
+| `line` | 한 줄 | 위쪽 가운데의 반전 색 한 줄. Notice 하나를 보이고, 빨간 수가 나머지 수를 보인다. 수를 누르면 `core.toasts.list {open}`를 실행해 그 아래에 카드 형식의 열로 보인다. 줄은 action 하나를 보인다 |
 | `deck` | 덱 | 오른쪽 위의 더미. 앞의 토스트는 온전히 보이고, 더미 위에 포인터를 두면 펼쳐진다 |
 
-Toast는 아이콘, title, text, action, 닫기 control을 보인다. 닫기 control은 `core.notices.close {id}`를 실행한다. Action을 실행하면 toast가 닫힌다. 오류 toast는 source가 실패한 작업을 다시 실행할 수 있을 때 `다시 시도`를, 그리고 `자세히`를 제공한다. `자세히`는 알림 센터를 그 notice에 맞춰 연다. Warning toast는 그것을 해결하는 action, 예컨대 설치를 제공한다. Success toast는 `되돌리기`나 `설정 열기`를 제공할 수 있다.
+Toast는 아이콘, title, text, action, 닫기 control을 보인다. 닫기 control은 `core.notices.close {id}`를 실행한다. Action을 실행하면 toast가 닫힌다. 다시 실행할 수 있는 source는 실패한 작업을 `{label: "다시 시도", command, params}` action으로 오류 notice의 첫 action에 넘긴다. Core는 재시도를 더하지 않으며, core가 만든 오류에는 `다시 시도`가 없다. 오류 toast는 또 `자세히`를 제공한다. `자세히`는 `core.notices.show {id}`를 실행해 알림 센터를 그 notice에 맞춰 연다. Warning toast는 그것을 해결하는 action, 예컨대 설치를 제공한다. Success toast는 `되돌리기`나 `설정 열기`를 제공할 수 있다.
 
 알림 센터가 열려 있으면 toast는 나타나지 않으며, 새 notice는 알림 센터에만 보인다. 알림 센터가 서랍이면 toast는 그 왼쪽에 놓인다. 조용히(`quietToasts`)를 켜면 `error` notice만 toast로 보이고, 나머지 notice는 알림 센터와 그 card의 status line에만 간다.
 
@@ -117,7 +117,9 @@ Toast는 아이콘, title, text, action, 닫기 control을 보인다. 닫기 con
 | `core.notices.clear {group}` | command | 센터 묶음의 항목을 지운다 |
 | `core.notices.clear-all` | command | 모든 항목을 지운다 |
 | `core.notices.close {id}` | command | notice의 toast와 status line notice를 닫고 항목은 남긴다. 보이는 notice가 없는 id는 -32602로 실패한다 |
-| `core.toasts` | status | 보이는 toast를 순서대로 나열한다. 각각은 `id`, `kind`, `title`, `count`와 밀리초 단위의 남은 시간을 가지며, 사용자를 기다리는 동안에는 `null`이다 |
+| `core.notices.show {id}` | command | 알림 센터를 열고 `id`의 항목으로 스크롤하며 그 항목을 보인 항목으로 표시한다. 항목이 없는 id는 -32602로 실패하고 id를 이름으로 적는다 |
+| `core.toasts.list {open}` | command | `open`이 true면 줄 형식 아래에 나머지 toast를 카드 형식의 열로 보이고, false면 숨긴다. Escape와 수를 한 번 더 누르는 것도 숨긴다 |
+| `core.toasts` | status | `{toasts, listOpen}`: 보이는 toast를 순서대로 나열한다. 각각은 `id`, `kind`, `title`, `count`와 밀리초 단위의 남은 시간을 가지며, 사용자를 기다리는 동안에는 `null`이다. `listOpen`은 줄 형식이 나머지 toast의 목록을 보이는지다 |
 
 `core.notices.close`와 `core.toasts`는 `core.error.dismiss`와 `core.workbench.error`를 대체한다.
 

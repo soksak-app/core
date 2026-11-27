@@ -180,15 +180,21 @@ export function mountNoticeView(document, store) {
     // card shows three toasts and counts the rest; line shows one; deck shows the stack, which CSS spreads on hover.
     const shown = style === "card" ? nodes.slice(0, TOAST_LIMIT) : style === "line" ? nodes.slice(0, 1) : nodes;
     const rest = nodes.length - shown.length;
-    for (const node of nodes) if (!shown.includes(node)) node.release();
+    // The line form lists the other toasts as a column under the line while the list is open (docs/spec/notifications.md#toasts).
+    const listed = style === "line" && store.toastStatus().listOpen ? nodes.slice(1) : [];
+    for (const node of nodes) if (!shown.includes(node) && !listed.includes(node)) node.release();
+    const column = el(document, "div", "toast__list");
+    column.hidden = listed.length === 0;
+    column.replaceChildren(...listed);
     // default: the toast counter is created when the first toast needs it.
-    counter ??= control(document, "button", "toast__more", "", "core.notices.panel", "core.notices.toggle", {});
+    counter ??= control(document, "button", "toast__more", "", "core.toasts.more", "core.toasts.list", { open: true });
+    bind(counter, "core.toasts.list", { open: !store.toastStatus().listOpen });
     counter.hidden = rest === 0;
     counter.textContent = style === "line" ? String(rest) : `+${rest}개 더`;
     // The line form shows the count of the other notices in the error tone (docs/spec/notifications.md#toasts).
     if (style === "line") counter.dataset.tone = "error";
     else delete counter.dataset.tone;
-    holder.replaceChildren(...shown, counter);
+    holder.replaceChildren(...shown, counter, column);
     holder.hidden = nodes.length === 0;
     if (holder.parentElement !== container) container.append(holder);
     if (holder.parentElement !== container) container.append(holder);
@@ -293,6 +299,13 @@ export function mountNoticeView(document, store) {
 
   function redrawCenter() {
     drawCenter();
+    // core.notices.show scrolls the center to its entry and marks it as the shown entry.
+    const shown = store.state.shown;
+    const target = shown === null ? null : center?.querySelector(`[data-notice="${shown}"]`);
+    if (target) {
+      target.dataset.shown = "true";
+      target.scrollIntoView({ block: "nearest" });
+    }
     for (const bell of document.querySelectorAll(".notice-bell")) bell.refresh();
   }
 
@@ -306,7 +319,9 @@ export function mountNoticeView(document, store) {
   onToastChange(drawToasts);
   onTabReports(redrawCenter);
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && store.status().open) store.toggle();
+    if (event.key !== "Escape") return;
+    if (store.toastStatus().listOpen) store.setList(false);
+    else if (store.status().open) store.toggle();
   });
 
   return {

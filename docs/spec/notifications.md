@@ -52,10 +52,10 @@ The toasts lie under the bell at the right edge of the window, above every card 
 | Value | Label | Form |
 | --- | --- | --- |
 | `card` | 카드 | A column at the top right, newest first. Three toasts show and a line `+<n>개 더` counts the rest. A toast that closes by itself shows its remaining time as a thin bar at its bottom |
-| `line` | 한 줄 | One line of inverted colors at the top center. One notice shows; a red count shows the number of the others, and a press on the count opens them as a list. The line shows one action |
+| `line` | 한 줄 | One line of inverted colors at the top center. One notice shows; a red count shows the number of the others, and a press on the count runs `core.toasts.list {open}`, which shows them as the card column under the line. The line shows one action |
 | `deck` | 덱 | A stack at the top right. The front toast shows whole; the pointer over the stack spreads it |
 
-A toast shows the icon, the title, the text, its actions and a close control, which runs `core.notices.close {id}`. Running an action closes the toast. An error offers `다시 시도` when its source can run the failed operation again and `자세히`, which opens the center at the notice; a warning offers the action that resolves it, such as an install; a success may offer `되돌리기` or `설정 열기`.
+A toast shows the icon, the title, the text, its actions and a close control, which runs `core.notices.close {id}`. Running an action closes the toast. A source that can run its failed operation again passes that operation as the first action of the error notice, `{label: "다시 시도", command, params}`; core adds no retry, and an error that core makes carries none. An error also offers `자세히`, which runs `core.notices.show {id}` and opens the center at the notice; a warning offers the action that resolves it, such as an install; a success may offer `되돌리기` or `설정 열기`.
 
 While the notice center is open, no toast appears, and a new notice shows in the center only. While the center is a drawer, the toasts lie left of it. The setting 조용히 (`quietToasts`) shows only `error` notices as toasts; every other notice goes to the center and to the status line of its card.
 
@@ -118,7 +118,9 @@ The commands create, read and remove notices as `tab.notify` does, so that an ag
 | `core.notices.clear {group}` | command | Removes the entries of a group of the center |
 | `core.notices.clear-all` | command | Removes every entry |
 | `core.notices.close {id}` | command | Closes the toast and the status line notice of the notice and keeps its entry; an id that no shown notice has fails with -32602 |
-| `core.toasts` | status | The shown toasts in order, each with `id`, `kind`, `title`, `count` and its remaining time in milliseconds, or `null` while it waits for the person |
+| `core.notices.show {id}` | command | Opens the center, scrolled to the entry of `id` and marking that entry as the shown entry; an id that no entry has fails with -32602, which names the id |
+| `core.toasts.list {open}` | command | Shows (`open` true) or hides (`open` false) the other toasts as the card column under the line form; Escape and a second press on the count also hide it |
+| `core.toasts` | status | `{toasts, listOpen}`: the shown toasts in order, each with `id`, `kind`, `title`, `count` and its remaining time in milliseconds, or `null` while it waits for the person, and `listOpen`, whether the line form shows the list of its other toasts |
 
 `core.notices.close` and `core.toasts` replace `core.error.dismiss` and `core.workbench.error`.
 

@@ -674,7 +674,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 /* Toasts lie under the bell at the right of the window, above the content, and keep the form of the setting toastStyle. */
 #toasts { position: fixed; top: var(--toast-top); right: var(--toast-right); z-index: 190; display: flex; flex-direction: column; align-items: flex-end;
   gap: var(--toast-gap); width: var(--toast-width); max-width: calc(var(--fill) - var(--toast-right) - var(--toast-right)); pointer-events: none; }
-#toasts[data-style="line"] { left: var(--center); right: auto; transform: translateX(calc(0% - var(--center))); flex-direction: row; align-items: center; width: max-content; }
+#toasts[data-style="line"] { left: var(--center); right: auto; transform: translateX(calc(0% - var(--center))); flex-direction: row; flex-wrap: wrap; align-items: center; width: max-content; }
 #toasts[data-style="deck"] .toast:not(:first-child) { margin-top: var(--toast-deck-lift); transform: scale(var(--toast-deck-scale)); }
 #toasts[data-style="deck"]:hover .toast:not(:first-child) { transform: none; margin-top: var(--toast-gap); }
 #toasts[data-style="card"] .toast__more, #toasts[data-style="deck"] .toast__more { display: none; }
@@ -682,6 +682,9 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .toast { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--toast-gap); align-items: start; box-sizing: border-box;
   align-self: stretch; padding: var(--toast-pad-top) var(--toast-pad-right) var(--toast-pad-bottom) var(--toast-pad-x); overflow: hidden; pointer-events: auto;
   background: var(--card); color: var(--fg); border: var(--bw) solid var(--edge); border-radius: var(--r-sm); box-shadow: var(--toast-shadow); }
+/* The list of the other toasts of the line form: a column under the line (docs/spec/notifications.md#toasts). */
+#toasts .toast__list { flex-basis: 100%; display: flex; flex-direction: column; align-items: flex-end; gap: var(--toast-gap); }
+#toasts .toast__list[hidden] { display: none; }
 #toasts[data-style="line"] .toast { width: max-content; max-width: var(--toast-width); height: var(--toast-line-h); padding-block: 0; align-items: center; border-radius: var(--toast-line-h); }
 .toast[hidden] { display: none; }
 .toast__mark { display: inline-grid; place-items: center; width: var(--notice-glyph); height: var(--notice-glyph); color: var(--focus); }
@@ -689,6 +692,8 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .toast[data-kind="success"] .toast__mark { color: var(--ok); }
 .toast[data-kind="warning"] .toast__mark { color: var(--warn); }
 .toast[data-kind="error"] .toast__mark { color: var(--no); }
+.toast[data-kind="progress"] .toast__mark svg, .notice-center__entry[data-kind="progress"] .notice-center__mark svg { animation: surface-status-spin 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .toast[data-kind="progress"] .toast__mark svg, .notice-center__entry[data-kind="progress"] .notice-center__mark svg { animation: none; } }
 .toast__title { font-weight: 600; font-size: var(--text-small); }
 .toast__text { color: var(--muted); font-size: var(--text-small); overflow-wrap: anywhere; }
 .toast__actions { display: flex; gap: var(--toast-gap); margin-top: var(--toast-gap); }

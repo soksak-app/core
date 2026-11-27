@@ -40,7 +40,10 @@ test("a warning of a card without the focus shows the action 카드로 가기 th
 test("an error of a card without the focus shows the same action after the notice's own actions", (t) => {
   const { document, store } = fixture(t);
   store.show({ kind: "error", title: "save failed", source: card("c2") });
-  assert.deepEqual(actionsOf(document, "save failed"), [{ label: "카드로 가기", command: "core.card.focus", params: { card: "c2" } }]);
+  assert.deepEqual(actionsOf(document, "save failed"), [
+    { label: "카드로 가기", command: "core.card.focus", params: { card: "c2" } },
+    { label: "자세히", command: "core.notices.show", params: { id: store.toasts().find((t) => t.title === "save failed").id } },
+  ]);
 });
 
 test("a card with the focus and an app warning show no 카드로 가기", (t) => {
