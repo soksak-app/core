@@ -45,6 +45,14 @@ const TESTS: &[main_thread::MainTest] = &[
         "a_shown_surface_sends_the_drawing_state_of_its_region",
         a_shown_surface_sends_the_drawing_state_of_its_region,
     ),
+    (
+        "a_mounted_page_of_a_shown_surface_sends_the_drawing_state_after_apply",
+        a_mounted_page_of_a_shown_surface_sends_the_drawing_state_after_apply,
+    ),
+    (
+        "a_hidden_tab_selected_after_a_restart_sends_its_drawing_state",
+        a_hidden_tab_selected_after_a_restart_sends_its_drawing_state,
+    ),
 ];
 
 /// The echo sidecar of the surface tests receives a line sent to it, which the file of its record holds after the stop.
@@ -178,11 +186,34 @@ fn wait_for_drawing_state(
     }
 }
 
-/// Shows the probe surface with its region in a real window. Then its page mounts again after a failed mount: the document begins a new
-/// generation of the surface, and the layout that follows keeps the surface shown, so it changes no visibility. The region of the new
-/// supplier must still receive the drawing state of the shown surface, without a window change or a click. Last, the tab is hidden, its
-/// view restarts while hidden, and the layout that selects it again sends the drawing state of the region.
+/// The part of the surface scenario that runs after the region is placed while the surface is hidden.
+#[derive(Clone, Copy, PartialEq)]
+enum Phase {
+    /// The layout shows the surface, which sends the drawing state of the region.
+    Shown,
+    /// The layout shows the surface, then its page mounts again after a failed mount: the document begins a new generation of the
+    /// surface, and the layout that follows keeps the surface shown, so it changes no visibility. The region of the new supplier must
+    /// still receive the drawing state without a window change or a click.
+    Mounted,
+    /// The tab is hidden, its view restarts while it is hidden, and the layout that selects the tab shows the surface.
+    Hidden,
+}
+
 fn a_shown_surface_sends_the_drawing_state_of_its_region() -> Result<(), String> {
+    shown_surface_sends_drawing_state(Phase::Shown)
+}
+
+fn a_mounted_page_of_a_shown_surface_sends_the_drawing_state_after_apply() -> Result<(), String> {
+    shown_surface_sends_drawing_state(Phase::Mounted)
+}
+
+fn a_hidden_tab_selected_after_a_restart_sends_its_drawing_state() -> Result<(), String> {
+    shown_surface_sends_drawing_state(Phase::Hidden)
+}
+
+/// Places the probe surface with its region in a real window, and runs the part of the scenario that `phase` names. Each test is its
+/// own process (`--exact`), because the application arguments of the test process are set once.
+fn shown_surface_sends_drawing_state(phase: Phase) -> Result<(), String> {
     use soksak_host::framework::{Manager, Window};
     use soksak_host::sidecars::WindowSidecars;
     use soksak_host::{composition, images, installed, surfaces, windows};
@@ -248,21 +279,24 @@ fn a_shown_surface_sends_the_drawing_state_of_its_region() -> Result<(), String>
             // test does not bring it to the front. The state that the platform reads at attach is replaced by the on-screen state
             // of the scenario, the same as the Go host test does, so the region draws when its surface shows.
             records.images.set_on_screen(true);
+            if phase == Phase::Hidden {
+                // The view restarts while the tab is hidden, which begins a new generation (documents.rs), and the layout selects the tab.
+                records.images.begin_generation(SURFACE);
+                surfaces::sync(&window, layout_request(true)?)?;
+                wait_for_drawing_state(config.path(), 0, "selecting the hidden tab after its restart")?;
+                return Ok(());
+            }
             // The layout that shows the surface sends the drawing state of its region. The sends run on a routine thread that
             // reports no event to the test, so the test waits for their lines in the requests of the echo sidecar.
             surfaces::sync(&window, layout_request(true)?)?;
             wait_for_drawing_state(config.path(), 0, "showing the surface")?;
-            let before = count_drawing_states(&surface_fixture::installed_echo_requests_so_far(config.path())?);
-            // The mounted page opens its document, which begins a new generation of the surface (documents.rs).
-            records.images.begin_generation(SURFACE);
-            surfaces::sync(&window, layout_request(true)?)?;
-            wait_for_drawing_state(config.path(), before, "the mounted page and the layout after it")?;
-            // The tab is hidden, its view restarts while it is hidden, and the layout selects the tab again.
-            let before = count_drawing_states(&surface_fixture::installed_echo_requests_so_far(config.path())?);
-            surfaces::sync(&window, layout_request(false)?)?;
-            records.images.begin_generation(SURFACE);
-            surfaces::sync(&window, layout_request(true)?)?;
-            wait_for_drawing_state(config.path(), before, "selecting the hidden tab after its restart")?;
+            if phase == Phase::Mounted {
+                let before = count_drawing_states(&surface_fixture::installed_echo_requests_so_far(config.path())?);
+                // The mounted page opens its document, which begins a new generation of the surface (documents.rs).
+                records.images.begin_generation(SURFACE);
+                surfaces::sync(&window, layout_request(true)?)?;
+                wait_for_drawing_state(config.path(), before, "the mounted page and the layout after it")?;
+            }
             Ok(())
         })();
         // The echo sidecar ends with its record, so its requests file is complete when the test reads it.

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F999-6: Each drawing phase of the surface fixture test is its own test, so the hidden tab phase can fail alone.
 - F1221: The sok Rust host refuses accounts without a programs declaration with the Go text, and its contract test is declared.
 - F1221: The contract cases of the accounts refusal and the request root are declared in host-contract.md, and the debug follow declaration is attached to its test.
 - F999-5: A hidden tab that the page shows after a restart is recorded to publish its surface visible, with a page-wire case and a compositor test.
