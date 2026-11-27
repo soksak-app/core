@@ -35,3 +35,18 @@ test('make benchmark-go fails a benchmark build whose link reports an object new
   assert.match(result.stderr, /ld built \S+ for macOS 27\.0, newer than the macOS 14\.4 of the link/, result.stdout + result.stderr);
   assert.doesNotMatch(result.stdout, /^RUN  Benchmark/m, 'a benchmark of a build with a linker failure ran');
 });
+
+// Both benchmark targets link the native library of native/darwin: benchmark-go reads its checksum for the cgo define, and the
+// Rust host reads it through pkg-config. The dry run names the native build as a command that runs before the benchmark command.
+test('make benchmark-go and make benchmark-rust build the native library before their benchmarks run', { timeout: 60000 }, () => {
+  for (const target of ['benchmark-go', 'benchmark-rust']) {
+    // MAKE=true keeps the recursive make of the native build from running, so the dry run names it and runs nothing.
+    const result = spawnSync('make', ['-n', target, 'MAKE=true'], { cwd: root, encoding: 'utf8', timeout: 30000 });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const lines = result.stdout.split('\n');
+    const build = lines.findIndex((line) => /-C native\/darwin\b/.test(line));
+    const benchmark = lines.findIndex((line) => /scripts\/benchmarks\.mjs/.test(line));
+    assert.notEqual(build, -1, `${target} does not build the native library of native/darwin`);
+    assert.ok(build < benchmark, `${target} runs its benchmark before the native build`);
+  }
+});

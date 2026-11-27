@@ -287,11 +287,12 @@ test-rust-alone: check-cargo
 # Runs the tests of a Rust package COUNT times in sequence. With TEST, runs only the test of that name.
 # This target reproduces and accepts an intermittent failure. At the first failure it reports the run number, the system load, and the output of that run.
 # Measures the cost of the recorder. It is not a test: it prints numbers and asserts nothing. The Rust writer is measured with cargo bench and the native ring with the benchmark of native/darwin.
-benchmark-rust: check-cargo
+# The native library is a prerequisite: GO_ENV takes its checksum, and the Rust host finds it through pkg-config (packages/host/rust/build.rs).
+benchmark-rust: check-cargo build-native
 	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_log_benchmark --timeout $(BENCH_TIMEOUT) -- $(CARGO) bench --manifest-path $(MANIFEST) -p $(BENCH_RUST_PACKAGE) --bench event_log_benchmark
 	@$(CARGO_ENV) node scripts/benchmarks.mjs cargo event_native_benchmark --timeout $(BENCH_TIMEOUT) -- $(CARGO) bench --manifest-path $(MANIFEST) -p $(BENCH_RUST_PACKAGE) --bench event_native_benchmark
 
-benchmark-go:
+benchmark-go: build-native
 	@$(GO_ENV) node scripts/benchmarks.mjs go $(BENCH_GO_PACKAGE) 'EventLogEmit|NativePull' --timeout $(BENCH_TIMEOUT) --ldflags='$(GO_LINK)'
 
 repeat-rust: check-cargo

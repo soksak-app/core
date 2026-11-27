@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
+- F1253: `make benchmark-go` and `make benchmark-rust` build the native library before their benchmarks run.
 - F1250-4: The mygo settings search field and the inputs have the declared field height of 28 points, not the line height of their text.
 - F1252: The host spec maps the four Rust surface and view theme cases to their Go tests in src.
 - F1217-17-1-1: The changelog lines that a records commit removed are restored; the label record keeps one line.

@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
+- F1253: `make benchmark-go`와 `make benchmark-rust`가 벤치마크 실행 전에 네이티브 라이브러리를 빌드한다.
 - F1250-4: mygo 설정 검색칸과 입력은 텍스트 줄 높이가 아니라 선언된 필드 높이 28 point다.
 - F1252: host spec가 Rust surface와 view theme case 네 개를 src의 Go 테스트에 대응시킨다.
 - F1217-17-1-1: 기록 commit이 지운 changelog 줄을 되살렸고, 글자 크기 단계 기록은 한 줄만 남겼다.
