@@ -65,7 +65,7 @@ const sidecarMessageLimit = 64 << 20
 
 type sidecarRequest struct {
 	Surface string `json:"surface"`
-	Root    string `json:"root,omitempty"`
+	Root    string `json:"root"`
 	Closed  bool   `json:"closed,omitempty"`
 	// Cids are the correlation identifiers of the inputs that this request continues (docs/spec/sidecars.md#messages).
 	Cids []string        `json:"cids,omitempty"`

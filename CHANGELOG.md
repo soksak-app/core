@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1109: The Go host sends the root of every page request, with an empty root for a window that shows no project, so the sidecar never receives a request without a root.
 - F1217-6: The mygo modal status test expects null while the settings tab is open, since the settings tab is a tab of the window.
 - F1217-6: The mygo settings tests find the toast dismissal switch by its spec label.
 - F1217-12-7: The settings nav command takes a group id, and the notice center gear opens the group 알림.

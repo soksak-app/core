@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -79,6 +80,31 @@ func TestAWindowCloseKeepsThePersistentSessionsOfItsSurfaces(t *testing.T) {
 		}
 	default:
 		t.Fatal("the window close did not close the standard-I/O session")
+	}
+}
+
+// contract: sidecars.request.root-present
+// A window that shows no project sends its page requests with the empty root, so the request line always names the root of its
+// window (docs/spec/sidecars.md, messages).
+func TestAWindowWithoutProjectSendsItsRequestWithAnEmptyRoot(t *testing.T) {
+	s := sidecarSessionSurfaces(t)
+	c := s.sidecars
+	c.stopped = false
+	const surface = "tab-no-project"
+	s.root = ""
+	process := &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 2),
+		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{surface: true}}
+	c.running[process.name] = process
+	if err := c.Send(s, process.name, surface, json.RawMessage(`{"operation":"ping"}`)); err != nil {
+		t.Fatalf("send from a window without a project: %v", err)
+	}
+	select {
+	case line := <-process.outbox:
+		if !strings.Contains(string(line.bytes), `"root":""`) {
+			t.Fatalf("the request of a window without a project has no root field: %s", line.bytes)
+		}
+	default:
+		t.Fatal("the request of a window without a project was not sent")
 	}
 }
 
