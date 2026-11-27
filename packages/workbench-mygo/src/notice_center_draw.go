@@ -275,7 +275,7 @@ func (e *ShownErrors) cardNotice(card string) *errorToast {
 func (e *ShownErrors) sidebarNotice(sidebar string) *errorToast {
 	e.ExpireNotices()
 	for i := len(e.toasts) - 1; i >= 0; i-- {
-		if toast := e.toasts[i]; !toast.closed && toast.source.Kind == "sidebar" && toast.source.Sidebar == sidebar {
+		if toast := e.toasts[i]; !toast.closed && toast.source.Kind == "sidebar" && toast.source.Sidebar == sidebar && !isMissingOrigin(toast.origin) {
 			return toast
 		}
 	}

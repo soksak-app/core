@@ -775,10 +775,6 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .card[data-place] > .sidebar-status{grid-row:3}
 .card:has(> .sidebar-head){grid-template-rows:minmax(0,var(--head-h)) minmax(0,1fr) minmax(0,var(--foot-h))}
 /* The warning line of a window sidebar takes the status line; its text is cut at the end and its whole text is the tooltip. */
-.sidebar-status > .missing-line{flex:1 1 auto;min-width:0;padding:0;flex-wrap:nowrap;white-space:nowrap;overflow:hidden;font-size:inherit;color:inherit}
-.missing-line__dot{flex:0 0 auto;color:var(--warn)}
-.missing-line__text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sidebar-status > .missing-line > .missing-line__button{flex:0 0 auto}
 .set{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column}
 /* The status line has the same height and text as the card foot, so the bottom lines of the sidebar and the neighboring card lie in one line. */
 .sidebar-status__fold{display:grid;place-items:center;margin-left:auto;width:var(--fold-button);height:var(--fold-button);padding:0;border:0;border-radius:var(--r-xs);
@@ -849,6 +845,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 /* A section whose plugin is not loaded keeps its tab in a tab layout, dimmed and struck through (docs/spec/plugins.md#missing-plugins). */
 .set__tab--missing { opacity: var(--dim-opacity); text-decoration: line-through; }
 /* The warning line of a missing plugin in a set line or a sidebar, in the warning tone. */
+.missing-line__text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .missing-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--toast-gap); padding: var(--toast-gap); color: var(--warn); font-size: var(--text-small); }
 .missing-line__button { border: 0; background: none; padding: 0; color: var(--focus); font: inherit; font-weight: 600; cursor: pointer; }
 

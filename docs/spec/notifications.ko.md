@@ -32,7 +32,7 @@ Notice는 다음 필드를 가진 기록이다.
 | 자리 | Notice | 위치 | 유지 시간 |
 | --- | --- | --- | --- |
 | 카드 status line | 그 카드의 notice, 그리고 sidebar의 notice는 그 sidebar의 상태줄에 | 그 카드의 content footer, 또는 sidebar의 상태줄 | `success`와 `info`는 6초. `warning`과 `error`는 사용자가 닫을 때까지. `progress`는 끝날 때까지 |
-| Toast | card가 아닌 source의 notice, focus가 없는 card의 `warning`과 `error` notice, [sidebar notice](#sidebar-notice)의 `warning` | 종 아래, 창의 오른쪽 | `success`와 `info`는 4초. `warning`과 `error`는 사용자가 닫을 때까지, 또는 오류·경고 자동 닫힘의 지연 뒤. `progress`는 끝날 때까지 |
+| Toast | card가 아닌 source의 notice, focus가 없는 card의 `warning`과 `error` notice, card [sidebar notice](#sidebar-notice)의 `warning`, 빠진 플러그인의 경고는 제외 | 종 아래, 창의 오른쪽 | `success`와 `info`는 4초. `warning`과 `error`는 사용자가 닫을 때까지, 또는 오류·경고 자동 닫힘의 지연 뒤. `progress`는 끝날 때까지 |
 | 알림 센터 | 모든 notice | 종을 눌러 연다 | `error`는 사용자가 지울 때까지. 나머지 kind는 `at` 뒤 7일 |
 
 Focus를 가진 card의 notice는 그 card의 status line에만 보인다. Focus가 없는 card의 `warning`이나 `error` notice는 status line에 보이고, `카드로 가기` action과 함께 toast에도 보인다. 이 action은 `core.card.focus {card}`를 실행한다. Card에 focus를 두면 그 card의 notice가 모두 읽음이 된다.
@@ -47,7 +47,7 @@ Card의 content footer([탭 알림](plugins.ko.md#탭-알림))는 그 card의 �
 
 ## Sidebar notice
 
-Sidebar notice(source `sidebar`)는 그 sidebar의 상태줄에 card 상태줄과 같은 형태로 보이며, 닫기 컨트롤은 `core.notices.close`를 실행한다. 같은 sidebar의 보이는 notice하고만 합쳐진다. `card`는 card sidebar의 카드이고, 창 사이드바에서는 null이다. 창 사이드바에는 focus가 없으므로 그 `warning` notice는 토스트로 보이고, card sidebar의 notice는 그 카드에 focus가 없는 동안만 토스트로 보이며, `card`가 null이 아니면 그 토스트는 `카드로 가기`를 가진다. 철회되면 상태줄과 토스트에서 빠지고 알림 센터는 항목을 유지한다.
+Sidebar notice(source `sidebar`)는 그 sidebar의 상태줄에 card 상태줄과 같은 형태로 보이며, 닫기 컨트롤은 `core.notices.close`를 실행한다. 같은 sidebar의 보이는 notice하고만 합쳐진다. `card`는 card sidebar의 카드이고, 창 사이드바에서는 null이다. 창 사이드바의 notice는 토스트가 되지 않고 상태줄에 보인다. card sidebar의 notice는 그 카드에 focus가 없는 동안만 토스트로 보이며, `card`가 null이 아니면 그 토스트는 `카드로 가기`를 가진다. 철회되면 상태줄과 토스트에서 빠지고 알림 센터는 항목을 유지한다. 빠진 플러그인의 경고는 토스트와 상태줄에 보이지 않고, 사이드바 맨 위의 줄([없는 플러그인](plugins.ko.md#없는-플러그인))이 보이며, 알림 센터와 종의 기록을 유지한다.
 
 ## 토스트
 

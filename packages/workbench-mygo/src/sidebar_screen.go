@@ -130,6 +130,8 @@ type SidebarFrame struct {
 	Tab string
 	// Missing lists the sections of the set whose plugin is not loaded, in set order (docs/spec/plugins.md#missing-plugins).
 	Missing []MissingSection
+	// MissingLines is the warning of each plugin of the missing sections, which the sidebar draws as a line at its top (sidebar_missing.go).
+	MissingLines []MissingLine
 	// Notice is the newest notice of the sidebar, which its status line shows in place of Status, or nil when the sidebar has none.
 	Notice *errorToast
 	// Order lists the section ids of the set in set order, the loaded and the missing ones, which the tabs keep.
@@ -337,14 +339,16 @@ func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame Sidebar
 	room := height - bandTop - bandBottom
 	inset := frame.SetInsets
 	setWidth := max(float32(0), width-inset.Left-inset.Right)
-	setRoom := max(float32(0), room-inset.Top-inset.Bottom)
+	// The warning lines stand above the set, one row each, and take their room from the set.
+	topRoom := float32(len(frame.MissingLines)) * metrics.FootH
+	setRoom := max(float32(0), room-inset.Top-inset.Bottom-topRoom)
 	// The group of the sidebar is its set, as the page names its container when it draws a set, and the set holds no status line. A
 	// sidebar without a set is a group as a whole and has no element.
 	named := frame.Set != ""
 	// A seat names the place of its body, which the insets of the set move.
 	body := func(c *ui.Context, place SidebarSeat) {
 		place.Box.X += float64(inset.Left)
-		place.Box.Y += float64(inset.Top + bandTop)
+		place.Box.Y += float64(inset.Top + bandTop + topRoom)
 		seat(c, place)
 	}
 	whole := ui.Column(c).Size(width, height).Clip()
@@ -357,6 +361,7 @@ func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame Sidebar
 		if window {
 			drawSidebarHead(c, binder, frame, metrics, shown)
 		}
+		drawMissingLines(c, binder, frame, metrics)
 		// The set takes all the room, so a set of short sections leaves the status line at the bottom.
 		var set ui.Element
 		if named {

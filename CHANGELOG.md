@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1231-3: A sidebar whose plugin is missing shows its warning once as a line at its top, above its sections; the warning is a notice-center record and no toast or status line notice.
 - F1217-17-3: Record the set row and list Red in both records
 - F1217-11-9: The closure check of the web notification surfaces is added and runs in the final verification batch.
 - F1273: Reveal a window whose main page loaded before the reveal without raising an exception.

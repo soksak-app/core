@@ -601,7 +601,8 @@ func (s *Sidebars) fill(frame *SidebarFrame, set *SidebarSet) {
 	if colon := strings.IndexByte(frame.Sidebar, ':'); colon >= 0 {
 		card = frame.Sidebar[:colon]
 	}
-	s.missing.reconcile(frame.Sidebar, card, MissingLines(*frame, s.options.Plugin))
+	frame.MissingLines = MissingLines(*frame, s.options.Plugin)
+	s.missing.reconcile(frame.Sidebar, card, frame.MissingLines)
 	frame.Notice = s.options.Notices.sidebarNotice(frame.Sidebar)
 	if set.Layout != "tabs" {
 		return

@@ -199,7 +199,14 @@ func (e *ShownErrors) SetFocusSource(focusOf func() string) {
 // quietFor reports whether a new notice of source shows no toast: a card sidebar's notice while its card has the focus, which keeps the entry
 // and the status line of the sidebar.
 func (e *ShownErrors) quietFor(source NoticeSource) bool {
-	if source.Kind != "sidebar" || source.Card == "" || e.focusOf == nil {
+	if source.Kind != "sidebar" {
+		return false
+	}
+	// A window sidebar has no card, and its notice shows on its status line only (docs/spec/notifications.md#sidebar-notices).
+	if source.Card == "" {
+		return true
+	}
+	if e.focusOf == nil {
 		return false
 	}
 	return source.Card == e.focusOf()

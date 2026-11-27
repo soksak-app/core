@@ -57,6 +57,10 @@ func (e *ShownErrors) NotifyFrom(origin string, fields NoticeFields, source Noti
 	if origin != "" {
 		e.recordOf(id).origin = origin
 	}
+	// A missing-plugin warning is a record of the notice center only, because its sidebar shows it as a line (sidebar_missing.go).
+	if isMissingOrigin(origin) {
+		e.recordOf(id).quiet = true
+	}
 	return id
 }
 

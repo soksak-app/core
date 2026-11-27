@@ -13,6 +13,8 @@ const CENTER_MS = 7 * 24 * 60 * 60 * 1000;
 const FILTERS = Object.freeze(["all", "problems", "progress"]);
 const GROUP_PATTERN = /^(today|yesterday|\d{4}-\d{2}-\d{2})$/;
 const SOURCE_KINDS = Object.freeze(["card", "sidebar", "plugin", "settings", "core"]);
+/** The origin prefix of a missing-plugin warning of a sidebar, which the notice center keeps as a record only (sidebar-sections.js). */
+export const MISSING_ORIGIN_PREFIX = "missing-plugin:";
 
 // The local day of a time as YYYY-MM-DD.
 export function dayOf(ms) {
@@ -93,7 +95,8 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
   const wantsToast = (kind, source) => {
     if (open) return false;
     if (settings("quietToasts") && kind !== "error") return false;
-    if (source.kind === "sidebar") return (source.card === null || source.card !== focusedCard) && (kind === "warning" || kind === "error");
+    // A window sidebar has no focus, and its notice shows on its status line only (docs/spec/notifications.md#sidebar-notices).
+    if (source.kind === "sidebar") return source.card !== null && source.card !== focusedCard && (kind === "warning" || kind === "error");
     if (source.kind !== "card") return true;
     // A card notice shows as a toast only while its card does not have the focus, and only for a warning or an error.
     return source.card !== focusedCard && (kind === "warning" || kind === "error");
@@ -203,8 +206,10 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
     };
     if (origin !== null) own(origin, notice);
     notices.push(notice);
-    if (wantsToast(kind, source)) slotFor(notice, "toast", toastMs(kind));
-    if (source.kind === "card" || source.kind === "sidebar") slotFor(notice, "line", lineMs(kind));
+    // A missing-plugin warning is a record of the notice center: the sidebar shows it as its own line, so it takes no toast and no status line.
+    const recordOnly = origin !== null && origin.startsWith(MISSING_ORIGIN_PREFIX);
+    if (!recordOnly && wantsToast(kind, source)) slotFor(notice, "toast", toastMs(kind));
+    if (!recordOnly && (source.kind === "card" || source.kind === "sidebar")) slotFor(notice, "line", lineMs(kind));
     // default: an error without log text is logged with its text (docs/spec/notifications.md, error: where: text).
     logOccurrence(notice, detail, logPlace, logText ?? text);
     changed();

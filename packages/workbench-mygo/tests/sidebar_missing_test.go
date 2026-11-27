@@ -15,14 +15,14 @@ func TestTheMissingSectionOfAWindowSidebarShowsItsLine(t *testing.T) {
 	f := newTabShell(t, &storedHost{installed: sidebarsInstalled, environment: []byte(sidebarsEnvironment),
 		projects: []map[string]any{gridProject(oneCard(tab("tab-aaaaaa", "plain")))}})
 	f.open(t)
-	if !f.tester.HasText("gone · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+	if !f.tester.HasText("gone 플러그인이 없어 섹션 1개를 못 보여 준다.") {
 		t.Fatalf("the sidebar shows %q", f.tester.Texts())
 	}
 }
 
-// The warning of a window sidebar is a notice in its status line at the bottom, and no line stands above its sections
-// (docs/spec/external-sidebars.md#sidebar-head-and-edge, docs/spec/plugins.md#missing-plugins).
-func TestTheMissingLineOfAWindowSidebarStandsInItsStatusLine(t *testing.T) {
+// The warning of a window sidebar is one line at the top of the sidebar, with the element core.sidebar.missing of its plugin, and no
+// status line notice (docs/spec/external-sidebars.md#sidebar-head-and-edge, docs/spec/plugins.md#missing-plugins).
+func TestTheMissingLineOfAWindowSidebarStandsAtItsTop(t *testing.T) {
 	f := newSidebars(t, sidebarsEnvironment, sidebarsInstalled)
 	var failed error
 	tt := ui.NewTester(func(c *ui.Context) {
@@ -38,11 +38,8 @@ func TestTheMissingLineOfAWindowSidebarStandsInItsStatusLine(t *testing.T) {
 		t.Fatal(failed)
 	}
 	element(t, tt, "core.sidebar.status", "left")
-	set := element(t, tt, "core.sidebar", "left")
-	if _, ok := exposedNode(set.Children, "core.sidebar.missing", "gone"); ok {
-		t.Fatal("a warning line stands above the sections of the sidebar")
-	}
-	if !tt.HasText("gone · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+	element(t, tt, "core.sidebar.missing", "left:gone")
+	if !tt.HasText("gone 플러그인이 없어 섹션 1개를 못 보여 준다.") {
 		t.Fatalf("the sidebar shows %q", tt.Texts())
 	}
 }

@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -125,9 +126,38 @@ type missingNotices struct {
 	shown map[string]map[string]string
 }
 
+// missingOriginPrefix is the prefix of the origin of a missing-plugin warning. Such a warning is a record of the notice center only: its
+// sidebar shows it as its line at the top, so it takes no toast and no status line notice (docs/spec/notifications.md#sidebar-notice).
+const missingOriginPrefix = "missing-plugin:"
+
 // missingOrigin is the origin of the warning of a plugin in a sidebar (docs/spec/notifications.md#sidebar-notice).
 func missingOrigin(sidebar, plugin string) string {
-	return "missing-plugin:" + sidebar + ":" + plugin
+	return missingOriginPrefix + sidebar + ":" + plugin
+}
+
+// isMissingOrigin tells whether an origin belongs to a missing-plugin warning.
+func isMissingOrigin(origin string) bool {
+	return strings.HasPrefix(origin, missingOriginPrefix)
+}
+
+// drawMissingLines draws the warning of each missing plugin of the frame as one line at the top of the sidebar, above its sections, with the
+// action of its state (docs/spec/plugins.md#missing-plugins). Each line has the height of the status line.
+func drawMissingLines(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics) {
+	theme := c.Theme()
+	for _, line := range frame.MissingLines {
+		label := line.Title + " " + line.Text
+		ui.Row(binder.Name(c, "core.sidebar.missing", frame.Sidebar+":"+line.Plugin)).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).
+			Gap(metrics.StatusGap).PaddingX(metrics.StatusPad).Role(ui.RoleStatus).Label(label).Children(func() {
+			ui.Text(c, "⚠").SingleLine().FontSize(metrics.StatusText).TextColor(metrics.Warn)
+			ui.Text(c, label).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Grow(1).FontSize(metrics.StatusText).TextColor(metrics.Warn)
+			if line.Action != nil && binder.Declares(line.Action.Command) {
+				action := line.Action
+				binder.Press(c, "core.sidebar.missing", action.Command, frame.Sidebar+":"+line.Plugin, action.Params).Role(ui.RoleButton).Children(func() {
+					ui.Text(c, action.Label).NoWrap().FontSize(metrics.StatusText).TextColor(theme.Text)
+				})
+			}
+		})
+	}
 }
 
 // reconcile shows the warning of each line of the sidebar and withdraws the notice of each origin of the sidebar that has no line now. The

@@ -47,18 +47,15 @@ func newSidebarsWithPlugin(t *testing.T, state *string, notices *workbench.Shown
 	return fixture
 }
 
-// The missing plugin of a window sidebar is a warning notice whose source is the sidebar, shown on its status line and as a toast; the
-// sidebar has no line above its sections (docs/spec/plugins.md#missing-plugins, docs/spec/notifications.md#sidebar-notice).
-func TestTheMissingPluginOfAWindowSidebarIsAWarningNoticeOnItsStatusLine(t *testing.T) {
+// The missing plugin of a window sidebar is one line at the top of the sidebar, and its warning notice is a record of the notice center
+// only: it is no toast and no status line notice (docs/spec/plugins.md#missing-plugins, docs/spec/notifications.md#sidebar-notice).
+func TestTheMissingPluginOfAWindowSidebarIsALineAndARecord(t *testing.T) {
 	state := ""
 	f := newSidebarsWithPlugin(t, &state, workbench.NewShownErrors(func(string) {}))
 	tt := drawLeftSidebar(t, f)
-	if !tt.HasText("gone · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
-		t.Fatalf("the status line shows %q", tt.Texts())
-	}
-	set := element(t, tt, "core.sidebar", "left")
-	if _, ok := exposedNode(set.Children, "core.sidebar.missing", "gone"); ok {
-		t.Fatal("a warning line stands above the sections of the sidebar")
+	element(t, tt, "core.sidebar.missing", "left:gone")
+	if !tt.HasText("gone 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+		t.Fatalf("the sidebar shows %q", tt.Texts())
 	}
 	entries := f.notices.EntryStatuses()
 	if len(entries) != 1 || entries[0]["title"] != "gone" || entries[0]["kind"] != "warning" {
@@ -67,8 +64,8 @@ func TestTheMissingPluginOfAWindowSidebarIsAWarningNoticeOnItsStatusLine(t *test
 	if source := entries[0]["source"].(workbench.NoticeSource); source.Kind != "sidebar" || source.Sidebar != "left" {
 		t.Fatalf("the source of the notice is %+v", source)
 	}
-	if toasts := f.notices.ToastStatuses(); len(toasts) != 1 || toasts[0].Title != "gone" {
-		t.Fatalf("the toasts are %+v", toasts)
+	if toasts := f.notices.ToastStatuses(); len(toasts) != 0 {
+		t.Fatalf("the missing-plugin warning is a toast: %+v", toasts)
 	}
 }
 
@@ -85,7 +82,7 @@ func TestTheMissingPluginNoticeIsWithdrawnWhenThePluginReloads(t *testing.T) {
 	}
 	state = "reload"
 	tt = drawLeftSidebar(t, f)
-	if tt.HasText("gone · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+	if tt.HasText("gone 플러그인이 없어 섹션 1개를 못 보여 준다.") {
 		t.Fatal("the status line still shows the withdrawn notice")
 	}
 	if toasts := notices.ToastStatuses(); len(toasts) != 0 {
@@ -96,8 +93,8 @@ func TestTheMissingPluginNoticeIsWithdrawnWhenThePluginReloads(t *testing.T) {
 	}
 }
 
-// A card sidebar's notice shows no toast while its card has the focus, and the notice center keeps its entry; a window sidebar's notice
-// is a toast (docs/spec/notifications.md#sidebar-notice).
+// A card sidebar's notice shows no toast while its card has the focus, and a window sidebar's notice shows no toast either: each keeps its
+// entry in the notice center (docs/spec/notifications.md#sidebar-notice).
 func TestACardSidebarNoticeHasNoToastWhileItsCardHasTheFocus(t *testing.T) {
 	notices := workbench.NewShownErrors(func(string) {})
 	notices.SetFocusSource(func() string { return "card-f" })
@@ -111,7 +108,7 @@ func TestACardSidebarNoticeHasNoToastWhileItsCardHasTheFocus(t *testing.T) {
 	}
 	notices.NotifyFrom("missing-plugin:left:window", workbench.NoticeFields{Kind: "warning", Title: "window(window)", Text: "플러그인이 없어 섹션 1개를 못 보여 준다."},
 		workbench.NoticeSource{Kind: "sidebar", Sidebar: "left", Plugin: "window"})
-	if toasts := notices.ToastStatuses(); len(toasts) != 1 || toasts[0].Title != "window(window)" {
-		t.Fatalf("a window sidebar's notice is not a toast: %+v", toasts)
+	if toasts := notices.ToastStatuses(); len(toasts) != 0 {
+		t.Fatalf("a window sidebar's warning is a toast: %+v", toasts)
 	}
 }

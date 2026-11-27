@@ -459,7 +459,7 @@ func TestDrawingASidebarShowsTheLineOfAMissingPlugin(t *testing.T) {
 	if failed != nil {
 		t.Fatal(failed)
 	}
-	if !tt.HasText("gone · 플러그인이 없어 섹션 1개를 못 보여 준다.") {
+	if !tt.HasText("gone 플러그인이 없어 섹션 1개를 못 보여 준다.") {
 		t.Fatalf("the sidebar shows %q", tt.Texts())
 	}
 }

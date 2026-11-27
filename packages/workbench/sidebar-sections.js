@@ -6,7 +6,8 @@
 import { bind, mark, run } from "./commands.js";
 import { clearSlotSurface, setSlotSurface } from "./compositor.js";
 import { icon } from "./icons.js";
-import { missingGroups, missingText, pluginRowsNow } from "./missing-plugins.js";
+import { missingGroups, missingLineNode, missingText, pluginRowsNow } from "./missing-plugins.js";
+import { MISSING_ORIGIN_PREFIX } from "./notices.js";
 import { cardNoticeLine } from "./notice-view.js";
 import { hasSection, section } from "./registry.js";
 import { hideSectionSurface, showSectionSurface, sectionSurfaceId } from "./section-surfaces.js";
@@ -337,8 +338,13 @@ export function drawSet(container, sidebar, set, context, footer = null) {
     container.dataset.layout = set.layout;
     container.dataset.expose = "core.sidebar";
     delete container.dataset.html;
-    // There is no set title line. The sections start at the top of the sidebar.
+    // There is no set title line. The warning lines of the missing plugins stand at the top, above the sections, with their actions
+    // (docs/spec/plugins.md#missing-plugins); the sections start below them.
     container.replaceChildren();
+    for (const group of missing) {
+      const line = missingLineNode(document, group);
+      if (line !== null) container.append(line);
+    }
     let strip = null;
     if (set.layout === "tabs") {
       strip = document.createElement("div");
@@ -521,7 +527,7 @@ export function restoreSidebarChoices(saved) {
 }
 
 /** The origin of the notice of a plugin that a sidebar cannot show: one shown notice per sidebar and plugin. */
-const missingOrigin = (sidebar, plugin) => `missing-plugin:${sidebar}:${plugin}`;
+const missingOrigin = (sidebar, plugin) => `${MISSING_ORIGIN_PREFIX}${sidebar}:${plugin}`;
 /** The origins that each sidebar shows, so that a warning which no longer applies is withdrawn. */
 const missingOrigins = new Map();
 
