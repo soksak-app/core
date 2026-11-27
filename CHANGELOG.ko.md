@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
+- F1217-17-1: 웹 모양 미리보기는 카드를 적용된 모서리, 글꼴, 글자 크기와 이음선으로 그린다.
 - F1239-1: 설정 탭은 menu를 content 옆에 그리고, 모양 page의 theme swatch는 pane 너비를 채운다.
 - F1245-1: sok.rs의 status read 기본값 3곳에 명세를 인용한 이유를 적는다.
 - F1217-9: registry index 형식 3이 maker, categories, updated를 가지며, plugin.json은 maker를 요구한다. index 작성기와 page는 이어서 바꾼다.

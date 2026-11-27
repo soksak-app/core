@@ -191,7 +191,7 @@ export const setupWarnings = () => setupParts.parts().filter((part) => part.stat
 export function agentsPage() {
   const parts = setupParts.parts();
   const warn = parts.filter((part) => part.state !== "ok").length;
-  const summary = warn ? badge(`${parts.length}개 중 ${warn}개가 다름`, "warn") : badge("모두 설치됨", "ok");
+  const summary = warn ? badge(`${parts.length}개 중 ${warn}개가 다름`, "warn", { iconName: "badge-warn" }) : badge("모두 설치됨", "ok");
   const rows = parts.map((part) => {
     const where = `setup:${part.part}:${part.file}`;
     let state;

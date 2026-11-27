@@ -284,24 +284,58 @@
 }
 
 .set-preview {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--set-control-w), 1fr));
-  gap: var(--space-2);
+  display: flex;
+  gap: calc(var(--half-gap) * 2);
+  padding: calc(var(--half-gap) * 2);
+  background: var(--bg);
+  border: var(--bw) solid var(--edge);
+  border-radius: var(--r);
+  margin-bottom: var(--space-3);
 }
 
 .set-preview__card {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-2);
+  overflow: hidden;
   border: var(--bw) solid var(--edge);
-  border-radius: var(--r-sm);
+  border-radius: var(--r);
   background: var(--card);
 }
 
+/* The cards share one line when the gap is 0 (docs/spec/settings.md#look): root carries the seam, set on every change. */
+:root[data-seam="line"] .set-preview__card + .set-preview__card {
+  margin-left: calc(var(--bw) * -1);
+}
+
 .set-preview__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 28px;
+  padding: 0 10px;
+  border-bottom: var(--bw) solid var(--edge);
   font-size: var(--text-caption);
   color: var(--muted);
+}
+
+.set-preview__head::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--rail);
+}
+
+.set-preview__body {
+  padding: 10px 12px;
+  font-family: var(--font);
+  font-size: var(--size);
+  line-height: 1.65;
+  color: var(--fg);
+  white-space: pre;
+  overflow: hidden;
 }
 
 .set-foot {
