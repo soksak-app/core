@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1278: The plugin folder count case names its hosts in the scope cell, so the contract parser reads it and the gpuikit check runs.
 - F1264-3: The Go and Rust hosts bind `documentBoxes` to the native box query, with the refusal texts of the specification.
 - F1107-6: The mygo workbench records each status read that names a surface as workbench.status.read, as the page does.
 - F1260: The Go test of the reload binding has the name of its Rust counterpart, so the host file audit pairs the two.

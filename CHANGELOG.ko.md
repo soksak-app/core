@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1278: plugin 폴더 개수 사례가 범위 칸에 host를 이름 대어, 계약 파서가 읽고 gpuikit 검사가 실행된다.
 - F1264-3: Go와 Rust 호스트가 `documentBoxes`를 native 상자 조회에 바인딩하고, 명세의 거부 문구를 쓴다.
 - F1107-6: mygo workbench는 surface를 지정한 status 읽기를 workbench.status.read로 기록한다.
 - F1260: reload binding의 Go test가 Rust 짝의 이름을 가져, host 파일 감사가 둘을 짝으로 인식한다.

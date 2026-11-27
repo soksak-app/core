@@ -1462,7 +1462,7 @@ fn invalid_json_closes_connection() {
 | `plugins.run.applies-before-it-notifies` | `installed.json`을 바꾸는 plugin 작업은 `plugins-changed`를 보내기 전에 변경을 사이드카에 적용한다. | all |
 | `plugins.run.rejects-invalid-and-concurrent` | `pluginsRun`은 알 수 없는 action, 비어 있지 않은 문자열이 아닌 plugin id, 명령의 message로 실패한 작업, 다른 작업이 실행 중일 때의 호출을 `another plugin operation is running`으로 거부하고, `plugins-changed` event를 보내지 않는다. | all |
 | `plugins.run.end-is-optional` | `pluginsRun`은 `end`가 없는 요청과 null `end`인 요청을 service를 끝내지 않는 작업으로 받는다. workbench가 그 작업에 `{action, plugin}`을 보내기 때문이다. | all |
-| `plugins.folders.count-follows-a-folder-added-or-removed` | `pluginsState`는 `plugins/`의 폴더 수인 `folders`를 보고한다. 폴더를 추가하거나 제거하면 수가 바뀌어 `plugins-folders-changed`가 새 수와 함께 전송되며, 호스트는 감시를 시작할 때 `plugins/`를 만든다. | all: Wails, Tauri, mygo 호스트가 plugin 폴더를 Go와 Rust host library와 같은 감시로 지켜본다. |
+| `plugins.folders.count-follows-a-folder-added-or-removed` | `pluginsState`는 `plugins/`의 폴더 수인 `folders`를 보고한다. 폴더를 추가하거나 제거하면 수가 바뀌어 `plugins-folders-changed`가 새 수와 함께 전송되며, 호스트는 감시를 시작할 때 `plugins/`를 만든다. | wailsv3, tauriv2, mygo only: Wails, Tauri, mygo 호스트가 plugin 폴더를 Go와 Rust host library와 같은 감시로 지켜본다. |
 | `plugins.registry.sets-like-the-command` | registry index로 `pluginsUseRegistry`를 부르면 `sok registry use`처럼 `plugins/registry.json`을 쓰고 `{ index }`를 돌려준다. 비어 있지 않은 문자열이 아닌 `index`는 `index must be a non-empty string`으로 거부한다. | all |
 | `plugins.start-update.replaces-refused-with-newest-accepted` | start 때 reader가 `plugin.json`을 거부하는 설치된 plugin은 index의 가장 새로운 수용 version으로 갱신되고, `pluginsState`는 새 설치 version을 보고한다. | all |
 | `plugins.start-update.advances-older-accepted` | start 때 index의 가장 새로운 수용 version보다 오래된 설치된 plugin은 그 version으로 갱신된다. | all |
