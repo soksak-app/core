@@ -34,11 +34,6 @@
       "example": {},
       "source": "page"
     },
-    "update-6": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-1": {
       "type": "object",
       "example": {},
@@ -266,17 +261,6 @@
           "saved": "/d/soksak.tar.gz",
           "error": null
         }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-6"
-      }
-    },
-    {
-      "reply": {
-        "result": null
       }
     },
     {

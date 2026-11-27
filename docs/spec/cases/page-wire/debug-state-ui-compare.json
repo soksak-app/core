@@ -44,27 +44,12 @@
       "example": {},
       "source": "page"
     },
-    "update-4": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-4": {
       "type": "object",
       "example": {},
       "source": "page"
     },
-    "update-5": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
     "place-5": {
-      "type": "object",
-      "example": {},
-      "source": "page"
-    },
-    "update-6": {
       "type": "object",
       "example": {},
       "source": "page"
@@ -259,17 +244,6 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-4"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
         "name": "overlayPlace",
         "payload": "$place-4"
       }
@@ -286,17 +260,6 @@
     },
     {
       "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-5"
-      }
-    },
-    {
-      "reply": {
-        "result": null
-      }
-    },
-    {
-      "call": {
         "name": "overlayPlace",
         "payload": "$place-5"
       }
@@ -309,17 +272,6 @@
           "w": 1024,
           "h": 768
         }
-      }
-    },
-    {
-      "call": {
-        "name": "overlayUpdate",
-        "payload": "$update-6"
-      }
-    },
-    {
-      "reply": {
-        "result": null
       }
     },
     {

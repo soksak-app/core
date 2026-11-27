@@ -514,8 +514,13 @@ const tell = (name, payload) => {
  * arrives first and tries to move a window that does not exist yet.
  */
 let turn = Promise.resolve();
+// A payload that is a function is read when the turn reaches the call, and a function that returns undefined sends nothing, so a call
+// sends the state of its source at send time and never an older snapshot of it.
 const tellInTurn = (name, payload) => {
-  const answered = turn.then(() => tell(name, payload));
+  const answered = turn.then(() => {
+    const body = typeof payload === "function" ? payload() : payload;
+    return body === undefined ? undefined : tell(name, body);
+  });
   // The next call is sent even when this one fails. Swallowing the failure here would leave no record anywhere, so
   // it is written to the application log.
   turn = answered.catch((why) => reportRecord("error", `host ${name} failed: ${why}`));
@@ -969,6 +974,7 @@ let shown = null;
 let showing = null;
 // The drawing that the host last received for the shown modal. An update that equals it changes nothing on the host, so it is not sent.
 let sentDrawing = null;
+let updateWaiting = null;
 let restoreErrorToasts = null;
 
 /* The state that the open modal document reported last. It is core.modal of docs/spec/exposure.md. */
@@ -1206,11 +1212,20 @@ export const overlay = native ? {
     /** Replaces the content of the modal view of this element. Recreating the view flickers. */
     update(el) {
       if (shown !== el.id) return;
-      const drawn = drawing(el);
-      const text = JSON.stringify(drawn);
-      if (text === sentDrawing) return;
-      sentDrawing = text;
-      tellInTurn("overlayUpdate", { id: shown, ...drawn });
+      // One update per view waits at most in the turn: it reads the card when it is sent, so the states that change while it waits are its state.
+      // The token of the view tells a waiting update that a hide or a later show ended its view.
+      if (updateWaiting === showing) return;
+      const token = showing;
+      updateWaiting = token;
+      tellInTurn("overlayUpdate", () => {
+        if (updateWaiting === token) updateWaiting = null;
+        if (showing !== token || shown !== el.id) return undefined;
+        const drawn = drawing(el);
+        const text = JSON.stringify(drawn);
+        if (text === sentDrawing) return undefined;
+        sentDrawing = text;
+        return { id: shown, ...drawn };
+      });
     },
 
     /** Closes the modal view of this element. */
