@@ -201,7 +201,13 @@ func (s *Shell) drawSettingsHead(c *ui.Context, model *settingsModel, width floa
 func (s *Shell) drawSettingsMenu(c *ui.Context, model *settingsModel, pane settingsPane) {
 	ui.Column(c).Width(pane.navW).Gap(pane.navGap).Padding(pane.navPadY, pane.navPadX).BorderWidth(0, s.palette.BorderWidth, 0, 0).BorderColor(s.palette.Edge).Children(func() {
 		s.drawSearchControl(c, model.find)
+		plugins := false
 		for _, control := range model.nav {
+			// The group of the plugin items has its title before its first item (docs/spec/settings.md#menu).
+			if control.dot && !plugins {
+				plugins = true
+				ui.Text(c, "설정이 있는 플러그인").FontSize(s.textCaption()).TextColor(s.palette.Muted)
+			}
 			s.drawSettingsNavItem(c, control, pane)
 		}
 	})
@@ -224,6 +230,10 @@ func (s *Shell) drawSettingsNavItem(c *ui.Context, control *SettingsControl, pan
 	button.Children(func() {
 		if on {
 			ui.Box(c).Absolute().Left(0).Top(pane.navMarkInset).Bottom(pane.navMarkInset).Width(pane.navMarkW).Radius(pane.navMarkR).Background(s.palette.Rail)
+		}
+		if control.dot {
+			// The dot of a plugin with settings uses the accent color, as .set-dot of packages/workbench/settings.css does.
+			ui.Box(c).Size(pane.navMarkW, pane.navMarkW).Radius(pane.navMarkR).Background(s.palette.Rail)
 		}
 		ui.Text(c, control.Label).FontSize(s.textControl()).TextColor(color)
 	})

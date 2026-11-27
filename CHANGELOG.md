@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: The settings menu lists each loaded plugin with settings or accounts as core.settings-tab.plugin-item, under the group 설정이 있는 플러그인.
 - F1217-7: Each row of the installed plugins page is the element core.settings-tab.plugin-row, with the plugin id as its item.
 - F1217-7: The agent group title is 에이전트 연동, and 모두 설치 is drawn as the primary button.
 - F1217-11-3: The modal error toast test answers through the close control of the copied toast, not its first button.

@@ -289,3 +289,13 @@ func TestEachInstalledRowIsNamedByItsPlugin(t *testing.T) {
 		t.Fatal("the row of the plugin card is not the element core.settings-tab.plugin-row with its id")
 	}
 }
+
+// The menu group of the plugins with settings lists each loaded plugin that declares settings or accounts, as the element
+// core.settings-tab.plugin-item with the item plugin:<id> (docs/spec/settings.md#menu).
+func TestTheMenuListsEachLoadedPluginWithSettingsAsAPluginItem(t *testing.T) {
+	f := categoryShell(t, enabledPlugins("card"), settingsWithTerminal)
+	f.clickQuiet("core.chrome.settings", "")
+	if !f.has("core.settings-tab.plugin-item", "plugin:card") {
+		t.Fatal("the menu does not list card as a plugin item with settings")
+	}
+}

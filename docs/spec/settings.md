@@ -46,7 +46,7 @@ Group `플러그인`:
 
 The catalog holds the plugins that the registry index lists with a version that is not revoked, and the plugins that are installed or loaded ([registry index](installation.md#registry-index)).
 
-Group `설정이 있는 플러그인`: one item per loaded and enabled plugin that declares settings or accounts, labelled with the plugin name and marked with a green dot (title `사용 중`). The group lists only these plugins. Every other plugin page opens from 설치됨, so the menu stays short with many installed plugins.
+Group `설정이 있는 플러그인`: one item per loaded and enabled plugin that declares settings or accounts, labelled with the plugin name and marked with a dot (title `사용 중`). Each item is the element `core.settings-tab.plugin-item` with the item `plugin:<id>`; the dot takes the accent color, as the web draws it. The group lists only these plugins. Every other plugin page opens from 설치됨, so the menu stays short with many installed plugins.
 
 Each page item runs `core.settings-tab.nav {page}`. `core.settings-tab.nav` also takes the optional `group`, the `id` of a group of that page ([rows](#rows)): the page scrolls the group to the top of the view. The command brings the settings tab to the front, also when the tab is closed, as core.settings.open does, so the gear of the notice center can run it. An unknown group is refused with -32602 and the page does not change. Each plugin item runs `core.settings-tab.plugin {plugin}`. The item of the page in front is selected: its background is the accent tint and its text is bold. A search shows no selected item.
 

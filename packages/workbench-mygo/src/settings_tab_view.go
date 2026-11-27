@@ -96,7 +96,9 @@ type OptionGroup struct {
 // SettingsControl is a control of the card as the status reports it.
 type SettingsControl struct {
 	// small is the size sm of a button, 24 points high (docs/spec/settings.md#controls).
-	small   bool
+	small bool
+	// dot says that the item of the menu shows the dot of a plugin with settings (docs/spec/settings.md#menu).
+	dot     bool
 	Name    string          `json:"name"`
 	Index   int             `json:"index"`
 	Key     *string         `json:"key"`
@@ -327,6 +329,13 @@ func (s *Shell) settingsBuild() (*settingsModel, error) {
 	for _, page := range settingsPages[:len(settingsPages)-1] {
 		model.nav = append(model.nav, b.pressedButton("nav:"+page[0], "core.settings-tab.nav", page[1], "core.settings-tab.nav",
 			map[string]any{"page": page[0]}, page[0] == w.page))
+	}
+	// The plugins with settings or accounts follow the pages in the group of their plugin items, by id (docs/spec/settings.md#menu).
+	for _, plugin := range s.pluginMenuItems() {
+		item := b.pressedButton("plugin:"+plugin.ID, "core.settings-tab.plugin-item", plugin.Name, "core.settings-tab.plugin",
+			map[string]any{"plugin": plugin.ID}, w.page == "plugin" && w.chosen == plugin.ID)
+		item.dot = true
+		model.nav = append(model.nav, item)
 	}
 	// The search field stands at the top of the menu and runs core.settings-tab.find for each change (docs/spec/settings.md#menu).
 	model.find = b.add(SettingsControl{Name: "core.settings-tab.find", Key: text("find"), Value: text(w.find), Command: settingCommand("core.settings-tab.find", nil),
@@ -612,6 +621,18 @@ func labelled(values []string, labels map[string]string) ([][2]string, error) {
 		options[i] = [2]string{value, label}
 	}
 	return options, nil
+}
+
+// pluginMenuItems returns the loaded plugins that declare settings or accounts, by id (docs/spec/settings.md#menu).
+func (s *Shell) pluginMenuItems() []*LoadedPlugin {
+	items := []*LoadedPlugin{}
+	for i := range s.plugins {
+		if unit := s.units[s.plugins[i].ID]; unit != nil && (len(unit.Settings) > 0 || unit.Accounts != nil) {
+			items = append(items, &s.plugins[i])
+		}
+	}
+	slices.SortFunc(items, func(a, b *LoadedPlugin) int { return strings.Compare(a.ID, b.ID) })
+	return items
 }
 
 func (s *Shell) loadedPlugin(id string) *LoadedPlugin {
