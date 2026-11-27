@@ -48,6 +48,14 @@
       "settings": [],
       "plugins": [],
       "catalog": 0
+    },
+    {
+      "query": "terminal",
+      "settings": [],
+      "plugins": [
+        "acme"
+      ],
+      "catalog": 0
     }
   ]
 }

@@ -10,7 +10,7 @@ const cases = JSON.parse(readFileSync(new URL("./settings-search-cases.json", im
 // The host answer of the fixture is read by the production web reader of the plugin rows (pluginRows), so the plugin inputs of the
 // matcher are the rows and units that a window builds from the answer.
 const answer = JSON.parse(readFileSync(new URL("./fixtures/plugin-host-answer.json", import.meta.url), "utf8"));
-const pluginUnits = answer.installed.plugins.map((item) => ({ id: item.id, name: item.manifest.name, description: item.manifest.description, version: item.version }));
+const pluginUnits = answer.installed.plugins.map((item) => ({ id: item.id, name: item.manifest.name, description: item.manifest.description, version: item.version, categories: item.manifest.categories ?? [] }));
 const settingDefs = Object.fromEntries(answer.installed.plugins.flatMap((item) => Object.entries(item.manifest.settings ?? {})
   .map(([local, def]) => [`${item.id}.${local}`, { plugin: item.id, label: def.label, description: def.description }])));
 const plugins = pluginRows(pluginUnits, answer.pluginsState, new Set());

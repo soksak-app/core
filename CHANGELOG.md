@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-17-10: The shared search cases match a plugin by its category name in the web and mygo hosts.
 - F1266: The folder count event test passes on HEAD and fails with its case reverted; the checklist item is complete.
 - F1271: The Installed page filters its rows by the search query over the name, id, description and category, as InstalledList of F1250-3 takes it over.
 - F1272: Create the parent folder of the nested view store in the Go view probe test.

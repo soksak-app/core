@@ -10,6 +10,17 @@
           "id": "acme",
           "name": "Acme",
           "description": "the files",
+          "categories": [
+            "terminal"
+          ],
+          "surface": {
+            "composition": {
+              "kind": "view",
+              "page": "ui/page.html"
+            }
+          },
+          "mark": "A",
+          "icon": "<path d=\"M1 1h14\"/>",
           "contributes": {},
           "settings": {
             "mode": { "type": "enum", "label": "파일 열기", "description": "how the files open", "values": ["a", "b"], "default": "a" }
