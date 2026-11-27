@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1246: The contract audit reads the reload binding case declaration of the Rust host, so tauriv2 and gpuikit declare it.
 - F1264-2: The darwin document region measures the elements that match a selector and replies their boxes and computed style, with a fixed script.
 - F1217-17-10: The account group of a plugin page shows the design description, and the login sentence is removed.
 - F1264-1: The native surfaces specification defines the box query, the request that reads the boxes and computed style of the elements of a document region.

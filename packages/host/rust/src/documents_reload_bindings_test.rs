@@ -1,7 +1,6 @@
 //! A main page reload ends the document registrations of each surface, and the view that the reloaded page creates on a
 //! surface binds to that surface only. The registrations of the other surfaces keep their surface names, so a press of
 //! their view resolves to their own surface.
-//! contract: surface.view.reload-keeps-bindings
 
 use super::{Documents, Key, Streams, remove_surface_for_reload};
 
@@ -9,6 +8,7 @@ fn key(surface: &str, name: &str) -> Key {
     (surface.to_string(), name.to_string())
 }
 
+// contract: surface.view.reload-keeps-bindings
 #[test]
 fn a_reload_keeps_each_view_bound_to_its_own_surface() {
     let documents = Documents::default();
