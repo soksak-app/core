@@ -72,6 +72,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.SpHostTestDocumentStoreClose, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "sp_host_test_document_store_is_open")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_document_store_is_open: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_document_store_is_open: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestDocumentStoreIsOpen, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "sp_host_test_sampler_capture_main")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_sampler_capture_main: %w", err)

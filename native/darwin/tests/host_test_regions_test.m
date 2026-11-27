@@ -69,11 +69,11 @@ int main(int argc, char **argv) { @autoreleasepool {
     check(sp_host_test_window_keys_wait((uintptr_t)window, &waitingBefore, &decisionBefore, &modalBefore) != NULL,
         @"a read before the production functions are installed is refused");
     check(sp_host_test_install_production_functions((uintptr_t)surfaceLayoutKeysWaitState, (uintptr_t)surfaceLayoutKeysWaitOpen,
-        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event, 0) != NULL, @"a missing production function is refused");
+        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event, 0, (uintptr_t)sp_document_store_is_open) != NULL, @"a missing production function is refused");
     check(sp_host_test_install_production_functions((uintptr_t)surfaceLayoutKeysWaitState, (uintptr_t)surfaceLayoutKeysWaitOpen,
-        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event, (uintptr_t)sp_document_store_close) == NULL, @"the production functions install");
+        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event, (uintptr_t)sp_document_store_close, (uintptr_t)sp_document_store_is_open) == NULL, @"the production functions install");
     check(sp_host_test_install_production_functions((uintptr_t)surfaceLayoutKeysWaitState, (uintptr_t)surfaceLayoutKeysWaitOpen,
-        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event, (uintptr_t)sp_document_store_close) != NULL, @"a second installation is refused");
+        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event, (uintptr_t)sp_document_store_close, (uintptr_t)sp_document_store_is_open) != NULL, @"a second installation is refused");
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL && SPPlaceSurfaceView(surface, view), @"the main webview creates the surface and the view web view is placed in it");
     webviewSetFrame(surface, 0, 0, 500, 400);

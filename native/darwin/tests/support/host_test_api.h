@@ -30,7 +30,7 @@ void sp_host_test_set_send_in_next_wait(bool send);
 // keeps the symbols of each library local to it. A missing address and a second installation return a static error without changing
 // the installed state.
 const char *sp_host_test_install_production_functions(uintptr_t keys_wait_state, uintptr_t keys_wait_open, uintptr_t region_raster,
-    uintptr_t region_present, uintptr_t event, uintptr_t store_close);
+    uintptr_t region_present, uintptr_t event, uintptr_t store_close, uintptr_t store_is_open);
 // Ends the persistent data store of directory through the installed sp_document_store_close on the main queue and waits until the store
 // ended, so that no WebKit process writes into the directory afterward and its folder can be removed. Every document of the directory
 // must be closed first. It waits on a thread that is not the main thread, because the main thread runs the end. Returns NULL, or an
@@ -38,6 +38,9 @@ const char *sp_host_test_install_production_functions(uintptr_t keys_wait_state,
 // each refusal of the end (a directory that is not an absolute path, a store that is already ending, an open document of the
 // directory, a WebKit process that did not end).
 const char *sp_host_test_document_store_close(const char *directory);
+// Reports whether a persistent data store of directory is open, through the installed sp_document_store_is_open on the main queue.
+// It returns false when the production functions are not installed or the calling thread is the main thread.
+bool sp_host_test_document_store_is_open(const char *directory);
 // Stores the event name with the class, the level and the fields (JSON text) in the native event ring of the production library
 // through its producer function, as a native producer does. Returns NULL, or the error when the producer refused the event.
 const char *sp_host_test_emit_event(uint8_t event_class, uint8_t level, const char *name, const char *fields);

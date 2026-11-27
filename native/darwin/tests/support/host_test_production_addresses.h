@@ -38,3 +38,6 @@ static inline uintptr_t sp_host_test_production_event_address(void) {
 static inline uintptr_t sp_host_test_production_store_close_address(void) {
     return (uintptr_t)sp_document_store_close;
 }
+static inline uintptr_t sp_host_test_production_store_is_open_address(void) {
+    return (uintptr_t)sp_document_store_is_open;
+}

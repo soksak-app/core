@@ -104,10 +104,11 @@ func viewStoreDirectory(t *testing.T) string {
 	return viewStore.directory
 }
 
-// endViewStores ends the data store of folder and of each directory under it, so that no WebKit process writes into the folder
-// afterward, and returns when every store ended, with the refusal of each store that did not end. A directory without a store ends at
-// once, so the directories are not told apart. The stores end together, because a store that stays open while another ends starts the
-// network process of WebKit again. It runs on a goroutine of a test, never on the main thread, which runs the ends.
+// endViewStores ends the data store of folder and of each directory under it that holds a store, so that no WebKit process writes into
+// the folder afterward, and returns when every store ended, with the refusal of each store that did not end. A directory without a store
+// (such as an origin folder) is not ended: the native library refuses the end of a directory without a store, so the query tells the two
+// apart first. The stores end together, because a store that stays open while another ends starts the network process of WebKit again.
+// It runs on a goroutine of a test, never on the main thread, which runs the ends.
 func endViewStores(folder string) error {
 	directories, err := storeDirectories(os.DirFS(folder), folder)
 	if err != nil {
@@ -115,7 +116,18 @@ func endViewStores(folder string) error {
 	}
 	refusals := make(chan error, len(directories))
 	for _, directory := range directories {
-		go func() { refusals <- support.EndDocumentStore(directory) }()
+		go func() {
+			open, err := support.DocumentStoreIsOpen(directory)
+			if err != nil {
+				refusals <- err
+				return
+			}
+			if !open {
+				refusals <- nil
+				return
+			}
+			refusals <- support.EndDocumentStore(directory)
+		}()
 	}
 	var failures []error
 	for range directories {

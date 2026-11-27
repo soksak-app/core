@@ -28,9 +28,10 @@ type NativeFunctions struct {
 	SpHostTestInstallStallFunctions      func(uintptr, uintptr) *byte
 	SpHostTestReadStallCounts            func(*uint64, *uint64, *uint64)
 	SpHostTestSetSendInNextWait          func(bool)
-	SpHostTestInstallProductionFunctions func(uintptr, uintptr, uintptr, uintptr, uintptr, uintptr) *byte
+	SpHostTestInstallProductionFunctions func(uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr) *byte
 	SpHostTestEmitEvent                  func(uint8, uint8, *byte, *byte) *byte
 	SpHostTestDocumentStoreClose         func(*byte) *byte
+	SpHostTestDocumentStoreIsOpen        func(*byte) bool
 	SpHostTestSamplerCaptureMain         func() int32
 	SpHostTestSamplerStart               func() int32
 	SpHostTestSamplerStop                func() int32
@@ -83,6 +84,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.SpHostTestDocumentStoreClose == nil {
 		return fmt.Errorf("native API function is missing: sp_host_test_document_store_close")
+	}
+	if functions.SpHostTestDocumentStoreIsOpen == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_document_store_is_open")
 	}
 	if functions.SpHostTestSamplerCaptureMain == nil {
 		return fmt.Errorf("native API function is missing: sp_host_test_sampler_capture_main")

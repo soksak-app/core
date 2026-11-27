@@ -597,12 +597,13 @@ static bool (*productionRegionPresent)(void *region, unsigned int token_id, cons
     double scale, uint64_t generation, uint64_t raster, int sequence);
 static bool (*productionEvent)(uint8_t eventClass, uint8_t level, const char *name, const char *fields_json);
 static void (*productionStoreClose)(const char *directory, void (*closed)(void *context, const char *error), void *context);
+static bool (*productionStoreIsOpen)(const char *directory);
 static bool productionFunctionsInstalled;
 
 const char *sp_host_test_install_production_functions(uintptr_t keys_wait_state, uintptr_t keys_wait_open, uintptr_t region_raster,
-    uintptr_t region_present, uintptr_t event, uintptr_t store_close) {
+    uintptr_t region_present, uintptr_t event, uintptr_t store_close, uintptr_t store_is_open) {
     if (productionFunctionsInstalled) return "host test production functions are already installed";
-    if (!keys_wait_state || !keys_wait_open || !region_raster || !region_present || !event || !store_close) {
+    if (!keys_wait_state || !keys_wait_open || !region_raster || !region_present || !event || !store_close || !store_is_open) {
         return "host test production function is missing";
     }
     productionKeysWaitState = (bool (*)(void *, bool *, bool *))keys_wait_state;
@@ -611,6 +612,7 @@ const char *sp_host_test_install_production_functions(uintptr_t keys_wait_state,
     productionRegionPresent = (bool (*)(void *, unsigned int, const unsigned char *, double, double, double, uint64_t, uint64_t, int))region_present;
     productionEvent = (bool (*)(uint8_t, uint8_t, const char *, const char *))event;
     productionStoreClose = (void (*)(const char *, void (*)(void *, const char *), void *))store_close;
+    productionStoreIsOpen = (bool (*)(const char *))store_is_open;
     productionFunctionsInstalled = true;
     return NULL;
 }
@@ -629,6 +631,15 @@ static void storeEnded(void *context, const char *error) {
 }
 
 static char storeRefusal[512];
+
+bool sp_host_test_document_store_is_open(const char *directory) {
+    if (pthread_main_np()) return false;
+    if (!productionFunctionsInstalled || !directory) return false;
+    __block bool open = false;
+    // The query runs on the main queue, where the production library reads its store table.
+    dispatch_sync(dispatch_get_main_queue(), ^{ open = productionStoreIsOpen(directory); });
+    return open;
+}
 
 const char *sp_host_test_document_store_close(const char *directory) {
     if (pthread_main_np()) return "host test data store end requires a thread that is not the main thread";

@@ -36,7 +36,8 @@ func InstallTestSupport() error {
 		if supportError = testlibrary.Error(functions.SpHostTestInstallProductionFunctions(
 			uintptr(C.sp_host_test_production_keys_wait_state_address()), uintptr(C.sp_host_test_production_keys_wait_open_address()),
 			uintptr(C.sp_host_test_production_region_raster_address()), uintptr(C.sp_host_test_production_region_present_address()),
-			uintptr(C.sp_host_test_production_event_address()), uintptr(C.sp_host_test_production_store_close_address()))); supportError != nil {
+			uintptr(C.sp_host_test_production_event_address()), uintptr(C.sp_host_test_production_store_close_address()),
+			uintptr(C.sp_host_test_production_store_is_open_address()))); supportError != nil {
 			return
 		}
 		if supportError = support.InstallNativeFunctions(functions); supportError != nil {

@@ -168,3 +168,15 @@ func EndDocumentStore(directory string) error {
 	path := append([]byte(directory), 0)
 	return testlibrary.Error(functions.SpHostTestDocumentStoreClose(&path[0]))
 }
+
+// DocumentStoreIsOpen reports whether the native library holds a persistent data store for directory, the directory of the documents
+// of a view folder as the store key names it. A directory without a store, such as an origin folder, reports false. The query runs on the
+// main thread, so DocumentStoreIsOpen runs on a goroutine of the test and never on the main thread.
+func DocumentStoreIsOpen(directory string) (bool, error) {
+	functions, err := installedNativeFunctions()
+	if err != nil {
+		return false, err
+	}
+	path := append([]byte(directory), 0)
+	return functions.SpHostTestDocumentStoreIsOpen(&path[0]), nil
+}
