@@ -1045,6 +1045,19 @@
           ]
         },
         {
+          "id": "projectFolder",
+          "name": "프로젝트 폴더",
+          "description": "새 프로젝트와 Git 저장소 가져오기가 시작하는 폴더. 모든 프로젝트에 적용된다.",
+          "rows": [
+            {
+              "key": "projectsFolder",
+              "label": "프로젝트 폴더",
+              "form": "folder",
+              "scope": "common"
+            }
+          ]
+        },
+        {
           "id": "location",
           "name": "위치",
           "description": "프로젝트 탭이 놓이는 위치. 바꾸면 카드 배치도 함께 바뀐다.",

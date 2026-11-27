@@ -749,6 +749,12 @@ export async function installCoreExposure({ home, renames, chrome, drawn, memory
   registry.command("core.settings.change", invalid(async ({ key, value: input, scope }) => {
     await changeSetting(key, input, scope, "core.settings.change");
   }));
+  // The folder control of a setting: the system folder dialog gives the folder, and a cancelled dialog changes nothing.
+  registry.command("core.settings.choose-folder", invalid(async ({ key, scope = "common" }) => {
+    const path = await windows.chooseFolder();
+    if (!path) return;
+    await changeSetting(key, path, scope, "core.settings.choose-folder");
+  }));
   // The side key of a window side negates its applied value, written to the scope of that value (docs/spec/external-sidebars.md#window-tools).
   registry.command("core.sidebar.toggle", invalid(async ({ side }) => {
     if (projects.inHome()) throw new Error("the work screen is not shown");

@@ -95,6 +95,7 @@
     "core.boundary.center",
     "core.layout.balance",
     "core.settings.change",
+    "core.settings.choose-folder",
     "core.settings.theme",
     "core.settings.link",
     "core.settings.sets.create",

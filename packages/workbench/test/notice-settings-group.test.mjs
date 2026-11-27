@@ -55,3 +55,22 @@ test("the delay is enabled while the switch is on", (t) => {
   const controls = [...delay.querySelectorAll("input, button")];
   assert.ok(controls.length > 0 && controls.every((el) => !el.disabled), "the delay is enabled while the switch is on");
 });
+
+test("the group 프로젝트 폴더 on the page 작업 공간 draws the folder row with its button that chooses the folder", async (t) => {
+  // The folder row shows projectsFolder and its 찾아보기 button runs core.settings.choose-folder for that key (docs/spec/settings.md#controls).
+  const { workspacePage } = await import("../settings-pages.js");
+  const dom = new JSDOM("<body></body>");
+  t.after(() => dom.window.close());
+  Object.assign(globalThis, { window: dom.window, document: dom.window.document });
+  beginSettings({ common: { projectsFolder: "~/Work" }, projects: [] }, null);
+  const root = dom.window.document.createElement("div");
+  root.append(...workspacePage());
+  const group = [...root.querySelectorAll("section.set-group")].find((el) => el.querySelector(".set-group__name").textContent === "프로젝트 폴더");
+  assert.ok(group, "the group 프로젝트 폴더 is drawn");
+  const row = group.querySelector(':scope > .set-row[data-row="projectsFolder"]');
+  assert.ok(row, "the folder row is drawn");
+  assert.ok(row.textContent.includes("~/Work"), "the row shows the value of projectsFolder");
+  const button = row.querySelector('button[data-command="core.settings.choose-folder"]');
+  assert.ok(button, "the folder row has the button that chooses the folder");
+  assert.equal(JSON.parse(button.dataset.params ?? "{}").key, "projectsFolder");
+});

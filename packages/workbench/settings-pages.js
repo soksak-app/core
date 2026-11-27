@@ -63,6 +63,16 @@ function themeRow() {
   return row({ wide: true, control: grid, key: "theme", extras: marks });
 }
 
+/** The folder control: the path in a fixed-width font and the button that chooses another folder (docs/spec/settings.md#controls). */
+function folderControl(key, disabled) {
+  const wrap = element("div", "set-folder");
+  const path = element("span", "set-folder__path", String(shownValue(key)));
+  path.title = String(shownValue(key));
+  const choose = button("찾아보기", { expose: "core.settings-tab.choose-folder", command: "core.settings.choose-folder", params: { key, scope: writeScope() }, key, disabled });
+  wrap.append(path, choose);
+  return wrap;
+}
+
 /** One row of a core setting, drawn with the control of its form. */
 export function settingRow(def) {
   const { key, label, form, unit = "", description = null, depends = null } = def;
@@ -74,6 +84,7 @@ export function settingRow(def) {
   else if (form === "switch") control = toggle(key, shownValue(key), { disabled });
   else if (form === "slider") control = slider(key, rangeOf(key), shownValue(key), { unit, disabled });
   else if (form === "stepper") control = stepper(key, rangeOf(key), shownValue(key), { unit, disabled });
+  else if (form === "folder") control = folderControl(key, disabled);
   else throw new Error(`settings row ${key} has form ${form}, which settingRow does not draw`);
   return row({ label, description, control, key, indent: depends !== null, extras: scopeMarks(key, label, labels, unit) });
 }
@@ -150,7 +161,7 @@ export function sizeGroup() {
 /** The workspace page: the project and position groups, the four-row sidebar list, and the sizes (docs/spec/settings.md#작업-공간). */
 export function workspacePage() {
   return [
-    ...["프로젝트", "위치"].map((name) => group(name, groupOf("workspace", name).description, rowsOfGroup("workspace", name), groupOf("workspace", name).id)),
+    ...["프로젝트", "프로젝트 폴더", "위치"].map((name) => group(name, groupOf("workspace", name).description, rowsOfGroup("workspace", name), groupOf("workspace", name).id)),
     sidebarGroup(),
     sizeGroup(),
   ];

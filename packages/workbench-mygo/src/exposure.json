@@ -3406,6 +3406,30 @@
         }
       },
       {
+        "name": "core.settings.choose-folder",
+        "description": "Chooses a folder with the system dialog and sets it as the value of key in scope; a cancelled dialog changes nothing.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "scope": {
+              "enum": [
+                "common",
+                "project"
+              ]
+            }
+          },
+          "required": [
+            "key"
+          ]
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.settings.theme",
         "description": "Applies a theme with its shape values in the given mode (the current mode by default) and scope (common by default).",
         "params": {
@@ -6565,6 +6589,10 @@
         "name": "core.settings-tab.set",
         "description": "The setting controls in workbench order (switches, select boxes, sliders and text fields, one control per setting form); core.settings lists their keys.",
         "many": true
+      },
+      {
+        "name": "core.settings-tab.choose-folder",
+        "description": "The 찾아보기 button of the folder row of a setting, which runs core.settings.choose-folder for that key."
       },
       {
         "name": "core.settings-tab.debug",

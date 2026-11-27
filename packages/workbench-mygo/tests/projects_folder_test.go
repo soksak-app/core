@@ -77,3 +77,39 @@ func TestTheCreateFormStartsInTheProjectsFolder(t *testing.T) {
 	}
 	t.Fatalf("the project was not created in projectsFolder; projects %v", f.host.projects)
 }
+
+// The page 작업 공간 draws the folder row of projectsFolder with the path and the button that chooses another folder.
+func TestTheWorkspacePageDrawsTheProjectsFolderRow(t *testing.T) {
+	f := newShell(t, &storedHost{common: map[string]any{"projectsFolder": "~/Work"}})
+	f.settle()
+	f.run("core.settings.open", nil)
+	f.run("core.settings-tab.nav", map[string]any{"page": "workspace"})
+	f.settle()
+	var found bool
+	for _, control := range f.modal().Controls {
+		if control.Name != "core.settings-tab.choose-folder" {
+			continue
+		}
+		found = true
+		if control.Command == nil || control.Command.Name != "core.settings.choose-folder" || control.Command.Params["key"] != "projectsFolder" {
+			t.Fatalf("the folder button has command %+v, want core.settings.choose-folder for projectsFolder", control.Command)
+		}
+	}
+	if !found {
+		t.Fatal("the workspace page has no folder button")
+	}
+	if !f.tester.HasText("~/Work") {
+		t.Fatalf("the folder row does not show the path; texts %q", f.tester.Texts())
+	}
+}
+
+// The folder button sets projectsFolder to the folder that the dialog gives; a cancelled dialog changes nothing.
+func TestTheFolderButtonSetsTheChosenFolder(t *testing.T) {
+	f := newShell(t, &storedHost{common: map[string]any{"projectsFolder": "~/Work"}})
+	f.settle()
+	f.run("core.settings.choose-folder", map[string]any{"key": "projectsFolder", "scope": "common"})
+	f.settle()
+	if got := f.settingsStatus().Values["projectsFolder"]; got != "/chosen" {
+		t.Fatalf("projectsFolder = %v, want the chosen folder /chosen", got)
+	}
+}

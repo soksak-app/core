@@ -100,12 +100,23 @@ func (s *Shell) buildWorkspace(b *settingsBuilder) error {
 		}
 		b.group("프로젝트", "프로젝트를 여는 방식. 모든 프로젝트에 적용되며, 이미 열린 창은 그대로 둔다.", opening)
 	}
+	folder := s.folderRow(b)
+	b.group("프로젝트 폴더", "새 프로젝트와 Git 저장소 가져오기가 시작하는 폴더. 모든 프로젝트에 적용된다.", folder)
 	position, err := s.choiceRow(b, "프로젝트 탭 위치", "projectTabs", s.settings.Catalog.Rows.Labels["projectTabs"])
 	if err != nil {
 		return err
 	}
 	b.group("위치", "프로젝트 탭이 놓이는 위치. 바꾸면 카드 배치도 함께 바뀐다.", position)
 	return s.buildSidebarRows(b)
+}
+
+// folderRow is the row of projectsFolder: the path, and the button 찾아보기 that runs core.settings.choose-folder (docs/spec/settings.md#controls).
+func (s *Shell) folderRow(b *settingsBuilder) settingsRow {
+	const key = "projectsFolder"
+	path := b.add(SettingsControl{Label: valueText(s.value(key)), kind: controlCaption})
+	choose := b.add(SettingsControl{Name: "core.settings-tab.choose-folder", Key: text(key), Label: "찾아보기", kind: controlButton,
+		Command: settingCommand("core.settings.choose-folder", map[string]any{"key": key, "scope": s.controlScope(key)}), Disabled: s.controlScope(key) != "common"})
+	return settingsRow{name: "프로젝트 폴더", controls: []*SettingsControl{path, choose}}
 }
 
 // buildSidebarRows builds the group Sidebar and the group Sidebar size of the window sidebars.

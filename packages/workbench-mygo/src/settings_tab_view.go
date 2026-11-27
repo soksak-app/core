@@ -1231,6 +1231,25 @@ func (s *Shell) registerSettingsValues() {
 		}
 		return err
 	})
+	// The folder of a setting: the system folder dialog gives the folder, and a cancelled dialog changes nothing.
+	later(s, "core.settings.choose-folder", func(value settingsParam, answer func(any, error)) {
+		s.calls.Call("folderChoose", nil, func(got any, err error) {
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			chosen, err := decode[string](got)
+			if err != nil {
+				answer(nil, err)
+				return
+			}
+			if chosen == "" {
+				answer(nil, nil)
+				return
+			}
+			answer(nil, invalidSetting(s.changing("core.settings.choose-folder", func() error { return s.settings.Change(value.Key, chosen, value.Scope) })))
+		})
+	})
 	act(s, "core.settings.link", func(value settingsParam) error { return invalidSetting(s.linkSet(value)) })
 }
 
