@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
+- F1247: The shown surface drawing item records its Red and Green results and is complete.
 - F1242: The when text of five workbench shortcut rows states the parameters that the spec table states.
 - F1217-18: The main window differences from the design reference are recorded per element.
 - F959-4: The layout runner waits for readiness by events, the endpoint file and the ready window of host.windows, and no longer retries reads.
