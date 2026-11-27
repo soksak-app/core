@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222: notice_center.go is in gofmt form.
 - F1217-7: The project home has the status line of the design in both hosts: the counts of projects and open projects, the enabled and installed plugins, the button back to the work screen through core.home.back, and the button for a new window.
 - F1226: A quit waits for the process that answers its connection, a failed quit follows a replacement that process.lock names, and a run ends its persistent services before the process audit: each service that stays after its folder is removed receives SIGTERM, the exit that the service declares, and a service that stays after it fails the step with its pid.
 - F957: Repeated splits of the last card toward right keep the cards of a row equal in the web and mygo workbenches; the tests are regression coverage.
