@@ -293,3 +293,78 @@ func TestTheToastIsDrawnInTheFootOfTheTab(t *testing.T) {
 		t.Fatal("the toast stays drawn after the undo")
 	}
 }
+
+// A toast names the values of its change in the form of its kind: a choice shows its option label, and a side switch names its side
+// (docs/spec/settings.md#saving-and-undo).
+func TestAToastNamesTheValuesOfAChangeByItsKind(t *testing.T) {
+	f := newShell(t, acme())
+	f.run("core.settings.open", nil)
+	f.run("core.settings.change", map[string]any{"key": "mode", "value": "light", "scope": "common"})
+	f.run("core.settings.change", map[string]any{"key": "mode", "value": "dark", "scope": "common"})
+	f.settle()
+	if !f.tester.HasText("모드: 밝음 → 어두움") {
+		t.Fatalf("the choice toast is not 모드: 밝음 → 어두움: %q", f.tester.Texts())
+	}
+	f.run("core.settings.change", map[string]any{"key": "left", "value": false, "scope": "common"})
+	f.run("core.settings.change", map[string]any{"key": "left", "value": true, "scope": "common"})
+	f.settle()
+	if !f.tester.HasText("왼쪽 사이드바 보이기: 끔 → 켬") {
+		t.Fatalf("the side toast is not 왼쪽 사이드바 보이기: 끔 → 켬: %q", f.tester.Texts())
+	}
+}
+
+// A theme change shows the toast 테마: <old> → <new>, and its undo restores the old theme (docs/spec/settings.md#saving-and-undo).
+func TestAThemeChangeShowsItsToastAndUndoRestoresTheTheme(t *testing.T) {
+	f := newShell(t, acme())
+	f.run("core.settings.open", nil)
+	f.run("core.settings.theme", map[string]any{"name": "nord", "mode": "dark", "scope": "common"})
+	f.run("core.settings.theme", map[string]any{"name": "solar", "mode": "dark", "scope": "common"})
+	f.settle()
+	if !f.tester.HasText("테마: nord → solar") {
+		t.Fatalf("the theme toast is not 테마: nord → solar: %q", f.tester.Texts())
+	}
+	f.run("core.settings-tab.undo", map[string]any{})
+	f.settle()
+	values := status[struct {
+		Values map[string]any `json:"values"`
+	}](t, f, "core.settings")
+	if values.Values["theme"] != "nord" {
+		t.Fatalf("undo leaves the theme at %v, want nord", values.Values["theme"])
+	}
+}
+
+// A sidebar order shows the toast 배치 순서: <sides> with the side names joined by → (docs/spec/settings.md#saving-and-undo).
+func TestASidebarOrderShowsItsSidesInItsToast(t *testing.T) {
+	f := newShell(t, acme())
+	f.run("core.settings.open", nil)
+	f.run("core.settings.change", map[string]any{"key": "sidebarOrder", "value": []string{"top", "left", "right", "bottom"}, "scope": "common"})
+	f.settle()
+	if !f.tester.HasText("배치 순서: 위 → 왼쪽 → 오른쪽 → 아래") {
+		t.Fatalf("the order toast is not 배치 순서: 위 → 왼쪽 → 오른쪽 → 아래: %q", f.tester.Texts())
+	}
+}
+
+// The undo of a project value that was not overridden before the change resets it, so no override stays (docs/spec/settings.md#saving-and-undo).
+func TestTheUndoOfANewProjectOverrideResetsIt(t *testing.T) {
+	f := projectWithPlugins(t)
+	f.settle()
+	f.run("core.settings.open", nil)
+	overridden := func() []string {
+		return status[struct {
+			Overridden []string `json:"overridden"`
+		}](t, f, "core.settings").Overridden
+	}
+	if slices.Contains(overridden(), "gap") {
+		t.Fatal("gap is overridden before the change")
+	}
+	f.run("core.settings.change", map[string]any{"key": "gap", "value": 20, "scope": "project"})
+	f.settle()
+	if !slices.Contains(overridden(), "gap") {
+		t.Fatal("the project change does not override gap")
+	}
+	f.run("core.settings-tab.undo", map[string]any{})
+	f.settle()
+	if slices.Contains(overridden(), "gap") {
+		t.Fatalf("undo leaves the override of gap: %v", overridden())
+	}
+}

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: 되돌리기 토스트는 변경 종류별 문구를 쓰고, 테마 변경을 기록하며, 새 프로젝트 재정의는 재설정으로 되돌린다.
 - F1217-7: 설정 변경의 되돌리기 토스트는 탭 하단에 core.settings-tab.toast 요소로 그려지고, 버튼은 core.settings-tab.undo다.
 - F1217-7: 플러그인 페이지는 매니페스트 설명을 보이며, 설명의 각 줄은 core.settings-tab.plugins.about 요소다.
 - F1217-7: 에이전트 그룹은 설치 버튼을 core.settings-tab.setup-install-all 요소의 모두 설치로 보이며, 빠진 항목이 없으면 비활성이다.

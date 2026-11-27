@@ -1188,14 +1188,23 @@ func (s *Shell) registerSettingsValues() {
 		}
 		scope := inScope(value.Scope)
 		old := s.settings.Scoped(value.Key, scope)
+		wasOverridden := s.settings.Overridden(value.Key)
 		err := s.changing("core.settings.change", func() error { return s.settings.Change(value.Key, input, value.Scope) })
 		if err == nil {
-			s.recordChange(value.Key, scope, old, input)
+			s.recordChange(value.Key, scope, old, input, wasOverridden)
 		}
 		return invalidSetting(err)
 	})
 	act(s, "core.settings.theme", func(value settingsParam) error {
-		return s.changing("core.settings.theme", func() error { return s.settings.Theme(value.Name, value.Mode, value.Scope) })
+		scope := inScope(value.Scope)
+		oldName, _ := s.settings.Scoped("theme", scope).(string)
+		oldMode, _ := s.settings.Scoped("mode", scope).(string)
+		err := s.changing("core.settings.theme", func() error { return s.settings.Theme(value.Name, value.Mode, value.Scope) })
+		if err == nil {
+			newName, _ := s.settings.Scoped("theme", scope).(string)
+			s.recordTheme(scope, oldName, oldMode, newName)
+		}
+		return err
 	})
 	act(s, "core.settings.link", func(value settingsParam) error { return invalidSetting(s.linkSet(value)) })
 }

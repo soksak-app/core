@@ -24,7 +24,12 @@ type settingsConfirm struct {
 type settingsUndo struct {
 	key, label, scope string
 	old, new          any
-	cancel            func()
+	// mode is the mode before a theme change, which the undo of the theme restores with the old theme.
+	mode string
+	// reset says that the undo removes the project override, because the value had none before the change.
+	reset  bool
+	text   string
+	cancel func()
 }
 
 // settingsBrowseStatus is the browse member of the status.

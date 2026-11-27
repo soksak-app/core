@@ -158,7 +158,7 @@ func (s *Shell) settingsFootHeight(pane settingsPane) float32 {
 // (docs/spec/settings.md#saving-and-undo).
 func (s *Shell) drawSettingsToast(c *ui.Context, width, height float32, pane settingsPane) {
 	toast := s.settingsTab.undo
-	text := fmt.Sprintf("%s: %v → %v", toast.label, toast.old, toast.new)
+	text := toast.text
 	// The row is a status with the text as its label, so the element tree keeps it (an unnamed container is not kept).
 	row := ui.Row(s.binder.Name(c, "core.settings-tab.toast", "")).Role(ui.RoleStatus).Label(text).Size(width, height).Padding(pane.paneTop, pane.paneX, pane.paneBottom, pane.paneX)
 	row.AlignItems(ui.Center).Gap(pane.rowGap).Children(func() {
