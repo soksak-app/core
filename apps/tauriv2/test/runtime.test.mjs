@@ -397,7 +397,7 @@ test("a call of the main page that carries out an operation sends its identifier
   }
 });
 
-// The setup calls of the settings window (docs/spec/cli.md#agents-in-the-application) reach the setup commands of the host.
+// The setup calls of the settings tab (docs/spec/cli.md#agents-in-the-application) reach the setup commands of the host.
 test("the setup calls reach the setup commands with their requests", async () => {
   const calls = [];
   globalThis.window = { __TAURI__: {

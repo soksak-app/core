@@ -575,7 +575,7 @@ func ValidateManifest(value any) error {
 			return fmt.Errorf("plugin %s: %s is removed; a section is a view of the plugin", jsFieldText(manifest, "id"), member)
 		}
 	}
-	// The settings view is removed: a plugin declares its settings, which the settings window draws (docs/spec/settings.md#controls).
+	// The settings view is removed: a plugin declares its settings, which the settings tab draws (docs/spec/settings.md#controls).
 	if _, ok := manifest["settingsView"]; ok {
 		return fmt.Errorf("plugin %s: settingsView is removed; a plugin declares its settings", jsFieldText(manifest, "id"))
 	}

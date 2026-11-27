@@ -940,7 +940,7 @@ fn capture_still(window: &Window) -> Result<Value, Failure> {
         ));
     platform.private_directory(&directory).map_err(internal)?;
     let path = directory.join("window.png");
-    // The child windows of an open modal or settings window stand over the window, so the image holds them too.
+    // The child windows of an open modal or settings tab stand over the window, so the image holds them too.
     platform
         .capture_still(numbers[0], &path.to_string_lossy())
         .map_err(internal)?;

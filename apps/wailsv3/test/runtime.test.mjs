@@ -112,7 +112,7 @@ test("a call of the main page that carries out an operation sends its identifier
   }
 });
 
-// The setup calls of the settings window (docs/spec/cli.md#agents-in-the-application) reach the setup methods of the host.
+// The setup calls of the settings tab (docs/spec/cli.md#agents-in-the-application) reach the setup methods of the host.
 test("the setup calls reach the setup methods with their requests", async () => {
   const calls = [];
   register("./support/wails-runtime-loader.mjs", import.meta.url);

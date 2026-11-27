@@ -1,7 +1,7 @@
 package host
 
 // The account runs and account homes of a plugin (docs/spec/native-surfaces.md#account-runs): the workbench runs the account
-// programs of a plugin for the settings window, where no view of the plugin runs, in the data folder of the plugin.
+// programs of a plugin for the settings tab, where no view of the plugin runs, in the data folder of the plugin.
 
 import (
 	"context"

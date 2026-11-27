@@ -462,7 +462,7 @@ fn plugin_install_refuses_a_release_without_the_view_page() {
         ),
     );
     assert_eq!((code, stderr.as_str()), (0, ""));
-    // The settings view is removed: a plugin declares its settings, which the settings window draws (docs/spec/settings.md#controls).
+    // The settings view is removed: a plugin declares its settings, which the settings tab draws (docs/spec/settings.md#controls).
     let settings_manifest = VIEW_MANIFEST.replacen(
         r#""surface":"#,
         r#""settingsView": {"page": "ui/settings.html"}, "surface":"#,

@@ -217,7 +217,7 @@ for (const app of Object.values(APPS))
 // commands of the settings tab. Expected: after each change the workbench answers the next request, core.sidebars shows the
 // window sidebars that the switches and the links give, and the window sidebars stand where the order places them.
 for (const app of Object.values(APPS))
-  test(`${app.name}: the workbench answers after the sidebar settings of the settings window change`, async (t) => {
+  test(`${app.name}: the workbench answers after the sidebar settings of the settings tab change`, async (t) => {
     const s = await open(t, app);
     await fresh(s);
     const { values, overridden } = await s.get("core.settings");

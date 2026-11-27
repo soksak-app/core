@@ -1306,7 +1306,7 @@ func captureStill(h *Host, s *Surfaces, c *endpointConn) (string, error) {
 		return "", err
 	}
 	path := filepath.Join(directory, "window.png")
-	// The child windows of an open modal or settings window stand over the window, so the picture holds them too.
+	// The child windows of an open modal or settings tab stand over the window, so the picture holds them too.
 	if err := capture.CaptureStill(numbers[0], path); err != nil {
 		return "", err
 	}

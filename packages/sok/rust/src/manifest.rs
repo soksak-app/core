@@ -1993,7 +1993,7 @@ pub fn validate_manifest(value: &Value) -> Result<(), String> {
             ));
         }
     }
-    // The settings view is removed: a plugin declares its settings, which the settings window draws (docs/spec/settings.md#controls).
+    // The settings view is removed: a plugin declares its settings, which the settings tab draws (docs/spec/settings.md#controls).
     if manifest.contains_key("settingsView") {
         return Err(format!(
             "plugin {}: settingsView is removed; a plugin declares its settings",

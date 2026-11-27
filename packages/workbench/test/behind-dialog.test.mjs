@@ -43,8 +43,8 @@ test("an open picker makes no element inert", async () => {
   wire.finish();
 });
 
-// The settings window stands over the document of every surface (docs/spec/exposure.md).
-test("the settings window stands over the document of every surface", async () => {
+// A dialog stands over the document of every surface (docs/spec/exposure.md).
+test("a dialog stands over the document of every surface", async () => {
   const wire = selectPageWire("overlay-dialog");
   overlay.show(at("settings"), { x: 0, y: 0, w: 800, h: 600 }, () => {});
   assert.deepEqual([behindDialog(null, "tab-a"), behindDialog(null)], [true, true]);

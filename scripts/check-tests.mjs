@@ -595,7 +595,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/accounts.test.mjs", id: "the commands refuse what the contract refuses before any host call" },
       { file: "packages/workbench/test/settings-accounts.test.mjs", id: "the plugin page draws a row per account in the order of the names, with the buttons of its login" },
     ],
-    expected: "The web workbench draws the group 계정 of a plugin page from the stored records and the status runs, serves the core.accounts commands and status, and keeps the fields of the group in the settings window.",
+    expected: "The web workbench draws the group 계정 of a plugin page from the stored records and the status runs, serves the core.accounts commands and status, and keeps the fields of the group in the settings tab.",
     levels: ["unit"],
   },
   {
@@ -609,7 +609,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/accounts_test.go", id: "TestAnAccountIsAddedLoggedInCancelledLoggedOutAndRemoved" },
       { file: "packages/workbench-mygo/tests/accounts_test.go", id: "TestTheAccountCommandsRefuseWhatTheContractRefuses" },
     ],
-    expected: "The mygo workbench draws the group 계정 of a plugin page, serves the core.accounts commands and status with the texts of the web workbench, and keeps the fields of the group in the settings window.",
+    expected: "The mygo workbench draws the group 계정 of a plugin page, serves the core.accounts commands and status with the texts of the web workbench, and keeps the fields of the group in the settings tab.",
     levels: ["unit"],
   },
   {
@@ -1791,7 +1791,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/settings-setup.test.mjs", id: "the agent page reads the parts when it shows, shows the PATH preference, and runs the setup commands" },
       { file: "packages/workbench-mygo/tests/setup_parts_test.go", id: "TestTheAgentGroupShowsAndInstallsTheSetupParts" },
     ],
-    expected: "The agent group of the settings window names every setup part, the hook parts as 훅, in both workbenches.",
+    expected: "The agent group of the settings tab names every setup part, the hook parts as 훅, in both workbenches.",
     levels: ["unit"],
   },
   {

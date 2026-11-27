@@ -395,10 +395,10 @@ export function sameJson(a, b) {
   return a === b;
 }
 
-/* The maximum length of the plugin description that the settings window shows. */
+/* The maximum length of the plugin description that the settings tab shows. */
 const PLUGIN_DESCRIPTION_MAX = 200;
 
-/* The maximum length of the setting name and description that the settings window shows. */
+/* The maximum length of the setting name and description that the settings tab shows. */
 const SETTING_LABEL_MAX = 40;
 const SETTING_DESCRIPTION_MAX = 200;
 const ADDRESS_MAX = 2048;
@@ -416,7 +416,7 @@ export function isSettingAddress(value) {
 
 function checkSettingDeclaration(where, full) {
   if (!isObject(full)) throw new Error(`${where}: setting must be an object`);
-  // The settings window shows label as the row name and description as the explanation below it.
+  // The settings tab shows label as the row name and description as the explanation below it.
   const { label, description, ...declaration } = full;
   if (typeof label !== "string" || label.length < 1 || label.length > SETTING_LABEL_MAX) {
     throw new Error(`${where}: label must be 1 to ${SETTING_LABEL_MAX} characters`);
@@ -886,7 +886,7 @@ export function validateManifest(manifest) {
   for (const member of ["host", "hostOperations"]) {
     if (manifest[member] !== undefined) throw new Error(`plugin ${manifest.id}: ${member} is removed; a section is a view of the plugin`);
   }
-  // The settings view is removed: a plugin declares its settings, which the settings window draws (docs/spec/settings.md#controls).
+  // The settings view is removed: a plugin declares its settings, which the settings tab draws (docs/spec/settings.md#controls).
   if (manifest.settingsView !== undefined) throw new Error(`plugin ${manifest.id}: settingsView is removed; a plugin declares its settings`);
   only("plugin.json", manifest, ["id", "name", "description", "mark", "icon", "surface", "sections", "preview", "dependencies", "background", "programs", "exposes", "settings",
     "data", "sidebars", "dialogs", "extends", "contributes", "events", "sessions", "accounts", "categories", "requires"]);
@@ -897,7 +897,7 @@ export function validateManifest(manifest) {
   if (id === "core") throw new Error("plugin.json: plugin id core is reserved for the core root");
   const where = `plugin ${id}`;
   if (!isText(manifest.name)) throw new Error(`${where}: name is required`);
-  // The plugin list of the settings window shows the description and searches it.
+  // The plugin list of the settings tab shows the description and searches it.
   if (typeof manifest.description !== "string" || manifest.description.length < 1 ||
       manifest.description.length > PLUGIN_DESCRIPTION_MAX) {
     throw new Error(`${where}: description must be 1 to ${PLUGIN_DESCRIPTION_MAX} characters`);
