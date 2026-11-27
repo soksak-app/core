@@ -110,6 +110,31 @@ The preceding macOS 26.6.2 arm64 optimized diagnostic measurement cohort retains
 - [ ] F1217-18 — P1: The main window and its tabs of the web and mygo workbenches match the reference design, and each sidebar header is as high as a card header. Waits for the confirmation of the reference design, the handoff and the settings mockup of the main window, which are kept outside the repository. The table of differences is recorded after that confirmation.
   - [o] F1217-18-1 — The head of a window sidebar is as high as a card header, and it takes the card header padding and gap in web and mygo. Input: a window sidebar with a set. Behavior: the web head row takes 8px of padding and gap, and mygo draws the head band at the status-line height (foot-h, 22px), while the card header is head-h (32px) with card-head-pad and card-head-gap (4px). Expected: both hosts draw the head at head-h with the card header padding and gap, and the set starts one head-h below the top of the sidebar. Red: the web test `the window sidebar head takes the padding and the gap of the card header` failed on the head padding assertion; `TestTheWindowSidebarHeadIsAsHighAsACardHeader` failed with the set at 22, want 32. Green: both pass; the geometry expectations of design_match_test.go and sidebars_test.go use head-h in place of foot-h for the head.
   - [o] F1217-18-2 — The mygo title bar of the settings tab shows the bell as its last element, as every other screen does. Input: the settings tab in front in mygo. Behavior: mygo drew no bell while the settings tab was in front, and web drew it. Expected: the bell is the last element of the title bar on every screen, the settings tab included (notifications.md#bell). Verified by TestTheSettingsTabTitleBarShowsTheBell (Red: no bell; Green: bell drawn).
+  Difference table of the main window against the design reference of the main window (outside the repository). Sizes are the declared chrome metrics in packages/workbench/workbench.json.
+
+  | Element | Reference | Web | mygo | Class | Result |
+  | --- | --- | --- | --- | --- | --- |
+  | Title tools, work screen | 4 side switches, separator, settings, bell | title-tools.js | chrome.go `drawChromeActs` | existing rule | matches |
+  | Title tools, settings tab in front | bell only | title-tools.js | chrome.go | defect: bell missing in mygo | fixed by F1217-18-2 |
+  | Title tools, project home | settings, bell | title-tools.js | chrome.go | existing rule | matches |
+  | Bell position | last element on every screen | title-tools.js | chrome.go | existing rule | matches |
+  | Sidebar head height | head-h, 32px, as a card head | sidebar head row | head band at foot-h, 22px | defect | fixed by F1217-18-1 |
+  | Sidebar head padding and gap | card-head-pad and card-head-gap, 4px | 8px | 4px | defect (web) | fixed by F1217-18-1 |
+  | Sidebar width range | 60–800 | unchanged | unchanged | existing rule | kept |
+  | Status bar height | statusbar-h, 24px | app.css `.statusbar` | statusbar.go | existing rule | matches |
+  | Window sidebar set for a side that the workspace hides, shown while its plugin has focus | proposal | not implemented | not implemented | proposal | not implemented |
+  | Status line and toast timing | 6 s for success and info on the status line, 4 s for a toast | notices.js `LINE_MS` 6000, `TOAST_MS` 4000 | notice_store.go and errors_screen.go | existing rule | matches |
+  | Toast styles and stack | card (3 toasts and "+n개 더"), line (one, red count), deck | notice-view.js lines 187–202 | errors_screen.go `style == "deck"` | existing rule | matches |
+  | Merged toast title | title ×n | notices.js line 132 | errors_screen.go line 341 | existing rule | matches |
+  | Quiet mode | errors only as toasts | notices.js line 95, notice-view.js line 236 | notice_center_draw.go, notice_store.go | existing rule | matches |
+  | Toast and notice center roles | alert for errors, status for others | notice-view.js lines 95, 131 | errors_screen.go | existing rule | web matches; mygo not measured at DOM level |
+  | Notice center shape and stacking | popover or drawer | notice-view.js | notice_center_draw.go | owned by F1239-1 | not measured in this table |
+  | Launcher search and hint | placeholder, ⌘O caption, hint line | home.js line 59 (`home__search-key`), line 63 | home_page.go lines 57, 72, 303 | existing rule | matches |
+  | Launcher buttons | 새 프로젝트 (primary), 폴더 열기, Git 저장소 가져오기 | home.js lines 242–248 | home_page.go lines 89–91 | existing rule | matches |
+  | Launcher groups and row | 고정, 최근; row with 열림, 스페이스 n, relative day | home.js lines 163, 172, 208–209 | home_page.go lines 170–173, 232–290 | existing rule | matches |
+  | Gear size in the title bar | owned by F1239-2 | not measured in this table | not measured in this table | owned by F1239-2 | not measured in this table |
+
+  The proposals of section 10 of the design reference are not implemented: the window sidebar set for a closed side while its plugin has focus, plugin relationship information (required plugins, section count, settings count, install count, maker), the launcher folder open and git import behavior, settings folding above 20 plugins, catalog paging above hundreds of entries, the card notice source API, and the shortcut conflicts of ⌘B, ⌥⌘B, ⌘J and ⇧⌘J.
   - [o] F1217-18-4 — The title of a missing plugin names the id alone when the plugin name is the id, so `files(files)` is not shown. Input: a window sidebar whose set names a plugin with no other name. Behavior: the title repeated the id as `name(id)`. Expected: the title is the id alone when the name is the id, and `name(id)` otherwise (docs/spec/plugins.md#missing-plugins). Verified by the missing-plugin tests of mygo, whose expected titles changed from `gone(gone)` to `gone` in the same change (Red: the titles still repeat the id; Green: the title names the id once).
 - [o] F1221 — P1: The test-link check follows the settings tab, the project home, the notice path and the split surface view path tests: each entry names a current test, and an entry of a behavior that F1217-1 or F1217-10 removed closes with a removal follow-up.
 - [o] F1222 — P1: Every default and discarded error in packages/workbench states its reason or is an explicit error, as scripts/check-fallbacks.mjs requires; the check runs in the local gate.

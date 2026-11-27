@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
+- F1217-18: 디자인 참조와 주 창의 차이를 요소별로 기록한다.
 - F959-4: layout runner가 재시도 없이 이벤트로 준비 상태를 기다린다. endpoint 파일과 host.windows의 ready 창을 기다린다.
 - F1217-18-4: 창 사이드바의 빠진 플러그인 제목에 플러그인 id가 한 번만 나온다.
 - F1236-3: 추적되는 Go 소스가 gofmt 기준을 지킨다. packages/workbench-mygo의 errors_screen.go와 sidebar_missing_notice_test.go를 서식에 맞췄다.

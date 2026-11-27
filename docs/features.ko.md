@@ -114,6 +114,31 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [ ] F1217-18 — P1: web과 mygo 작업 화면의 주 창과 탭이 참조 디자인과 맞고, 각 사이드바 머리가 카드 머리와 같은 높이다. 저장소 밖에 있는 주 창의 참조 디자인(handoff와 설정 시안)의 확인을 기다린다. 확인 뒤에 차이 표를 기록한다.
   - [o] F1217-18-1 — 창 사이드바의 머리는 카드 머리와 같은 높이이며, web과 mygo에서 카드 머리의 여백과 간격을 쓴다. Input: set이 있는 창 사이드바. Behavior: web의 머리 줄은 여백과 간격이 8px이고, mygo는 머리 띠를 상태줄 높이(foot-h, 22px)로 그렸다. 카드 머리는 head-h(32px)이며 card-head-pad와 card-head-gap(4px)을 쓴다. Expected: 두 host 모두 머리를 head-h로 그리고 카드 머리의 여백과 간격을 쓰며, set은 사이드바 위에서 head-h만큼 내려와 시작한다. Red: web 테스트 `the window sidebar head takes the padding and the gap of the card header`가 머리 여백 검사에서 실패했다. `TestTheWindowSidebarHeadIsAsHighAsACardHeader`는 set이 22에서 시작해 32를 기대하며 실패했다. Green: 둘 다 통과한다. design_match_test.go와 sidebars_test.go의 기하 기대값은 머리에 foot-h 대신 head-h를 쓴다.
   - [o] F1217-18-2 — mygo 설정 탭이 앞에 있을 때도 제목 줄 마지막 요소로 벨을 그린다, 다른 화면과 같다. Input: mygo에서 설정 탭이 앞에 있는 상태. Behavior: mygo는 설정 탭이 앞에 있을 때 벨을 그리지 않았고 web은 그렸다. Expected: 설정 탭을 포함해 모든 화면에서 벨이 제목 줄의 마지막 요소다(notifications.md#bell). TestTheSettingsTabTitleBarShowsTheBell로 검증한다(Red: 벨 없음, Green: 벨 그림).
+  주 창의 차이 표(저장소 밖의 주 창 디자인 참조 대비). 크기는 packages/workbench/workbench.json의 선언된 chrome 값이다.
+
+  | 요소 | 참조 | web | mygo | 분류 | 결과 |
+  | --- | --- | --- | --- | --- | --- |
+  | 제목줄 도구, 작업 화면 | 사이드 토글 4개, 구분선, 설정, 벨 | title-tools.js | chrome.go `drawChromeActs` | 기존 규칙 | 일치 |
+  | 제목줄 도구, 설정 탭 앞 | 벨만 | title-tools.js | chrome.go | 결함: mygo에서 벨이 없음 | F1217-18-2로 고침 |
+  | 제목줄 도구, 프로젝트 홈 | 설정, 벨 | title-tools.js | chrome.go | 기존 규칙 | 일치 |
+  | 벨 위치 | 모든 화면에서 마지막 요소 | title-tools.js | chrome.go | 기존 규칙 | 일치 |
+  | 사이드바 머리 높이 | head-h, 32px, 카드 머리와 같음 | 사이드바 머리 줄 | foot-h 높이의 머리 띠, 22px | 결함 | F1217-18-1로 고침 |
+  | 사이드바 머리 여백과 간격 | card-head-pad와 card-head-gap, 4px | 8px | 4px | 결함(web) | F1217-18-1로 고침 |
+  | 사이드바 너비 범위 | 60–800 | 변경 없음 | 변경 없음 | 기존 규칙 | 유지 |
+  | 상태줄 높이 | statusbar-h, 24px | app.css `.statusbar` | statusbar.go | 기존 규칙 | 일치 |
+  | 작업 공간에서 꺼진 변의 창 사이드바 세트, 플러그인이 포커스인 동안 표시 | 제안 | 구현 안 함 | 구현 안 함 | 제안 | 구현 안 함 |
+  | 상태줄과 토스트 시간 | 상태줄의 성공·정보 6초, 토스트 4초 | notices.js `LINE_MS` 6000, `TOAST_MS` 4000 | notice_store.go, errors_screen.go | 기존 규칙 | 일치 |
+  | 토스트 모양과 쌓임 | 카드(3개와 "+n개 더"), 한 줄(하나, 빨간 수), 덱 | notice-view.js 187–202행 | errors_screen.go `style == "deck"` | 기존 규칙 | 일치 |
+  | 합친 토스트 제목 | 제목 ×n | notices.js 132행 | errors_screen.go 341행 | 기존 규칙 | 일치 |
+  | 조용히 모드 | 오류만 토스트로 | notices.js 95행, notice-view.js 236행 | notice_center_draw.go, notice_store.go | 기존 규칙 | 일치 |
+  | 토스트와 알림 센터 역할 | 오류는 alert, 나머지는 status | notice-view.js 95행, 131행 | errors_screen.go | 기존 규칙 | web 일치, mygo는 DOM 수준에서 측정하지 않음 |
+  | 알림 센터 모양과 쌓임 | 팝오버 또는 서랍 | notice-view.js | notice_center_draw.go | F1239-1 소관 | 이 표에서 측정하지 않음 |
+  | 런처 검색칸과 안내 | 자리 표시 문구, ⌘O 표시, 안내 줄 | home.js 59행(`home__search-key`), 63행 | home_page.go 57, 72, 303행 | 기존 규칙 | 일치 |
+  | 런처 버튼 | 새 프로젝트(primary), 폴더 열기, Git 저장소 가져오기 | home.js 242–248행 | home_page.go 89–91행 | 기존 규칙 | 일치 |
+  | 런처 묶음과 줄 | 고정, 최근; 열림, 스페이스 n, 상대 날짜가 있는 줄 | home.js 163, 172, 208–209행 | home_page.go 170–173, 232–290행 | 기존 규칙 | 일치 |
+  | 제목줄 설정 아이콘 크기 | F1239-2 소관 | 이 표에서 측정하지 않음 | 이 표에서 측정하지 않음 | F1239-2 소관 | 이 표에서 측정하지 않음 |
+
+  디자인 참조 10장의 제안 항목은 구현하지 않았다: 닫힌 변에 대한 창 사이드바 세트를 플러그인 포커스 동안 보이기, 플러그인 관계 정보(필요한 플러그인, 섹션 수, 설정 수, 설치 수, 만든 이), 런처의 폴더 열기와 git 가져오기 동작, 플러그인 20개를 넘을 때 설정 접기, 수백 개를 넘을 때 카탈로그 페이지 나누기, 카드 알림 출처 API, ⌘B·⌥⌘B·⌘J·⇧⌘J 단축키 충돌.
   - [o] F1217-18-4 — 이름이 id와 같은 플러그인의 빠진 플러그인 제목은 id만 쓴다, 그래서 `files(files)`를 보이지 않는다. Input: 세트가 이름 말고는 없는 플러그인을 가리키는 창 사이드바. Behavior: 제목이 id를 `이름(id)`로 되풀이했다. Expected: 이름이 id와 같으면 제목은 id만이고, 아니면 `이름(id)`다(docs/spec/plugins.md#missing-plugins). 빠진 플러그인의 mygo 테스트로 검증한다. 기대 제목을 `gone(gone)`에서 `gone`으로 같은 변경에서 바꿨다(Red: 제목이 여전히 id를 되풀이함, Green: 제목에 id가 한 번만 나옴).
 - [o] F1221 — P1: test-link 검사가 settings tab, project home, notice 경로, 나뉜 surface view path test를 따른다: 각 항목은 현재 test를 가리키고, F1217-1이나 F1217-10이 없앤 동작의 항목은 removal follow-up으로 닫는다.
 - [o] F1222 — P1: packages/workbench의 모든 기본값과 버린 오류는 scripts/check-fallbacks.mjs가 요구하는 대로 이유를 밝히거나 명시적 오류가 된다; 이 검사는 local gate에서 돈다.
