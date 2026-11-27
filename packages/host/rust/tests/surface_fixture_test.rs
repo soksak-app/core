@@ -180,7 +180,8 @@ fn wait_for_drawing_state(
 
 /// Shows the probe surface with its region in a real window. Then its page mounts again after a failed mount: the document begins a new
 /// generation of the surface, and the layout that follows keeps the surface shown, so it changes no visibility. The region of the new
-/// supplier must still receive the drawing state of the shown surface, without a window change or a click.
+/// supplier must still receive the drawing state of the shown surface, without a window change or a click. Last, the tab is hidden, its
+/// view restarts while hidden, and the layout that selects it again sends the drawing state of the region.
 fn a_shown_surface_sends_the_drawing_state_of_its_region() -> Result<(), String> {
     use soksak_host::framework::{Manager, Window};
     use soksak_host::sidecars::WindowSidecars;
@@ -256,6 +257,12 @@ fn a_shown_surface_sends_the_drawing_state_of_its_region() -> Result<(), String>
             records.images.begin_generation(SURFACE);
             surfaces::sync(&window, layout_request(true)?)?;
             wait_for_drawing_state(config.path(), before, "the mounted page and the layout after it")?;
+            // The tab is hidden, its view restarts while it is hidden, and the layout selects the tab again.
+            let before = count_drawing_states(&surface_fixture::installed_echo_requests_so_far(config.path())?);
+            surfaces::sync(&window, layout_request(false)?)?;
+            records.images.begin_generation(SURFACE);
+            surfaces::sync(&window, layout_request(true)?)?;
+            wait_for_drawing_state(config.path(), before, "selecting the hidden tab after its restart")?;
             Ok(())
         })();
         // The echo sidecar ends with its record, so its requests file is complete when the test reads it.

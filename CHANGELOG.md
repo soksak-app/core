@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F999-4: A hidden tab selected after its view restarts is tested to send the drawing state of its region without input.
 - F1217-16: The footprint goal of the settings tab in the S15 state is named G3-S15-settings-tab-footprint.
 - F1217-11-3: A toast has the role alert when it is an error and status otherwise, and a success or info card notice shows on its status line for six seconds.
 - F1222: The exposed settings tab state and the card footer state their defaults for the fallback check.

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F999-4: 숨겨진 탭이 재시작 뒤 선택되면 입력 없이 region의 그리기 상태를 보내는 동작을 Go와 Rust 테스트로 고정했습니다.
 - F1217-16: S15 상태의 설정 탭 footprint 목표는 G3-S15-settings-tab-footprint로 부른다.
 - F1217-11-3: toast는 error이면 role alert, 그 밖이면 role status를 가지며, 카드의 success 또는 info 알림은 상태 줄에 6초 동안 보입니다.
 - F1222: 노출된 설정 탭 상태와 카드 footer의 기본값을 폴백 검사용으로 명시한다.

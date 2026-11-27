@@ -811,6 +811,22 @@ func awaitDrawingThatDraws(service *sidecar) bool {
 	}
 }
 
+// A hidden tab whose view restarts while it is hidden begins a new generation of its surface, and the layout that selects the tab shows
+// the surface. The region of the restarted supplier must receive the drawing state of the selected tab without input.
+// contract: images.drawing.shown-surface
+func TestAHiddenTabSelectedAfterARestartSendsItsDrawingState(t *testing.T) {
+	s, service, req, surface := shownRegionScenario(t)
+	// The restart happens while the tab is hidden: the document of the view begins a generation (documents.go surfaceCommitted).
+	runOnMainThread(func() { s.images.BeginGeneration(surface) })
+	for len(service.outbox) > 0 {
+		<-service.outbox
+	}
+	applyShownLayout(t, s, req)
+	if !awaitDrawingThatDraws(service) {
+		t.Fatal("selecting the hidden tab after its restart sent its region no drawing state that draws")
+	}
+}
+
 // contract: images.drawing.shown-surface
 // A region that its page attached while its surface was hidden receives the drawing state of the surface when a layout shows the surface,
 // without a window change, so its supplier starts to draw (docs/spec/native-surfaces.md#image-regions).
