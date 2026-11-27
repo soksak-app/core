@@ -688,3 +688,17 @@ func TestARefusedChangeKeepsTheValueOfALaterPendingChange(t *testing.T) {
 		t.Fatalf("the refused later change left gap %v, not 10", store.Value("gap"))
 	}
 }
+
+// A stored first width outside the min–max range loads and is drawn as stored; a change refuses only the change that leaves the order false, and a
+// change that brings the width back into the range succeeds (docs/spec/settings.md#layout-values).
+func TestAStoredWidthOutsideTheRangeLoadsAndTheFixChangeSucceeds(t *testing.T) {
+	var writes []saved
+	store := settingsStore(t, &writes)
+	stored := map[string]any{"sidebarMinWidth": float64(300), "sidebarMaxWidth": float64(500), "sidebarWidth": float64(200)}
+	if err := store.Begin(stored, nil, ""); err != nil {
+		t.Fatalf("the stored width outside the range is refused at load: %v", err)
+	}
+	if err := store.Change("sidebarWidth", float64(300), "common"); err != nil {
+		t.Fatalf("the change that brings the width into the range is refused: %v", err)
+	}
+}

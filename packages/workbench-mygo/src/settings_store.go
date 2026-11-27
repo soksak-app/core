@@ -706,6 +706,12 @@ func (s *SettingsStore) check(values map[string]any) error {
 	if err := checkSidebarReferences(sets, links, s.plugins, "settings"); err != nil {
 		return err
 	}
+	return nil
+}
+
+// checkWidths refuses a change that leaves the first width outside the range from the minimum to the maximum. A stored width outside the
+// range loads and is drawn as stored (docs/spec/settings.md#layout-values), so only a change is checked here.
+func checkWidths(values map[string]any) error {
 	// silent: validate checked the type of each value before this check runs.
 	least, _ := values["sidebarMinWidth"].(float64)
 	// silent: validate checked the type of each value before this check runs.
@@ -771,6 +777,9 @@ func (s *SettingsStore) Set(patch map[string]any, scope string) error {
 		return err
 	}
 	if err := s.check(s.effective(common, overrides)); err != nil {
+		return err
+	}
+	if err := checkWidths(s.effective(common, overrides)); err != nil {
 		return err
 	}
 	restore := s.restoreOf(project, patch)
