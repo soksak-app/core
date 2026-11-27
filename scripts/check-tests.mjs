@@ -17979,6 +17979,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1122",
+    implementation: [{ file: "scripts/test-app.mjs", symbol: "async function endServices(" }],
+    tests: [
+      { file: "scripts/test/test-app.test.mjs", id: "a run ends the persistent services of its applications before its process audit, and names a service that does not end" },
+      { file: "scripts/test/test-app.test.mjs", id: "a run ends a persistent service that stays after its folder is removed, by the SIGTERM that its service declares" },
+    ],
+    expected: "A run ends the persistent services of its applications before the remaining-processes step judges the processes, so a check that starts a service passes its audit.",
+    levels: ["unit"],
+  },
+  {
     id: "F1222-2",
     implementation: [
       { file: "packages/host/go/src/motion.go", symbol: "func ReduceMotionOf" },

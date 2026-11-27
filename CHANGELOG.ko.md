@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1122: feature link table이 services 단계를 증명하는 실행기 테스트 두 개를 적어, link table 점검이 F1122를 다룬다.
 - F1217-8: 변 단축키 cmd+b, opt+cmd+b, shift+cmd+j, cmd+j는 텍스트 입력에 포커스가 없을 때만 두 호스트에서 실행된다.
 - F1122: 실행기의 services 단계가 remaining processes 단계 전에 run의 persistent service를 끝내며, hidden-view-reload check가 남은 service 없이 통과한다.
 - F1222-2: scripts/check-tests.mjs의 테스트 주장이 Go, Rust, mygo 호스트의 동작 줄이기 테스트를 이름으로 들고 이 항목에 잇는다.

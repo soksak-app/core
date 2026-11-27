@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1122: The feature link table names the two runner tests that prove the services step, so the link table check covers F1122.
 - F1217-8: The side keys cmd+b, opt+cmd+b, shift+cmd+j and cmd+j run only while no text input has focus, in both hosts.
 - F1122: The services step of the runner ends the persistent services of a run before the remaining-processes step, and the hidden-view-reload check passes with no service left.
 - F1222-2: The test claims of scripts/check-tests.mjs name the reduced motion tests of the Go, Rust and mygo hosts and link them to the item.
