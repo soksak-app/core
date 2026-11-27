@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-11-7: The captures-cleared case records the toast update and the re-place of the debug view.
 - F1217-7: The window start issues the theme, the notice read and the ready report in one order in every run.
 - F1217-12-10: Escape closes the open notice center through core.notices.toggle.
 - F795-13: The test check links F795-13 to the notice store factory, the error display and the seven occurrence tests.
