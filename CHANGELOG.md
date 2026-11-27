@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: The import form shows each output line of git while the clone runs; the host sends each line as the event project-clone {line} to the window of the call.
+- F1252: The Go host item for the Rust surface and view theme tests records the TestMain store check count and waits on F1237.
 - F1244: The window check package ships an event catalog equal to docs/spec/events.json again.
 - F1237-2: The store close refuses a directory without a data store with an error that names it, and keys stores by canonical path.
 - F1240: The record states the cause of the client watch test timeout: the case value changed by the F1217 design work, not the watch code.

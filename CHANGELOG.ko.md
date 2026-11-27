@@ -6,6 +6,7 @@
 ## 2026-11-27
 
 +- F1217-7-2-3-1: 가져오기 폼이 복제 중 git의 출력 줄을 각각 보인다. 호스트는 각 줄을 호출을 보낸 창에 이벤트 project-clone {line}으로 보낸다.
+- F1252: Rust surface와 view theme 테스트의 Go 대응 항목을 기록한다. TestMain store 확인 개수를 적고 F1237을 기다린다.
 - F1244: window-check 패키지가 배포하는 event catalog를 docs/spec/events.json과 다시 같게 맞춘다.
 - F1237-2: 데이터 store가 없는 directory의 store close는 그 directory를 이름으로 든 오류로 거부하고, store는 정규 경로로 키를 둔다.
 - F1240: 클라이언트 watch test 시간 초과의 원인을 기록에 맞게 고쳤다. 원인은 watch 코드가 아니라 F1217 디자인 작업이 바꾼 case 값이다.
