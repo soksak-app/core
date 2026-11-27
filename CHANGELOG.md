@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1229: The notice center panel defect is recorded in the feature list as open until a capture shows the panel uncovered.
 - F1217-8: The side keys cmd+b, opt+cmd+b, shift+cmd+j and cmd+j run core.sidebar.toggle on the work screen, which shows or hides the left, right, top or bottom window sidebar; the shortcut reply case and the runtime.shortcuts.read test list the current rows.
 - F1228: The checklist keeps the lines of its parent and adds only the F1228 item.
 - F1228: The refusal of a positional window in describe, commands, exposures and mcp names the --window and --project options in Go and Rust.
