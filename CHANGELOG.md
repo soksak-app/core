@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1250-4: A declared settings page lowers its sections and items through the component set, and an unknown component refuses it by name.
 - F1245-3: Name the reason of eight workbench defaults, quoting the spec line each follows, and make one absence default an explicit branch.
 - F1256: The copies of packages/workbench/workbench.json in the Go, Rust and mygo hosts equal their source again (#F1256).
 - F1217-17-3: The open breaks of the sidebar sets editor are recorded as F1217-17-3-1 to F1217-17-3-3, and the mygo set card moves to F1250.
