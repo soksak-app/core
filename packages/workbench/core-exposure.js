@@ -560,7 +560,7 @@ export function installErrorExposure() {
     if (!target) throw new RangeError(`card ${card} does not exist`);
     const tab = activeTab(target);
     if (!tab) throw new RangeError(`card ${card} has no tab`);
-    return notificationStore().showTab(checkNotice(fields), { card, tab: tab.id, plugin: tab.plugin });
+    return notificationStore().showTab(checkNotice(fields), { card, tab: tab.id, plugin: tab.plugin, label: tab.title });
   }));
   // The store refuses an id that is not a progress notice with a plain Error, so the command checks it first and refuses it as -32602.
   const progressNotice = (id) => {

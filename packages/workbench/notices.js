@@ -225,10 +225,10 @@ export function createNotices({ settings, view, log, onChange = () => {}, now = 
     show: occur,
 
     /** Shows a notice of a tab, checked with the notice rule of the plugin api, and returns its id. */
-    showTab(fields, { card, tab, plugin }, origin = null) {
+    showTab(fields, { card, tab, plugin, label }, origin = null) {
       const checked = checkNotice(fields);
       const action = checked.action ? [checked.action] : [];
-      return occur({ kind: checked.kind, title: checked.title, text: checked.text, source: { kind: "card", card, tab, plugin }, actions: action,
+      return occur({ kind: checked.kind, title: checked.title, text: checked.text, source: { kind: "card", card, tab, plugin, label }, actions: action,
         progress: checked.kind === "progress" ? null : undefined, origin });
     },
 

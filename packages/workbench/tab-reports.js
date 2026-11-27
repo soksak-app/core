@@ -145,7 +145,10 @@ export function setVisibleTab(probe) {
  * A notice with system true is also kept for an operating system notification while its tab is not visible.
  */
 export function reportNotice(tabId, fields, plugin) {
-  const id = noticeStore.showTab(fields, { card: cardOfTab(tabId), tab: tabId, plugin });
+  // The label is the title of the tab when the plane knows it, else the card id (docs/spec/notifications.md#notice-center).
+  const card = cardOfTab(tabId);
+  const label = noticeTargetOfTab(tabId)?.label ?? card;
+  const id = noticeStore.showTab(fields, { card, tab: tabId, plugin, label });
   // A later notice of the tab, system or not, replaces the kept system notice of the tab (docs/spec/plugins.md#tab-reports).
   if (fields.system === true) keepSystemNotice(tabId, fields);
   else if (systemNotices.delete(tabId)) notify();

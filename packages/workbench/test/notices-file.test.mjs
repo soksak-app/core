@@ -24,9 +24,11 @@ const entry = (over) => ({
 
 test("a document of the current format yields its entries; null is a missing file; another format is refused by name", () => {
   assert.deepEqual(checkNoticesDocument(null), []);
-  assert.deepEqual(checkNoticesDocument({ format: 1, notices: [entry({})] }).map((e) => e.id), ["notice-1"]);
-  assert.throws(() => checkNoticesDocument({ format: 2, notices: [] }), /notices\.json.*format 2.*expected format 1/);
-  assert.throws(() => checkNoticesDocument({ notices: [] }), /notices\.json.*format undefined/);
+  assert.deepEqual(checkNoticesDocument({ format: 2, notices: [entry({})] }).map((e) => e.id), ["notice-1"]);
+  assert.throws(() => checkNoticesDocument({ format: 1, notices: [] }), /notices\.json holds no notices of format 2/);
+  assert.throws(() => checkNoticesDocument({ notices: [] }), /notices\.json holds no notices of format 2/);
+  assert.throws(() => checkNoticesDocument({ format: 2, notices: [entry({ source: { kind: "card", card: "c", tab: "t" } })] }),
+    /notice-1 is a card notice without its tab label/);
 });
 
 test("open restores the stored entries, drops the expired ones and writes the list after a change", async () => {
@@ -35,7 +37,7 @@ test("open restores the stored entries, drops the expired ones and writes the li
   const written = [];
   const host = {
     notices: async () => ({
-      format: 1,
+      format: 2,
       notices: [
         entry({ id: "notice-7", kind: "info", title: "week-old", at: new Date(Date.now() - 8 * DAY).toISOString() }),
         entry({ id: "notice-8", kind: "error", title: "kept", at: new Date(Date.now() - 30 * DAY).toISOString() }),
@@ -58,7 +60,7 @@ test("a tab report that changes no notice writes nothing after open", async () =
   store.clearAll();
   const written = [];
   const host = {
-    notices: async () => ({ format: 1, notices: [entry({ id: "notice-3", title: "stored" })] }),
+    notices: async () => ({ format: 2, notices: [entry({ id: "notice-3", title: "stored" })] }),
     noticesPut: async (notices) => { written.push(notices); return 1; },
   };
   stops.push(await openNotices({ host, failed: () => assert.fail("no failure expected") }));

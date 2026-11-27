@@ -278,7 +278,7 @@ export function mountNoticeView(document, store) {
   }
 
   const sourceChip = (source) => {
-    if (source.kind === "card") return source.card;
+    if (source.kind === "card") return source.label;
     if (source.kind === "plugin") return source.plugin;
     if (source.kind === "settings") return "설정";
     return "soksak";

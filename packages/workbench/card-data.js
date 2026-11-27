@@ -5,11 +5,11 @@
 // default: the fixed left and right sidebar cards have null data, so they have no surface tab.
 export const tabsOf = (card) => card?.data?.tabs ?? [];
 export const activeTab = (card) => tabsOf(card).find((t) => t.id === card.data.activeId);
-/** The notice target {card, tab, plugin} of a tab id among the cards, or null when no card holds the tab (docs/spec/notifications.md#card-status-line). */
+/** The notice target {card, tab, plugin, label} of a tab id among the cards, or null when no card holds the tab; the label is the title of the tab's layout entry (docs/spec/notifications.md#card-status-line). */
 export function noticeTargetIn(cards, tabId) {
   const card = cards.find((c) => tabsOf(c).some((t) => t.id === tabId));
   const tab = card ? tabsOf(card).find((t) => t.id === tabId) : undefined;
-  return tab ? { card: card.id, tab: tab.id, plugin: tab.plugin } : null;
+  return tab ? { card: card.id, tab: tab.id, plugin: tab.plugin, label: tab.title } : null;
 }
 // default: a card that was never resized shows its text at the factor 1.
 export const cardTextSize = (card) => card?.data?.textSize ?? 1;

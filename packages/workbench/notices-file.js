@@ -1,5 +1,5 @@
 // The notice center file notices.json of the application configuration directory, read through the notices kind of the workspace bridge
-// (docs/spec/notifications.md#notice-center, docs/spec/native-host.md#project-and-settings-operations). The file holds {format: 1, notices}.
+// (docs/spec/notifications.md#notice-center, docs/spec/native-host.md#project-and-settings-operations). The file holds {format: 2, notices}.
 import { notificationStore, onTabReports } from "./tab-reports.js";
 
 export const NOTICES_FILE = "notices.json";
@@ -13,18 +13,22 @@ export function endNoticesWriter() {
   stopWriter = null;
   stop?.();
 }
-const FORMAT = 1;
+const FORMAT = 2;
 const ENTRY_KEYS = ["id", "kind", "title", "text", "source", "actions", "at", "count", "read"];
 
 /** Returns the entries of a stored document, [] for a missing file; refuses a document of another format with the name of the file. */
 export function checkNoticesDocument(document) {
   if (document === null || document === undefined) return [];
   if (typeof document !== "object" || document.format !== FORMAT || !Array.isArray(document.notices)) {
-    throw new Error(`${NOTICES_FILE} has format ${document?.format}, expected format ${FORMAT}`);
+    throw new Error(`${NOTICES_FILE} holds no notices of format ${FORMAT}: ${JSON.stringify(document)}`);
   }
   for (const entry of document.notices) {
     const missing = ENTRY_KEYS.find((key) => !(key in entry));
     if (missing !== undefined) throw new Error(`${NOTICES_FILE} holds an entry without ${missing}`);
+    // A card entry keeps the title of its tab as the label, which the source chip shows (docs/spec/notifications.md#notice-center).
+    if (entry.source?.kind === "card" && !(typeof entry.source.label === "string" && entry.source.label !== "")) {
+      throw new Error(`${NOTICES_FILE}: notice ${entry.id} is a card notice without its tab label`);
+    }
   }
   return document.notices;
 }
