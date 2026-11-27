@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F999: 재시작 뒤 view가 입력 없이 현재 frame을 그리는지 e2e restart-view-draw.test.mjs가 세 application에서 확인한다.
 - F1226: quit은 연결에 응답한 process의 종료를 기다리고, 실패한 quit은 process.lock이 가리키는 교체 process를 따라가며, run은 process 점검 전에 persistent service를 제거한다.
 - F1229: 알림 센터 패널 결함을 기능 목록에 열린 항목으로 기록한다. 패널이 가려지지 않은 캡처가 기록될 때까지 열려 있다.
 - F1217-8: 변 단축키 cmd+b, opt+cmd+b, shift+cmd+j, cmd+j가 작업 화면에서 core.sidebar.toggle을 실행해 왼쪽, 오른쪽, 위, 아래 창 사이드바를 보이거나 숨기며, 단축키 응답 case와 runtime.shortcuts.read 테스트가 현재 행을 적는다.
