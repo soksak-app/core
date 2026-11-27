@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- Removed the duplicate transcript case: transcript-order records the same transcript call shape.
 - F1224, F1225, F1217-11: The checklist records the term, schema and toast items as complete.
 - Removed the duplicate exposure trace case: exposure-registry-dropped-trace plays the same record.
 - F1222: The feature links of F1222 to F1224 name their implementation and tests, and the glyph test of the notice center is claimed by the test inventory.
