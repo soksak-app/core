@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -165,7 +166,7 @@ func (s *Shell) drawNoticeEntry(c *ui.Context, toast *errorToast) {
 	entry := s.binder.PressAll(c, "core.notices.entry", toast.id, steps...)
 	color := s.noticeKindColor(toast.kind)
 	entry.FillWidth().Row().AlignItems(ui.Start).Gap(m.toastGap).Padding(m.noticeEntryPad, m.noticeEntryPad, m.noticeEntryPad, m.noticeEntryPad).Children(func() {
-		ui.Icon(c, s.noticeGlyph(toast.kind)).Size(m.noticeGlyph, m.noticeGlyph).Shrink(0).TextColor(color)
+		s.noticeIcon(c, toast.kind, m.noticeGlyph, color)
 		ui.Column(c).FillWidth().Gap(m.toastGap).Children(func() {
 			ui.Text(c, displayTitle(toast)).Wrap().TextColor(s.palette.Fg).Label(displayTitle(toast))
 			if toast.text != "" {
@@ -264,6 +265,20 @@ func (s *Shell) noticeGlyph(kind string) *ui.SVG {
 	return s.declaredIcon("0 0 24 24", paint, s.options.Declared.Icons[name])
 }
 
+// noticeTurns reports whether the icon of a notice kind turns: only the progress ring turns, and only while the desktop allows motion.
+func noticeTurns(kind string, reduceMotion bool) bool {
+	return kind == "progress" && !reduceMotion
+}
+
+// noticeIcon draws the icon of a notice kind at size. A progress ring turns with the frames of its window, which the Loop of the element
+// keeps coming while the ring is drawn, so a ring that is not drawn does not turn; the period is the time of one turn, not a frame time.
+func (s *Shell) noticeIcon(c *ui.Context, kind string, size float32, color ui.Color) {
+	icon := ui.Icon(c, s.noticeGlyph(kind)).Size(size, size).Shrink(0).TextColor(color)
+	if noticeTurns(kind, c.Preferences().ReduceMotion) {
+		icon.Rotate(icon.Loop("notice-ring", time.Second, ui.Linear) * 360)
+	}
+}
+
 // noticeKindColor is the color of a kind's icon: the error token for an error, the accent for info and progress.
 func (s *Shell) noticeKindColor(kind string) ui.Color {
 	switch kind {
@@ -296,7 +311,7 @@ func (s *Shell) drawCardNotice(c *ui.Context, card string, data *layout.CardData
 		line.Background(faded(color, m.noticeToneMix))
 	}
 	line.Children(func() {
-		ui.Icon(c, s.noticeGlyph(toast.kind)).Size(m.noticeGlyph, m.noticeGlyph).Shrink(0).TextColor(color)
+		s.noticeIcon(c, toast.kind, m.noticeGlyph, color)
 		ui.Text(c, title).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(s.palette.Fg)
 		if len(toast.actions) > 0 && s.binder.Declares(toast.actions[0].Command) {
 			action := toast.actions[0]
