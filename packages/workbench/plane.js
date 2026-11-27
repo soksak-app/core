@@ -19,7 +19,7 @@ import { bindSidebarGrip } from "./sidebar-grip.js";
 import { targetCardInsets } from "./card-insets.js";
 import { CARD_TOOL_MENUS, createCardTools, updateCardTools } from "./card-tools.js";
 import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resolveSidebarSet, setSidebar, sideName, sizeSidebar, spaceFoldText, toggleSidebar } from "./card-sidebars.js";
-import { arrangeWindowSidebars, SIDE_NAMES, FOLD_ICONS, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowOrientation, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
+import { arrangeWindowSidebars, SIDE_NAMES, FOLD_ICONS, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowOrientation, windowSidebar, windowSidebarCards, windowStatusText } from "./window-sidebars.js";
 import { environment, pluginUnits, unmetPlugins } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
 import { cardNumber, memberId, readGroupTree, targetIds } from "./group-tree.js";
@@ -286,7 +286,7 @@ function createCard(card) {
   el.className = "card";
   el.dataset.expose = "core.card";
   el.innerHTML = isPlace(card.id)
-    ? '<header class="chrome sidebar-head" data-expose="core.sidebar.head"></header><div class="set"></div>'
+    ? '<header class="chrome sidebar-head" data-expose="core.sidebar.head"></header><div class="set"></div><footer class="sidebar-status" data-expose="core.sidebar.status"></footer>'
     : '<header class="chrome" data-expose="core.card.header"></header><div class="slot"></div><footer class="status" data-expose="core.card.status"></footer>';
   // It reads data-card-id of the element and does not capture the card object in a closure. Switching the space creates new
   // card objects with the same ids, so a captured reference is an object that no longer exists.
@@ -340,16 +340,19 @@ function updateCard(el, card, rect) {
     el.dataset.place = place;
     const set = standingSet(place);
     const holder = el.querySelector(".set");
+    // The status line of the window sidebar ends it, and it names the side (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+    const footer = el.querySelector(":scope > .sidebar-status");
+    footer.dataset.side = side;
     if (set) {
       // A plugin override uses the active surface of the focused card.
       const owner = kind === null ? { card: null, surface: null }
         // default: an empty focused card has no active surface (null).
         : { card: focusedId, surface: activeTab(grid.card(focusedId))?.id ?? null };
       // The content of an ordinary sidebar has no card-surface link and no rail.
-      drawSet(holder, card.id, set, { ...owner, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side });
+      drawSet(holder, card.id, set, { ...owner, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side, statusText: windowStatusText(side, kind) }, footer);
     } else {
       // The place shows no set; it draws its status line, and core.sidebars reports it with a null set.
-      drawSet(holder, card.id, null, { card: null, surface: null, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side });
+      drawSet(holder, card.id, null, { card: null, surface: null, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side, statusText: windowStatusText(side, kind) }, footer);
     }
     // The head row shows the position of the side in sidebarOrder counted from 1, the name and the layout badge of its set, and the ×
     // that turns the sidebar off (docs/spec/external-sidebars.md#sidebar-head-and-edge).
@@ -1387,13 +1390,12 @@ function drawCardSidebars(el, card, rect) {
     const handle = body.querySelector(".card-sidebar__grip");
     mark(handle, "core.card.sidebar.size", { card: card.id, side });
     const name = sideName(side);
-    setText(body.querySelector(".card-sidebar__status"), `${name} 사이드바 · ${set.title}`);
     handle.title = state.autoCollapsed ? `공간 부족으로 ${name} 사이드바 자동 접힘` : state.collapsed ? `눌러 ${name} 사이드바 펼치기` : `끌어 크기 바꾸기 · 눌러 ${name} 사이드바 접기`;
     el.dataset[`sidebar${side[0].toUpperCase()}${side.slice(1)}`] = state.collapsed ? "folded" : "open";
     el.style.setProperty(`--p${side[0]}`, state.collapsed ? "var(--divider)" : `${deviceGridSize(state.shownSize, gridScale())}px`);
     // default: a sidebar section of a card with no tabs has no surface context (null) — it is the same context as the left window sidebar.
     const surface = activeTab(card) === null || activeTab(card) === undefined ? null : activeTab(card).id;
-    drawSet(body.querySelector(".set"), `${card.id}:${side}`, set, { card: card.id, surface, space: heldSpace, orientation: side === "top" || side === "bottom" ? "horizontal" : "vertical" });
+    drawSet(body.querySelector(".set"), `${card.id}:${side}`, set, { card: card.id, surface, space: heldSpace, orientation: side === "top" || side === "bottom" ? "horizontal" : "vertical", statusText: `${name} 사이드바 · ${set.title}` }, body.querySelector(".card-sidebar__status"));
   }
   return spaceFoldText(presentation);
 }

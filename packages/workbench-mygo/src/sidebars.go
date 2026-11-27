@@ -520,6 +520,9 @@ func (s *Sidebars) Hide(c *ui.Context, frame SidebarFrame) {
 func (s *Sidebars) drawnMetrics() SidebarMetrics {
 	metrics := s.metrics
 	metrics.BorderWidth, metrics.StatusText = s.options.Look()
+	if s.options.Warn != nil {
+		metrics.Warn = s.options.Warn()
+	}
 	return metrics
 }
 
@@ -583,6 +586,7 @@ func (s *Sidebars) fill(frame *SidebarFrame, set *SidebarSet) {
 		}
 		frame.Sections = append(frame.Sections, drawn)
 	}
+	frame.Warning = newestWarning(MissingLines(*frame, s.options.Plugin))
 	if set.Layout != "tabs" {
 		return
 	}
@@ -599,17 +603,8 @@ func (s *Sidebars) fill(frame *SidebarFrame, set *SidebarSet) {
 	}
 }
 
-// Draw draws the frame at box, in window coordinates. The line of each missing plugin stands above the sections, one header height each.
+// Draw draws the frame at box, in window coordinates. The warning of a missing plugin stands in the status line of the sidebar (fill).
 func (s *Sidebars) Draw(c *ui.Context, frame SidebarFrame, box layout.Rect) {
-	if lines := MissingLines(frame, s.options.Plugin); len(lines) > 0 {
-		top := float64(s.metrics.HeadH) * float64(len(lines))
-		ui.Column(c).Size(float32(box.W), float32(top)).Children(func() {
-			for _, line := range lines {
-				s.drawMissingLine(c, line, float32(box.W))
-			}
-		})
-		box = layout.Rect{X: box.X, Y: box.Y + top, W: box.W, H: max(0, box.H-top)}
-	}
 	// The status names the rect of the set, as the page reports the box of `.set`: the set stands inside the insets of the frame and
 	// below the head of a window sidebar or above its status line of a card sidebar (DrawSidebar).
 	inset := frame.SetInsets
@@ -852,7 +847,16 @@ type sidebarStatus struct {
 	Plugin      *string         `json:"plugin"`
 	Side        *string         `json:"side"`
 	Rect        sidebarRect     `json:"rect"`
+	Status      string          `json:"status"`
+	Warning     *warningStatus  `json:"warning"`
 	Sections    []sectionStatus `json:"sections"`
+}
+
+// warningStatus is the warning of a status line in core.sidebars: the plugin, its text and the count of the other missing plugins.
+type warningStatus struct {
+	Plugin string `json:"plugin"`
+	Text   string `json:"text"`
+	Others int    `json:"others"`
 }
 
 // nullable is nil for the empty text.
@@ -887,9 +891,14 @@ func (s *Sidebars) status() []sidebarStatus {
 		if frame.Side == "" {
 			placement, plugin = "card", nil // The context of a card sidebar has no plugin and no side of a window sidebar.
 		}
+		status, warning := frame.Status, (*warningStatus)(nil)
+		if frame.Warning != nil {
+			status = frame.Warning.Shown()
+			warning = &warningStatus{Plugin: frame.Warning.Line.Plugin, Text: frame.Warning.Line.Text, Others: frame.Warning.Others}
+		}
 		sidebars = append(sidebars, sidebarStatus{Sidebar: frame.Sidebar, Set: drawn.set, Layout: nullable(frame.Layout), Orientation: frame.Orientation,
 			Tab: nullable(frame.Tab), Card: nullable(drawn.owner.Card), Surface: surface, Placement: placement, Plugin: plugin,
-			Side: nullable(frame.Side), Rect: sidebarRect{drawn.rect.X, drawn.rect.Y, drawn.rect.W, drawn.rect.H}, Sections: sections})
+			Side: nullable(frame.Side), Rect: sidebarRect{drawn.rect.X, drawn.rect.Y, drawn.rect.W, drawn.rect.H}, Status: status, Warning: warning, Sections: sections})
 	}
 	return sidebars
 }

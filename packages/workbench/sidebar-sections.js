@@ -6,7 +6,7 @@
 import { bind, mark, run } from "./commands.js";
 import { clearSlotSurface, setSlotSurface } from "./compositor.js";
 import { icon } from "./icons.js";
-import { missingGroups, missingLineNode, pluginRowsNow } from "./missing-plugins.js";
+import { missingGroups, pluginRowsNow, shownWarningText, warningNode, warningOf } from "./missing-plugins.js";
 import { hasSection, section } from "./registry.js";
 import { hideSectionSurface, showSectionSurface, sectionSurfaceId } from "./section-surfaces.js";
 import { mountSurface } from "./surface-modules.js";
@@ -15,6 +15,8 @@ import { mountSurface } from "./surface-modules.js";
 const choices = new Map();
 /* For each drawn set element, its sidebar, set and section items. */
 const drawn = new Map();
+// The status line of each window sidebar container: its shown text and its warning, which core.sidebars reports.
+const statuses = new WeakMap();
 const listeners = new Set();
 
 const notify = () => { for (const fn of listeners) fn(); };
@@ -286,12 +288,13 @@ function bindSectionDivider(divider, record, above, below) {
  * Draws the set set of sidebar sidebar in container. context is {card, surface, orientation, window, plugin, side} of the sidebar.
  * If the set, layout, section list and context are the same, the elements and mounts are kept.
  */
-export function drawSet(container, sidebar, set, context) {
+export function drawSet(container, sidebar, set, context, footer = null) {
   if (context.orientation !== "horizontal" && context.orientation !== "vertical") throw new Error("section orientation must be horizontal or vertical");
   const { space } = context;
   if (typeof space !== "string" || !space) throw new Error(`sidebar ${sidebar} draws sections without the space of its layout`);
   // A fixed sidebar place without a set draws no sections, and core.sidebars reports it with a null set and its rectangle
   // (docs/spec/external-sidebars.md#override-context-and-rail-border). Its container names no element, as it holds none.
+  if (footer !== null) paintStatus(container, footer, sidebarStatusOf(context, set === null ? [] : missingGroups(set.sections, pluginRowsNow())));
   if (set === null) {
     const record = drawn.get(container);
     if (record?.set === null && record.sidebar === sidebar) {
@@ -331,10 +334,6 @@ export function drawSet(container, sidebar, set, context) {
     delete container.dataset.html;
     // There is no set title line. The sections start at the top of the sidebar.
     container.replaceChildren();
-    for (const group of missing) {
-      const line = missingLineNode(document, group);
-      if (line !== null) container.append(line);
-    }
     let strip = null;
     if (set.layout === "tabs") {
       strip = document.createElement("div");
@@ -517,6 +516,33 @@ export function restoreSidebarChoices(saved) {
 }
 
 /** Drawn sidebars in document order. The value of core.sidebars. */
+/**
+ * The status of a sidebar: its shown text and its warning. The text without a warning is context.statusText, which the caller gives
+ * from the side and the set (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+ */
+function sidebarStatusOf(context, groups) {
+  if (typeof context.statusText !== "string" || !context.statusText) throw new Error("a sidebar status line needs its text");
+  const warning = warningOf(groups);
+  return { text: warning === null ? context.statusText : shownWarningText(warning), warning };
+}
+
+/** The warning as core.sidebars reports it: the plugin, its text and the count of the other missing plugins, without its button. */
+function reportedWarning(warning) {
+  return warning === null ? null : { plugin: warning.plugin, text: warning.text, others: warning.others };
+}
+
+/** Shows the status of a sidebar in its footer and keeps it for the report of core.sidebars. */
+function paintStatus(container, footer, status) {
+  statuses.set(container, status);
+  footer.replaceChildren();
+  footer.title = status.text;
+  if (status.warning === null) {
+    footer.textContent = status.text;
+    return;
+  }
+  footer.append(warningNode(document, status.warning, { dot: true }));
+}
+
 export function sidebarsState() {
   return [...document.querySelectorAll(".set[data-sidebar]")].map((container) => drawn.get(container)).filter((record) => record && !record.context.hidden)
     .map((record) => {
@@ -524,6 +550,9 @@ export function sidebarsState() {
       const choice = record.set === null ? null : choiceOf(record.sidebar);
       return {
         sidebar: record.sidebar, set: record.set, layout: record.layout, orientation: record.context.orientation,
+        // The shown status text and its warning; a sidebar without a footer reports both as null.
+        status: statuses.get(record.container)?.text ?? null,
+        warning: reportedWarning(statuses.get(record.container)?.warning ?? null),
         tab: record.layout === "tabs" ? choice.tab : null,
         card: record.context.card, surface: record.context.surface,
         placement: record.context.window ? "window" : "card",

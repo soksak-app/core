@@ -82,6 +82,8 @@ type SidebarMetrics struct {
 	// StatusGap and StatusPad are the gap and the side padding of a status line. BorderWidth and StatusText follow the settings of the
 	// window: the width of a line and the size of a caption.
 	StatusGap, StatusPad, BorderWidth, StatusText float32
+	// Warn is the color of a warning in a status line, which the host gives through its options.
+	Warn ui.Color
 	// FoldButton and FoldIcon are the sizes of the fold control of a status line and of its icon.
 	FoldButton float32
 	FoldIcon   float32
@@ -126,6 +128,8 @@ type SidebarFrame struct {
 	Tab string
 	// Missing lists the sections of the set whose plugin is not loaded, in set order (docs/spec/plugins.md#missing-plugins).
 	Missing []MissingSection
+	// Warning is the warning of the status line: the newest missing plugin of the set, or nil when no plugin has a line.
+	Warning *MissingWarning
 	// Order lists the section ids of the set in set order, the loaded and the missing ones, which the tabs keep.
 	Order []string
 	// Side is `left` or `right` for a window sidebar and empty for a card sidebar.
@@ -311,11 +315,11 @@ func sectionItem(frame SidebarFrame, section SidebarSection) string {
 	return frame.Sidebar + "/" + section.ID
 }
 
-// sidebarBands returns the height of the band above the set and of the band below it: a window sidebar has its head above the set, and a
-// card sidebar has its status line below it (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+// sidebarBands returns the height of the band above the set and of the band below it: a window sidebar has its head above the set and its
+// status line below it, and a card sidebar has its status line below it (docs/spec/external-sidebars.md#sidebar-head-and-edge).
 func sidebarBands(frame SidebarFrame, metrics SidebarMetrics) (top, bottom float32) {
 	if frame.Side != "" {
-		return metrics.FootH, 0
+		return metrics.FootH, metrics.FootH
 	}
 	return 0, metrics.FootH
 }
@@ -323,8 +327,8 @@ func sidebarBands(frame SidebarFrame, metrics SidebarMetrics) (top, bottom float
 // DrawSidebar draws the sidebar of the frame in a box of width and height. seat runs in the body of an open section, where the
 // native view of the section surface stands, and at the end for each section that is not visible.
 func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame SidebarFrame, metrics SidebarMetrics, width, height float32, seat seatDrawer) {
-	// A window sidebar has its head as the top row and no status line; a card sidebar has its status line as the bottom row
-	// (docs/spec/external-sidebars.md#sidebar-head-and-edge).
+	// A window sidebar has its head as the top row and its status line as the bottom row, and a card sidebar has its status line as the bottom
+	// row (docs/spec/external-sidebars.md#sidebar-head-and-edge).
 	window := frame.Side != ""
 	bandTop, bandBottom := sidebarBands(frame, metrics)
 	room := height - bandTop - bandBottom
@@ -368,9 +372,7 @@ func DrawSidebar(c *ui.Context, binder *Binder, drag *SectionDrag, frame Sidebar
 				drawVerticalList(c, binder, drag, frame, metrics, setWidth, setRoom, body)
 			}
 		})
-		if !window {
-			drawSidebarStatus(c, binder, frame, metrics)
-		}
+		drawSidebarStatus(c, binder, frame, metrics)
 	})
 	for _, place := range SidebarSeats(frame) {
 		if !place.Visible {
@@ -626,16 +628,25 @@ func drawSectionTab(c *ui.Context, binder *Binder, frame SidebarFrame, section S
 // statusName is the element name of the status line of the frame: that of a window sidebar or that of a card sidebar.
 func statusName(frame SidebarFrame) string {
 	if frame.Side != "" {
-		return "core.sidebar.head"
+		return "core.sidebar.status"
 	}
 	return "core.card.sidebar.status"
 }
 
-// drawSidebarStatus draws the status line at the bottom of a card sidebar, which describes the slot.
+// drawSidebarStatus draws the status line at the bottom of a sidebar. It shows the warning of the frame when it has one, and otherwise
+// the status text of the frame (docs/spec/external-sidebars.md#sidebar-head-and-edge).
 func drawSidebarStatus(c *ui.Context, binder *Binder, frame SidebarFrame, metrics SidebarMetrics) {
 	theme := c.Theme()
+	label := frame.Status
+	if frame.Warning != nil {
+		label = frame.Warning.Shown()
+	}
 	ui.Row(binder.Name(c, statusName(frame), frame.Sidebar)).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(metrics.StatusGap).PaddingX(metrics.StatusPad).
-		BorderWidth(metrics.BorderWidth, 0, 0, 0).BorderColor(theme.Border).Role(ui.RoleStatus).Label(frame.Status).Children(func() {
+		BorderWidth(metrics.BorderWidth, 0, 0, 0).BorderColor(theme.Border).Role(ui.RoleStatus).Label(label).Children(func() {
+		if frame.Warning != nil {
+			drawWarning(c, binder, *frame.Warning, metrics)
+			return
+		}
 		ui.Text(c, frame.Status).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).Grow(1).FontSize(metrics.StatusText).TextColor(theme.TextMuted)
 	})
 }

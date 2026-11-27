@@ -58,8 +58,8 @@ export function windowSidebarsPlaced(grid, order) {
 }
 
 /**
- * The cards that draw a head and a foot, which the drop band check measures. A window sidebar draws its head and its set and no
- * status line (docs/spec/external-sidebars.md#sidebar-head-and-edge), so the check does not read a foot from it.
+ * The cards that draw a head and a foot, which the drop band check measures. A window sidebar draws its head, its set and its status
+ * line of class sidebar-status (docs/spec/external-sidebars.md#sidebar-head-and-edge), which is not the foot of a card, so the check does not read a foot from it.
  */
 export function headedAndFootedCards(plane) {
   return [...plane.querySelectorAll(".card[data-card-id]")]

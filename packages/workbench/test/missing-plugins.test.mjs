@@ -54,7 +54,7 @@ function sidebar() {
   document.getElementById("plane").append(container);
   return container;
 }
-const context = { space: "spc-mmmmmm", orientation: "horizontal", window: true };
+const context = { space: "spc-mmmmmm", orientation: "horizontal", window: true, statusText: "왼쪽 창 사이드바" };
 
 test("a tab layout keeps the missing section in its set order as a dimmed, struck tab with no surface", () => {
   const container = sidebar();
@@ -64,14 +64,43 @@ test("a tab layout keeps the missing section in its set order as a dimmed, struc
   assert.equal(container.querySelectorAll('[data-section="gone.a"]').length, 0, "no section element is drawn for the missing section");
 });
 
-test("a sidebar shows one warning line for the missing plugin above its sections, with the state button", () => {
+test("a card sidebar's status line shows the warning of its missing plugin in place of its side and set", () => {
   const container = sidebar();
-  drawSet(container, "left", { id: "list", title: "List", layout: "list", sections: ["gone.a", "gone.b", "probe.tree"] }, context);
-  const lines = container.querySelectorAll('[data-expose="core.sidebar.missing"]');
+  const footer = document.createElement("footer");
+  drawSet(container, "card:left", { id: "list", title: "List", layout: "list", sections: ["gone.a", "probe.tree"] },
+    { space: "spc-mmmmmm", orientation: "vertical", card: "card", surface: null, statusText: "왼쪽 사이드바 · List" }, footer);
+  assert.equal(footer.querySelector(".missing-line__text").textContent, "gone(gone) 플러그인이 없어 섹션 1개를 못 보여 준다.");
+  assert.equal(footer.textContent.includes("왼쪽 사이드바"), false, "the warning replaces the side and set text");
+});
+
+test("a window sidebar shows its warning line in its status line, and no line above its sections", () => {
+  const container = sidebar();
+  const footer = document.createElement("footer");
+  footer.className = "sidebar-status";
+  document.getElementById("plane").append(footer);
+  drawSet(container, "left", { id: "list", title: "List", layout: "list", sections: ["gone.a", "gone.b", "probe.tree"] }, context, footer);
+  assert.equal(container.querySelectorAll('[data-expose="core.sidebar.missing"]').length, 0, "no warning line above the sections");
+  const lines = footer.querySelectorAll('[data-expose="core.sidebar.missing"]');
   assert.equal(lines.length, 1, "once however many of its sections the set holds");
   assert.equal(lines[0].dataset.plugin, "gone");
-  assert.equal(lines[0].textContent, "gone(gone) 플러그인이 없어 섹션 2개를 못 보여 준다.");
-  assert.ok(lines[0].compareDocumentPosition(container.querySelector('[data-section="probe.tree"]')) & 4, "the line precedes its sections");
+  assert.equal(lines[0].querySelector(".missing-line__text").textContent, "gone(gone) 플러그인이 없어 섹션 2개를 못 보여 준다.");
+  assert.equal(footer.title, "gone(gone) 플러그인이 없어 섹션 2개를 못 보여 준다.", "the tooltip holds the whole text");
+});
+
+test("the status line shows the newest missing plugin in set order, with the count of the other missing plugins", () => {
+  const container = sidebar();
+  const footer = document.createElement("footer");
+  drawSet(container, "left", { id: "two", title: "Two", layout: "list", sections: ["gone.a", "other.x", "probe.tree"] }, context, footer);
+  const text = footer.querySelector(".missing-line__text").textContent;
+  assert.equal(text, "other(other) 플러그인이 없어 섹션 1개를 못 보여 준다. +1개 더");
+});
+
+test("the status line of a window sidebar without a warning shows its side and its plugin", () => {
+  const container = sidebar();
+  const footer = document.createElement("footer");
+  drawSet(container, "left", { id: "ok", title: "Ok", layout: "list", sections: ["probe.tree"] }, { ...context, side: "left", plugin: "probe", statusText: "왼쪽 창 사이드바 · probe" }, footer);
+  assert.equal(footer.querySelector('[data-expose="core.sidebar.missing"]'), null);
+  assert.equal(footer.textContent, "왼쪽 창 사이드바 · probe");
 });
 
 test("missingLineNode draws the line element with the plugin, the warning tone and its button", () => {

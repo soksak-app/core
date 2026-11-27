@@ -5971,6 +5971,11 @@
         "many": true
       },
       {
+        "name": "core.sidebar.status",
+        "description": "The status line at the bottom of each fixed window sidebar of the sides left, right, top and bottom: the warning line of its newest missing plugin, or its side and plugin text; the item is the side.",
+        "many": true
+      },
+      {
         "name": "core.sidebar.head",
         "description": "The head row of each fixed window sidebar of the sides left, right, top and bottom: the position of its side in sidebarOrder, the name and layout badge of its set, and the × that turns the side off.",
         "many": true
@@ -6007,7 +6012,7 @@
       },
       {
         "name": "core.card.sidebar.status",
-        "description": "The status lines that end the open card sidebars in workbench order; each names its side and its set.",
+        "description": "The status lines that end the open card sidebars in workbench order; each names its side and its set, or shows the warning of a missing plugin of its set.",
         "many": true
       },
       {

@@ -284,9 +284,9 @@ func TestDrawingASidebarGivesEverySeatItsPlaceInTheWindow(t *testing.T) {
 	}
 	head, _ := declared.Metric("head-h")
 	foot, _ := declared.Metric("foot-h")
-	// The head row of the window sidebar stands above the set, and the set holds gone.section, whose plugin is not loaded, so the line of
-	// that plugin stands above the sections for one header height.
-	if tree.Box.Y != 20+foot+head+head {
+	// The head row of the window sidebar stands above the set, and the warning of gone.section, whose plugin is not loaded, stands in the
+	// status line at the bottom, so the first section starts below the head row alone.
+	if tree.Box.Y != 20+foot+head {
 		t.Fatalf("the seat of the tree starts at %v", tree.Box.Y)
 	}
 }

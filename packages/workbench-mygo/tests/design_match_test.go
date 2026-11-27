@@ -87,7 +87,7 @@ func TestADoubleClickRenameHasTheSharedInputBorderBoxHeight(t *testing.T) {
 	}
 }
 
-// The element of a sidebar holds its set: the set starts below the head row and ends above the bottom border of the card
+// The element of a sidebar holds its set: the set starts below the head row and ends above the status line at the bottom of the card
 // (docs/spec/external-sidebars.md#sidebar-head-and-edge).
 func TestTheSidebarElementStartsBelowItsHead(t *testing.T) {
 	f := sidebarShell(t)
@@ -95,8 +95,8 @@ func TestTheSidebarElementStartsBelowItsHead(t *testing.T) {
 	if top := card.Y + cardBorder + headRow(t); !designNear(side.Y, top) {
 		t.Fatalf("the sidebar starts at %v, want below the head at %v", side.Y, top)
 	}
-	if bottom := card.Y + card.H - cardBorder; !designNear(side.Y+side.H, bottom) {
-		t.Fatalf("the sidebar ends at %v, want the bottom border at %v", side.Y+side.H, bottom)
+	if bottom := card.Y + card.H - cardBorder - headRow(t); !designNear(side.Y+side.H, bottom) {
+		t.Fatalf("the sidebar ends at %v, want above the status line at %v", side.Y+side.H, bottom)
 	}
 }
 

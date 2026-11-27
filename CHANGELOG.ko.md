@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1231: 카드와 창 사이드바의 상태 줄이 섹션 위 줄 대신 세트 순서에서 맨 뒤인 없는 플러그인의 경고를 보이고, core.sidebars가 status와 warning을 보고한다.
 - F999: 남은 일에 raster view 재시작 check를 근거로 적고, 설치된 plugin view(terminal) 재현은 release를 기다린다고 적는다.
 - F1217-7: 프로젝트 홈의 상태줄을 명세에 적는다. 프로젝트와 열린 프로젝트 수, 켜진 플러그인과 설치된 플러그인 수, core.home.back으로 작업 화면에 돌아가는 버튼, 새 창 버튼이다.
 - F999: 재시작 뒤 view가 입력 없이 현재 frame을 그리는지 e2e restart-view-draw.test.mjs가 세 application에서 확인한다.

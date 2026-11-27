@@ -13,6 +13,11 @@ export function windowAxis(side) {
   return side === "left" || side === "right" ? "x" : "y";
 }
 
+/** The status line text of a window sidebar that shows no warning: its side name and the plugin of its set (docs/spec/external-sidebars.md#sidebar-head-and-edge). */
+export function windowStatusText(side, plugin) {
+  return `${SIDE_NAMES[side]} 창 사이드바${plugin ? ` · ${plugin}` : ""}`;
+}
+
 /** The names of the sides in the status line, the fold control and the chrome switch of a window sidebar. */
 export const SIDE_NAMES = Object.freeze({ left: "왼쪽", right: "오른쪽", top: "위", bottom: "아래" });
 

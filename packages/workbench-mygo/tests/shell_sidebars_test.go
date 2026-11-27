@@ -46,9 +46,10 @@ func TestAWindowSidebarHasOneHeadAtItsTop(t *testing.T) {
 		}
 		lines := 0
 		var walk func(nodes []ui.ElementNode)
+		// The head row is the status line at the top; the status line at the bottom of the sidebar is not a head line.
 		walk = func(nodes []ui.ElementNode) {
 			for _, node := range nodes {
-				if node.Role == ui.RoleStatus && node.Bounds.X >= card.Bounds.X && node.Bounds.X < card.Bounds.X+card.Bounds.W {
+				if node.Role == ui.RoleStatus && node.Bounds.X >= card.Bounds.X && node.Bounds.X < card.Bounds.X+card.Bounds.W && node.Bounds.Y < top+headRow(t) {
 					lines++
 				}
 				walk(node.Children)

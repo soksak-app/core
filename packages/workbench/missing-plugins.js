@@ -52,29 +52,60 @@ export function missingText(group) {
   return { text, button };
 }
 
-/** The warning line of a group: the element core.sidebar.missing with the plugin id as its parameter, or null when no line is shown. */
-export function missingLineNode(document, group) {
-  const line = missingText(group);
-  if (line === null) return null;
+/**
+ * The warning of a sidebar's status line: the newest group that has a line, which is the last one in set order, and the count of the other
+ * groups with a line. It is null when no group has a line (docs/spec/plugins.md#missing-plugins).
+ */
+export function warningOf(groups) {
+  const lines = groups.map((group) => ({ group, line: missingText(group) })).filter((item) => item.line !== null);
+  if (lines.length === 0) return null;
+  const { group, line } = lines.at(-1);
+  return { plugin: group.id, text: line.text, button: line.button, others: lines.length - 1 };
+}
+
+/** The text that a warning shows: its text and ` +<n>개 더` when other plugins are missing too. */
+export function shownWarningText(warning) {
+  return warning.others > 0 ? `${warning.text} +${warning.others}개 더` : warning.text;
+}
+
+/**
+ * The line of a warning: the element core.sidebar.missing with the plugin id as its parameter, in the warning tone. The dot is shown in
+ * the status line only. The text is cut by CSS and its whole text is the tooltip of the line.
+ */
+export function warningNode(document, warning, { dot = false } = {}) {
   const node = document.createElement("div");
   node.className = "missing-line missing-line--warn";
   node.setAttribute("role", "status");
   node.dataset.expose = "core.sidebar.missing";
-  node.dataset.plugin = group.id;
+  node.dataset.plugin = warning.plugin;
+  node.title = shownWarningText(warning);
+  if (dot) {
+    const mark = document.createElement("span");
+    mark.className = "missing-line__dot";
+    mark.textContent = "●";
+    node.append(mark);
+  }
   const label = document.createElement("span");
   label.className = "missing-line__text";
-  label.textContent = line.text;
+  label.textContent = shownWarningText(warning);
   node.append(label);
-  if (line.button !== null) {
+  if (warning.button) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "missing-line__button";
     button.dataset.expose = "core.sidebar.missing";
-    button.textContent = line.button.label;
-    mark(button, line.button.command, line.button.params);
+    button.textContent = warning.button.label;
+    mark(button, warning.button.command, warning.button.params);
     node.append(button);
   }
   return node;
+}
+
+/** The warning line of a group in a set line, or null when the group has no line (docs/spec/plugins.md#missing-plugins). */
+export function missingLineNode(document, group) {
+  const line = missingText(group);
+  if (line === null) return null;
+  return warningNode(document, { plugin: group.id, text: line.text, button: line.button, others: 0 });
 }
 
 /** The chip of a missing section in the set editor: dashed and struck through, with the tooltip `<name>(<id>) 플러그인 필요`. */

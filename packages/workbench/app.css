@@ -764,10 +764,16 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 /* Sidebar. The section starts at the top without a set title row or a placeholder, and ends with a 26pt status line.
    The section head is a band one step lighter than the sidebar, and a collapsed section keeps only the head. All colors come from theme tokens. */
 .card[data-place]{grid-template-rows:0 minmax(0,1fr) minmax(0,var(--foot-h))}
-/* A window sidebar has its head row (docs/spec/external-sidebars.md#sidebar-head-and-edge) and no status line below its set. */
+/* A window sidebar has its head row and its status line below its set (docs/spec/external-sidebars.md#sidebar-head-and-edge). */
 .card[data-place] > .chrome:not(.sidebar-head){display:none}
 .card[data-place] > .set{grid-row:2}
-.card:has(> .sidebar-head){grid-template-rows:minmax(0,var(--head-h)) minmax(0,1fr)}
+.card[data-place] > .sidebar-status{grid-row:3}
+.card:has(> .sidebar-head){grid-template-rows:minmax(0,var(--head-h)) minmax(0,1fr) minmax(0,var(--foot-h))}
+/* The warning line of a window sidebar takes the status line; its text is cut at the end and its whole text is the tooltip. */
+.sidebar-status > .missing-line{flex:1 1 auto;min-width:0;padding:0;flex-wrap:nowrap;white-space:nowrap;overflow:hidden;font-size:inherit;color:inherit}
+.missing-line__dot{flex:0 0 auto;color:var(--warn)}
+.missing-line__text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar-status > .missing-line > .missing-line__button{flex:0 0 auto}
 .set{flex:1 1 auto;min-height:0;overflow:auto;display:flex;flex-direction:column}
 /* The status line has the same height and text as the card foot, so the bottom lines of the sidebar and the neighboring card lie in one line. */
 .sidebar-status__fold{display:grid;place-items:center;margin-left:auto;width:var(--fold-button);height:var(--fold-button);padding:0;border:0;border-radius:var(--r-xs);
