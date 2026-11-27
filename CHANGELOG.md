@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1222: The notice view states its action, toast and group defaults, and reads a boolean hold and the bell refresh directly.
 - F1222: A string setting declaration without maxLength is refused, and the settings module states its remaining defaults.
 - F999-3: A layout sends the drawing states of image regions after every layout, so a page that mounts after a failed mount receives its drawing state without a window change.
 - F1222: The notice module states the defaults of log text, log place, messages and missing notices for the fallback check.

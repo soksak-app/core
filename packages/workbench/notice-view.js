@@ -33,7 +33,7 @@ function control(document, tag, className, label, name, command, params) {
 function holdWhile(node, store, id) {
   let pointer = false;
   let focus = false;
-  const apply = () => store.hold(id, pointer || focus);
+  const apply = () => store.hold(id, [pointer, focus].some(Boolean));
   node.addEventListener("pointerenter", () => { if (!pointer) { pointer = true; apply(); } });
   node.addEventListener("pointerleave", () => { if (pointer) { pointer = false; apply(); } });
   node.addEventListener("focusin", () => { if (!focus) { focus = true; apply(); } });
@@ -74,6 +74,7 @@ export function cardNoticeLine(document, store, notice, tabName = null) {
   parts.push(el(document, "span", "notice-line__title", notice.base));
   if (notice.text !== "") parts.push(el(document, "span", "notice-line__text", notice.text));
   const [action] = notice.actions;
+  // default: an action without parameters runs its command with none.
   if (action) parts.push(control(document, "button", "notice-line__action", `[${action.label}]`, "core.notices.action", action.command, action.params ?? {}));
   parts.push(control(document, "button", "notice-line__close", "×", "core.notices.close", "core.notices.close", { id: notice.id }));
   parts.forEach((part, index) => {
@@ -138,6 +139,7 @@ export function mountNoticeView(document, store) {
     actions.replaceChildren();
     const shown = style === "line" ? notice.actions.slice(0, 1) : notice.actions;
     for (const action of shown) {
+      // default: an action without parameters runs its command with none.
       const button = control(document, "button", "toast__action", action.label, "core.notices.action", action.command, action.params ?? {});
       button.dataset.id = notice.id;
       // Running an action closes its toast (docs/spec/notifications.md#toasts).
@@ -149,6 +151,7 @@ export function mountNoticeView(document, store) {
     bar.hidden = toast.remaining === null;
     // The bar runs for the remaining time at its first draw and again when a restart raises the remaining time. A redraw with a lower remaining
     // time writes nothing, so the drawn HTML carries no timer-driven width (docs/spec/notifications.md#toasts).
+    // default: a toast bar without a recorded remaining time has none.
     const drawnFor = barRemaining.get(node) ?? null;
     if ((toast.remaining !== null && drawnFor === null) || (toast.remaining !== null && toast.remaining > drawnFor)) {
       bar.style.animationDuration = `${toast.remaining}ms`;
@@ -177,6 +180,7 @@ export function mountNoticeView(document, store) {
     const shown = style === "card" ? nodes.slice(0, TOAST_LIMIT) : style === "line" ? nodes.slice(0, 1) : nodes;
     const rest = nodes.length - shown.length;
     for (const node of nodes) if (!shown.includes(node)) node.release();
+    // default: the toast counter is created when the first toast needs it.
     counter ??= control(document, "button", "toast__more", "", "core.notices.panel", "core.notices.toggle", {});
     counter.hidden = rest === 0;
     counter.textContent = style === "line" ? String(rest) : `+${rest}개 더`;
@@ -228,6 +232,7 @@ export function mountNoticeView(document, store) {
       if (entries.length === 0) continue;
       const section = el(document, "section", "notice-center__group");
       const label = el(document, "div", "notice-center__label");
+      // default: an earlier day has no label, so its group id, the day, is its label.
       label.append(el(document, "span", "", GROUP_LABEL[group] ?? group));
       if (group !== "progress") label.append(control(document, "button", "notice-center__clear", "지우기", "core.notices.clear", "core.notices.clear", { group }));
       section.append(label);
@@ -262,6 +267,7 @@ export function mountNoticeView(document, store) {
     meta.append(el(document, "time", "", new Date(entry.at).toTimeString().slice(0, 5)));
     body.append(meta);
     const actions = el(document, "div", "notice-center__actions");
+    // default: an action without parameters runs its command with none.
     for (const action of entry.actions) actions.append(control(document, "button", "toast__action", action.label, "core.notices.action", action.command, action.params ?? {}));
     body.append(actions);
     node.append(mark, body);
@@ -286,7 +292,7 @@ export function mountNoticeView(document, store) {
 
   function redrawCenter() {
     drawCenter();
-    for (const bell of document.querySelectorAll(".notice-bell")) bell.refresh?.();
+    for (const bell of document.querySelectorAll(".notice-bell")) bell.refresh();
   }
 
   function redraw() {
