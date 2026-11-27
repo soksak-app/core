@@ -993,18 +993,19 @@ func TestTheSearchOfTheSettingsIsThePillOfThePage(t *testing.T) {
 	}
 }
 
-// inputHeight is the height of an input of the page: a line of its text inside the padding and the edge of the browser.
+// inputHeight is the height of an input of the page: the field height of the declaration, 28 points. The line of the text inside the padding
+// gave 28.85 points, which the specification does not allow (docs/spec/settings.md#controls).
 func inputHeight(t *testing.T) float32 {
 	t.Helper()
 	declared, err := workbench.Declared()
 	if err != nil {
 		t.Fatal(err)
 	}
-	line, ok := declared.Metric("line-height")
+	field, ok := declared.Metric("field-h")
 	if !ok {
-		t.Fatal("no line height is declared")
+		t.Fatal("no field height is declared")
 	}
-	return float32(line)*13 + 2*(plainLength(t, "pad-y")+plainLength(t, "edge-w"))
+	return float32(field)
 }
 
 // The browser rings a focused input outside its box, in the focus color of the system, which follows the accent color.

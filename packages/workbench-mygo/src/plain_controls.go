@@ -62,7 +62,8 @@ func (s *Shell) plainControls() PlainControls {
 		Placeholder: color("placeholder"), SelectFill: color("select-bg"), SelectFg: color("select-fg"), Muted: s.palette.Muted,
 		Font: s.fontFamily(), Size: size, Figures: float32(figures),
 		EdgeW: metric("edge-w"), PadX: metric("pad-x"), PadY: metric("pad-y"), Radius: metric("r"),
-		Height:  float32(chrome("line-height"))*size + 2*(metric("pad-y")+metric("edge-w")),
+		// Height is the input height of the declaration: an input and a select are 28 points high (docs/spec/settings.md#controls).
+		Height:  chrome("field-h"),
 		SelectH: metric("select-h"), SelectPad: metric("select-pad"), SelectRoom: metric("select-room"),
 		SelectRadius: metric("select-r"), Halo: metric("select-halo"), ArrowsW: metric("select-arrows-w"), ArrowsH: metric("select-arrows-h"), ArrowsEnd: metric("select-arrows-end"),
 		PanelGap: chrome("space-1"), PanelRadius: s.radiusSmall(), PanelEdgeW: s.palette.BorderWidth,
