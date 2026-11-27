@@ -113,6 +113,7 @@ func TestTheTitleBarHasNoUpdateControl(t *testing.T) {
 
 func TestARegistryURLThatIsNoReleaseHasNoReleasePage(t *testing.T) {
 	f, stored := updateShell(t, "file:///releases/soksak-2.0.0.zip")
+	openInstalled(t, f)
 	if status := f.appUpdateStatus(); status.Available == nil || status.Available.Release != nil {
 		t.Fatalf("the status is %+v", status)
 	}

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-6: mygo 시작과 업데이트 테스트가 시작 시 알림 저장소 읽기와 설치됨 페이지의 애플리케이션 업데이트 읽기를 명시한다.
 - F1217-12-5: 알림 센터 머리가 닫기 control을 그리며, 이 control은 core.notices.toggle을 실행하는 element core.notices.toggle이다. 이 element는 workbench exposure와 mygo 사본에 선언된다.
 - F795-13: 오류 occurrence 테스트가 timer 대체 없이 page clock 위에서 오류 표시 경로를 실행한다.
 - F999-1: Rust 호스트는 layout 뒤 surface의 드로잉 상태를 보내며, apply 수준 테스트로 이를 고정하고 중복된 visibility spawn을 제거합니다.

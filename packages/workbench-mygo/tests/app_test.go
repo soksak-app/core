@@ -149,7 +149,9 @@ func TestAppStartsWhenTheWindowShows(t *testing.T) {
 	}
 	app.Shown(window)
 	queue.drain(t)
-	if strings.Join(startCalls(stored.calls), " ") != "windowControls workspace workspace workspace windowReady notificationState pluginsState sidecarsOutdated sidecarsRetain" {
+	// The start reads the snapshot, the tab state, the tab sessions and the notice store, so the workspace is called four times
+	// (docs/spec/notifications.md#notice-center: a restart keeps the notices).
+	if strings.Join(startCalls(stored.calls), " ") != "windowControls workspace workspace workspace workspace windowReady notificationState pluginsState sidecarsOutdated sidecarsRetain" {
 		t.Fatalf("the start called %v", stored.calls)
 	}
 }

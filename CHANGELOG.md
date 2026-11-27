@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-6: The start and update tests of the mygo package state the notice store read at start and the installed page that reads the application update.
 - F1217-12-5: The notice center head draws its close control, the element core.notices.toggle, which runs core.notices.toggle; the element is declared in the workbench exposure and its mygo copy.
 - F795-13: The error-occurrences test runs its toasts on the page clock through the error display, with no timer replacement and no stand-in name.
 - F999-1: The Rust host sends the drawing states of a shown surface after its layout, pinned by an apply-level test; the redundant visibility spawn is removed.
