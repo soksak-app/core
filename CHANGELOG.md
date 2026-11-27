@@ -8,7 +8,7 @@
 - F1161: A card notice merges only with a shown notice of the same card; app notices keep merging by kind and title
 - F1217-16: Rename the settings window to the settings tab, with settings_modal.go moved to settings_tab_view.go.
 - F1161: The workbench package files list names sidecar-outdated.js, so the staged frontend holds the module that core-exposure.js imports.
-- F715-3: The test-link check points the remaining links of the error toast, surface view path, settings tab and fixture pages at the current symbols and tests and removes the F699 e2e link whose title is gone.
+- F1221: The test-link check points the remaining links of the error toast, surface view path, settings tab and fixture pages at the current symbols and tests and removes the F699 e2e link whose title is gone.
 - F1217-11-6: A card notice no longer marks its tab, and a later notice of a tab removes its kept system notification.
 - F1217-6: The start and update tests of the mygo package state the notice store read at start and the installed page that reads the application update.
 - F1217-12-5: The notice center head draws its close control, the element core.notices.toggle, which runs core.notices.toggle; the element is declared in the workbench exposure and its mygo copy.
@@ -17,7 +17,7 @@
 - F1161: The Go host reports the surfaces that the sessions of an outdated service count
 - F1161: The Rust host reports the surfaces that the sessions of an outdated service count
 - F1217: Both pages draw the design: one notice store with the bell, the notice center, the card status line and the toast forms; the settings tab with its row component and plugin pages; the project home in place of the library; the status bar, the closed hint, the sidebar head row and project tabs in four places (F1217-1, F1217-3, F1217-5, F1217-6, F1217-7, F1217-11 to F1217-15). The outdated service notice shows in both pages and the outdated entries list their surfaces (F1161).
-- F715-3: The test-link check points the F715-2 library and settings links at the current home, settings and e2e tests and removes the library pane entry that the project home has no rule for.
+- F1221: The test-link check points the F715-2 library and settings links at the current home, settings and e2e tests and removes the library pane entry that the project home has no rule for.
 - F1107: Tests pin that the main page forwards a status read to the named one of two surfaces that register the status, and that a view answers the read of the named surface; the CLI and the host pass the named surface.
 - F1220-1: The page log and performance cases record the loss of a refused batch in the next batch, and their tests flush at their own points; the logging specification names the reason of that loss (Red: 9 page log tests and 1 performance test failed after F1220).
 - F999: A surface that a layout shows sends the drawing states of its image regions to their suppliers after the layout, in the Go and the Rust host, so a terminal shown after a restart draws without input (Red: showing the surface sent its region no drawing state that draws).

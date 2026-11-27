@@ -8,7 +8,7 @@
 - F1161: card notice는 같은 card의 떠 있는 notice하고만 합쳐지고, app notice는 kind와 title로 계속 합쳐진다
 - F1217-16: 설정 창을 settings tab으로 이름 바꾸고 settings_modal.go를 settings_tab_view.go로 옮겼다.
 - F1161: workbench package의 files 목록이 sidecar-outdated.js를 적어서, staging한 frontend가 core-exposure.js가 import하는 module을 가져요.
-- F715-3: 테스트 링크 검사가 오류 toast, surface view path, 설정 탭, fixture 페이지의 남은 링크를 현재 심볼과 테스트로 연결하고, 제목이 없어진 F699 e2e 링크를 제거한다.
+- F1221: 테스트 링크 검사가 오류 toast, surface view path, 설정 탭, fixture 페이지의 남은 링크를 현재 심볼과 테스트로 연결하고, 제목이 없어진 F699 e2e 링크를 제거한다.
 - F1217-11-6: 카드 알림은 탭 표시를 바꾸지 않고, 탭의 나중 알림은 남아 있던 시스템 알림을 제거합니다.
 - F1217-6: mygo 시작과 업데이트 테스트가 시작 시 알림 저장소 읽기와 설치됨 페이지의 애플리케이션 업데이트 읽기를 명시한다.
 - F1217-12-5: 알림 센터 머리가 닫기 control을 그리며, 이 control은 core.notices.toggle을 실행하는 element core.notices.toggle이다. 이 element는 workbench exposure와 mygo 사본에 선언된다.
@@ -17,7 +17,7 @@
 - F1161: Go 호스트는 outdated 서비스의 sessions가 세는 surface 목록을 보고한다
 - F1161: Rust 호스트는 outdated 서비스의 sessions가 세는 surface 목록을 보고한다
 - F1217: 두 page가 design을 그려요: bell, notice center, card status line, toast 형태를 가진 notice store 하나, row component와 plugin page를 가진 settings tab, library 대신 project home, status bar, closed hint, sidebar head row, 네 위치의 project tab이에요(F1217-1, F1217-3, F1217-5, F1217-6, F1217-7, F1217-11~F1217-15). outdated service notice가 두 page에 보이고 outdated 항목이 surface를 나열해요(F1161).
-- F715-3: 테스트 링크 검사가 F715-2의 라이브러리·설정 링크를 현재 홈, 설정, e2e 테스트로 연결하고, 프로젝트 홈에 패널 규칙이 없어 라이브러리 패널 항목을 제거한다.
+- F1221: 테스트 링크 검사가 F715-2의 라이브러리·설정 링크를 현재 홈, 설정, e2e 테스트로 연결하고, 프로젝트 홈에 패널 규칙이 없어 라이브러리 패널 항목을 제거한다.
 - F1107: test는 main page가 status를 등록한 두 surface 중 지정한 surface로 읽기를 보내고, view가 지정한 surface의 읽기에 답함을 고정한다. CLI와 host는 지정한 surface를 넘긴다.
 - F1220-1: page log와 performance case는 거절된 batch의 손실을 다음 batch에 기록하고, test는 자기 지점에서 flush한다. logging specification은 그 손실의 이유를 적는다(Red: F1220 뒤 page log test 9개와 performance test 1개 실패).
 - F999: layout이 보이게 한 surface는 Go와 Rust host에서 layout 뒤에 image region의 drawing 상태를 supplier에 보내, 재시작 뒤 보인 terminal이 입력 없이 그려진다(Red: surface를 보여도 region에 그리는 drawing 상태를 보내지 않았다).
