@@ -5211,6 +5211,72 @@
       },
       "description": "The index of an event file was built from the whole file, because it did not exist or was not the index of that file."
     },
+    "host.clone.start": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "target",
+          "pid"
+        ]
+      },
+      "description": "The import form started a clone: the host started git with the target folder (the address is never stored)."
+    },
+    "host.clone.line": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "line": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "line"
+        ]
+      },
+      "description": "One output line of git during a clone started from the import form."
+    },
+    "host.clone.end": {
+      "layer": "host",
+      "class": "lifecycle",
+      "level": "info",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "number"
+          },
+          "status": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "target",
+          "pid",
+          "status"
+        ]
+      },
+      "description": "git ended a clone started from the import form; status is its exit code, or -1 when a signal ended it."
+    },
     "host.relaunch.start": {
       "layer": "host",
       "class": "lifecycle",
