@@ -1,0 +1,37 @@
+{
+  "name": "mcp-status-window-fallback",
+  "description": "status_get without a window and without an agent surface reads the key window of windows.list, and the first window of the list when no window is key.",
+  "replay": false,
+  "reason": "The windows of the case are the answers of a scripted endpoint, and the server of the test starts with no window argument and no surface of a running application.",
+  "variables": {
+    "refusal": { "type": "string", "example": "process 7 is not a process of a surface: no parent process of it is a running sidecar of the application that started it for a surface" },
+    "screen": { "type": "any", "example": { "screen": "workspace", "modal": null } }
+  },
+  "mcp": {
+    "arguments": [],
+    "steps": [
+      { "tool": "status_get", "arguments": { "name": "core.screen" }, "result": "$screen" },
+      { "tool": "status_get", "arguments": { "name": "core.screen" }, "result": "$screen" }
+    ]
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1014, "message": "$refusal" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": [
+      { "window": "a", "title": "first", "project": null, "key": false, "ready": true },
+      { "window": "b", "title": "second", "project": null, "key": true, "ready": true }
+    ] } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.get", "params": { "name": "core.screen", "window": "b" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 4, "method": "agent.surface" } },
+    { "reply": { "jsonrpc": "2.0", "id": 4, "error": { "code": 1014, "message": "$refusal" } } },
+    { "send": { "jsonrpc": "2.0", "id": 5, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 5, "result": [
+      { "window": "a", "title": "first", "project": null, "key": false, "ready": true },
+      { "window": "b", "title": "second", "project": null, "key": false, "ready": true }
+    ] } },
+    { "send": { "jsonrpc": "2.0", "id": 6, "method": "status.get", "params": { "name": "core.screen", "window": "a" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 6, "result": "$screen" } }
+  ]
+}

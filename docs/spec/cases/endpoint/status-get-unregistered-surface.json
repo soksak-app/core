@@ -1,0 +1,14 @@
+{
+  "name": "status-get-unregistered-surface",
+  "description": "status.get of a status that the surface named in the request has not registered is refused with the error 1002 that the page reports, so no value of another surface answers it.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "main", "name": "probe.lines", "surface": "tab-c" } } },
+    { "page": { "call": { "name": "status.get", "payload": { "name": "probe.lines", "surface": "tab-c" } } } },
+    { "page": { "reply": { "error": { "code": 1002, "message": "not registered" } } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "error": { "code": 1002, "message": "not registered" } } }
+  ]
+}

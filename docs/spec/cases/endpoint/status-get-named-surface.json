@@ -1,0 +1,17 @@
+{
+  "name": "status-get-named-surface",
+  "description": "status.get forwards the surface that the request names to the page with the rest of its params and without the window, and answers the value that the page returns for that surface.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "variables": {
+    "screen": { "type": "object", "keys": ["screen"], "example": { "screen": "tab-b" } }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "window": "main", "name": "probe.lines", "surface": "tab-b" } } },
+    { "page": { "call": { "name": "status.get", "payload": { "name": "probe.lines", "surface": "tab-b" } } } },
+    { "page": { "reply": { "result": { "screen": "tab-b" } } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": "$screen" } }
+  ]
+}

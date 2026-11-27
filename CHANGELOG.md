@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1107: Status reads of a named surface, of an unregistered surface and the window fallback of the MCP status tool have tests.
 - F1222: Accounts without a programs or data declaration are refused with a message that names the missing declaration.
 - F1217-11-7: The timeline cases record the overlay updates that the host sends after the queued update change.
 - F1217-16: Comments, test titles and check expectations name the settings tab, not a settings window.

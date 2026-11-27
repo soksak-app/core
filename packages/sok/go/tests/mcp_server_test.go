@@ -531,7 +531,7 @@ func TestTheMCPServerReplaysTheEndpointCases(t *testing.T) {
 	for _, name := range []string{
 		"mcp-exposure-search", "mcp-exposure-without-element", "mcp-exposure-without-params", "mcp-input-pointer-inactive",
 		"mcp-tools-call", "mcp-watch-connection-closed", "mcp-watch-current-value", "mcp-watch-next-change", "mcp-agent-context",
-		"mcp-window-describe", "mcp-tools-call-rejected", "mcp-messages",
+		"mcp-window-describe", "mcp-tools-call-rejected", "mcp-messages", "mcp-status-window-fallback",
 	} {
 		t.Run(name, func(t *testing.T) { runMCPCase(t, name) })
 	}
