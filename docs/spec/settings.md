@@ -216,7 +216,7 @@ The button `새 세트` (plus icon) runs `core.settings.sets.create {scope}`, wh
 The editor of a set shows:
 
 - `이름`: a text field that runs `core.settings.sets.update {id, title, scope}`. An empty name shows the line `이름이 필요하다.` under the field. A name of 1 to 40 characters is stored.
-- `배치`: a segment `목록` (`list`) and `탭` (`tabs`), which runs `core.settings.sets.update {id, layout, scope}`.
+- `배치`: a segment `목록` (`list`) and `탭` (`tabs`), which runs `core.settings.sets.update {id, layout, scope}`. The segments are the element `core.settings-tab.layout` of the set (its item is `layout:<set id>`).
 - `섹션`: one chip per section of the set, in set order, each with the section name and the button × (`<section name> 빼기`);a section of a plugin that is not loaded shows its chip with a dashed border in the muted tone and its name struck through, with the tooltip `<name>(<id>) 플러그인 필요` ([missing plugins](plugins.md#missing-plugins)). When the set has no section, the line `아직 섹션이 없다.` shows. After the chips stands the select `섹션 추가…`, whose options are the registered sections that the set does not contain, each with the plugin id as its hint, grouped by plugin in plugin and declaration order; the select is disabled while the set contains every registered section.
 - The line `바꾼 값은 바로 저장된다. 같은 섹션은 한 세트에 한 번만 들어간다.`
 - The button `완료`.

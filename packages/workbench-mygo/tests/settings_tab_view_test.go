@@ -1957,3 +1957,23 @@ func TestAFailedSettingWriteRestoresTheValueAndShowsItsErrorOnce(t *testing.T) {
 		t.Fatalf("the shell showed %q, not one error with the host text", shown)
 	}
 }
+
+// The layout segments of a set are the controls core.settings-tab.layout of the set, and each runs core.settings.sets.update
+// (docs/spec/settings.md#사이드바-세트).
+func TestTheSetLayoutSegmentsAreNamedLayoutControls(t *testing.T) {
+	f := opened(t)
+	f.run("core.settings-tab.nav", map[string]any{"page": "sets"})
+	f.run("core.settings-tab.edit", map[string]any{"set": "set-1"})
+	found := 0
+	for _, control := range f.modal().Controls {
+		if control.Name == "core.settings-tab.layout" && control.Key != nil && *control.Key == "layout:set-1" {
+			found++
+			if control.Command == nil || control.Command.Name != "core.settings.sets.update" {
+				t.Fatalf("the layout segment runs %+v", control.Command)
+			}
+		}
+	}
+	if found != 1 {
+		t.Fatalf("found %d layout controls of set-1, want one control with the two segments", found)
+	}
+}

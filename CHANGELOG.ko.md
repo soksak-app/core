@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7: 세트 배치 세그먼트는 core.settings-tab.layout 요소이며, 항목은 layout:<세트 id>다.
 - F1217-7: 되돌리기 토스트는 변경 종류별 문구를 쓰고, 테마 변경을 기록하며, 새 프로젝트 재정의는 재설정으로 되돌린다.
 - F1217-7: 설정 변경의 되돌리기 토스트는 탭 하단에 core.settings-tab.toast 요소로 그려지고, 버튼은 core.settings-tab.undo다.
 - F1217-7: 플러그인 페이지는 매니페스트 설명을 보이며, 설명의 각 줄은 core.settings-tab.plugins.about 요소다.

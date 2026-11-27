@@ -151,7 +151,7 @@ func (s *Shell) setEditor(b *settingsBuilder, set StoredSet, scope string) {
 	update := map[string]any{"id": set.ID, "scope": scope}
 	title := b.add(SettingsControl{Name: "core.settings-tab.set-title", Key: text("title:" + set.ID), Value: text(set.Title), Command: settingCommand("core.settings.sets.update", update),
 		kind: controlText, param: "title", maxLength: setTitleMax})
-	layout := b.add(SettingsControl{Name: "core.settings-tab.choice", Key: text("layout:" + set.ID), Value: text(set.Layout), Options: []string{"list", "tabs"},
+	layout := b.add(SettingsControl{Name: "core.settings-tab.layout", Key: text("layout:" + set.ID), Value: text(set.Layout), Options: []string{"list", "tabs"},
 		Command: settingCommand("core.settings.sets.update", update), kind: choiceKind(2), param: "layout", labels: map[string]string{"list": "목록", "tabs": "탭"}})
 	rows := []settingsRow{{name: "이름", controls: []*SettingsControl{title}}, {name: "배치", controls: []*SettingsControl{layout}}}
 	if set.Title == "" {
