@@ -4,6 +4,7 @@ package host
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -627,5 +628,22 @@ func TestAViewCreatedAfterAReloadRecordsTheAppliedTheme(t *testing.T) {
 			t.Fatalf("page.theme.applied records %v, want %v; probe events %v", stored, want, events)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// A runtime.log call of a generation that is not the current view is refused with an error that names the plugin and generation of the
+// view it found and the plugin and generation of the call, so a record that the view drops is reported (docs/spec/logging.md#policy).
+func TestARuntimeLogOfAnotherGenerationIsAnErrorNamingBoth(t *testing.T) {
+	log := startViewRecordWriter(t, t.TempDir())
+	s := readyViewLogSurfaces(t, log)
+	current := probeGeneration(s)
+	call := map[string]any{"id": uint64(1), "command": "runtime.log", "params": json.RawMessage(`{"action":"batch","events":[]}`)}
+	answer, err := s.answerViewLog("probe-surface", "probe", current+1, call)
+	if answer != nil || err == nil {
+		t.Fatalf("a call of generation %d to the view of generation %d: answer %v, error %v; want an error", current+1, current, answer, err)
+	}
+	want := fmt.Sprintf("runtime.log of plugin probe generation %d: the view of probe-surface has plugin probe generation %d", current+1, current)
+	if err.Error() != "probe-surface: "+want {
+		t.Fatalf("the error is %q, want it to name both generations: %q", err.Error(), want)
 	}
 }

@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1233-1: A runtime.log of another plugin or generation is refused with an error that names both.
 - F1217-7: The web Red of the home status line fails at import, because its module exports no createHomeStatusBar.
 - F1234: The copy list of the exposure check and the common-only keys test name the copies and keys that the declarations hold on main, so both tests pass.
 - F1217-7-2-2: The common setting projectsFolder, default ~/Projects, refuses a value that is not an absolute path or a path that starts with ~/ in mygo and the web workbench.

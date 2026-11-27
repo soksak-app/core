@@ -296,12 +296,17 @@ type viewLogAnswer struct {
 	requestErr error
 }
 
-// answerViewLog carries out the runtime.log call of the view of surface and returns its answer. A call of a view that has another plugin or
-// generation has no answer.
+// answerViewLog carries out the runtime.log call of the view of surface and returns its answer. A call whose plugin or generation is not
+// the current view of surface is refused with an error that names the plugin and generation of the view that was found, so the records
+// it carries are reported rather than dropped.
 func (s *Surfaces) answerViewLog(surface, plugin string, generation uint64, call map[string]any) (*viewLogAnswer, error) {
 	channel, ok := s.documents.view(surface)
-	if !ok || channel.plugin != plugin || channel.generation != generation {
-		return nil, nil
+	if !ok {
+		return nil, fmt.Errorf("%s: runtime.log of plugin %s generation %d: the surface has no view", surface, plugin, generation)
+	}
+	if channel.plugin != plugin || channel.generation != generation {
+		return nil, fmt.Errorf("%s: runtime.log of plugin %s generation %d: the view of %s has plugin %s generation %d",
+			surface, plugin, generation, surface, channel.plugin, channel.generation)
 	}
 	if channel.document == "" || channel.timeOrigin == 0 {
 		return nil, fmt.Errorf("%s: runtime.log has no ready document", surface)

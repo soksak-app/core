@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1233-1: 다른 plugin이나 generation의 runtime.log는 둘 다 이름 붙인 오류로 거절된다.
 - F1217-7: 홈 상태줄 웹 Red는 createHomeStatusBar를 내보내지 않아 가져오기에서 실패한다.
 - F1234: exposure 검사의 copy 목록과 common-only key 검사가 main의 선언이 가진 copy와 key를 기대하도록 고쳐, 두 test가 통과한다.
 - F1217-7-2-2: mygo와 웹 workbench에서 공통 설정 projectsFolder(기본값 ~/Projects)는 절대 경로도 ~/로 시작하는 경로도 아닌 값을 거부한다.
