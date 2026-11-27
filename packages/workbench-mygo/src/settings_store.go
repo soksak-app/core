@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"slices"
@@ -614,6 +615,9 @@ func (s *SettingsStore) validate(key string, value any) error {
 			return fmt.Errorf("Invalid setting %s: %w", key, err)
 		}
 	}
+	if key == "projectsFolder" {
+		return validateProjectsFolder(value)
+	}
 	if key == "memorySaverDelay" {
 		number, ok := integer(value)
 		if bounds := catalog.Settings.MemorySaverDelay; !ok || number < bounds[0] || number > bounds[1] {
@@ -630,6 +634,15 @@ func (s *SettingsStore) validate(key string, value any) error {
 		if definition.Key == key {
 			return validateDeclared(definition, value)
 		}
+	}
+	return nil
+}
+
+// validateProjectsFolder accepts an absolute path or a path that starts with ~/, the base folder of new projects. The host expands ~/.
+func validateProjectsFolder(value any) error {
+	text, ok := value.(string)
+	if !ok || !(filepath.IsAbs(text) || strings.HasPrefix(text, "~/")) {
+		return fmt.Errorf("Invalid setting projectsFolder: %s is not an absolute path or a path that starts with ~/", jsonText(value))
 	}
 	return nil
 }
@@ -829,6 +842,8 @@ func (s *SettingsStore) settingType(key string) (string, error) {
 	switch {
 	case slices.Contains(catalog.Settings.Switches, key):
 		return "boolean", nil
+	case key == "projectsFolder":
+		return "string", nil
 	case key == "diagnostics.log" || key == "sets" || key == "links" || catalog.Settings.Orders[key] != nil || s.isPluginOrder(key):
 		return "object", nil
 	case ranged || key == "memorySaverDelay" || key == "textSize":

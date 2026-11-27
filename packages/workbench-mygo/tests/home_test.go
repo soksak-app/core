@@ -283,8 +283,11 @@ func TestTheOpenProjectsFollowTheStore(t *testing.T) {
 	host.open = nil
 	f.shell.Event("workspace-changed", nil)
 	f.settle()
-	if f.tester.HasText("열림") {
-		t.Fatalf("the home still shows %q after the release", f.tester.Texts())
+	// The status line shows "열림 0", which contains the badge text, so the badge is matched as a whole label.
+	for _, text := range f.tester.Texts() {
+		if text == "열림" {
+			t.Fatalf("the home still shows %q after the release", f.tester.Texts())
+		}
 	}
 }
 

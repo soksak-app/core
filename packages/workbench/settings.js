@@ -228,6 +228,9 @@ function validateValue(key, value) {
       }
     }
   }
+  if (key === "projectsFolder" && !(typeof value === "string" && (value.startsWith("/") || value.startsWith("~/")))) {
+    throw new Error(`Invalid setting projectsFolder: ${JSON.stringify(value)} is not an absolute path or a path that starts with ~/`);
+  }
   if (key === "memorySaverDelay" && (!Number.isInteger(value) || value < MEMORY_SAVER_DELAY[0] || value > MEMORY_SAVER_DELAY[1])) {
     throw new Error(`Invalid setting memorySaverDelay: ${JSON.stringify(value)}`);
   }
@@ -276,6 +279,7 @@ export function settingType(key) {
   if (SWITCHES.includes(key)) return "boolean";
   if (STRUCTURED.includes(key) || orderValues(key) !== null) return "object";
   if (Object.hasOwn(RANGES, key) || key === "memorySaverDelay" || key === "problemToastDismissSeconds") return "number";
+  if (key === "projectsFolder") return "string";
   if (CHOICES[key]) return typeof CHOICES[key][0];
   const definition = pluginDefinitions.get(key);
   if (!definition) throw new Error(`Unknown setting: ${key}`);

@@ -386,6 +386,7 @@
   "settings": {
     "defaults": {
       "projectOpening": "windows",
+      "projectsFolder": "~/Projects",
       "viewProcess": "plugin",
       "theme": "midnight",
       "mode": "dark",
@@ -532,6 +533,7 @@
       "noticeCenterStyle",
       "problemToastDismissSeconds",
       "projectOpening",
+      "projectsFolder",
       "quietToasts",
       "textSize",
       "toastStyle",

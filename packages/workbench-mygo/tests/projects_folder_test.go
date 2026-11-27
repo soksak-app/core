@@ -1,0 +1,63 @@
+package workbench_test
+
+import (
+	"testing"
+)
+
+// The base folder of new projects is a common setting whose default is ~/Projects.
+func TestTheProjectsFolderDefaultsToTheProjectsFolderOfTheHome(t *testing.T) {
+	var writes []saved
+	store := settingsStore(t, &writes)
+	if err := store.Begin(nil, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Value("projectsFolder"); got != "~/Projects" {
+		t.Fatalf("default projectsFolder = %v, want ~/Projects", got)
+	}
+}
+
+// A value of projectsFolder is an absolute path or a path that starts with ~/; any other value is refused and changes nothing.
+func TestAProjectsFolderThatIsNoAbsolutePathIsRefused(t *testing.T) {
+	var writes []saved
+	store := settingsStore(t, &writes)
+	if err := store.Begin(nil, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"", "Projects", "projects/work", "~", "~user/work"} {
+		err := store.Set(map[string]any{"projectsFolder": value}, "common")
+		want := `Invalid setting projectsFolder: "` + value + `" is not an absolute path or a path that starts with ~/`
+		if err == nil || err.Error() != want {
+			t.Fatalf("Set(%q) = %v, want %s", value, err, want)
+		}
+	}
+	if err := store.Set(map[string]any{"projectsFolder": 3.0}, "common"); err == nil {
+		t.Fatal("a number was accepted as projectsFolder")
+	}
+	if got := store.Value("projectsFolder"); got != "~/Projects" {
+		t.Fatalf("a refused change set projectsFolder to %v", got)
+	}
+	if len(writes) != 0 {
+		t.Fatalf("a refused change was written %d times", len(writes))
+	}
+}
+
+// An absolute path and a path that starts with ~/ are accepted in the common scope, and the project scope refuses the key.
+func TestAProjectsFolderIsCommonOnly(t *testing.T) {
+	var writes []saved
+	store := settingsStore(t, &writes)
+	if err := store.Begin(nil, nil, "prj-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(map[string]any{"projectsFolder": "/work/base"}, "common"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Set(map[string]any{"projectsFolder": "~/Work"}, "common"); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Value("projectsFolder"); got != "~/Work" {
+		t.Fatalf("projectsFolder = %v, want ~/Work", got)
+	}
+	if err := store.Set(map[string]any{"projectsFolder": "~/Work"}, "project"); err == nil || err.Error() != "projectsFolder is common-only" {
+		t.Fatalf("project scope: %v", err)
+	}
+}

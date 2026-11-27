@@ -189,7 +189,7 @@ test('stored and changed core setting values must have their declared form', asy
   const { orderedCallsAnswered } = await import('../host.js');
   const invalid = [
     ['gap', 'wide'], ['gap', 49], ['radius', 1.5], ['size', 9], ['font', 'serif'], ['theme', 'neon'], ['mode', 'dim'],
-    ['projectOpening', 'tab'], ['projectTabs', 'center'], ['focusInd', 'glow'], ['fullRule', 'both'],
+    ['projectOpening', 'tab'], ['projectsFolder', 'Projects'], ['projectsFolder', ''], ['projectTabs', 'center'], ['focusInd', 'glow'], ['fullRule', 'both'],
     ['left', 'yes'], ['right', 1], ['dim', null],
   ];
   for (const [key, stored] of invalid) {
@@ -204,7 +204,7 @@ test('stored and changed core setting values must have their declared form', asy
     assert.throws(() => change({ [key]: value }, 'common', 'test'), new RegExp(`Invalid setting ${key}`),
       `changing ${key} to ${JSON.stringify(value)} was accepted`);
   }
-  beginSettings({ common: { gap: 0, radius: 24, size: 10, font: 'mono-jet', theme: 'slate', mode: 'light',
+  beginSettings({ common: { gap: 0, radius: 24, size: 10, font: 'mono-jet', theme: 'slate', mode: 'light', projectsFolder: '~/Work',
     projectOpening: 'tabs', projectTabs: 'left', focusInd: 'corner', fullRule: 'none', left: false, right: true, dim: true },
   projects: [] }, null);
   await orderedCallsAnswered();

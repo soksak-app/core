@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217-7-2-2: The common setting projectsFolder, default ~/Projects, refuses a value that is not an absolute path or a path that starts with ~/ in mygo and the web workbench.
 - F1232: The checklist records the Hangul comment item F1232 with its sub-items F1232-1 to F1232-4, one per package folder.
 - F1124: The policy test fails at the step of a policy change that no policy applies within 20 s, in place of waiting without end.
 - F1217-7-2: The project folder setting, the Git import form and the projectClone host call are specified in EN and KO.

@@ -195,7 +195,7 @@ test("the declaration states each setting of the defaults once, with a choice li
     ...settings.switches, ...settings.commonOnly, "memorySaverDelay"]) {
     assert.ok(keys.has(key) || ["gap", "radius", "font", "size"].includes(key), `${key} has no default`);
   }
-  assert.deepEqual(settings.commonOnly, ["autoDismissProblemToasts", "memorySaver", "memorySaverDelay", "noticeCenterStyle", "problemToastDismissSeconds", "projectOpening", "quietToasts", "textSize", "toastStyle", "viewProcess"]);
+  assert.deepEqual(settings.commonOnly, ["autoDismissProblemToasts", "memorySaver", "memorySaverDelay", "noticeCenterStyle", "problemToastDismissSeconds", "projectOpening", "projectsFolder", "quietToasts", "textSize", "toastStyle", "viewProcess"]);
   assert.ok(declaration.menuLanguages.some((language) => language.id === declaration.defaultLanguage));
 });
 
