@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- 설정 스크롤 모달 사례를 제거했다: settings-scroll.test.mjs가 스크롤 조항을 고정한다.
 - 작업 공간 페이지 와이어 사례를 워크벤치 테스트가 재생한다: 공통 설정 쓰기, 알 수 없는 프로젝트 거부, 스냅샷.
 - 자리표시 신원 사례를 제거했다: 신원 거부는 호스트 폴더 신원 테스트가 고정한다.
 - F1108: 메인 페이지 reload 뒤에 만들어진 view가 자기 window의 theme을 기록하며, 실제 window에서 host 테스트가 이를 확인한다. reload_surface_documents_for_test가 reload를 실행한다.

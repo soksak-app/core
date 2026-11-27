@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- Removed the settings scroll modal case: settings-scroll.test.mjs pins its scroll clauses.
 - The workspace page-wire cases are played by a workbench test: the common settings write, the unknown project refusal and the snapshot.
 - Removed the placeholder identity case: the identity refusal is pinned by the host folder identity tests.
 - F1108: A view created after a main page reload records the theme of its window in a real-window host test, and the test runs the reload through reload_surface_documents_for_test.
