@@ -1,6 +1,6 @@
 {
   "name": "page-log-failed-relay-console",
-  "description": "The host fails the log batch of a plugin event, and the page writes the failure to its original console only.",
+  "description": "The host fails the log batch of a plugin event, the page writes the failure to its original console only, and the next batch of the page states the one event that the refused batch lost, with the reason that the host refused the batch.",
   "replay": false,
   "reason": "The log call of the case fails with host closed, the answer of a host whose connection ended, and the producer runs a host that does not end.",
   "variables": {
@@ -17,6 +17,26 @@
     "mono-ns-1": {
       "type": "integer",
       "example": 5000000801,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000465,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 5000000805,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000466,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5000000806,
       "source": "page"
     }
   },
@@ -42,6 +62,41 @@
     {
       "reply": {
         "error": "host closed"
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "warn",
+              "event": "workbench.log.dropped",
+              "fields": {
+                "count": 1,
+                "bytes": 82,
+                "reason": "the host refused the batch"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "plugin.fixture.y",
+              "fields": {}
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
       }
     }
   ]

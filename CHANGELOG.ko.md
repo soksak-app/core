@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1220-1: page log와 performance case는 거절된 batch의 손실을 다음 batch에 기록하고, test는 자기 지점에서 flush한다. logging specification은 그 손실의 이유를 적는다(Red: F1220 뒤 page log test 9개와 performance test 1개 실패).
 - F999: layout이 보이게 한 surface는 Go와 Rust host에서 layout 뒤에 image region의 drawing 상태를 supplier에 보내, 재시작 뒤 보인 terminal이 입력 없이 그려진다(Red: surface를 보여도 region에 그리는 drawing 상태를 보내지 않았다).
 - F1219: 객체 수 테스트는 측정이 `finally`에서 하듯 실패한 단계에서 client를 닫아, `open`이 없는 picker 응답이 card menu 단계를 판정 함수 오류로 곧바로 실패시킨다(case `object-counts-menu-picker-without-open`. Red: 테스트가 timeout까지 돌았다).
 - F1220: Page event batcher는 host가 거절한 batch의 event를 이유 `the host refused the batch`로 버린 수에 세어 다음 batch에 밝히며, 거절은 곧바로 다시 보내지 않는다(Red: 거절된 9개 event가 수 없이 사라졌다).

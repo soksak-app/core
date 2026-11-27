@@ -1,6 +1,6 @@
 {
   "name": "performance-relay-failure",
-  "description": "A failed relay of the trace batch is reported with its event count, and a failed switch off rejects the switch; the first batch of the writer carries the clock statement of the page.",
+  "description": "A failed relay of the trace batch is reported with its event count, a failed switch off rejects the switch, and the next batch of the page states the two events that the refused batch lost, with the reason that the host refused the batch; the first batch of the writer carries the clock statement of the page.",
   "replay": false,
   "reason": "The case calls performance, which the producer does not run.",
   "variables": {
@@ -83,6 +83,16 @@
     "clock-mono-ns-5": {
       "type": "integer",
       "example": 5000000789
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000502,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5000000842,
+      "source": "page"
     }
   },
   "steps": [
@@ -228,6 +238,33 @@
     {
       "reply": {
         "error": "switch failed"
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "warn",
+              "event": "workbench.log.dropped",
+              "fields": {
+                "count": 2,
+                "bytes": 123,
+                "reason": "the host refused the batch"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
       }
     }
   ]

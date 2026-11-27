@@ -126,14 +126,14 @@ test("a failed relay is reported with its event count and a failed switch reject
   const wire = selectPageWire("performance-relay-failure");
   const errors = [];
   // The own writer of this test reports a failed relay to the list of errors, so the report is observed as a value.
-  const tracer = createTracer(
-    (request) => host.call("performance", request),
-    createEventBatcher({ call: (request) => host.call("log", request), report: (error) => errors.push(error.message), classify: classOf,
-      gate: logGate, writer: { layer: "workbench", member: "start", identity: pageIdentity } }),
-  );
+  const batcher = createEventBatcher({ call: (request) => host.call("log", request), report: (error) => errors.push(error.message), classify: classOf,
+    gate: logGate, writer: { layer: "workbench", member: "start", identity: pageIdentity } });
+  const tracer = createTracer((request) => host.call("performance", request), batcher);
   await tracer.setEnabled(true);
   assert.equal(await tracer.timed("core.ok", async () => 42), 42);
   await assert.rejects(tracer.setEnabled(false), /switch failed/);
+  // The next batch states the events that the refused batch lost, so the flush sends that batch at this point of the test.
+  await batcher.flush();
   // The first batch also holds the statement of the anchor (workbench.log.clock).
   assert.deepEqual(errors, ["page event batch of 2 events failed: relay failed"]);
   wire.finish();

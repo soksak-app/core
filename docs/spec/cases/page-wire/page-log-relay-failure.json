@@ -1,6 +1,6 @@
 {
   "name": "page-log-relay-failure",
-  "description": "The host fails the first log batch with a closed host, and the page sends the next record in a second log batch, which the host answers.",
+  "description": "The host fails the first log batch with a closed host, and the page sends the next record in a second log batch, which the host answers; the second batch first states the one event that the refused batch lost, with the reason that the host refused the batch.",
   "replay": false,
   "reason": "The log call of the case fails with host closed, the answer of a host whose connection ended, and the producer runs a host that does not end.",
   "variables": {
@@ -27,6 +27,16 @@
     "mono-ns-2": {
       "type": "integer",
       "example": 5000000802,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000463,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5000000803,
       "source": "page"
     }
   },
@@ -63,6 +73,18 @@
         "payload": {
           "action": "batch",
           "events": [
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "warn",
+              "event": "workbench.log.dropped",
+              "fields": {
+                "count": 1,
+                "bytes": 113,
+                "reason": "the host refused the batch"
+              }
+            },
             {
               "ts_us": "$ts-us-2",
               "mono_ns": "$mono-ns-2",

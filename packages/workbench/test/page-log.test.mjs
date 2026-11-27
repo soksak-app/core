@@ -111,10 +111,14 @@ test("a failed relay is reported on the original console and does not become a c
     captureConsole(target);
     emitEvent("info", "plugin.fixture.x", {});
     await flushEvents();
+    // The refused batch is counted, and the next batch of this test states the count, so the count does not reach the next test.
+    emitEvent("info", "plugin.fixture.y", {});
+    await flushEvents();
   } finally {
     console.error = original;
   }
   assert.equal(events().some((event) => event.event === "workbench.console.error"), false);
+  assert.deepEqual(events().filter(({ event }) => event === "workbench.log.dropped").map(({ fields }) => fields.count), [1], "the refused batch is counted once");
   assert.ok(reported.some((line) => line.includes("page event batch of 1 events failed: host closed")));
   wire.finish();
 });

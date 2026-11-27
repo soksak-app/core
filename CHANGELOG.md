@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1220-1: The page log and performance cases record the loss of a refused batch in the next batch, and their tests flush at their own points; the logging specification names the reason of that loss (Red: 9 page log tests and 1 performance test failed after F1220).
 - F999: A surface that a layout shows sends the drawing states of its image regions to their suppliers after the layout, in the Go and the Rust host, so a terminal shown after a restart draws without input (Red: showing the surface sent its region no drawing state that draws).
 - F1219: The object count test closes its client at a failing step, as the measurement does in its `finally`, so a picker reply without `open` fails the card menu step at once with the predicate error (case `object-counts-menu-picker-without-open`; Red: the test ran until its timeout).
 - F1220: The page event batcher counts the events of a batch that the host refused as dropped with the reason `the host refused the batch` and states them in the next batch, and a refusal sends nothing again at once (Red: the 9 refused events were lost without a count).
