@@ -405,7 +405,7 @@ pub fn register_view_source_event_stream(
 mod view_source_stream_test;
 
 /// A reload of the app DOM replaces all plugin documents but does not end the sessions: the modules of the new page reach
-/// the same session owners (docs/spec/surface-composition.md). The reload sends the sidecars only the detach of each
+/// the same owners (docs/spec/surface-composition.md). The reload sends the sidecars only the detach of each
 /// captured image of `surface` in `targets`, without waiting for the acknowledgements, so the surface stays pending until
 /// its detaches end (docs/spec/sidecars.md).
 pub fn reload_surface_sidecars<O: crate::sidecars::Owner>(

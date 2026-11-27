@@ -729,7 +729,7 @@ fn invalid_json_closes_connection() {
 | `images.detach.surface-ends-after-its-last-detach` | surface는 그 image detach가 모두 끝날 때까지 pending이고, 창 event `image-detach-ended {surface, error}`는 마지막 detach가 끝난 뒤에 온다. | all |
 | `images.reload.captures-old-image-owner` | Reload는 native 영역을 닫고 surface generation을 올리기 전에 각 이미지의 supplier와 현재 generation을 캡처한다. | all |
 | `images.reload.start-sends-detach-without-waiting` | reload는 native image를 닫은 뒤 캡처한 각 image의 detach를 보내고, 응답을 기다리지 않고 start document를 돌려준다. 각 image의 surface는 pending으로 남는다. | all |
-| `surfaces.reload.sends-only-image-detaches` | page reload는 다시 불러온 surface가 캡처한 각 image의 detach만 sidecar에 보낸다. image supplier에도, surface가 보낸 적이 있는 persistent sidecar에도 다른 메시지는 보내지 않으며, 새 page의 module이 같은 session owner에 연결된다. | all |
+| `surfaces.reload.sends-only-image-detaches` | page reload는 다시 불러온 surface가 캡처한 각 image의 detach만 sidecar에 보낸다. image supplier에도, surface가 보낸 적이 있는 persistent sidecar에도 다른 메시지는 보내지 않으며, 새 page의 module이 같은 소유자에 연결된다. | all |
 | `images.detach.pending-surface-is-refused` | surface의 detach가 pending인 동안 그 surface의 `imageAttach`와 page의 모든 sidecar send는 `... is pending`으로 거부되고, 다른 surface는 거부되지 않는다. | all |
 | `images.detach.session-end-releases` | supplier 연결이 끝나면 그 supplier의 pending detach가 끝나고 각 surface의 ended event가 `... ended: the supplier connection ended`를 담는다. surface session이 끝나면 그 surface의 pending detach가 ended event 없이 끝난다. | all |
 | `images.detach.ended-event-waits-for-ready` | workbench가 ready를 알리기 전의 ended event는 ready를 알릴 때 보낸다. workbench 시작은 이전 workbench가 받지 못한 event를 버리고 그 실패를 오류 기록으로 쓴다. | all |

@@ -323,9 +323,9 @@ const SIDECAR: &str = "fixture-sidecar";
 const ROOT: &str = "/fixture/root";
 
 #[derive(Clone)]
-struct SessionOwner(String);
+struct KeyOwner(String);
 
-impl Owner for SessionOwner {
+impl Owner for KeyOwner {
     fn key(&self) -> String {
         self.0.clone()
     }
@@ -337,8 +337,8 @@ impl Owner for SessionOwner {
     fn deliver_failure(&self, _failure: Failure) {}
 }
 
-fn owner(key: &str) -> SessionOwner {
-    SessionOwner(key.to_string())
+fn owner(key: &str) -> KeyOwner {
+    KeyOwner(key.to_string())
 }
 
 /// A window whose shown project changes during a test.
@@ -442,7 +442,7 @@ pub(crate) fn service_with_hello_gate(
 }
 
 /// Sends an open to the surface of the window, which starts the sidecar and records the surface and its root.
-fn open_session(sidecars: &Sidecars<SessionOwner>, window: &SessionOwner, surface: &str) {
+fn open_session(sidecars: &Sidecars<KeyOwner>, window: &KeyOwner, surface: &str) {
     sidecars
         .send(window, SIDECAR, surface, &raw(r#"{"operation":"open"}"#))
         .unwrap();
@@ -455,7 +455,7 @@ fn a_retain_keeps_an_ordinary_surface_first_sent_during_its_start() {
     let executable = Folder::new();
     let config = Folder::new();
     let (received, thread) = service(config.path());
-    let slot: Arc<Mutex<Option<Arc<Sidecars<SessionOwner>>>>> = Arc::new(Mutex::new(None));
+    let slot: Arc<Mutex<Option<Arc<Sidecars<KeyOwner>>>>> = Arc::new(Mutex::new(None));
     let hook_slot = slot.clone();
     let sidecars = declared(executable.path(), config.path()).with_retain_sending(move |name| {
         if name != SIDECAR {
