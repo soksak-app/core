@@ -284,10 +284,9 @@ func TestDrawingASidebarGivesEverySeatItsPlaceInTheWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 	head, _ := declared.Metric("head-h")
-	foot, _ := declared.Metric("foot-h")
-	// The head row of the window sidebar stands above the set, and the warning of gone.section, whose plugin is not loaded, stands in the
-	// status line at the bottom, so the first section starts below the head row alone.
-	if tree.Box.Y != 20+foot+head {
+	// The head row of the window sidebar stands above the set at the height of a card header, and the first section starts below the head row
+	// of its own, which has the same height. The warning of gone.section stands in the status line at the bottom.
+	if tree.Box.Y != 20+head+head {
 		t.Fatalf("the seat of the tree starts at %v", tree.Box.Y)
 	}
 }

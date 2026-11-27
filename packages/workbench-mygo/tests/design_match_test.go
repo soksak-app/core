@@ -95,7 +95,8 @@ func TestTheSidebarElementStartsBelowItsHead(t *testing.T) {
 	if top := card.Y + cardBorder + headRow(t); !designNear(side.Y, top) {
 		t.Fatalf("the sidebar starts at %v, want below the head at %v", side.Y, top)
 	}
-	if bottom := card.Y + card.H - cardBorder - headRow(t); !designNear(side.Y+side.H, bottom) {
+	// The status line at the bottom of the sidebar is the chrome metric foot-h high.
+	if bottom := card.Y + card.H - cardBorder - footRow(t); !designNear(side.Y+side.H, bottom) {
 		t.Fatalf("the sidebar ends at %v, want above the status line at %v", side.Y+side.H, bottom)
 	}
 }

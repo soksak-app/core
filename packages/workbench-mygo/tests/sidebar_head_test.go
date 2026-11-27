@@ -9,8 +9,22 @@ import (
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
-// headRow is the height of the head row of a window sidebar, the chrome metric foot-h that the row takes above the set.
+// headRow is the height of the head row of a window sidebar, the chrome metric head-h that the head shares with a card header.
 func headRow(t *testing.T) float32 {
+	t.Helper()
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, ok := declared.Metric("head-h")
+	if !ok {
+		t.Fatal("the chrome metric head-h is not declared")
+	}
+	return float32(head)
+}
+
+// footRow is the height of the status line at the bottom of a window sidebar, the chrome metric foot-h.
+func footRow(t *testing.T) float32 {
 	t.Helper()
 	declared, err := workbench.Declared()
 	if err != nil {

@@ -5,6 +5,7 @@
 
 ## 2026-11-27
 
+- F1217-18-1: 창 사이드바 머리가 web과 mygo에서 카드 머리와 같은 높이와 여백을 쓴다.
 - F1217-7-2-3: 프로젝트 홈의 가져오기 폼이 Git 저장소를 projectsFolder에 projectClone으로 복제한다. 웹 workbench, mygo, Go 호스트, Rust 호스트에 적용되며, 거부되거나 실패한 복제는 프로젝트를 추가하지 않고 대상 폴더를 남기지 않는다.
 - F1217-7-2-2: 대화상자 명령 검사가 core.settings.choose-folder를 folderChoose 호스트 호출과 함께 나열한다.
 - F1217-17: 설정 탭은 handoff의 컨트롤 칸, 행 높이, 입력 높이, 작은 버튼, 라벨 아래 설명 규칙과 일치한다.

@@ -200,6 +200,8 @@ func readSidebarMetrics(declared *Declarations) (SidebarMetrics, error) {
 	m.SectionHeadFont = declared.ChromeValue("ui-font")
 	read("section-tab-mark", &m.SectionTabMark)
 	read("sidebar-status-gap", &m.StatusGap)
+	read("card-head-gap", &m.CardHeadGap)
+	read("card-head-pad", &m.CardHeadPad)
 	read("space-2", &m.StatusPad)
 	read("fold-button", &m.FoldButton)
 	read("card-icon", &m.FoldIcon)

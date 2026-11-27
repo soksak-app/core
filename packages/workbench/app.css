@@ -786,7 +786,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .sidebar-status__fold{opacity:0}
 .card:hover > .sidebar-head > .sidebar-status__fold,.card:focus-within > .sidebar-head > .sidebar-status__fold,.sidebar-status__fold:focus-visible{opacity:var(--opaque)}
 /* The head row of a window sidebar: the position of its side, the name and the layout badge of its set, and the × at the right. */
-.sidebar-head{display:flex;align-items:center;gap:var(--space-2);padding:0 var(--space-2);border-bottom:var(--bw) solid var(--edge);font-size:var(--text-caption);color:var(--muted);white-space:nowrap;overflow:hidden}
+.sidebar-head{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);border-bottom:var(--bw) solid var(--edge);font-size:var(--text-caption);color:var(--muted);white-space:nowrap;overflow:hidden}
 .sidebar-head__order{font-weight:600;color:var(--fg)}
 .sidebar-head__spacer{flex:1 1 auto}
 .sidebar-head > .sidebar-status__fold{margin-left:0}

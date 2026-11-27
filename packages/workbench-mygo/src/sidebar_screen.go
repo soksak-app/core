@@ -82,6 +82,8 @@ type SidebarMetrics struct {
 	// StatusGap and StatusPad are the gap and the side padding of a status line. BorderWidth and StatusText follow the settings of the
 	// window: the width of a line and the size of a caption.
 	StatusGap, StatusPad, BorderWidth, StatusText float32
+	// CardHeadGap and CardHeadPad are the gap and the side padding of a card header, which the head of a window sidebar takes.
+	CardHeadGap, CardHeadPad float32
 	// Warn is the color of a warning in a status line, which the host gives through its options.
 	Warn ui.Color
 	// FoldButton and FoldIcon are the sizes of the fold control of a status line and of its icon.
@@ -318,8 +320,9 @@ func sectionItem(frame SidebarFrame, section SidebarSection) string {
 // sidebarBands returns the height of the band above the set and of the band below it: a window sidebar has its head above the set and its
 // status line below it, and a card sidebar has its status line below it (docs/spec/external-sidebars.md#sidebar-head-and-edge).
 func sidebarBands(frame SidebarFrame, metrics SidebarMetrics) (top, bottom float32) {
+	// The head of a window sidebar is as high as a card header (docs/spec/external-sidebars.md#sidebar-head-and-edge).
 	if frame.Side != "" {
-		return metrics.FootH, metrics.FootH
+		return metrics.HeadH, metrics.FootH
 	}
 	return 0, metrics.FootH
 }
@@ -664,7 +667,7 @@ func drawSidebarHead(c *ui.Context, binder *Binder, frame SidebarFrame, metrics 
 		}
 	}
 	// The element core.sidebar.head holds only the place as its text, so the name and the badge stand beside it in the band.
-	ui.Row(c).FillWidth().Height(metrics.FootH).AlignItems(ui.Center).Gap(metrics.StatusGap).PaddingX(metrics.StatusPad).
+	ui.Row(c).FillWidth().Height(metrics.HeadH).AlignItems(ui.Center).Gap(metrics.CardHeadGap).PaddingX(metrics.CardHeadPad).
 		BorderWidth(0, 0, metrics.BorderWidth, 0).BorderColor(theme.Border).Children(func() {
 		ui.Row(binder.Name(c, "core.sidebar.head", frame.Sidebar)).AlignItems(ui.Center).Role(ui.RoleStatus).Label(frame.Status).Children(func() {
 			ui.Text(c, strconv.Itoa(frame.Number)).SingleLine().FontSize(metrics.StatusText).TextColor(theme.TextMuted)
