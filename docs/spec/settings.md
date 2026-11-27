@@ -8,7 +8,7 @@ The settings tab has one menu, one page at a time and one content pane. While th
 
 ## Opening and closing
 
-- `core.settings.open` opens the settings tab beside the project tabs, or brings the open tab to the front. The tab shows the chip `⚙ 설정` with a close control. The chrome button (element `core.chrome.settings`), the app menu item 설정… and `cmd+,` run this command.
+- `core.settings.open` opens the settings tab beside the project tabs, or brings the open tab to the front. The tab shows the chip `⚙ 설정` with a close control; its ⚙ is the settings icon of the title bar ⚙ at the same size and stroke. The chrome button (element `core.chrome.settings`), the app menu item 설정… and `cmd+,` run this command.
 - Each project window has one settings tab. The tab stands after the project tabs in every position of `projectTabs`. Its scope is the project of its window. When the window shows the project home, no project is selected and the page head has no scope control ([page head](#page-head)).
 - The close control of the chip (element `core.settings-tab.close`) runs `core.settings.close`. The command closes the tab and brings the work screen of the window to the front.
 - While the settings tab is in front, the surfaces of the window are not drawn and keep their sessions, as a hidden tab keeps them.

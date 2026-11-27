@@ -10,7 +10,8 @@ func TestTheSettingsChipStandsInTheTitleBarAfterTheProjectTabs(t *testing.T) {
 	f.run("core.settings.open", nil)
 	bar := element(t, f.tester, "core.chrome.bar", "")
 	chip := element(t, f.tester, "core.settings-tab.chip", "")
-	if chip.Text != "⚙ 설정" {
+	// The gear is the settings icon beside the label (gear_icon_size_test.go), so the text is the name of the tab.
+	if chip.Text != "설정" {
 		t.Fatalf("the chip says %q", chip.Text)
 	}
 	last := f.box("core.project-tab", second)

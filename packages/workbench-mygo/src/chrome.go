@@ -116,8 +116,12 @@ func (s *Shell) drawSettingsChip(c *ui.Context) {
 	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(s.frameLength(m.chromeGap)).Margin(0, 0, 0, s.frameLength(m.chromeGap)).Children(func() {
 		open := s.binder.Press(c, "core.settings-tab.chip", "core.settings.open", "", nil)
 		open.Height(s.frameLength(m.spaceTabH)).PaddingX(s.frameLength(m.chromeGap)).AlignItems(ui.Center).Radius(s.radiusSmall()).
-			Border(s.palette.BorderWidth, border).Label("⚙ 설정").Children(func() {
-			ui.Text(c, "⚙ 설정").SingleLine().FontSize(size).TextColor(s.palette.Fg)
+			Gap(s.frameLength(m.chromeGap)).Border(s.palette.BorderWidth, border).Label("설정").Children(func() {
+			// The gear is the settings icon of the title bar gear, at its size and stroke.
+			icon := s.frameLength(m.actIcon)
+			paint := fmt.Sprintf(`fill="none" stroke="currentColor" stroke-width="%g"`, m.actStroke)
+			ui.Icon(c, s.declaredIcon("0 0 24 24", paint, s.options.Declared.Icons["settings"])).Size(icon, icon).TextColor(s.palette.Fg)
+			ui.Text(c, "설정").SingleLine().FontSize(size).TextColor(s.palette.Fg)
 		})
 		closing := s.binder.Press(c, "core.settings-tab.close", "core.settings.close", "", nil)
 		closing.Height(s.frameLength(m.spaceTabH)).PaddingX(s.frameLength(m.barXPad)).AlignItems(ui.Center).Label("설정 탭 닫기").Tooltip("설정 탭 닫기")

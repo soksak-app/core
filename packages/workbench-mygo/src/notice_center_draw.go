@@ -91,7 +91,8 @@ func (s *Shell) drawNoticeHead(c *ui.Context) {
 		ui.Text(c, "알림").SingleLine().TextColor(s.palette.Fg)
 		ui.Box(c).Grow(1)
 		s.uiButton(c, s.binder.Press(c, "core.notices.read-all", "core.notices.read-all", "", nil), "모두 읽음", false)
-		s.uiButton(c, s.binder.Press(c, "core.notices.settings", "core.settings-tab.nav", "", map[string]any{"page": "behavior", "group": "notices"}), "⚙", false)
+		// The gear is the icon switch of the title bar gear, so every gear of the window has one size and stroke.
+		s.drawAct(c, s.binder.Press(c, "core.notices.settings", "core.settings-tab.nav", "", map[string]any{"page": "behavior", "group": "notices"}), "알림 설정", "settings", false, 1)
 		close := s.binder.Press(c, "core.notices.toggle", "core.notices.toggle", "", nil)
 		close.Size(m.noticeGlyph, m.noticeGlyph).Shrink(0).Center().Label("닫기").Tooltip("닫기").Cursor(ui.CursorPointer).Children(func() {
 			ui.Icon(c, s.declaredIcon("0 0 24 24", fmt.Sprintf(`fill="none" stroke="currentColor" stroke-width="%g"`, 2.0), s.options.Declared.Icons["close"])).

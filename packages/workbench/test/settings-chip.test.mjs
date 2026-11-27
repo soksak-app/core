@@ -33,7 +33,9 @@ test("the chip is hidden without a settings tab and shows the label with its clo
   chip.draw();
   assert.equal(root.hidden, false);
   const open = root.querySelector('[data-expose="core.settings-tab.chip"]');
-  assert.equal(open.textContent, "⚙ 설정");
+  // The gear is the settings icon of the title bar (gear-icon-size.test.mjs), and the text is the name of the tab.
+  assert.equal(open.textContent, "설정");
+  assert.ok(open.querySelector("svg"), "the chip has no gear");
   assert.equal(open.dataset.command, "core.settings.open");
   const close = root.querySelector('[data-expose="core.settings-tab.close"]');
   assert.equal(close.dataset.command, "core.settings.close");

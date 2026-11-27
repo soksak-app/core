@@ -147,7 +147,8 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .act--text{width:auto;padding:0 var(--space-2);font-size:var(--text-control)}
 .act:hover{color:var(--fg);background:var(--inset)}
 .act[data-on=true]{color:var(--focus)}
-.act svg{width:var(--act-icon);height:var(--act-icon);fill:none;stroke:currentColor;stroke-width:var(--act-stroke);
+/* The gear of the settings tab chip is drawn as the gear of the title bar. */
+.act svg,.settings-chip__open svg{width:var(--act-icon);height:var(--act-icon);fill:none;stroke:currentColor;stroke-width:var(--act-stroke);
   stroke-linecap:round;stroke-linejoin:round}
 
 /* When the project tabs are placed on the left. They start above the space row and continue to the bottom. */
@@ -689,7 +690,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 #toasts[data-style="line"] .toast { width: max-content; max-width: var(--toast-width); height: var(--toast-line-h); padding-block: 0; align-items: center; border-radius: var(--toast-line-h); }
 .toast[hidden] { display: none; }
 .toast__mark { display: inline-grid; place-items: center; width: var(--notice-glyph); height: var(--notice-glyph); color: var(--focus); }
-.toast__mark svg, .notice-center__mark svg, .notice-line__dot svg, .toast__close svg, .notice-center__head svg { display: block; width: inherit; height: inherit; fill: none; stroke: currentColor; stroke-width: var(--icon-stroke); stroke-linecap: round; stroke-linejoin: round; }
+.toast__mark svg, .notice-center__mark svg, .notice-line__dot svg, .toast__close svg, .notice-center__close svg { display: block; width: inherit; height: inherit; fill: none; stroke: currentColor; stroke-width: var(--icon-stroke); stroke-linecap: round; stroke-linejoin: round; }
 .toast[data-kind="success"] .toast__mark { color: var(--ok); }
 .toast[data-kind="warning"] .toast__mark { color: var(--warn); }
 .toast[data-kind="error"] .toast__mark { color: var(--no); }

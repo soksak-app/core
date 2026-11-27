@@ -63,7 +63,7 @@ body[data-screen=home] .chrome-bar__acts{margin-left:auto}
 /* The settings tab chip beside the project tabs and the container of the settings content (docs/spec/settings.md#opening-and-closing). */
 .settings-chip{display:flex;align-items:center;gap:var(--space-1);flex:0 0 auto;margin-left:var(--space-1)}
 .settings-chip[hidden],.settings-tab[hidden],.work[hidden]{display:none}
-.settings-chip__open{border:var(--bw) solid var(--edge);border-radius:var(--r-xs);background:var(--chip-on);color:var(--fg);font-size:var(--text-small);padding:0 var(--space-2);height:var(--chrome-row-h)}
+.settings-chip__open{display:inline-flex;align-items:center;gap:var(--space-1);border:var(--bw) solid var(--edge);border-radius:var(--r-xs);background:var(--chip-on);color:var(--fg);font-size:var(--text-small);padding:0 var(--space-2);height:var(--chrome-row-h)}
 .settings-chip__close{border:0;background:transparent;color:var(--muted);font-size:var(--text-control);padding:0 var(--space-1)}
 /* While the settings tab is in front, the chip and its close control share one frame and the open control has no frame of its own (design: tgroup). */
 .settings-chip[data-on=true]{border:var(--bw) solid var(--edge);border-radius:var(--r-xs);background:var(--chip-sel)}

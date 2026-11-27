@@ -223,7 +223,12 @@ export function mountNoticeView(document, store) {
     const head = el(document, "header", "notice-center__head");
     head.append(el(document, "strong", "notice-center__title", "알림"));
     head.append(control(document, "button", "notice-center__read", "모두 읽음", "core.notices.read-all", "core.notices.read-all", {}));
-    head.append(control(document, "button", "notice-center__settings", "⚙", "core.notices.settings", "core.settings-tab.nav", { page: "behavior", group: "notices" }));
+    // The gear is the settings icon of the title bar in an icon switch, so every gear of the window has one size and stroke.
+    const gear = control(document, "button", "notice-center__settings act", "", "core.notices.settings", "core.settings-tab.nav", { page: "behavior", group: "notices" });
+    gear.title = "알림 설정";
+    gear.setAttribute("aria-label", "알림 설정");
+    gear.innerHTML = icon("settings");
+    head.append(gear);
     head.append(control(document, "button", "notice-center__close", "", "core.notices.toggle", "core.notices.toggle", {}));
     head.querySelector(".notice-center__close").innerHTML = icon("close");
     const filters = el(document, "div", "notice-center__filters");

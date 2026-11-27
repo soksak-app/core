@@ -2,6 +2,7 @@
 // The settings module supplies the content and its state: mount(container) draws the content, front() tells whether the settings tab is in front,
 // and open() tells whether the window has a settings tab. Each is injected so that the chip depends on no module that does not yet export it.
 import { bind } from "./commands.js";
+import { icon } from "./icons.js";
 
 /**
  * Draws the chip into root and returns the state it draws. root holds the chip button and the close control; the content container is
@@ -11,7 +12,7 @@ export function createSettingsChip(root, container, { mount, front, open, hint =
   if (typeof mount !== "function" || typeof front !== "function" || typeof open !== "function") {
     throw new Error("the settings chip needs the mount, front and open functions of the settings module");
   }
-  root.innerHTML = '<button type="button" class="settings-chip__open" data-expose="core.settings-tab.chip">⚙ 설정</button><button type="button" class="settings-chip__close" data-expose="core.settings-tab.close" aria-label="설정 탭 닫기">×</button>';
+  root.innerHTML = `<button type="button" class="settings-chip__open" data-expose="core.settings-tab.chip">${icon("settings")}설정</button><button type="button" class="settings-chip__close" data-expose="core.settings-tab.close" aria-label="설정 탭 닫기">×</button>`;
   const openButton = root.querySelector(".settings-chip__open");
   const closeButton = root.querySelector(".settings-chip__close");
   bind(openButton, "core.settings.open", {});
