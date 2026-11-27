@@ -87,6 +87,14 @@ func goHost_document_queried(context uintptr, value *byte) {
 	reply(native.GoString(value))
 }
 
+// goHost_document_boxed receives the one reply of a box query and releases its receiver.
+func goHost_document_boxed(context uintptr, value *byte) {
+	handle := handles.Handle(uintptr(context))
+	reply := handle.Value().(func(string))
+	handle.Delete()
+	reply(native.GoString(value))
+}
+
 func goHost_document_event(context uintptr, value *byte) {
 	handles.Handle(uintptr(context)).Value().(func(string))(native.GoString(value))
 }

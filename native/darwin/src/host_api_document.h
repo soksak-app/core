@@ -9,6 +9,7 @@ void coreRootSet(uintptr_t context);
 void *coreRootBufferCreate(size_t length);
 void coreRootBufferRelease(void *buffer, size_t length);
 void documentQuery(void *document, uintptr_t context);
+void documentBoxes(void *document, const char *selector, const char *properties, uintptr_t context);
 void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, const char *label, const char *channel, bool sharesProcess, uintptr_t context);
 void documentSetMessage(void *document, uintptr_t context);
 void documentSetViewMessage(void *document, uintptr_t context);

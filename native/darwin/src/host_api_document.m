@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include "document_view.h"
 #include "main_thread.h"
 #include "host_callbacks.h"
@@ -55,6 +56,22 @@ static void documentQueriedBridge(void *context, const char *reply) {
 
 void documentQuery(void *document, uintptr_t context) {
     hostRunOnMain(^{ sp_document_query(document, documentQueriedBridge, (void *)context); });
+}
+
+// The selector and the properties are copied before the call crosses to the main thread, because the caller may free its strings
+// once the call returns. sp_document_boxes reads them on the main thread and replies through the worker.
+static void documentBoxedBridge(void *context, const char *reply) {
+    hostRunOnWorker(^{ sp_host_callback_document_boxed((uintptr_t)context, (char *)reply); });
+}
+
+void documentBoxes(void *document, const char *selector, const char *properties, uintptr_t context) {
+    char *selectorCopy = strdup(selector);
+    char *propertiesCopy = strdup(properties ? properties : "[]");
+    hostRunOnMain(^{
+        sp_document_boxes(document, selectorCopy, propertiesCopy, documentBoxedBridge, (void *)context);
+        free(selectorCopy);
+        free(propertiesCopy);
+    });
 }
 
 void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, const char *label, const char *channel, bool sharesProcess, uintptr_t context) {

@@ -44,6 +44,7 @@ func callbackHandlers() abi.Callbacks {
 		DocumentStream:            goHost_document_stream,
 		CoreRootServe:             goHost_core_root_serve,
 		DocumentQueried:           goHost_document_queried,
+		DocumentBoxed:             goHost_document_boxed,
 		DocumentEvent:             goHost_document_event,
 		MemoryPressure:            goHost_memory_pressure,
 		DockNewWindow:             goHost_dock_new_window,

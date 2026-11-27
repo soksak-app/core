@@ -1629,6 +1629,72 @@ void sp_document_query(void *handle, sp_document_query_reply reply, void *contex
     reply(context, json.UTF8String);
 }
 
+// The fixed script of sp_document_boxes. It runs in the document world with the arguments selector and properties (the JSON text of
+// the property names), and returns the reply object of docs/spec/native-surfaces.md#box-query. Each refusal is an error object.
+static NSString *const kBoxesScript =
+    @"let names; try { names = JSON.parse(properties); } catch (error) { return { error: 'properties must be a JSON array' }; }"
+    "if (!Array.isArray(names)) return { error: 'properties must be an array' };"
+    "for (const name of names) {"
+    " if (typeof name !== 'string') return { error: 'property must be a string' };"
+    " if (!/^[a-z][a-z0-9-]*$/.test(name) || !CSS.supports(name, 'inherit')) return { error: 'unknown style property ' + name };"
+    "}"
+    "let found; try { found = document.querySelectorAll(selector); }"
+    " catch (error) { return { error: 'invalid selector ' + selector + ': ' + error.message }; }"
+    "const boxes = [];"
+    "for (const element of Array.prototype.slice.call(found, 0, 500)) {"
+    " const rect = element.getBoundingClientRect();"
+    " const computed = getComputedStyle(element);"
+    " const style = {};"
+    " for (const name of names) style[name] = computed.getPropertyValue(name);"
+    " boxes.push({ x: rect.x, y: rect.y, width: rect.width, height: rect.height, style });"
+    "}"
+    "return { total: found.length, truncated: found.length > 500, boxes };";
+
+// Replies with the JSON text of object. An object that JSON cannot encode is replied as an error, so a reply always holds JSON.
+static void boxesReplyJSON(id object, sp_document_boxes_reply reply, void *context) {
+    if (![object isKindOfClass:NSDictionary.class] || ![NSJSONSerialization isValidJSONObject:object]) {
+        reply(context, "{\"error\":\"box query returned a value that is not JSON\"}");
+        return;
+    }
+    NSData *data = [NSJSONSerialization dataWithJSONObject:object options:0 error:nil];
+    NSString *json = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+    reply(context, json.UTF8String);
+}
+
+void sp_document_boxes(void *handle, const char *selector, const char *properties, sp_document_boxes_reply reply, void *context) {
+    NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
+    SPDocumentView *view = (SPDocumentView *)handle;
+    if (!view || view.closed) {
+        reply(context, "{\"error\":\"the document region is closed\"}");
+        return;
+    }
+    if (!selector || !*selector) {
+        reply(context, "{\"error\":\"selector must not be empty\"}");
+        return;
+    }
+    // A region with no committed main frame document has no URL.
+    if (view.URL.absoluteString.length == 0) {
+        reply(context, "{\"error\":\"the document region shows no page\"}");
+        return;
+    }
+    NSDictionary *arguments = @{
+        @"selector": [NSString stringWithUTF8String:selector],
+        @"properties": [NSString stringWithUTF8String:properties ?: "[]"],
+    };
+    [view callAsyncJavaScript:kBoxesScript arguments:arguments inFrame:nil
+        inContentWorld:[WKContentWorld worldWithName:kDocumentWorld] completionHandler:^(id result, NSError *error) {
+        if (view.closed) {
+            reply(context, "{\"error\":\"the document region is closed\"}");
+            return;
+        }
+        if (error) {
+            boxesReplyJSON(@{ @"error": error.localizedDescription }, reply, context);
+            return;
+        }
+        boxesReplyJSON(result ?: @{ @"error": @"box query returned no object" }, reply, context);
+    }];
+}
+
 char *sp_document_interaction_state(void *handle) {
     NSCAssert(NSThread.isMainThread, @"documents belong to the main thread");
     SPDocumentView *view = (SPDocumentView *)handle;

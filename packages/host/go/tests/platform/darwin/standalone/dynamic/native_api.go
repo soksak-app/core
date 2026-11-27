@@ -92,6 +92,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.DocumentBinaryTake, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "documentBoxes")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API documentBoxes: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API documentBoxes: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.DocumentBoxes, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "documentCreate")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API documentCreate: %w", err)

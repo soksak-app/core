@@ -197,6 +197,14 @@ typedef void (*sp_document_query_reply)(void *context, const char *json);
 // once before the call returns.
 void sp_document_query(void *document, sp_document_query_reply reply, void *context);
 
+// The reply of sp_document_boxes: the JSON object {"total", "truncated", "boxes"} of docs/spec/native-surfaces.md#box-query, or
+// {"error": <text>}. json is released when the call returns. Called once on the main thread, after sp_document_boxes returns.
+typedef void (*sp_document_boxes_reply)(void *context, const char *json);
+
+// Measures the elements of the main frame document of the region that match selector: properties is a JSON array of CSS property
+// names. A fixed script of the document world runs the measurement, so the page supplies no code. reply is called once.
+void sp_document_boxes(void *document, const char *selector, const char *properties, sp_document_boxes_reply reply, void *context);
+
 // Returns the public interactionState of the region (serialized session history) as base64 in a string that the caller
 // releases with free, an empty string when the region has loaded nothing or the web view yields no state, or NULL for a
 // closed region.

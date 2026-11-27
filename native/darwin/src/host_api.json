@@ -8,6 +8,7 @@
     "documentAddScript",
     "documentBinaryPut",
     "documentBinaryTake",
+    "documentBoxes",
     "documentCreate",
     "documentQuery",
     "documentSetEvent",

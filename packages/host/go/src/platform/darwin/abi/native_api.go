@@ -124,6 +124,7 @@ type NativeFunctions struct {
 	DocumentAddScript                      func(unsafe.Pointer, *byte)
 	DocumentBinaryPut                      func(unsafe.Pointer, unsafe.Pointer, uint64, *byte, *byte) *byte
 	DocumentBinaryTake                     func(unsafe.Pointer, *byte, *unsafe.Pointer, *uint64) *byte
+	DocumentBoxes                          func(unsafe.Pointer, *byte, *byte, uintptr)
 	DocumentCreate                         func(unsafe.Pointer, *byte, *byte, *byte, *byte, *byte, bool, uintptr) unsafe.Pointer
 	DocumentQuery                          func(unsafe.Pointer, uintptr)
 	DocumentSetEvent                       func(unsafe.Pointer, uintptr)
@@ -323,6 +324,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.DocumentBinaryTake == nil {
 		return fmt.Errorf("native API function is missing: documentBinaryTake")
+	}
+	if functions.DocumentBoxes == nil {
+		return fmt.Errorf("native API function is missing: documentBoxes")
 	}
 	if functions.DocumentCreate == nil {
 		return fmt.Errorf("native API function is missing: documentCreate")
