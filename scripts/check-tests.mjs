@@ -5753,7 +5753,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "native/darwin/tests/webview_render_occluded_test.m", id: "the modal web view does not detect the occlusion of its window" },
     ],
-    expected: "Still captures include rendered child settings modals at their device-pixel geometry, both normally and while covered, after the declared WebKit modal document has loaded.",
+    expected: "Still captures include rendered child modals at their device-pixel geometry, both normally and while covered, after the declared WebKit modal document has loaded.",
     levels: ["unit", "application"],
   },
   {
@@ -7164,7 +7164,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/page-start-imports.test.mjs", id: "the first window of a main page reads no module of the settings tab or the debug view" },
       { file: "packages/workbench/test/page-start-imports.test.mjs", id: "a settings tab that never loaded answers its status as absent, and its first command loads it" },
     ],
-    expected: "The first window reads no module of the settings modal or the debug view, and each screen loads at its first use.",
+    expected: "The first window reads no module of the settings tab or the debug view, and each screen loads at its first use.",
     levels: ["unit"],
   },
   {
@@ -11258,7 +11258,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/workbench/test/settings-scroll.test.mjs", id: "a negative scroll position is kept as reported and a value that is not a number is refused" },
     ],
-    expected: "The settings modal keeps a negative scroll position that the native modal reports and refuses a value that is not a number.",
+    expected: "The settings tab keeps a negative scroll position as reported and refuses a value that is not a number.",
     levels: ["unit"],
   },
   {
@@ -14059,7 +14059,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "e2e/modal.test.mjs", id: "add and split menus are transparent and have no backdrop" },
     ],
-    expected: "Both rebuilt hosts preserve the existing transparent picker and semi-transparent settings modal contract through focus, dismissal, movement, resize, reload, and deferred geometry verification.",
+    expected: "Both rebuilt hosts preserve the existing transparent picker contract through focus, dismissal, movement, resize, reload, and deferred geometry verification.",
     levels: ["native", "application"],
   },
   {

@@ -783,7 +783,7 @@ export async function installCoreExposure({ home, renames, chrome, drawn, memory
   });
   registry.command("core.settings.open", async () => { (await settingsUi()).openSettingsTab(); });
   registry.command("core.settings.close", () => { settingsScreen?.closeSettingsTab(); });
-  // The debug view and the settings modal are both dialogs, and the host shows one native modal at a time.
+  // The debug view is a dialog, so the settings tab closes before it opens.
   registry.command("core.debug.open", onDebug(async (screen) => { settingsScreen?.closeSettingsTab(); await screen.openDebug(); }));
   registry.command("core.debug.close", () => { closeDebug(); });
   registry.command("core.debug.save", onDebug((screen, { path }) => screen.saveDebugFile(path)));
