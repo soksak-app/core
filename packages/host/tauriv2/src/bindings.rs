@@ -23,7 +23,7 @@ use soksak_host::link;
 use soksak_host::menu;
 use soksak_host::modals::{self, OverlayRequest, PlaceRequest, RevisedContent, UpdateRequest};
 use soksak_host::motion;
-use soksak_host::projects::{self, CreateProject, Folder};
+use soksak_host::projects::{self, CloneProject, CreateProject, Folder};
 use soksak_host::shapes::{self, ShapeRequest};
 use soksak_host::sidecars::WindowSidecars;
 use soksak_host::surfaces::{
@@ -273,6 +273,16 @@ async fn project_create(app: AppHandle, request: Argument<CreateProject>) -> Res
     let Argument(request) = request;
     blocking(move || {
         projects::project_create(&app, request)
+    })
+    .await
+}
+
+/// Clones a Git repository into the target folder, which must not exist, and returns the target folder.
+#[tauri::command]
+async fn project_clone(app: AppHandle, request: Argument<CloneProject>) -> Result<Folder, String> {
+    let Argument(request) = request;
+    blocking(move || {
+        projects::project_clone(&app, request)
     })
     .await
 }

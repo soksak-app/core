@@ -40,7 +40,7 @@ const listen = createLifecycleListener((event, fn) =>
 
 const METHOD = {
   workspace: "Workspace",
-  windowNew: "WindowNew", folderChoose: "FolderChoose", projectCreate: "ProjectCreate",
+  windowNew: "WindowNew", folderChoose: "FolderChoose", projectCreate: "ProjectCreate", projectClone: "ProjectClone",
   projectFolder: "ProjectFolder",
   projectOpen: "ProjectOpen",
   projectShown: "ProjectShown",

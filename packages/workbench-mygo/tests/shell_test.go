@@ -72,6 +72,9 @@ type storedHost struct {
 	geometry any
 	// createRefused is the refusal of projectCreate.
 	createRefused error
+	// cloneRefused is the refusal of projectClone, and clones holds the argument of each projectClone call.
+	cloneRefused error
+	clones       []map[string]string
 	// open are the projects that the host names as owned by a window.
 	open []string
 	// appUpdate is the answer of appUpdateState, and opened holds the arguments of linkOpen.
@@ -291,6 +294,19 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 				return nil, err
 			}
 			return map[string]string{"root": root, "identity": "identity of " + root}, nil
+		}),
+		"projectClone": answer("projectClone", func(argument json.RawMessage) (any, error) {
+			var request map[string]string
+			if err := json.Unmarshal(argument, &request); err != nil {
+				return nil, err
+			}
+			h.mu.Lock()
+			h.clones = append(h.clones, request)
+			h.mu.Unlock()
+			if h.cloneRefused != nil {
+				return nil, h.cloneRefused
+			}
+			return map[string]string{"root": request["target"], "identity": "identity of " + request["target"]}, nil
 		}),
 		"projectCreate": answer("projectCreate", func(argument json.RawMessage) (any, error) {
 			if h.createRefused != nil {

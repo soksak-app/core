@@ -7,6 +7,9 @@ export function hostWindows(host) {
   return {
     /** Provides the new folder creation and folder selection dialogs. */
     createsFolders: true,
+    /** Provides the Git repository import: the host clones the address into the target folder and answers the target's identity. */
+    clonesRepositories: true,
+    cloneProject: (request) => host.call("projectClone", request),
     newWindow: (cids) => host.call("windowNew", undefined, { cids }),
     onActivate: (fn) => host.on("project-activate", fn),
     onCloseRequest: (fn) => host.on("project-close-request", fn),

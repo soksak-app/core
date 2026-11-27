@@ -245,7 +245,42 @@ export function createHome(root) {
     const open = element('button', 'ui-button', '폴더 열기'); open.type = 'button';
     open.dataset.expose = 'core.home.open-folder';
     mark(open, 'core.home.form.open', { mode: 'open' });
-    actionsRow.append(add, open);
+    const clone = element('button', 'ui-button', 'Git 저장소 가져오기'); clone.type = 'button';
+    clone.dataset.expose = 'core.home.import';
+    mark(clone, 'core.home.form.open', { mode: 'import' });
+    actionsRow.append(add, open, clone);
+  }
+
+  /** The target of an import: <projectsFolder>/<name>, where the name is the last element of the address without .git. */
+  function importTarget(address) {
+    const text = address.trim();
+    if (text === '') throw new Error('the address is empty');
+    if (text.startsWith('-')) throw new Error('the address starts with -');
+    const name = text.replace(/\/+$/, '').replace(/\.git$/, '').split(/[/:]/).pop();
+    if (name === '') throw new Error('the address has no repository name');
+    return `${String(value('projectsFolder')).replace(/\/+$/, '')}/${name}`;
+  }
+
+  /** The import form: one address field, the target shown under it, and the submit that clones the address (docs/spec/projects.md#project-folder). */
+  function renderImport() {
+    const fields = element('form', 'home-form__fields');
+    form.append(element('h2', '', 'Git 저장소 가져오기'));
+    const label = element('label', '', '저장소 주소'), input = element('input', 'text-field');
+    input.name = 'address'; input.dataset.expose = 'core.home.form.address'; input.placeholder = 'https://…'; input.required = true; input.autocomplete = 'off';
+    mark(input, 'core.home.form.set', { field: 'address' }); input.dataset.live = '';
+    label.append(input); fields.append(label);
+    const target = element('div', 'home-form__target');
+    const show = () => { try { target.textContent = importTarget(input.value); } catch { target.textContent = '—'; } };
+    input.addEventListener('input', show); show();
+    fields.append(target);
+    const actions = element('div', 'home-form__actions');
+    const cancel = element('button', 'ui-button', '취소'); cancel.type = 'button'; cancel.dataset.expose = 'core.home.form.cancel';
+    mark(cancel, 'core.home.form.cancel');
+    const submit = element('button', 'ui-button primary', '가져오기'); submit.type = 'button'; submit.dataset.expose = 'core.home.form.submit';
+    mark(submit, 'core.home.form.submit');
+    actions.append(cancel, submit); fields.append(actions); form.append(fields);
+    fields.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); submit.click(); } });
+    input.focus();
   }
 
   function renderForm() {
@@ -253,6 +288,7 @@ export function createHome(root) {
     if (form.dataset.mode === formMode) return;
     form.dataset.mode = formMode;
     form.innerHTML = '';
+    if (formMode === 'import') { renderImport(); return; }
     const creates = formMode === 'create';
     form.append(element('h2', '', creates ? '새 폴더로 프로젝트 만들기' : '기존 폴더로 프로젝트 만들기'));
     const fields = element('form', 'home-form__fields');
@@ -345,7 +381,8 @@ export function createHome(root) {
     pin: (id) => { const project = projects.all().find((p) => p.id === id); if (!project) throw new Error(`unknown project ${id}`); return perform(() => projects.pin(id, !project.pinned)); },
     openForm(mode, parent) {
       if (mode === 'create' && !windows.createsFolders) throw new Error('this application cannot create folders');
-      if (mode !== 'create' && mode !== 'open') throw new Error(`unknown form mode ${mode}`);
+      if (mode === 'import' && !windows.clonesRepositories) throw new Error('this application cannot import repositories');
+      if (mode !== 'create' && mode !== 'open' && mode !== 'import') throw new Error(`unknown form mode ${mode}`);
       // default: a form without a parent has no parent folder.
       // a create form starts in projectsFolder, the base folder of new projects; the person may replace it.
       formMode = mode; formPath = parent ?? (mode === 'create' ? value('projectsFolder') : null); form.hidden = false; form.dataset.mode = '';
@@ -358,8 +395,15 @@ export function createHome(root) {
     submitForm() {
       if (form.hidden) throw new Error('the form is not open');
       return perform(async () => {
-        let target = formField('parent').value.trim();
-        if (formMode === 'create') target = (await windows.createFolder({ parent: target, name: formField('name').value.trim() })).root;
+        let target;
+        if (formMode === 'import') {
+          // The address is refused before the clone starts; the host refuses an existing target and a failed clone with its own text.
+          const address = formField('address').value.trim();
+          target = (await windows.cloneProject({ address, target: importTarget(address) })).root;
+        } else {
+          target = formField('parent').value.trim();
+          if (formMode === 'create') target = (await windows.createFolder({ parent: target, name: formField('name').value.trim() })).root;
+        }
         // default: if every color is already in use, the first color is used again.
         await projects.open({ root: target, color: TINTS.find((t) => !projects.all().some((p) => p.color === t)) ?? TINTS[0], layout: fresh() });
         form.hidden = true; formMode = null; form.dataset.mode = ''; form.innerHTML = '';

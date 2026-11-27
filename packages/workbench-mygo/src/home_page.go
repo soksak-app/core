@@ -88,6 +88,7 @@ func (s *Shell) drawHomeButtons(c *ui.Context) {
 	ui.Row(c).Gap(s.metrics.space2).Children(func() {
 		s.uiButton(c, s.binder.Press(c, "core.home.add", "core.home.form.open", "", map[string]string{"mode": "create"}), "새 프로젝트", true)
 		s.uiButton(c, s.binder.Press(c, "core.home.open-folder", "core.home.form.open", "", map[string]string{"mode": "open"}), "폴더 열기", false)
+		s.uiButton(c, s.binder.Press(c, "core.home.import", "core.home.form.open", "", map[string]string{"mode": "import"}), "Git 저장소 가져오기", false)
 	})
 }
 
@@ -96,6 +97,20 @@ func (s *Shell) drawHomeForm(c *ui.Context) {
 	m := s.metrics
 	creates := s.home.formMode == "create"
 	ui.Column(c).FillWidth().Padding(m.space4).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, s.palette.Edge).Background(s.palette.Card).Gap(m.space3).Children(func() {
+		if s.home.formMode == "import" {
+			s.drawFormField(c, "core.home.form.address", "address", &s.home.address, "저장소 주소", "https://…", true, nil)
+			target, err := s.importTarget(s.home.address)
+			if err != nil {
+				target = "—"
+			}
+			ui.Text(c, "대상 폴더").LineHeight(s.metrics.lineHeight).FontSize(s.textControl()).TextColor(s.palette.Muted)
+			ui.Text(c, target).SingleLine().FontSize(s.textControl()).TextColor(s.palette.Fg)
+			ui.Row(c).FillWidth().Gap(m.space2).Justify(ui.End).Children(func() {
+				s.uiButton(c, s.binder.Press(c, "core.home.form.cancel", "core.home.form.cancel", "", nil), "취소", false)
+				s.uiButton(c, s.binder.Press(c, "core.home.form.submit", "core.home.form.submit", "", nil), "가져오기", true)
+			})
+			return
+		}
 		if creates {
 			s.drawFormField(c, "core.home.form.name", "name", &s.home.name, "프로젝트 폴더 이름", "my-project", true, nil)
 		}

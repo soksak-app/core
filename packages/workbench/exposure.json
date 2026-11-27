@@ -5475,12 +5475,12 @@
       },
       {
         "name": "core.home.form.open",
-        "description": "Opens the project home form that creates a project folder (create) or adopts an existing folder (open).",
+        "description": "Opens the project home form that creates a project folder (create), adopts an existing folder (open) or clones a Git repository (import).",
         "params": {
           "type": "object",
           "properties": {
             "mode": {
-              "enum": ["create", "open"]
+              "enum": ["create", "open", "import"]
             },
             "parent": {
               "type": "string"
@@ -5499,7 +5499,7 @@
           "type": "object",
           "properties": {
             "field": {
-              "enum": ["name", "parent"]
+              "enum": ["name", "parent", "address"]
             },
             "value": {
               "type": "string"
@@ -6449,6 +6449,14 @@
       {
         "name": "core.home.search",
         "description": "The project home search field."
+      },
+      {
+        "name": "core.home.import",
+        "description": "The button of the project home that opens the form of a Git repository import (docs/spec/projects.md#project-home)."
+      },
+      {
+        "name": "core.home.form.address",
+        "description": "The repository address field of the import form of the project home."
       },
       {
         "name": "core.home.add",

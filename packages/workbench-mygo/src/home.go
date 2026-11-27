@@ -19,6 +19,8 @@ type homeState struct {
 	selected, confirm string
 	formMode          string // create, open, or "" while the form is closed.
 	name, parent      string
+	// address is the repository address of the import form.
+	address string
 	// folderErrors holds the reason of each project folder that cannot be read, checks the latest check of each root, and foldersFor the
 	// roots that were last checked.
 	folderErrors map[string]string
@@ -293,7 +295,7 @@ func (s *Shell) registerHome() {
 	act(s, "core.home.form.open", func(value struct {
 		Mode string `json:"mode"`
 	}) error {
-		if value.Mode != "create" && value.Mode != "open" {
+		if value.Mode != "create" && value.Mode != "open" && value.Mode != "import" {
 			return fmt.Errorf("unknown form mode %s", value.Mode)
 		}
 		s.home.formMode = value.Mode
@@ -319,6 +321,8 @@ func (s *Shell) registerHome() {
 			s.home.name = value.Value
 		case "parent":
 			s.home.parent = value.Value
+		case "address":
+			s.home.address = value.Value
 		default:
 			return fmt.Errorf("the form has no %s field", value.Field)
 		}
@@ -378,10 +382,55 @@ func (s *Shell) performHome(action func(done func(error)), ended func()) {
 	})
 }
 
-// submitForm opens the folder of the form: a new folder in create mode, an existing folder otherwise.
+// importTarget is the folder that the import form clones into: projectsFolder and the name of the repository, which is the last
+// element of the address without a trailing slash and without .git. It returns the reason of a refused address.
+func (s *Shell) importTarget(address string) (string, error) {
+	address = strings.TrimSpace(address)
+	if address == "" {
+		return "", fmt.Errorf("the address is empty")
+	}
+	if strings.HasPrefix(address, "-") {
+		return "", fmt.Errorf("the address starts with -")
+	}
+	name := strings.TrimSuffix(strings.TrimRight(address, "/"), ".git")
+	if i := strings.LastIndexAny(name, "/:"); i >= 0 {
+		name = name[i+1:]
+	}
+	if name == "" {
+		return "", fmt.Errorf("the address has no repository name")
+	}
+	folder, _ := s.settings.Value("projectsFolder").(string)
+	return strings.TrimSuffix(folder, "/") + "/" + name, nil
+}
+
+// submitForm opens the folder of the form: a new folder in create mode, a clone in import mode, an existing folder otherwise.
 func (s *Shell) submitForm() error {
 	if s.home.formMode == "" {
 		return fmt.Errorf("the form is not open")
+	}
+	if s.home.formMode == "import" {
+		target, err := s.importTarget(s.home.address)
+		if err != nil {
+			s.performHome(func(done func(error)) { done(err) }, func() {})
+			return nil
+		}
+		address := strings.TrimSpace(s.home.address)
+		s.performHome(func(done func(error)) {
+			s.calls.Call("projectClone", map[string]string{"address": address, "target": target}, func(value any, err error) {
+				if err != nil {
+					done(err)
+					return
+				}
+				folder, err := decode[ProjectFolderValue](value)
+				if err != nil {
+					done(err)
+					return
+				}
+				s.home.formMode, s.home.address = "", ""
+				s.openFolder(folder, s.freeTint(), func(_ json.RawMessage, err error) { done(err) })
+			})
+		}, func() {})
+		return nil
 	}
 	s.performHome(func(done func(error)) {
 		opened := func(value any, err error) {
@@ -394,7 +443,7 @@ func (s *Shell) submitForm() error {
 				done(err)
 				return
 			}
-			s.home.formMode, s.home.name, s.home.parent = "", "", ""
+			s.home.formMode, s.home.name, s.home.parent, s.home.address = "", "", "", ""
 			s.openFolder(folder, s.freeTint(), func(_ json.RawMessage, err error) { done(err) })
 		}
 		if s.home.formMode == "create" {

@@ -268,3 +268,32 @@ test("the create form starts its parent folder with the common setting projectsF
   const parent = root.querySelector('input[name="parent"]');
   assert.equal(parent?.value, "~/Projects", "the create form does not start in projectsFolder");
 });
+
+test("the project home has the button that opens the import form, whose target is under projectsFolder", async () => {
+  // The import form takes one address and shows the target <projectsFolder>/<name>, where the name is the last element without .git.
+  const { root, home } = mount([project("a", "alpha")]);
+  await settled();
+  home.render();
+  const button = root.querySelector('[data-expose="core.home.import"]');
+  assert.ok(button, "the project home has the import button");
+  assert.equal(button.dataset.command, "core.home.form.open");
+  home.actions.openForm("import");
+  const address = root.querySelector('input[name="address"]');
+  assert.ok(address, "the import form has the address field");
+  address.value = "https://example.com/acme/widget.git";
+  address.dispatchEvent(new dom.window.Event("input"));
+  assert.equal(root.querySelector(".home-form__target")?.textContent, "~/Projects/widget", "the form shows the target under projectsFolder");
+});
+
+test("an empty address is refused before any clone starts, and no clone is requested", async () => {
+  const { windows } = await import("@soksak/runtime");
+  const requests = [];
+  windows.cloneProject = async (request) => { requests.push(request); return { root: request.target }; };
+  const { root, home } = mount([project("a", "alpha")]);
+  await settled();
+  home.render();
+  home.actions.openForm("import");
+  await home.actions.submitForm();
+  assert.deepEqual(requests, [], "a clone started for an empty address");
+  assert.ok(document.body.textContent.includes("the address is empty"), "the refusal is shown through the error display");
+});

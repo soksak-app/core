@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -396,4 +397,54 @@ func (h *Host) ProjectCreate(reqJSON json.RawMessage) (ProjectFolder, error) {
 		return ProjectFolder{}, err
 	}
 	return ResolveProjectFolder(destination)
+}
+
+// CloneProject is the request of ProjectClone: the repository address and the target folder that the clone creates.
+type CloneProject struct {
+	Address string `json:"address"`
+	Target  string `json:"target"`
+}
+
+// ProjectClone clones the address into the target folder, which must not exist, and returns the target folder. The clone runs the
+// git program with the address after --, so an address that starts with - is read as an address and never as an option. A failed
+// clone removes the target folder that it created, and the error carries the output of git.
+func (h *Host) ProjectClone(reqJSON json.RawMessage) (ProjectFolder, error) {
+	req, err := argument[CloneProject]("request", reqJSON)
+	if err != nil {
+		return ProjectFolder{}, err
+	}
+	address := strings.TrimSpace(req.Address)
+	if address == "" {
+		return ProjectFolder{}, fmt.Errorf("the address is empty")
+	}
+	if strings.HasPrefix(address, "-") {
+		return ProjectFolder{}, fmt.Errorf("the address starts with -")
+	}
+	target := filepath.Clean(req.Target)
+	if !filepath.IsAbs(target) {
+		return ProjectFolder{}, fmt.Errorf("the target is not an absolute path: %s", req.Target)
+	}
+	if _, err := ResolveProjectFolder(filepath.Dir(target)); err != nil {
+		return ProjectFolder{}, fmt.Errorf("%s is not a folder", filepath.Dir(target))
+	}
+	if _, err := os.Lstat(target); err == nil {
+		return ProjectFolder{}, fmt.Errorf("%s already exists", target)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return ProjectFolder{}, err
+	}
+	cmd := exec.Command("git", "clone", "--", address, target)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		var notFound *exec.Error
+		if errors.As(err, &notFound) {
+			return ProjectFolder{}, fmt.Errorf("git is not installed or not on PATH")
+		}
+		if _, statErr := os.Lstat(target); statErr == nil {
+			if removeErr := os.RemoveAll(target); removeErr != nil {
+				return ProjectFolder{}, fmt.Errorf("%s remains after the failed clone: %w", target, removeErr)
+			}
+		}
+		return ProjectFolder{}, fmt.Errorf("%s", strings.TrimSpace(string(output)))
+	}
+	return ResolveProjectFolder(target)
 }
