@@ -181,8 +181,6 @@ func (s *Shell) writeStored(source string) {
 }
 
 func (s *Shell) openTabs(next func()) {
-	// The entries of the notice center are read beside the tab states, and the first draw does not wait for them.
-	s.loadNotices()
 	if s.tabs == nil {
 		next()
 		return

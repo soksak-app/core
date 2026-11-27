@@ -826,10 +826,11 @@ func TestTheShellWritesItsEventsThroughTheHostCallLog(t *testing.T) {
 	for _, event := range stored.written("workbench.call") {
 		called = append(called, event["fields"].(map[string]any)["name"].(string))
 	}
-	// The start reads the window chrome and the snapshot; the notice entries are read beside the tab states and do not block the first draw
+	// The start reads the window chrome, the snapshot and the theme, then the notice entries, then reports the window ready; each read waits
+	// for the answer of the one before it, so the order holds across runs. The notice entries do not block the first draw
 	// (docs/spec/notifications.md#notice-center). The plugin state, the outdated services (sidecarsOutdated,
 	// docs/spec/persistent-services.md#updates) and the retained sessions follow.
-	if strings.Join(startCalls(called), " ") != "windowControls workspace workspace windowReady setTheme notificationState pluginsState sidecarsOutdated sidecarsRetain" {
+	if strings.Join(startCalls(called), " ") != "windowControls workspace workspace windowReady notificationState pluginsState sidecarsOutdated sidecarsRetain" {
 		t.Fatalf("the shell recorded the calls %v", called)
 	}
 	if _, err := f.shell.Registry().Answer("command.run", json.RawMessage(`{"name":"core.unknown","params":{}}`), nil); err == nil {
@@ -946,5 +947,25 @@ func TestEveryRunOfACommandIsRecordedOnce(t *testing.T) {
 	want := []string{"core.home.show <nil>", "core.projects.browse stored failure", "core.home.show <nil>", "core.home.show <nil>"}
 	if answered != 2 || !reflect.DeepEqual(recorded, want) {
 		t.Fatalf("the runs answered %d times and recorded %q, want 2 answers and %q", answered, recorded, want)
+	}
+}
+
+// The start calls of the window keep one order in every run: the host receives them in the order that the shell issues them, because each
+// call waits for the answer of the call before it in the chain of the start (docs/spec/notifications.md#notice-center).
+func TestTheStartCallsKeepOneOrderAcrossRuns(t *testing.T) {
+	var first string
+	for run := range 5 {
+		stored := &storedHost{classes: traceClasses(), common: map[string]any{"diagnostics.log": traceClasses()}}
+		newShell(t, stored)
+		var called []string
+		for _, event := range stored.written("workbench.call") {
+			called = append(called, event["fields"].(map[string]any)["name"].(string))
+		}
+		order := strings.Join(called, " ")
+		if run == 0 {
+			first = order
+		} else if order != first {
+			t.Fatalf("run %d recorded the calls %q and run 0 recorded %q", run, order, first)
+		}
 	}
 }

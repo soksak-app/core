@@ -604,3 +604,19 @@ func TestAGroupNameOutsideOneToFortyCharactersIsRefused(t *testing.T) {
 		t.Fatal("a refused group name changed the layout")
 	}
 }
+
+// The row of the project tabs at the bottom takes its height from the plane of the work area: a project tab of 36 points, the padding of
+// 5 points above and below it and the 1 point border of its top edge, so the plane of the plan is 47 points less than in the top place
+// (docs/spec/settings.md#values, projectTabs = bottom).
+func TestThePlaneOfTheLayoutPlanLeavesTheBottomRowItsHeight(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f.run(t, "core.settings.set", `{"patch": {"projectTabs": "bottom"}}`)
+	f.settle()
+	// 30 cards of 96 points and 29 corridors of 12 points need 3228 points across; the top place gives a plane of 782 × 686 points.
+	plan := f.mustPlan(terminalRow(70))
+	const rowHeight = 36 + 2*5 + 1
+	want := "the cards of the tree have no extent in the plane of 782 × " + strconv.Itoa(686-rowHeight) + " points"
+	if plan.Feasible || plan.Reason == nil || *plan.Reason != want {
+		t.Fatalf("the plan with the bottom row is feasible %v with the reason %v, want %q", plan.Feasible, plan.Reason, want)
+	}
+}
