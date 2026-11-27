@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217: The project home removes a project with a missing folder as page-wire case home-folders-remove, played by home-folders.test.mjs.
 - F1108: The window check reloads a fixture view's page with core.plugins.apply and judges its colors and contrast before and after the reload; the defect is not reproduced under this condition.
 - F1217-8: The project home search field shows the caption ⌘O after it in both hosts.
 - F1107: The status-read record names the owned session that the resolved surface shows.

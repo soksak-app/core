@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F1217: 폴더가 없는 프로젝트를 빼는 page-wire case home-folders-remove를 home-folders.test.mjs가 재생한다.
 - F1108: 창 check는 fixture view를 core.plugins.apply로 다시 불러와 reload 전후 색과 대비를 판정하며, 이 조건에서는 결함이 재현되지 않는다.
 - F1217-8: 프로젝트 홈 검색 칸이 두 host 모두에서 칸 뒤에 ⌘O 글을 보인다.
 - F1107: status read 기록은 resolved surface가 보여 주는 owned session을 이름으로 적는다.
