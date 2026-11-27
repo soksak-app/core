@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F999: 남은 일에 raster view 재시작 check를 근거로 적고, 설치된 plugin view(terminal) 재현은 release를 기다린다고 적는다.
 - F1217-7: 프로젝트 홈의 상태줄을 명세에 적는다. 프로젝트와 열린 프로젝트 수, 켜진 플러그인과 설치된 플러그인 수, core.home.back으로 작업 화면에 돌아가는 버튼, 새 창 버튼이다.
 - F999: 재시작 뒤 view가 입력 없이 현재 frame을 그리는지 e2e restart-view-draw.test.mjs가 세 application에서 확인한다.
 - F1226: quit은 연결에 응답한 process의 종료를 기다리고, 실패한 quit은 process.lock이 가리키는 교체 process를 따라가며, run은 process 점검 전에 persistent service를 제거한다.

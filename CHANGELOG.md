@@ -5,6 +5,7 @@
 
 ## 2026-11-26
 
+- F999: The Remains name the restart check of the raster views as evidence and the terminal reproduction with installed plugin views, which waits for the releases.
 - F1217-7: The project home has a status line in the specification: the counts of projects and open projects, the enabled and installed plugins, the button back to the work screen through core.home.back, and the button for a new window.
 - F999: Views draw their current frame after a restart without input, checked by e2e restart-view-draw.test.mjs on three applications.
 - F1226: A quit waits for the process that answers its connection, a failed quit follows a replacement that process.lock names, and a run removes its persistent services before the process audit.
